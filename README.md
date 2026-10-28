@@ -41,8 +41,8 @@
 - **Notifications** for mentions and DMs, plus unread badges, including Discord's
   own unread count.
 
-> The interface is currently in Portuguese (pt-BR). Localization is on the
-> [roadmap](#roadmap).
+> The interface is currently in Portuguese (pt-BR); localization is on the
+> [roadmap](#roadmap). The screenshots below show the English labels planned for it.
 
 ## Screenshots
 
@@ -79,8 +79,10 @@ On first launch:
 2. Sign in with Discord (if the server enables it) or create a local account.
 3. Create a server with **+**, or join one with an invite code.
 
-Need a server? See [distopic-server](https://github.com/GustavoHSCruz/distopic-server).
-It runs with a single `docker compose up`.
+**Joining someone's community?** The client is all you need: no server
+install. Only the person hosting the community runs
+[distopic-server](https://github.com/GustavoHSCruz/distopic-server), once,
+with a single `docker compose up`.
 
 ## How the Discord tab works
 

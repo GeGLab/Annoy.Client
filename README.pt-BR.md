@@ -43,6 +43,8 @@
 
 Mais capturas no [README em inglês](README.md#screenshots).
 
+> As capturas mostram os rótulos em inglês da futura versão localizada; o build atual tem a interface em português.
+
 ## Começando
 
 Precisa do Node.js 22.13 ou mais novo.
@@ -56,6 +58,10 @@ npm run dev
 
 No app, clique em **Conectar a um servidor Distopic** e digite o endereço (sem
 porta, usa a `8787`). Depois, entre com Discord ou crie uma conta.
+
+**Vai entrar na comunidade de alguém?** Basta o client; você não instala
+servidor nenhum. Só quem hospeda roda o
+[distopic-server](https://github.com/GustavoHSCruz/distopic-server), uma vez.
 
 ## Sobre a aba do Discord
 
