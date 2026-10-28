@@ -12,6 +12,7 @@ export function AddAccountModal() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +40,7 @@ export function AddAccountModal() {
     const abort = new AbortController();
     discordAbort.current = abort;
     try {
-      const { auth } = await discordLogin(info.url, () => beginDiscordLogin(info.url), abort.signal);
+      const { auth } = await discordLogin(info.url, () => beginDiscordLogin(info.url, inviteCode.trim() || undefined), abort.signal);
       if (auth) addAccount({ id: `${info.url}#${auth.user.id}`, url: info.url, token: auth.token, userId: auth.user.id, instanceName: info.info.name });
     } catch (err) {
       if (!abort.signal.aborted) setError((err as Error).message);
@@ -48,13 +49,21 @@ export function AddAccountModal() {
     }
   }
 
+  // Older servers don't send `registration`; they never require an invite.
+  const needsInvite = info?.info.registration === "invite";
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!info) return;
     setError(null);
     setBusy(true);
     try {
-      const res = await authenticate(info.url, mode, { username, password, ...(mode === "register" && displayName && { displayName }) });
+      const res = await authenticate(info.url, mode, {
+        username,
+        password,
+        ...(mode === "register" && displayName && { displayName }),
+        ...(mode === "register" && inviteCode.trim() && { inviteCode: inviteCode.trim() }),
+      });
       addAccount({ id: `${info.url}#${res.user.id}`, url: info.url, token: res.token, userId: res.user.id, instanceName: info.info.name });
     } catch (err) {
       setError((err as Error).message);
@@ -114,6 +123,11 @@ export function AddAccountModal() {
                   Entrar com Discord
                 </button>
               )}
+              {needsInvite && (
+                <Field label="Convite (para conta nova)" hint="Quem já tem conta pode deixar em branco">
+                  <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" />
+                </Field>
+              )}
               <div className="or">
                 <span>ou com usuário e senha</span>
               </div>
@@ -125,6 +139,11 @@ export function AddAccountModal() {
           {mode === "register" && (
             <Field label="Nome de exibição" hint="Opcional; você pode mudar depois">
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            </Field>
+          )}
+          {mode === "register" && needsInvite && (
+            <Field label="Convite de cadastro" hint="Peça a quem hospeda esta instância">
+              <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
             </Field>
           )}
           <Field label="Senha" hint={mode === "register" ? "Mínimo de 8 caracteres" : undefined}>

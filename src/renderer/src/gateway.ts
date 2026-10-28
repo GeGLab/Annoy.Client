@@ -41,6 +41,15 @@ export class Gateway {
     };
   }
 
+  /** Skips the backoff wait: used when the network comes back or the user asks to retry. */
+  reconnectNow(): void {
+    if (this.closed || this.socket) return;
+    if (this.retry) clearTimeout(this.retry);
+    this.retry = null;
+    this.backoff = 1000;
+    this.connect();
+  }
+
   close(): void {
     this.closed = true;
     if (this.retry) clearTimeout(this.retry);

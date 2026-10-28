@@ -4,9 +4,11 @@ import { getState, setState, useStore } from "./store.ts";
 import { AddAccountModal, CreateServerModal } from "./components/AccountModals.tsx";
 import { Home } from "./components/Home.tsx";
 import { ImportDiscordModal } from "./components/ImportModal.tsx";
+import { DeleteAccountModal, InstanceAdminModal } from "./components/InstanceAdmin.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { ChannelSettingsModal, CreateChannelModal, InviteModal, ServerSettingsModal, UserSettingsModal } from "./components/Settings.tsx";
 import { TopBar } from "./components/TopBar.tsx";
+import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
 function Modals() {
@@ -27,6 +29,12 @@ function Modals() {
       return <InviteModal accountId={modal.accountId} serverId={modal.serverId} />;
     case "userSettings":
       return <UserSettingsModal />;
+    case "screenPicker":
+      return <ScreenPickerModal />;
+    case "instanceAdmin":
+      return <InstanceAdminModal accountId={modal.accountId} />;
+    case "deleteAccount":
+      return <DeleteAccountModal accountId={modal.accountId} />;
     case "importDiscord":
       return <ImportDiscordModal accountId={modal.accountId} serverId={modal.serverId} />;
   }

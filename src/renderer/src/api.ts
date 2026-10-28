@@ -37,7 +37,7 @@ export async function fetchInfo(url: string): Promise<InstanceInfo> {
 export async function authenticate(
   url: string,
   mode: "login" | "register",
-  body: { username: string; password: string; displayName?: string },
+  body: { username: string; password: string; displayName?: string; inviteCode?: string },
 ): Promise<AuthResponse> {
   return parse(
     await fetch(`${url}/api/auth/${mode}`, {
@@ -77,8 +77,14 @@ export async function discordLogin(url: string, begin: () => Promise<DiscordLogi
   throw new Error("Tempo esgotado esperando o Discord");
 }
 
-export async function beginDiscordLogin(url: string): Promise<DiscordLoginBegin> {
-  return parse(await fetch(`${url}/api/auth/discord/begin`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }));
+export async function beginDiscordLogin(url: string, inviteCode?: string): Promise<DiscordLoginBegin> {
+  return parse(
+    await fetch(`${url}/api/auth/discord/begin`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(inviteCode ? { inviteCode } : {}),
+    }),
+  );
 }
 
 export class Api {

@@ -40,6 +40,8 @@ export interface InstanceState {
   typing: Record<string, Record<string, number>>;
   unread: Record<string, { count: number; mention: boolean }>;
   imports: Record<string, ImportJob>;
+  /** This account's role on the instance, from READY. */
+  instance: { isAdmin: boolean; registration: "open" | "invite" | "closed"; voiceBackend: "builtin" | "cloudflare" } | null;
 }
 
 export type View =
@@ -55,13 +57,19 @@ export type Modal =
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: "text" | "voice" | "category" }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings" };
+  | { kind: "userSettings" }
+  | { kind: "screenPicker" }
+  | { kind: "instanceAdmin"; accountId: string }
+  | { kind: "deleteAccount"; accountId: string };
 
 export interface VoiceUi {
   accountId: string;
   serverId: string;
   channelId: string;
   status: "connecting" | "connected";
+  canStream: boolean;
+  camera: boolean;
+  screen: boolean;
 }
 
 export interface Settings {
@@ -70,6 +78,7 @@ export interface Settings {
   vadThreshold: number;
   inputDeviceId: string;
   outputDeviceId: string;
+  cameraDeviceId: string;
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
@@ -100,6 +109,7 @@ const DEFAULT_SETTINGS: Settings = {
   vadThreshold: 18,
   inputDeviceId: "default",
   outputDeviceId: "default",
+  cameraDeviceId: "default",
   selfMute: false,
   selfDeaf: false,
   notifications: true,
@@ -136,6 +146,7 @@ export const emptyInstance = (): InstanceState => ({
   typing: {},
   unread: {},
   imports: {},
+  instance: null,
 });
 
 let state: AppState = {
@@ -165,6 +176,11 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   for (const l of listeners) l();
 }
 
+export function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 /** Selectors must return existing references (immer keeps them stable). */
 export function useStore<T>(selector: (s: AppState) => T): T {
   return useSyncExternalStore(
@@ -177,14 +193,14 @@ export function useStore<T>(selector: (s: AppState) => T): T {
 }
 
 let toastSeq = 0;
-export function toast(text: string): void {
+export function toast(text: string, durationMs = 4500): void {
   const id = ++toastSeq;
   setState((s) => {
     s.toast = { id, text };
   });
   setTimeout(() => {
     if (state.toast?.id === id) setState((s) => void (s.toast = null));
-  }, 4500);
+  }, durationMs);
 }
 
 export function instanceOf(s: AppState, accountId: string): InstanceState | undefined {

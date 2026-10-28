@@ -50,9 +50,14 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 - **Text chat.** History with infinite scroll, replies, edits, `@mentions` with
   autocomplete, Markdown, drag-and-drop and paste-to-upload, image previews, and
   typing indicators.
-- **Voice.** Voice activity detection with a sensitivity meter, or push-to-talk.
-  Mute and deafen, input and output device selection, speaking rings, and server
-  mute and disconnect for moderators.
+- **Voice, camera and screen sharing.** A call view with a video grid, focus
+  and fullscreen. Pick a screen or window to share (the system portal on
+  Wayland). Voice activity detection with a sensitivity meter or push-to-talk,
+  device selection, speaking rings, server mute and disconnect for moderators.
+- **Instance admin.** If you host the instance: sign-up mode, sign-up invites,
+  accounts and servers, all from Settings.
+- **Survives outages.** Server tabs stay visible while offline, reconnect with
+  one click (or automatically), and you rejoin the call you were in.
 - **Moderation.** Role editor, per-channel permission overwrites
   (allow/inherit/deny), invites, kick, ban and ban list.
 - **Friends and DMs.** Friend requests, presence, direct messages.
@@ -70,10 +75,11 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 
 | | |
 | :---: | :---: |
-| <img src="docs/screenshots/chat-and-voice.png" alt="Chat and voice" width="420"><br>**Chat and voice channels** | <img src="docs/screenshots/member-card.png" alt="Member card" width="420"><br>**Member card with roles and moderation** |
+| <img src="docs/screenshots/chat-and-voice.png" alt="Chat and voice" width="420"><br>**Chat and voice channels** | <img src="docs/screenshots/voice-call.png" alt="Call with cameras" width="420"><br>**Calls with camera and screen sharing** |
+| <img src="docs/screenshots/member-card.png" alt="Member card" width="420"><br>**Member card with roles and moderation** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
 | <img src="docs/screenshots/roles.png" alt="Role editor" width="420"><br>**Role editor** | <img src="docs/screenshots/channel-permissions.png" alt="Channel permissions" width="420"><br>**Per-channel permissions** |
 | <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Sign in with Discord or a local account** |
-| <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
+| <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** | |
 
 ## Build from source
 
@@ -155,7 +161,6 @@ npm run sync:protocol -- ../distopic-server/packages/protocol/src
 - [ ] Global push-to-talk hotkey (works when the window is unfocused)
 - [x] Windows installer and Linux AppImage with in-app updates
 - [ ] Code-signed Windows builds, macOS
-- [ ] Video and screen sharing in Distopic voice channels
 - [ ] Custom avatars and server icons
 
 ## Contributing

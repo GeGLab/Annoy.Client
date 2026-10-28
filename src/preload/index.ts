@@ -8,6 +8,12 @@ const bridge = {
   reloadDiscord: () => ipcRenderer.send("discord:reload"),
   flashWindow: () => ipcRenderer.send("window:flash"),
   setDiscordTopInset: (px: number) => ipcRenderer.send("discord:inset", px),
+  screen: {
+    /** "system": the OS portal picks the source (Wayland); "app": show Distopic's own picker. */
+    mode: () => ipcRenderer.invoke("screen:mode") as Promise<"system" | "app">,
+    sources: () => ipcRenderer.invoke("screen:sources") as Promise<{ id: string; name: string; kind: "screen" | "window"; thumbnail: string }[]>,
+    choose: (id: string) => ipcRenderer.send("screen:choose", id),
+  },
   updates: {
     get: () => ipcRenderer.invoke("update:get") as Promise<UpdateState>,
     check: () => ipcRenderer.invoke("update:check") as Promise<void>,

@@ -1,8 +1,9 @@
 import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { Api } from "./api.ts";
 import { Gateway } from "./gateway.ts";
-import { emptyInstance, getState, setState, toast, type Account, type InstanceState, type View } from "./store.ts";
+import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
 import { VoiceSession } from "./voice.ts";
+import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -13,7 +14,8 @@ interface Live {
 }
 
 const live = new Map<string, Live>();
-let voice: { accountId: string; session: VoiceSession } | null = null;
+type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
+let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
 const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function apiFor(accountId: string): Api {
@@ -35,6 +37,48 @@ function patchInstance(accountId: string, recipe: (inst: InstanceState) => void)
 
 // Accounts -------------------------------------------------------------------
 
+// Last-known servers and profile per account, so tabs survive restarts and outages.
+const cacheKey = (accountId: string) => `distopic.cache.${accountId}`;
+
+function readCache(accountId: string): Pick<InstanceState, "servers" | "user"> | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(accountId));
+    return raw ? (JSON.parse(raw) as Pick<InstanceState, "servers" | "user">) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(accountId: string): void {
+  const inst = getState().instances[accountId];
+  if (!inst || inst.status !== "ready") return;
+  try {
+    localStorage.setItem(cacheKey(accountId), JSON.stringify({ servers: inst.servers, user: inst.user }));
+  } catch {
+    // Storage full or unavailable: the cache is a convenience only.
+  }
+}
+
+/** Voice channel to rejoin once the gateway is back, after an unplanned drop. */
+let rejoin: { accountId: string; serverId: string; channelId: string } | null = null;
+
+export function reconnect(accountId?: string): void {
+  for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
+}
+
+window.addEventListener("online", () => reconnect());
+
+// Keep the cache in step with the server list, whatever changed it.
+const lastServers = new Map<string, unknown>();
+subscribe(() => {
+  for (const [id, inst] of Object.entries(getState().instances)) {
+    if (inst.status === "ready" && lastServers.get(id) !== inst.servers) {
+      lastServers.set(id, inst.servers);
+      writeCache(id);
+    }
+  }
+});
+
 export function connectAccount(account: Account): void {
   if (live.has(account.id)) return;
   const api = new Api(account.url, account.token);
@@ -49,7 +93,10 @@ export function connectAccount(account: Account): void {
   );
   live.set(account.id, { api, gateway });
   setState((s) => {
-    s.instances[account.id] ??= emptyInstance();
+    if (!s.instances[account.id]) {
+      const cached = readCache(account.id);
+      s.instances[account.id] = { ...emptyInstance(), ...(cached && { servers: cached.servers, user: cached.user }) };
+    }
   });
   gateway.connect();
 }
@@ -217,16 +264,34 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   leaveVoice();
   const gateway = gatewayFor(accountId);
   if (!gateway) return;
-  const session = new VoiceSession(gateway, channelId, getState().settings);
-  voice = { accountId, session };
+  const selfId = getState().instances[accountId]?.user?.id ?? "";
+  // The instance says where media flows; both sessions behave the same for the UI.
+  const Session = getState().instances[accountId]?.instance?.voiceBackend === "cloudflare" ? CloudflareVoiceSession : VoiceSession;
+  const session: AnyVoiceSession = new Session(gateway, channelId, selfId, getState().settings, () =>
+    setState((s) => {
+      if (s.voice && voice?.session === session) {
+        s.voice.camera = session.isSharing("camera");
+        s.voice.screen = session.isSharing("screen");
+      }
+    }),
+    () =>
+      toast(
+        "Sem áudio: o app não alcançou a porta de voz do servidor. Quem hospeda deve conferir DISTOPIC_ANNOUNCED_IP e liberar a porta 40000 (UDP e TCP).",
+        12000,
+      ),
+  );
+  voice = { accountId, serverId, session };
   setState((s) => {
-    s.voice = { accountId, serverId, channelId, status: "connecting" };
+    s.voice = { accountId, serverId, channelId, status: "connecting", canStream: false, camera: false, screen: false };
   });
   try {
     await session.start();
     if (voice?.session !== session) return;
     setState((s) => {
-      if (s.voice) s.voice.status = "connected";
+      if (s.voice) {
+        s.voice.status = "connected";
+        s.voice.canStream = session.canStream;
+      }
     });
     if (!session.canSpeak) toast("Você está conectado sem permissão para falar");
   } catch (err) {
@@ -247,6 +312,47 @@ export function updateVoiceSettings(): void {
   const settings = getState().settings;
   voice?.session.updateSettings(settings);
   if (voice) gatewayFor(voice.accountId)?.send({ op: "voice_state", selfMute: settings.selfMute, selfDeaf: settings.selfDeaf });
+}
+
+export async function toggleCamera(): Promise<void> {
+  const session = voice?.session;
+  if (!session) return;
+  try {
+    if (session.isSharing("camera")) await session.stopVideo("camera");
+    else await session.startVideo("camera", getState().settings.cameraDeviceId);
+  } catch (err) {
+    toast(`Câmera: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Stops an active share, or starts one. Where the app owns the picker, the
+ * screen picker modal runs first and calls `startScreenShare` with a source.
+ */
+export async function toggleScreenShare(): Promise<void> {
+  const session = voice?.session;
+  if (!session) return;
+  if (session.isSharing("screen")) return void (await session.stopVideo("screen"));
+  const mode = (await window.distopic?.screen.mode()) ?? "system";
+  if (mode === "app") {
+    setState((s) => {
+      s.modal = { kind: "screenPicker" };
+    });
+    return;
+  }
+  await startScreenShare(null);
+}
+
+export async function startScreenShare(sourceId: string | null): Promise<void> {
+  const session = voice?.session;
+  if (!session) return;
+  if (sourceId) window.distopic?.screen.choose(sourceId);
+  try {
+    await session.startVideo("screen");
+  } catch (err) {
+    // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
+    if ((err as DOMException).name !== "NotAllowedError") toast(`Tela: ${(err as Error).message}`);
+  }
 }
 
 export function setPushToTalk(down: boolean): void {
@@ -288,11 +394,23 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.dms = event.d.dms;
         inst.relationships = event.d.relationships;
         inst.presences = event.d.presences;
+        inst.instance = event.d.instance;
         // History may have gaps after a reconnect; reload lazily.
         inst.messages = {};
         inst.serverStates = {};
       });
-      if (voice?.accountId === accountId) leaveVoice(false);
+      if (voice?.accountId === accountId) {
+        // The old session died with the socket; come back to the same room.
+        rejoin = { accountId, serverId: voice.serverId, channelId: voice.session.channelId };
+        leaveVoice(false);
+      }
+      if (rejoin?.accountId === accountId && event.d.servers.some((sv) => sv.id === rejoin?.serverId)) {
+        const target = rejoin;
+        rejoin = null;
+        void ensureServer(accountId, target.serverId).then((st) => {
+          if (st?.channels.some((c) => c.id === target.channelId)) void joinVoice(accountId, target.serverId, target.channelId);
+        });
+      }
       // Instances are small (TeamSpeak scale): load every server so unread
       // badges and voice rosters work without opening each one.
       for (const server of event.d.servers) void ensureServer(accountId, server.id);

@@ -22,7 +22,7 @@ import { UpdateSettings } from "./Updates.tsx";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
 const TEXT_PERMS: PermissionName[] = ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_MESSAGES", "ATTACH_FILES", "MENTION_EVERYONE"];
-const VOICE_PERMS: PermissionName[] = ["VIEW_CHANNEL", "CONNECT", "SPEAK", "MUTE_MEMBERS"];
+const VOICE_PERMS: PermissionName[] = ["VIEW_CHANNEL", "CONNECT", "SPEAK", "STREAM", "MUTE_MEMBERS"];
 
 function useServer(accountId: string, serverId: string): { state: ServerState | undefined; me: string | undefined } {
   return {
@@ -83,6 +83,7 @@ function AccountRow({ accountId }: { accountId: string }) {
   const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
   const user = useStore((s) => s.instances[accountId]?.user);
   const status = useStore((s) => s.instances[accountId]?.status);
+  const isAdmin = useStore((s) => s.instances[accountId]?.instance?.isAdmin ?? false);
   const [name, setName] = useState(user?.displayName ?? "");
   const [discordAvailable, setDiscordAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -129,8 +130,16 @@ function AccountRow({ accountId }: { accountId: string }) {
           {syncing ? "Aguardando…" : "Sincronizar Discord"}
         </button>
       )}
-      <button className="btn btn-danger" onClick={() => confirm(`Sair de ${account.instanceName}?`) && removeAccount(accountId)}>
+      {isAdmin && (
+        <button className="btn" onClick={() => openModal({ kind: "instanceAdmin", accountId })} title="Cadastro, convites, contas e servidores desta instância">
+          Administrar instância
+        </button>
+      )}
+      <button className="btn btn-ghost" onClick={() => confirm(`Sair de ${account.instanceName}?`) && removeAccount(accountId)}>
         Sair
+      </button>
+      <button className="icon-btn danger" title="Excluir minha conta nesta instância" onClick={() => openModal({ kind: "deleteAccount", accountId })}>
+        <Icon name="trash" size={16} />
       </button>
     </div>
   );
@@ -169,6 +178,7 @@ export function UserSettingsModal() {
   }, [capturing]);
 
   const inputs = devices.filter((d) => d.kind === "audioinput");
+  const cameras = devices.filter((d) => d.kind === "videoinput");
   const outputs = devices.filter((d) => d.kind === "audiooutput");
 
   return (
@@ -211,6 +221,16 @@ export function UserSettingsModal() {
             </select>
           </Field>
         </div>
+        <Field label="Câmera">
+          <select value={settings.cameraDeviceId} onChange={(e) => update({ cameraDeviceId: e.target.value })}>
+            <option value="default">Padrão do sistema</option>
+            {cameras.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || "Câmera"}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Modo de entrada" hint="A mudança vale para a próxima conexão de voz">
           <div className="radio-row">
             <label>

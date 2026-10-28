@@ -48,14 +48,21 @@ function openExternal(raw: string): void {
   }
 }
 
-function configureSession(s: Session): void {
+/** On Wayland only the desktop portal may pick what to capture, so the app shows no picker of its own. */
+const systemPicker = process.platform === "linux" && (process.env.XDG_SESSION_TYPE === "wayland" || !!process.env.WAYLAND_DISPLAY);
+/** Source the user picked in the app's screen picker, consumed by the next capture request. */
+let chosenScreenSource: string | null = null;
+
+function configureSession(s: Session, own: boolean): void {
   s.setPermissionRequestHandler((_wc, permission, callback) => callback(MEDIA_PERMISSIONS.has(permission)));
   s.setPermissionCheckHandler((_wc, permission) => MEDIA_PERMISSIONS.has(permission));
-  // Screen sharing: the OS picker (PipeWire portal on Linux) chooses the source when available.
   s.setDisplayMediaRequestHandler(
     async (_request, callback) => {
-      const [source] = await desktopCapturer.getSources({ types: ["screen", "window"] });
-      callback(source ? { video: source, audio: process.platform === "win32" ? "loopback" : undefined } : {});
+      const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
+      // Distopic's own UI picks a source first; Discord (and the portal case) take what the system offers.
+      const picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : sources[0];
+      chosenScreenSource = null;
+      callback(picked ? { video: picked, audio: !own && process.platform === "win32" ? "loopback" : undefined } : {});
     },
     { useSystemPicker: true },
   );
@@ -72,7 +79,7 @@ function layoutDiscord(): void {
 function ensureDiscord(): WebContentsView {
   if (discord) return discord;
   const partition = session.fromPartition("persist:discord");
-  configureSession(partition);
+  configureSession(partition, false);
   partition.setUserAgent(chromeUserAgent(partition));
   discord = new WebContentsView({
     webPreferences: { partition: "persist:discord", contextIsolation: true, sandbox: true, spellcheck: true },
@@ -115,7 +122,7 @@ function setDiscordVisible(visible: boolean): void {
 }
 
 function createWindow(): void {
-  configureSession(session.defaultSession);
+  configureSession(session.defaultSession, true);
   win = new BrowserWindow({
     width: 1320,
     height: 840,
@@ -157,6 +164,14 @@ ipcMain.handle("discord:visible", () => discordVisible);
 ipcMain.on("discord:inset", (_e, top: unknown) => {
   discordTopInset = typeof top === "number" && Number.isFinite(top) ? Math.max(0, Math.min(200, Math.round(top))) : 0;
   layoutDiscord();
+});
+ipcMain.handle("screen:mode", () => (systemPicker ? "system" : "app"));
+ipcMain.handle("screen:sources", async () => {
+  const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 } });
+  return sources.map((src) => ({ id: src.id, name: src.name, kind: src.id.startsWith("screen:") ? "screen" : "window", thumbnail: src.thumbnail.toDataURL() }));
+});
+ipcMain.on("screen:choose", (_e, id: unknown) => {
+  chosenScreenSource = typeof id === "string" ? id : null;
 });
 ipcMain.on("window:flash", () => {
   if (win && !win.isFocused()) win.flashFrame(true);

@@ -1,5 +1,5 @@
 import type { ServerSummary } from "@distopic/protocol";
-import { leaveVoice, navigate, openServer, updateVoiceSettings } from "../client.ts";
+import { leaveVoice, navigate, openServer, reconnect, updateVoiceSettings } from "../client.ts";
 import { initials } from "../format.tsx";
 import { setState, useStore, type Account, type InstanceState } from "../store.ts";
 import { Avatar, Icon } from "./ui.tsx";
@@ -23,7 +23,7 @@ function ServerTab({ account, server, inst }: { account: Account; server: Server
   const unread = unreadFor(inst, inst?.serverStates[server.id]?.channels.map((c) => c.id) ?? []);
   return (
     <button
-      className={`tab-item${active ? " active" : ""}${unread.count ? " unread" : ""}`}
+      className={`tab-item${active ? " active" : ""}${unread.count ? " unread" : ""}${inst?.status === "ready" ? "" : " offline"}`}
       onClick={() => void openServer(account.id, server.id)}
       title={`${server.name} · ${account.instanceName}`}
     >
@@ -138,7 +138,13 @@ export function TopBar() {
           const inst = instances[account.id];
           return (
             <div key={account.id} className="tab-group" title={account.instanceName}>
-              {inst?.status !== "ready" && <span className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status ?? "conectando"}`} />}
+              {inst?.status !== "ready" && (
+                <button
+                  className={`instance-status ${inst?.status ?? "connecting"}`}
+                  title={inst?.status === "invalid" ? `${account.instanceName}: sessão expirada, entre de novo` : `${account.instanceName}: sem conexão. Clique para tentar agora`}
+                  onClick={() => (inst?.status === "invalid" ? setState((s) => void (s.modal = { kind: "addAccount" })) : reconnect(account.id))}
+                />
+              )}
               {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
             </div>
           );

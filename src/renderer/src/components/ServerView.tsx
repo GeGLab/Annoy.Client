@@ -1,9 +1,10 @@
 import { has, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
 import { useMemo, useState } from "react";
-import { apiFor, joinVoice, openChannel, openDm } from "../client.ts";
+import { apiFor, joinVoice, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
+import { VoiceStage } from "./VoiceStage.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
 
 // Channel list -------------------------------------------------------------
@@ -23,6 +24,12 @@ function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: Ser
                 <Icon name="micOff" size={14} />
               </span>
             )}
+            {v.video && (
+              <span className="voice-flag" title="Câmera ligada">
+                <Icon name="camera" size={14} />
+              </span>
+            )}
+            {v.screen && <span className="live small" title="Compartilhando a tela">AO VIVO</span>}
             {v.selfDeaf && (
               <span className="voice-flag" title="Ensurdecido">
                 <Icon name="headphonesOff" size={14} />
@@ -79,7 +86,11 @@ function ChannelRow({ accountId, state, channel, me, activeId }: { accountId: st
       <li>
         <div
           className={`channel voice${connected ? " active" : ""}${canConnect ? "" : " locked"}`}
-          onClick={() => (canConnect ? void joinVoice(accountId, state.server.id, channel.id) : toast("Sem permissão para conectar"))}
+          onClick={() => {
+            if (!canConnect) return toast("Sem permissão para conectar");
+            if (!connected) void joinVoice(accountId, state.server.id, channel.id);
+            openChannel(accountId, state.server.id, channel.id);
+          }}
           title={canConnect ? "Clique para entrar" : "Sem permissão para conectar"}
         >
           <Icon name={canConnect ? "speaker" : "lock"} size={16} />
@@ -345,20 +356,46 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
 
 // View ---------------------------------------------------------------------
 
+/** Shown while the instance is unreachable, instead of an empty screen. */
+function ServerUnavailable({ accountId }: { accountId: string }) {
+  const status = useStore((s) => s.instances[accountId]?.status);
+  const name = useStore((s) => s.accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor");
+  if (status === "ready" || status === undefined) return <div className="loading">Carregando servidor…</div>;
+  return (
+    <div className="empty-main offline-panel">
+      <div className="offline-icon">
+        <Icon name="refresh" size={26} />
+      </div>
+      <h2>{status === "invalid" ? "Sessão expirada" : `Sem conexão com ${name}`}</h2>
+      <p className="muted">
+        {status === "invalid"
+          ? "Entre de novo para continuar."
+          : "O app continua tentando sozinho. Se você estava numa chamada, ele volta para a sala quando reconectar."}
+      </p>
+      <button className="btn" onClick={() => (status === "invalid" ? openModal({ kind: "addAccount" }) : reconnect(accountId))}>
+        {status === "invalid" ? "Entrar de novo" : "Tentar agora"}
+      </button>
+    </div>
+  );
+}
+
 export function ServerView({ accountId, serverId, channelId }: { accountId: string; serverId: string; channelId: string | null }) {
   const state = useStore((s) => s.instances[accountId]?.serverStates[serverId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   const [showMembers, setShowMembers] = useState(true);
-  if (!state || !me) return <div className="loading">Carregando servidor…</div>;
+  if (!state || !me) return <ServerUnavailable accountId={accountId} />;
 
   const channel = state.channels.find((c) => c.id === channelId && c.type === "text");
+  const voiceChannel = state.channels.find((c) => c.id === channelId && c.type === "voice");
   const perms = channel ? channelPerms(state, me, channel) : 0;
   const names = new Map(state.members.map((m) => [m.user.id, displayNameOf(m)]));
 
   return (
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
-      {channel ? (
+      {voiceChannel ? (
+        <VoiceStage accountId={accountId} state={state} channel={voiceChannel} />
+      ) : channel ? (
         <Chat
           key={channel.id}
           accountId={accountId}
