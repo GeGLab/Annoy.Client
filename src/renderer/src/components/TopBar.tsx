@@ -1,0 +1,161 @@
+import type { ServerSummary } from "@distopic/protocol";
+import { leaveVoice, navigate, openServer, updateVoiceSettings } from "../client.ts";
+import { initials } from "../format.tsx";
+import { setState, useStore, type Account, type InstanceState } from "../store.ts";
+import { Avatar, Icon } from "./ui.tsx";
+
+function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
+  let count = 0;
+  let mention = false;
+  for (const id of channelIds) {
+    const u = inst?.unread[id];
+    if (u) {
+      count += u.count;
+      mention ||= u.mention;
+    }
+  }
+  return { count, mention };
+}
+
+function ServerTab({ account, server, inst }: { account: Account; server: ServerSummary; inst: InstanceState | undefined }) {
+  const view = useStore((s) => s.view);
+  const active = view.kind === "server" && view.accountId === account.id && view.serverId === server.id;
+  const unread = unreadFor(inst, inst?.serverStates[server.id]?.channels.map((c) => c.id) ?? []);
+  return (
+    <button
+      className={`tab-item${active ? " active" : ""}${unread.count ? " unread" : ""}`}
+      onClick={() => void openServer(account.id, server.id)}
+      title={`${server.name} · ${account.instanceName}`}
+    >
+      <span className="tab-tile">{initials(server.name)}</span>
+      <span className="tab-label">{server.name}</span>
+      {unread.mention && <span className="tab-badge">{unread.count}</span>}
+    </button>
+  );
+}
+
+function VoiceChip() {
+  const voice = useStore((s) => s.voice);
+  const inst = useStore((s) => (s.voice ? s.instances[s.voice.accountId] : undefined));
+  if (!voice) return null;
+  const state = inst?.serverStates[voice.serverId];
+  const channel = state?.channels.find((c) => c.id === voice.channelId);
+  return (
+    <div className={`voice-chip ${voice.status}`}>
+      <span className="voice-dot" />
+      <button className="voice-chip-label" onClick={() => void openServer(voice.accountId, voice.serverId)} title="Ir para o servidor">
+        <strong>{voice.status === "connected" ? channel?.name ?? "Voz" : "Conectando…"}</strong>
+        <span>{state?.server.name ?? ""}</span>
+      </button>
+      <button className="icon-btn danger" onClick={() => leaveVoice()} title="Desconectar da voz">
+        <Icon name="hangup" size={16} />
+      </button>
+    </div>
+  );
+}
+
+function Controls() {
+  const settings = useStore((s) => s.settings);
+  const view = useStore((s) => s.view);
+  const accounts = useStore((s) => s.accounts);
+  const accountId = "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
+  const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
+
+  const toggle = (key: "selfMute" | "selfDeaf") => {
+    setState((s) => {
+      s.settings[key] = !s.settings[key];
+      // Undeafening also unmutes.
+      if (key === "selfDeaf" && !s.settings.selfDeaf) s.settings.selfMute = false;
+    });
+    updateVoiceSettings();
+  };
+  const openSettings = () =>
+    setState((s) => {
+      s.modal = { kind: "userSettings" };
+    });
+
+  return (
+    <div className="topbar-controls">
+      <VoiceChip />
+      <button className={`icon-btn${settings.selfMute ? " danger" : ""}`} onClick={() => toggle("selfMute")} title={settings.selfMute ? "Ativar microfone" : "Silenciar"}>
+        <Icon name={settings.selfMute ? "micOff" : "mic"} />
+      </button>
+      <button className={`icon-btn${settings.selfDeaf ? " danger" : ""}`} onClick={() => toggle("selfDeaf")} title={settings.selfDeaf ? "Ativar áudio" : "Ensurdecer"}>
+        <Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} />
+      </button>
+      <button className="icon-btn" onClick={openSettings} title="Configurações">
+        <Icon name="gear" />
+      </button>
+      <button className="topbar-user" onClick={openSettings} title={user ? `@${user.username}` : "Sem conta"}>
+        {user ? <Avatar user={user} size={30} presence="online" /> : <span className="avatar placeholder" />}
+      </button>
+    </div>
+  );
+}
+
+/** Tab bar: Discord, home and every server of every connected instance, plus global controls. */
+export function TopBar() {
+  const accounts = useStore((s) => s.accounts);
+  const instances = useStore((s) => s.instances);
+  const view = useStore((s) => s.view);
+  const badge = useStore((s) => s.discordBadge);
+
+  let homeCount = 0;
+  for (const a of accounts) {
+    const inst = instances[a.id];
+    for (const dm of inst?.dms ?? []) homeCount += inst?.unread[dm.id]?.count ?? 0;
+    homeCount += inst?.relationships.filter((r) => r.status === "incoming").length ?? 0;
+  }
+
+  return (
+    <header className="topbar">
+      <div className="brand-mark" aria-hidden>
+        <svg viewBox="0 0 64 64" width="26" height="26">
+          <rect width="64" height="64" rx="18" fill="var(--accent)" />
+          <path d="M20 18h13c9 0 15 6 15 14s-6 14-15 14H20z" fill="none" stroke="var(--on-accent)" strokeWidth="6" strokeLinejoin="round" />
+          <circle cx="33" cy="32" r="4" fill="var(--on-accent)" />
+        </svg>
+      </div>
+      <nav className="tabs-strip" aria-label="Servidores">
+        <button className={`tab-item fixed${view.kind === "discord" ? " active" : ""}`} onClick={() => navigate({ kind: "discord" })} title="Discord">
+          <span className="tab-tile">DC</span>
+          <span className="tab-label">Discord</span>
+          {badge && <span className="tab-badge">{badge}</span>}
+        </button>
+        <button
+          className={`tab-item fixed${view.kind === "home" ? " active" : ""}`}
+          onClick={() => navigate({ kind: "home", accountId: view.kind === "home" ? view.accountId : (accounts[0]?.id ?? null), dmId: null })}
+          title="Amigos e mensagens diretas"
+        >
+          <span className="tab-tile">
+            <Icon name="home" size={15} />
+          </span>
+          <span className="tab-label">Início</span>
+          {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
+        </button>
+        <span className="tabs-sep" />
+        {accounts.map((account) => {
+          const inst = instances[account.id];
+          return (
+            <div key={account.id} className="tab-group" title={account.instanceName}>
+              {inst?.status !== "ready" && <span className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status ?? "conectando"}`} />}
+              {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
+            </div>
+          );
+        })}
+        <button
+          className="tabbar-add"
+          title="Adicionar servidor"
+          onClick={() =>
+            setState((s) => {
+              s.modal = accounts.length === 0 ? { kind: "addAccount" } : { kind: "createServer", accountId: accounts[0]!.id };
+            })
+          }
+        >
+          <Icon name="plus" size={18} />
+        </button>
+      </nav>
+      <Controls />
+    </header>
+  );
+}

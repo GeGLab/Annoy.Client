@@ -6,7 +6,7 @@ import { Home } from "./components/Home.tsx";
 import { ImportDiscordModal } from "./components/ImportModal.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { ChannelSettingsModal, CreateChannelModal, InviteModal, ServerSettingsModal, UserSettingsModal } from "./components/Settings.tsx";
-import { Sidebar } from "./components/Sidebar.tsx";
+import { TopBar } from "./components/TopBar.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
 function Modals() {
@@ -91,7 +91,7 @@ export function App() {
 
   return (
     <div className="app">
-      <Sidebar />
+      <TopBar />
       <div className="content">
       <UpdateBanner />
       <main className="main">

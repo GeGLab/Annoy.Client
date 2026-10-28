@@ -2,8 +2,8 @@ import { join } from "node:path";
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
 import { startUpdater } from "./updater.ts";
 
-/** Must match --sidebar-width in the renderer stylesheet. */
-const SIDEBAR_WIDTH = 72;
+/** Must match --topbar-height in the renderer stylesheet; the Discord view sits below the tab bar. */
+const TOPBAR_HEIGHT = 56;
 const DISCORD_URL = "https://discord.com/app";
 const DISCORD_HOSTS = /^(?:[a-z0-9-]+\.)*(discord\.com|discordapp\.com|discord\.gg|discord\.new|discordapp\.net|discord\.media)$/;
 const MEDIA_PERMISSIONS = new Set(["media", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
@@ -64,7 +64,8 @@ function configureSession(s: Session): void {
 function layoutDiscord(): void {
   if (!win || !discord) return;
   const { width, height } = win.getContentBounds();
-  discord.setBounds({ x: SIDEBAR_WIDTH, y: discordTopInset, width: Math.max(0, width - SIDEBAR_WIDTH), height: Math.max(0, height - discordTopInset) });
+  const top = TOPBAR_HEIGHT + discordTopInset;
+  discord.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
 }
 
 /** Created lazily and kept alive, so switching back is instant and the session persists. */

@@ -1,7 +1,7 @@
 import { LIMITS, type Message } from "@distopic/protocol";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { apiFor, loadMessages, sendTyping } from "../client.ts";
-import { formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
+import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 
@@ -109,18 +109,14 @@ function MessageRow({
         </div>
       )}
       <div className="message-main">
-        <div className="message-gutter">
-          {compact ? (
-            <span className="message-time-hover">{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-          ) : (
-            <Avatar user={message.author} size={40} />
-          )}
-        </div>
+        <time className="message-stamp" dateTime={message.createdAt} title={formatTime(message.createdAt)}>
+          {formatClock(message.createdAt)}
+        </time>
         <div className="message-body">
           {!compact && (
             <div className="message-head">
+              <Avatar user={message.author} size={22} />
               <span className="message-author">{name}</span>
-              <span className="message-time">{formatTime(message.createdAt)}</span>
             </div>
           )}
           {editing ? (
@@ -461,11 +457,17 @@ export function Chat(props: ChatProps) {
         {entry?.loading && <div className="loading small">Carregando…</div>}
         {items.map((m, i) => {
           const prev = items[i - 1];
+          const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
           const compact =
-            !!prev && !m.replyToId && prev.author.id === m.author.id && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
+            !newDay && !!prev && !m.replyToId && prev.author.id === m.author.id && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
           return (
+            <Fragment key={m.id}>
+            {newDay && (
+              <div className="day-divider" role="separator">
+                <span>{formatDay(m.createdAt)}</span>
+              </div>
+            )}
             <MessageRow
-              key={m.id}
               accountId={accountId}
               message={m}
               compact={compact}
@@ -476,6 +478,7 @@ export function Chat(props: ChatProps) {
               canModerate={props.canModerate}
               onReply={setReplyTo}
             />
+            </Fragment>
           );
         })}
       </div>

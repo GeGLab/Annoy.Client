@@ -3,7 +3,6 @@ import { useState, type FormEvent } from "react";
 import { apiFor, navigate, openDm } from "../client.ts";
 import { useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
-import { UserPanel } from "./UserPanel.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
 
 type Tab = "online" | "all" | "pending" | "add";
@@ -104,7 +103,6 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
       <div className="server-view">
         <aside className="channels">
           <div className="channel-scroll" />
-          <UserPanel accountId={null} />
         </aside>
         <div className="empty-main welcome">
           <h1>Bem-vindo ao Distopic</h1>
@@ -161,7 +159,6 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           })}
           {inst.dms.length === 0 && <li className="muted padded small">Abra uma DM pela lista de amigos ou de membros.</li>}
         </ul>
-        <UserPanel accountId={accountId} />
       </aside>
       {dm && other && me ? (
         <Chat

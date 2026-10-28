@@ -4,7 +4,6 @@ import { apiFor, joinVoice, openChannel, openDm } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
-import { UserPanel } from "./UserPanel.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
 
 // Channel list -------------------------------------------------------------
@@ -210,7 +209,6 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </li>
         ))}
       </ul>
-      <UserPanel accountId={accountId} />
     </aside>
   );
 }
