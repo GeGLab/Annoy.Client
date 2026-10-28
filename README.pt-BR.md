@@ -14,6 +14,19 @@
 
 </div>
 
+## Download
+
+- **Windows 10/11:** [Distopic-Setup-x64.exe](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-Setup-x64.exe).
+  Instala só para o seu usuário, sem pedir administrador. Como o instalador
+  ainda não é assinado, o Windows pode mostrar *"O Windows protegeu o
+  computador"*: clique em **Mais informações → Executar assim mesmo**.
+- **Linux:** [Distopic-x86_64.AppImage](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-x86_64.AppImage).
+  Rode `chmod +x` e abra.
+
+**Atualizações:** o app avisa quando sai uma versão nova e você decide quando
+atualizar. A única exceção é uma correção de segurança crítica, que é
+obrigatória. Veja o [SECURITY.md](SECURITY.md).
+
 ## Funcionalidades
 
 - **Discord e Distopic lado a lado:** o botão **DC** abre o Discord oficial numa

@@ -7,6 +7,7 @@ import { ImportDiscordModal } from "./components/ImportModal.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { ChannelSettingsModal, CreateChannelModal, InviteModal, ServerSettingsModal, UserSettingsModal } from "./components/Settings.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
 function Modals() {
   const modal = useStore((s) => s.modal);
@@ -37,6 +38,9 @@ export function App() {
   const view = useStore((s) => s.view);
   const modalOpen = useStore((s) => s.modal !== null);
   const toast = useStore((s) => s.toast);
+  const blocking = useStore((s) => isBlocking(s.update));
+  const bannerVisible = useBannerVisible();
+  useUpdateState();
 
   useEffect(() => {
     connectAll();
@@ -52,9 +56,14 @@ export function App() {
   // The Discord view is a native layer above the page; hide it while a modal is open.
   useEffect(() => {
     if (view.kind !== "discord") return;
-    if (modalOpen) window.distopic?.hideDiscord();
+    if (modalOpen || blocking) window.distopic?.hideDiscord();
     else window.distopic?.showDiscord();
-  }, [modalOpen, view.kind]);
+  }, [modalOpen, blocking, view.kind]);
+
+  // Keep the update banner visible above the Discord view.
+  useEffect(() => {
+    window.distopic?.setDiscordTopInset(bannerVisible ? BANNER_HEIGHT : 0);
+  }, [bannerVisible]);
 
   // Push-to-talk while the window has focus.
   useEffect(() => {
@@ -83,6 +92,8 @@ export function App() {
   return (
     <div className="app">
       <Sidebar />
+      <div className="content">
+      <UpdateBanner />
       <main className="main">
         {view.kind === "discord" ? (
           <div className="discord-placeholder">
@@ -94,7 +105,9 @@ export function App() {
           <Home accountId={view.accountId} dmId={view.dmId} />
         )}
       </main>
+      </div>
       <Modals />
+      <MandatoryUpdate />
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}

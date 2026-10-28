@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
+import { startUpdater } from "./updater.ts";
 
 /** Must match --sidebar-width in the renderer stylesheet. */
 const SIDEBAR_WIDTH = 72;
@@ -10,8 +11,12 @@ const MEDIA_PERMISSIONS = new Set(["media", "notifications", "fullscreen", "clip
 let win: BrowserWindow | null = null;
 let discord: WebContentsView | null = null;
 let discordVisible = false;
+/** Space reserved above the Discord view for in-app banners (e.g. an available update). */
+let discordTopInset = 0;
 
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
+// Windows only shows notifications for apps with an explicit AppUserModelID; it must match build.appId.
+if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
@@ -21,7 +26,8 @@ app.on("second-instance", () => {
 
 /** Discord gates features on the user agent; present plain Chrome like Vesktop does. */
 function chromeUserAgent(s: Session): string {
-  return s.getUserAgent().replace(/\s(Electron|distopic|@distopic\/client)\/\S+/gi, "");
+  // Drops the "Electron/x" and app ("Distopic/x", "distopic-client/x") tokens.
+  return s.getUserAgent().replace(/\s(Electron|distopic[\w-]*)\/\S+/gi, "");
 }
 
 function isDiscordUrl(raw: string): boolean {
@@ -58,7 +64,7 @@ function configureSession(s: Session): void {
 function layoutDiscord(): void {
   if (!win || !discord) return;
   const { width, height } = win.getContentBounds();
-  discord.setBounds({ x: SIDEBAR_WIDTH, y: 0, width: Math.max(0, width - SIDEBAR_WIDTH), height });
+  discord.setBounds({ x: SIDEBAR_WIDTH, y: discordTopInset, width: Math.max(0, width - SIDEBAR_WIDTH), height: Math.max(0, height - discordTopInset) });
 }
 
 /** Created lazily and kept alive, so switching back is instant and the session persists. */
@@ -147,11 +153,18 @@ ipcMain.on("discord:show", () => setDiscordVisible(true));
 ipcMain.on("discord:hide", () => setDiscordVisible(false));
 ipcMain.on("discord:reload", () => discord?.webContents.reload());
 ipcMain.handle("discord:visible", () => discordVisible);
+ipcMain.on("discord:inset", (_e, top: unknown) => {
+  discordTopInset = typeof top === "number" && Number.isFinite(top) ? Math.max(0, Math.min(200, Math.round(top))) : 0;
+  layoutDiscord();
+});
 ipcMain.on("window:flash", () => {
   if (win && !win.isFocused()) win.flashFrame(true);
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  if (win) startUpdater(win);
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

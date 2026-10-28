@@ -11,11 +11,33 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-[Features](#features) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GustavoHSCruz/distopic-server)
+[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GustavoHSCruz/distopic-server)
 
 <img src="docs/screenshots/chat-and-voice.png" alt="Distopic client: channel list with voice, chat and member list" width="860">
 
 </div>
+
+## Download
+
+| Platform | File |
+| --- | --- |
+| **Windows 10/11** (x64) | [Distopic-Setup-x64.exe](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-Setup-x64.exe) |
+| **Linux** (x64) | [Distopic-x86_64.AppImage](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-x86_64.AppImage) |
+
+**Windows:** run the installer. It installs for your user only, so no admin
+rights are needed, and it creates Start menu and desktop shortcuts. The
+installer is not code-signed yet, so Windows SmartScreen may show *"Windows
+protected your PC"*. Click **More info → Run anyway**.
+
+**Linux:** `chmod +x Distopic-x86_64.AppImage` and run it. AppImages need FUSE 2
+(`libfuse2`), which most distributions ship.
+
+### Updates
+
+The app checks for new versions on launch and every few hours, and **always
+asks before updating**. A banner offers *Update* or *Later*. The one exception
+is a critical security fix: then the update downloads by itself and the app
+asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 
 ## Features
 
@@ -53,7 +75,7 @@
 | <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Sign in with Discord or a local account** |
 | <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
 
-## Getting started
+## Build from source
 
 Requires Node.js 22.13 or newer.
 
@@ -64,14 +86,18 @@ npm install
 npm run dev        # development with hot reload
 ```
 
-To run a production build locally:
+To run a production build locally, or to package installers:
 
 ```bash
-npm run build
-npm start
+npm run build && npm start
+npm run dist:linux     # dist/Distopic-x86_64.AppImage
+npm run dist:win       # dist/Distopic-Setup-x64.exe (needs Windows or Wine; CI builds it on Windows)
 ```
 
-On first launch:
+Releases are built by [GitHub Actions](.github/workflows/release.yml) when a
+GitHub release is published.
+
+## First launch
 
 1. Choose **Conectar a um servidor Distopic** (Connect to a Distopic server) and type the server address, for
    example `192.168.0.10` or `chat.example.com`. Without a port, the client
@@ -127,7 +153,8 @@ npm run sync:protocol -- ../distopic-server/packages/protocol/src
 
 - [ ] English UI and localization
 - [ ] Global push-to-talk hotkey (works when the window is unfocused)
-- [ ] Packaged builds: AppImage, Windows installer, macOS
+- [x] Windows installer and Linux AppImage with in-app updates
+- [ ] Code-signed Windows builds, macOS
 - [ ] Video and screen sharing in Distopic voice channels
 - [ ] Custom avatars and server icons
 

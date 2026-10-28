@@ -18,6 +18,7 @@ import { apiFor, openChannel, removeAccount, updateVoiceSettings } from "../clie
 import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
+import { UpdateSettings } from "./Updates.tsx";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
 const TEXT_PERMS: PermissionName[] = ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_MESSAGES", "ATTACH_FILES", "MENTION_EVERYONE"];
@@ -232,6 +233,14 @@ export function UserSettingsModal() {
             <MicMeter deviceId={settings.inputDeviceId} />
           </Field>
         )}
+      </section>
+
+      <section className="settings-section">
+        <h3>Atualizações</h3>
+        <UpdateSettings />
+        <p className="muted small">
+          Você sempre é avisado de versões novas e decide quando atualizar. A única exceção é uma correção de segurança crítica, que é obrigatória.
+        </p>
       </section>
 
       <section className="settings-section">

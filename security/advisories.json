@@ -1,0 +1,4 @@
+{
+  "$comment": "Read by every installed client to decide whether an update is mandatory. See SECURITY.md.",
+  "advisories": []
+}

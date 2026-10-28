@@ -9,6 +9,7 @@ import type {
   User,
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
+import type { UpdateState } from "../../shared/update.ts";
 import { useSyncExternalStore } from "react";
 
 export interface Account {
@@ -83,6 +84,10 @@ export interface AppState {
   settings: Settings;
   discordBadge: string | null;
   toast: { id: number; text: string } | null;
+  /** Owned by the main process; null outside Electron. */
+  update: UpdateState | null;
+  /** Version whose banner the user dismissed this session. */
+  updateDismissed: string | null;
 }
 
 const ACCOUNTS_KEY = "distopic.accounts";
@@ -142,6 +147,8 @@ let state: AppState = {
   settings: load(SETTINGS_KEY, DEFAULT_SETTINGS),
   discordBadge: null,
   toast: null,
+  update: null,
+  updateDismissed: null,
 };
 
 const listeners = new Set<() => void>();
