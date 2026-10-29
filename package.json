@@ -47,7 +47,7 @@
     "esbuild@0.28.2": true
   },
   "productName": "Annoy",
-  "author": "GeGLab",
+  "author": "Gustavo Cruz",
   "homepage": "https://distopic.geg.dev.br",
   "repository": {
     "type": "git",
@@ -56,7 +56,7 @@
   "build": {
     "appId": "br.dev.geg.distopic",
     "productName": "Annoy",
-    "copyright": "Copyright © 2026 GeGLab",
+    "copyright": "Copyright © 2026 Gustavo Cruz",
     "directories": {
       "output": "dist",
       "buildResources": "build"

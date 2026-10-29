@@ -174,7 +174,7 @@ npm run build
 
 ## License
 
-[MIT](LICENSE) © GeGLab
+[MIT](LICENSE) © Gustavo Cruz
 
 Annoy is not affiliated with or endorsed by Discord Inc. "Discord" is a
 trademark of Discord Inc.

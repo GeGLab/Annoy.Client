@@ -86,4 +86,4 @@ Discord web.
 
 ## Licença
 
-[MIT](LICENSE) © GeGLab. O Annoy não é afiliado ao Discord Inc.
+[MIT](LICENSE) © Gustavo Cruz. O Annoy não é afiliado ao Discord Inc.
