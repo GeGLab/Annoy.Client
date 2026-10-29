@@ -1,5 +1,6 @@
 import type { Settings } from "../store.ts";
 export const SCREEN_RESOLUTIONS = [
+  { value: 0, label: "Resolu??o nativa", width: 0, height: 0 },
   { value: 480, label: "480p", width: 854, height: 480 },
   { value: 720, label: "720p HD", width: 1280, height: 720 },
   { value: 1080, label: "1080p Full HD", width: 1920, height: 1080 },
@@ -8,8 +9,8 @@ export const SCREEN_RESOLUTIONS = [
   { value: 2160, label: "4K (3840 × 2160)", width: 3840, height: 2160 },
 ];
 export function screenProfile(settings: Pick<Settings, "screenHeight" | "screenFps">) {
-  const resolution = SCREEN_RESOLUTIONS.find((r) => r.value === settings.screenHeight) ?? SCREEN_RESOLUTIONS[2]!;
-  const fps = [15, 24, 30, 60, 120].includes(settings.screenFps) ? settings.screenFps : 30;
-  return { constraints: { width: { ideal: resolution.width, max: resolution.width }, height: { ideal: resolution.height, max: resolution.height }, frameRate: { ideal: fps, max: fps } }, maxBitrate: Math.round(Math.min(60_000_000, Math.max(800_000, resolution.width * resolution.height * fps * .085))), quality: { width: resolution.width, height: resolution.height, fps } };
+  const resolution = SCREEN_RESOLUTIONS.find((r) => r.value === settings.screenHeight) ?? SCREEN_RESOLUTIONS[3]!;
+  const fps = [0, 15, 24, 30, 60, 120].includes(settings.screenFps) ? settings.screenFps : 30;
+  return { constraints: { ...(resolution.width ? { width: { ideal: resolution.width, max: resolution.width }, height: { ideal: resolution.height, max: resolution.height } } : {}), frameRate: fps ? { ideal: fps, max: fps } : { ideal: 144 } }, maxBitrate: Math.round(Math.min(60_000_000, Math.max(800_000, (resolution.width || 3840) * (resolution.height || 2160) * (fps || 144) * .085))), quality: { width: resolution.width, height: resolution.height, fps } };
 }
-export const screenQualityLabel = (quality?: { width?: number; height: number; fps: number }) => quality ? `${quality.width === 2048 ? "2K" : quality.height === 2160 ? "4K" : `${quality.height}p`} ${quality.fps} FPS` : "Ao vivo";
+export const screenQualityLabel = (quality?: { width?: number; height: number; fps: number }) => quality ? `${quality.height === 0 ? "Nativa" : quality.width === 2048 ? "2K" : quality.height === 2160 ? "4K" : `${quality.height}p`} ${quality.fps ? `${quality.fps} FPS` : "Sem limite"}` : "Ao vivo";

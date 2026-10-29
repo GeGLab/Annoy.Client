@@ -21,6 +21,7 @@ import { UpdateSettings } from "../Updates.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
+import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
@@ -427,6 +428,13 @@ export function UserSettingsModal() {
                   {deviceSelect("Saída de áudio", "audiooutput", draft.outputDeviceId, "outputDeviceId")}
                 </div>
                 {deviceSelect("Câmera", "videoinput", draft.cameraDeviceId, "cameraDeviceId")}
+                </PreferenceCard>
+                <PreferenceCard icon="monitor" title="Transmissão de tela" description="Escolha resolução e FPS ao iniciar. O som do computador pode acompanhar a imagem no Windows.">
+                  <label className="check">
+                    <Switch checked={draft.screenAudio} disabled={saving || !screenAudioSupported()} onCheckedChange={(checked) => update({ screenAudio: checked })} />
+                    Transmitir o som do computador junto com a tela
+                  </label>
+                  {!screenAudioSupported() && <p className="muted small">Captura de som do computador disponível no Windows.</p>}
                 </PreferenceCard>
                 <PreferenceCard icon="sliders" title="Entrada de voz" description="Reduza ruídos e controle quando o microfone transmite sua voz.">
                 <Field

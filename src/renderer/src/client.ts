@@ -374,6 +374,12 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   }
 }
 
+function rejoinVoice(target: { accountId: string; serverId: string; channelId: string }): void {
+  void ensureServer(target.accountId, target.serverId).then((st) => {
+    if (st?.channels.some((c) => c.id === target.channelId)) void joinVoice(target.accountId, target.serverId, target.channelId);
+  });
+}
+
 export function leaveVoice(notifyServer = true): void {
   const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
@@ -504,16 +510,25 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.serverStates = {};
       });
       if (voice?.accountId === accountId) {
-        // The old session died with the socket; come back to the same room.
-        rejoin = { accountId, serverId: voice.serverId, channelId: voice.session.channelId };
-        leaveVoice(false);
-      }
-      if (rejoin?.accountId === accountId && event.d.servers.some((sv) => sv.id === rejoin?.serverId)) {
+        // A Cloudflare call keeps flowing without the gateway: take the same session
+        // back. Otherwise (or if that fails) the old session is gone; rejoin the room.
+        const current = voice;
+        void current.session.resume().then((resumed) => {
+          if (voice !== current) return;
+          if (resumed) {
+            setState((s) => {
+              if (s.voice) s.voice.canStream = current.session.canStream;
+            });
+            return;
+          }
+          const target = { accountId, serverId: current.serverId, channelId: current.session.channelId };
+          leaveVoice(false);
+          rejoinVoice(target);
+        });
+      } else if (rejoin?.accountId === accountId && event.d.servers.some((sv) => sv.id === rejoin?.serverId)) {
         const target = rejoin;
         rejoin = null;
-        void ensureServer(accountId, target.serverId).then((st) => {
-          if (st?.channels.some((c) => c.id === target.channelId)) void joinVoice(accountId, target.serverId, target.channelId);
-        });
+        rejoinVoice(target);
       }
       // Instances are small (TeamSpeak scale): load every server so unread
       // badges and voice rosters work without opening each one.

@@ -19,8 +19,10 @@ User scope, 2026-10-29. Client and companion server changes are developed on
 - [x] Login/register redesign and remembered account switching after logout.
 - [x] Default call banner only over external service views.
 - [x] Clean Annoy news/start destination.
-- [x] Final tests: 17 desktop, 6 activity, 5 discovery and 2 profile tests; both typechecks and client build.
-- [ ] Upstream fetch/integration, conflict review and PRs.
+- [x] Final tests: 17 desktop, 7 activity, 5 discovery and 2 profile tests; both typechecks and client build.
+- [x] Fetch/integrate client upstream 0.4.4 and server 0.4.3; resolve capture/settings conflicts.
+- [x] Post-merge checks: 16 desktop passes plus the updated settings test passing separately, 7 activity and 7 server tests, typechecks and build.
+- [ ] Linked PR publication.
 
 Git commit identity is configured globally and in both repositories as
 GuilhermeSDB <guilhermescarmagnani@outlook.com>. Git Credential Manager and the
@@ -33,3 +35,8 @@ anti-patterns; type-size advisories retain the existing compact desktop scale.
 Private video tests used deterministic generated media between two Electron
 clients. Physical cameras, cross-network TURN and hardware-dependent 4K capture
 remain deployment/manual checks.
+
+Integration preserves upstream system audio, frame-rate/content hints, native
+capture, uncapped FPS, Cloudflare stream budgets and call recovery. Old saved
+FPS preferences migrate to the new resolution/FPS picker. New quality metadata
+uses zero to label native/uncapped choices without imposing capture caps.

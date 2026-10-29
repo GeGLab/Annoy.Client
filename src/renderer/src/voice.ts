@@ -6,6 +6,7 @@ import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Gateway } from "./gateway.ts";
 import type { Settings } from "./store.ts";
+import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
 
 type TransportInfo = {
   id: string;
@@ -14,12 +15,6 @@ type TransportInfo = {
   dtlsParameters: ms.DtlsParameters;
 };
 
-
-/** Sender limits; the SFU forwards one encoding, so these bound everyone's download too. */
-const VIDEO_PROFILES = {
-  camera: { constraints: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, maxBitrate: 1_200_000 },
-  screen: { constraints: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } }, maxBitrate: 3_500_000 },
-} as const;
 
 interface RemoteMedia {
   consumer: ms.Consumer;
@@ -38,6 +33,10 @@ export class VoiceSession {
   private recv: ms.Transport | null = null;
   private producer: ms.Producer | null = null;
   private video = new Map<"camera" | "screen", { producer: ms.Producer; track: MediaStreamTrack }>();
+  /** Sound shared together with the screen. */
+  private screenAudio: { producer: ms.Producer; track: MediaStreamTrack } | null = null;
+  /** The server accepts "screen_audio"; older ones would take it for a second mic. */
+  private serverScreenAudio = false;
   private consumers = new Map<string, RemoteMedia>();
   private micGate: MicGate | null = null;
   private closed = false;
@@ -56,13 +55,14 @@ export class VoiceSession {
   ) {}
 
   async start(): Promise<void> {
-    const joined = await this.gw.voice<{ rtpCapabilities: ms.RtpCapabilities; canSpeak: boolean; canStream: boolean }>("join", {
+    const joined = await this.gw.voice<{ rtpCapabilities: ms.RtpCapabilities; canSpeak: boolean; canStream: boolean; screenAudio?: boolean }>("join", {
       channelId: this.channelId,
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
     });
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
+    this.serverScreenAudio = joined.screenAudio === true;
     const { Device } = await import("mediasoup-client");
     if (this.closed) return;
     this.device = await Device.factory();
@@ -100,7 +100,7 @@ export class VoiceSession {
     const track = await this.micGate.start();
     this.producer = await this.send!.produce({
       track,
-      codecOptions: { opusDtx: true, opusFec: true },
+      codecOptions: { opusDtx: true, opusFec: true, opusMaxAverageBitrate: OPUS_VOICE.maxaveragebitrate },
       stopTracks: false,
       appData: { source: "mic" },
     });
@@ -115,6 +115,11 @@ export class VoiceSession {
       audio.muted = settings.selfDeaf;
       if (deviceChanged) void this.applySink(audio);
     }
+  }
+
+  /** Media runs through the server, so a reconnect always means rejoining. */
+  resume(): Promise<boolean> {
+    return Promise.resolve(false);
   }
 
   setPushToTalk(down: boolean): void {
@@ -141,15 +146,21 @@ export class VoiceSession {
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
     if (!this.send || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
-    const profile = source === "screen" ? screenProfile(this.settings) : VIDEO_PROFILES.camera;
+    const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
+    const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })
-        : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: false });
+        : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
     const track = stream.getVideoTracks()[0];
+    const sound = stream.getAudioTracks()[0];
     if (!track) throw new Error("Nenhuma imagem capturada");
-    if (source === "screen") track.contentHint = "detail";
-    if (this.closed) return void track.stop();
+    // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
+    if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
+    if (this.closed) {
+      track.stop();
+      return void sound?.stop();
+    }
     const producer = await this.send.produce({
       track,
       encodings: [{ maxBitrate: profile.maxBitrate }],
@@ -157,6 +168,19 @@ export class VoiceSession {
       appData: { source },
     });
     this.video.set(source, { producer, track });
+    if (sound) {
+      try {
+        const audio = await this.send.produce({
+          track: sound,
+          codecOptions: { opusStereo: true, opusDtx: false, opusFec: true, opusMaxAverageBitrate: OPUS_SCREEN.maxaveragebitrate },
+          appData: { source: "screen_audio" },
+        });
+        this.screenAudio = { producer: audio, track: sound };
+      } catch (err) {
+        sound.stop();
+        console.warn("screen audio failed", err);
+      }
+    }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });
     // The OS "stop sharing" control (or an unplugged camera) ends the track.
     track.addEventListener("ended", () => void this.stopVideo(source));
@@ -169,9 +193,16 @@ export class VoiceSession {
     this.video.delete(source);
     entry.producer.close();
     entry.track.stop();
+    const sound = source === "screen" ? this.screenAudio : null;
+    if (sound) {
+      this.screenAudio = null;
+      sound.producer.close();
+      sound.track.stop();
+    }
     dropTile(`local:${source}`);
     this.onLocalMedia();
-    if (!this.closed) await this.gw.voice("closeProducer", { producerId: entry.producer.id }).catch(() => undefined);
+    if (this.closed) return;
+    for (const { producer } of sound ? [entry, sound] : [entry]) await this.gw.voice("closeProducer", { producerId: producer.id }).catch(() => undefined);
   }
 
   // Remote media --------------------------------------------------------
@@ -228,6 +259,9 @@ export class VoiceSession {
       track.stop();
     }
     this.video.clear();
+    this.screenAudio?.producer.close();
+    this.screenAudio?.track.stop();
+    this.screenAudio = null;
     clearTiles();
     this.producer?.close();
     this.send?.close();

@@ -162,3 +162,8 @@ permanente. O status ausente usa a inatividade do sistema operacional; o padrão
 A detecção de programação usa títulos de janelas de editores conhecidos. O
 adaptador publica nomes de arquivo/projeto e linguagem, sem caminhos completos
 nem conteúdo de arquivos. O compartilhamento geral também controla essa categoria.
+
+A integração com upstream 0.4.4 preserva áudio de sistema no Windows, captura
+com resolução nativa/FPS sem limite, orçamento por transmissão e recuperação
+de sala após reinícios. Preferências antigas de FPS são migradas para o seletor
+novo. Os valores zero de qualidade indicam resolução nativa ou FPS sem limite.

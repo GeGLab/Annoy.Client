@@ -185,7 +185,7 @@ export function ScreenPickerModal() {
       <p className="muted small">Escolha a qualidade antes de transmitir. Resoluções e FPS maiores usam mais rede e processamento; o dispositivo pode limitar a captura.</p>
       <div className="grid-2 screen-quality-options">
         <Field label="Resolução"><Select aria-label="Resolução da transmissão" value={String(settings.screenHeight)} onChange={(event) => setState((s) => { s.settings.screenHeight = Number(event.target.value); })}>{SCREEN_RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field>
-        <Field label="Quadros por segundo"><Select aria-label="FPS da transmissão" value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps} FPS</option>)}</Select></Field>
+        <Field label="Quadros por segundo"><Select aria-label="FPS da transmissão" value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? `${fps} FPS` : "Sem limite"}</option>)}</Select></Field>
       </div>
       {system ? <button className="btn" onClick={() => { closeModal(); void startScreenShare(null); }}><Icon name="monitor" />Escolher tela ou janela</button> : <>
       <div className="tabs">

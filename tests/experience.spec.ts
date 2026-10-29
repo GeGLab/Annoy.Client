@@ -379,7 +379,10 @@ test("message sounds, channel/server mute, DM shortcuts, hover layout and settin
     await expect.poll(async () => Math.abs((await badge.boundingBox())!.x - original.x)).toBeLessThan(2);
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await page.getByRole("button", { name: "Voz e vídeo", exact: true }).click();
-    await expect(page.locator(".preference-card")).toHaveCount(3);
+    await expect(page.getByRole("heading", { name: "Dispositivos", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Entrada de voz", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Transmissão de tela", exact: true })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "Transmitir o som do computador junto com a tela", exact: true })).toBeChecked();
     await page.screenshot({ path: join(capture, "preferences-cards-dark.png") });
     await page.getByRole("button", { name: "Notificações", exact: true }).click();
     await page.getByRole("switch", { name: "Sons de mensagens", exact: true }).uncheck();

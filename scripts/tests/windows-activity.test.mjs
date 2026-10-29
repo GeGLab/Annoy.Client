@@ -80,3 +80,19 @@ test("automatic away observes the configured boundary and supports disabling", (
   assert.equal(isAway(10_000, 0), false);
   assert.equal(isAway(NaN, 10), false);
 });
+
+
+test("screen profiles preserve selected caps, 2K labels and upstream native/uncapped mode", async () => {
+  const { screenProfile, screenQualityLabel } = await import("../../src/renderer/src/lib/screen-profile.ts");
+  const selected = screenProfile({ screenHeight: 2048, screenFps: 60 });
+  assert.equal(selected.constraints.width.max, 2048);
+  assert.equal(selected.constraints.height.max, 1080);
+  assert.equal(selected.constraints.frameRate.max, 60);
+  assert.equal(screenQualityLabel(selected.quality), "2K 60 FPS");
+  assert.ok(Number.isInteger(selected.maxBitrate));
+  const native = screenProfile({ screenHeight: 0, screenFps: 0 });
+  assert.equal(native.constraints.width, undefined);
+  assert.equal(native.constraints.frameRate.max, undefined);
+  assert.equal(screenQualityLabel(native.quality), "Nativa Sem limite");
+  assert.ok(native.maxBitrate <= 60_000_000);
+});

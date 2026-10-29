@@ -116,6 +116,7 @@ export interface Settings {
   awayMinutes: number;
   screenHeight: number;
   screenFps: number;
+  screenAudio: boolean;
 }
 
 export interface AppState {
@@ -178,12 +179,19 @@ const DEFAULT_SETTINGS: Settings = {
   awayMinutes: 10,
   screenHeight: 1080,
   screenFps: 30,
+  screenAudio: true,
 };
 
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? ({ ...fallback, ...JSON.parse(raw) } as T) : fallback;
+    if (!raw) return fallback;
+    const saved = JSON.parse(raw);
+    if (key === "distopic.settings" && saved.screenFps === undefined && saved.screenQuality) {
+      saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
+      if (saved.screenQuality === "max") saved.screenHeight = 0;
+    }
+    return { ...fallback, ...saved } as T;
   } catch {
     return fallback;
   }

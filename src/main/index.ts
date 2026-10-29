@@ -5,7 +5,7 @@ import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
 
-const MEDIA_PERMISSIONS = new Set(["media", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
+const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
 let win: BrowserWindow | null = null;
 const stopActivity = registerActivity(ipcMain, () => win);
@@ -70,12 +70,14 @@ function configureSession(s: Session, own: boolean): void {
   s.setPermissionRequestHandler((_wc, permission, callback) => callback(MEDIA_PERMISSIONS.has(permission)));
   s.setPermissionCheckHandler((_wc, permission) => MEDIA_PERMISSIONS.has(permission));
   s.setDisplayMediaRequestHandler(
-    async (_request, callback) => {
+    async (request, callback) => {
       const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
       // Annoy's own UI picks a source first; services (and the portal case) take what the system offers.
       const picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : sources[0];
       chosenScreenSource = null;
-      callback(picked ? { video: picked, audio: !own && process.platform === "win32" ? "loopback" : undefined } : {});
+      // Windows can add the system's sound (WASAPI loopback); Annoy asks for it only when the user shares audio.
+      const loopback = process.platform === "win32" && (!own || request.audioRequested);
+      callback(picked ? { video: picked, audio: loopback ? "loopback" : undefined } : {});
     },
     { useSystemPicker: true },
   );
