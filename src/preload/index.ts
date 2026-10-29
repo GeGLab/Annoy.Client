@@ -16,6 +16,11 @@ const bridge = {
       return () => ipcRenderer.off("activity:snapshot", handler);
     },
   },
+  /** Kept by the OS keychain; null when there's none (the value isn't stored then). */
+  secrets: {
+    get: (name: "global") => ipcRenderer.invoke("secrets:get", name) as Promise<string | null>,
+    set: (name: "global", value: string | null) => ipcRenderer.invoke("secrets:set", name, value) as Promise<boolean>,
+  },
   window: {
     minimize: () => ipcRenderer.send("window:control", "minimize"),
     maximize: () => ipcRenderer.send("window:control", "maximize"),

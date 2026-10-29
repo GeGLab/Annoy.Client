@@ -28,7 +28,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
     return (
       <div className="bot-platform-empty">
         <Icon name="bot" size={44} />
-        <h2>A loja precisa do suporte da sua instância</h2>
+        <h2>As integrações precisam do suporte da sua instância</h2>
         <p>
           Este servidor ainda não oferece instalação e execução de bots Annoy. Quem hospeda a instância precisa habilitar a plataforma
           antes de você instalar um bot.
@@ -47,7 +47,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
     return (
       <div className="bot-platform-empty">
         <Icon name="wifiOff" size={36} />
-        <h2>Não foi possível abrir a loja</h2>
+        <h2>Não foi possível abrir as integrações</h2>
         <p role="alert">{error}</p>
         <Button variant="secondary" onClick={() => void refresh()}>
           Tentar novamente
@@ -125,7 +125,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
         {!snapshot.canManage && (
           <p className="bot-notice">
             <Icon name="lock" size={16} />
-            Você pode consultar a loja. Para alterar bots, peça permissão a quem administra o servidor.
+            Você pode consultar as integrações. Para alterar bots, peça permissão a quem administra o servidor.
           </p>
         )}
         {error && (
@@ -211,7 +211,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
         ) : (
           <div className="bot-list-empty">
             <Icon name="bot" size={36} />
-            <h3>{query ? "Nenhum bot encontrado" : "Seu primeiro bot começa na loja"}</h3>
+            <h3>{query ? "Nenhum bot encontrado" : "Sua primeira integração começa aqui"}</h3>
             <p className="muted">{query ? "Tente outro nome." : "Explore o catálogo para adicionar um bot ao servidor."}</p>
             {!query && (
               <Button variant="secondary" onClick={() => setTab("catalog")}>
@@ -289,8 +289,8 @@ export default function Marketplace({ accountId, serverId }: { accountId: string
   return (
     <section className="marketplace">
       <header className="chat-header">
-        <Icon name="store" size={21} />
-        <h1>Loja de bots</h1>
+        <Icon name="cable" size={21} />
+        <h1>Integrações</h1>
         <span className="marketplace-context">Annoy</span>
         <span className="spacer" />
         {selected && (
