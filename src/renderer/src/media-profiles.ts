@@ -78,3 +78,36 @@ export function tuneOpus(sdp: string, byMid: ReadonlyMap<string, Record<string, 
       .join("")
   );
 }
+
+/**
+ * Cloudflare's answers may renumber RTP header extensions on a section that is
+ * already negotiated (closing a track does it), which Chromium refuses and
+ * leaves the connection stuck. Keep the numbers we already agreed on: for each
+ * section we know, extensions take our ID by URI, and unknown ones are dropped.
+ */
+export function alignExtmap(remote: string, local: string | undefined): string {
+  if (!local) return remote;
+  const idsByMid = new Map<string, Map<string, string>>();
+  for (const section of local.split(/(?=^m=)/m).slice(1)) {
+    const mid = /^a=mid:(\S+)/m.exec(section)?.[1];
+    if (!mid) continue;
+    const ids = new Map<string, string>();
+    for (const [, id, uri] of section.matchAll(/^a=extmap:(\d+)(?:\/\w+)? (\S+)/gm)) ids.set(uri!, id!);
+    idsByMid.set(mid, ids);
+  }
+  const [head, ...sections] = remote.split(/(?=^m=)/m);
+  return (
+    head +
+    sections
+      .map((section) => {
+        const mid = /^a=mid:(\S+)/m.exec(section)?.[1];
+        const ids = mid ? idsByMid.get(mid) : undefined;
+        if (!ids) return section;
+        return section.replace(/^a=extmap:(\d+)((?:\/\w+)?) (\S+)(.*)(\r?\n)/gm, (_line, _id, dir: string, uri: string, rest: string, eol: string) => {
+          const id = ids.get(uri);
+          return id ? `a=extmap:${id}${dir} ${uri}${rest}${eol}` : "";
+        });
+      })
+      .join("")
+  );
+}

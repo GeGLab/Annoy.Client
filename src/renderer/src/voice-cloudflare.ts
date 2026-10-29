@@ -6,7 +6,7 @@ import type { Gateway } from "./gateway.ts";
 import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Settings } from "./store.ts";
-import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, screenProfile, tuneOpus } from "./media-profiles.ts";
+import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, screenProfile, tuneOpus } from "./media-profiles.ts";
 
 interface Remote {
   source: MediaSource;
@@ -103,7 +103,9 @@ export class CloudflareVoiceSession {
   }
 
   private setRemote(pc: RTCPeerConnection, type: "offer" | "answer", sdp: string): Promise<void> {
-    return pc.setRemoteDescription({ type, sdp: tuneOpus(sdp, this.opus) });
+    // Answers must keep the extension IDs of our offer; offers may introduce new sections.
+    const aligned = type === "answer" ? alignExtmap(sdp, pc.localDescription?.sdp) : alignExtmap(sdp, pc.currentLocalDescription?.sdp);
+    return pc.setRemoteDescription({ type, sdp: tuneOpus(aligned, this.opus) });
   }
 
   private subscribe(producerId: string, userId: string, source: MediaSource) {
