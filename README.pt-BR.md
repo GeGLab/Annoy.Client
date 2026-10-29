@@ -41,6 +41,9 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
   "digitando…".
 - **Voz:** detecção de voz com medidor ou apertar para falar, mute/deafen,
   escolha de dispositivos, indicador de fala e moderação.
+- **Filtro de ruído com IA:** o microfone passa por um filtro local (GTCRN ou
+  RNNoise, embutido no app) que tira teclado, cliques e ventilador antes de
+  alguém ouvir. Veja as [medições](docs/noise-suppression.md).
 - **Moderação:** editor de cargos, permissões por canal, convites, expulsar e
   banir.
 - **Amigos e DMs:** pedidos de amizade, presença e mensagens diretas.

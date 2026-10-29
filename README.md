@@ -55,6 +55,10 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   and fullscreen. Pick a screen or window to share (the system portal on
   Wayland). Voice activity detection with a sensitivity meter or push-to-talk,
   device selection, speaking rings, server mute and disconnect for moderators.
+- **Neural noise suppression.** Your microphone goes through a local AI filter
+  (GTCRN or RNNoise, bundled, nothing downloaded) that removes keyboards, clicks
+  and fans before anyone hears them. See the
+  [measurements](docs/noise-suppression.md).
 - **Instance admin.** If you host the instance: sign-up mode, sign-up invites,
   accounts and servers, all from Settings.
 - **Survives outages.** Server tabs stay visible while offline, reconnect with

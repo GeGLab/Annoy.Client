@@ -18,6 +18,7 @@ import { apiFor, openChannel, removeAccount, updateVoiceSettings } from "../clie
 import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
+import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../noise.ts";
 import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 
@@ -38,22 +39,21 @@ function keyLabel(code: string): string {
   return code.replace(/^Key/, "").replace(/^Digit/, "").replace("Backquote", "` (crase)");
 }
 
-function MicMeter({ deviceId }: { deviceId: string }) {
+/** Live level of the filtered microphone, optionally played back so you can hear the filter. */
+function MicMeter({ deviceId, filter, monitor }: { deviceId: string; filter: NoiseFilter; monitor: boolean }) {
   const [level, setLevel] = useState(0);
   const threshold = useStore((s) => s.settings.vadThreshold);
+  const micRef = useRef<Mic | null>(null);
   useEffect(() => {
     let stop = false;
-    let stream: MediaStream | null = null;
-    let ctx: AudioContext | null = null;
-    void navigator.mediaDevices
-      .getUserMedia({ audio: { deviceId: deviceId === "default" ? undefined : { exact: deviceId } } })
-      .then((s) => {
-        if (stop) return s.getTracks().forEach((t) => t.stop());
-        stream = s;
-        ctx = new AudioContext();
-        const analyser = ctx.createAnalyser();
+    void openMic(deviceId, filter)
+      .then((mic) => {
+        if (stop) return mic.stop();
+        micRef.current = mic;
+        const analyser = mic.ctx.createAnalyser();
         analyser.fftSize = 512;
-        ctx.createMediaStreamSource(s).connect(analyser);
+        mic.output.connect(analyser);
+        if (monitor) mic.output.connect(mic.ctx.destination);
         const buf = new Uint8Array(analyser.fftSize);
         const loop = () => {
           if (stop) return;
@@ -68,10 +68,10 @@ function MicMeter({ deviceId }: { deviceId: string }) {
       .catch(() => toast("Não foi possível acessar o microfone"));
     return () => {
       stop = true;
-      stream?.getTracks().forEach((t) => t.stop());
-      void ctx?.close();
+      micRef.current?.stop();
+      micRef.current = null;
     };
-  }, [deviceId]);
+  }, [deviceId, filter, monitor]);
   return (
     <div className="meter">
       <div className={`meter-fill${level >= threshold ? " hot" : ""}`} style={{ width: `${Math.min(100, level)}%` }} />
@@ -151,6 +151,7 @@ export function UserSettingsModal() {
   const settings = useStore((s) => s.settings);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [capturing, setCapturing] = useState(false);
+  const [monitor, setMonitor] = useState(false);
 
   const update = (patch: Partial<Settings>) => {
     setState((s) => {
@@ -232,6 +233,20 @@ export function UserSettingsModal() {
             ))}
           </select>
         </Field>
+        <Field label="Filtro de ruído" hint={`${NOISE_FILTERS.find((f) => f.value === settings.noiseFilter)?.hint ?? ""} Vale para a próxima conexão de voz.`}>
+          <select value={settings.noiseFilter} onChange={(e) => update({ noiseFilter: e.target.value as NoiseFilter })}>
+            {NOISE_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <label className="check">
+          <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
+          Ouvir meu microfone com o filtro (use fone de ouvido)
+        </label>
+        {(monitor || settings.inputMode === "ptt") && <MicMeter deviceId={settings.inputDeviceId} filter={settings.noiseFilter} monitor={monitor} />}
         <Field label="Modo de entrada" hint="A mudança vale para a próxima conexão de voz">
           <div className="radio-row">
             <label>
@@ -251,7 +266,7 @@ export function UserSettingsModal() {
         ) : (
           <Field label={`Sensibilidade: ${settings.vadThreshold}`} hint="Fale e ajuste até a barra ficar verde só quando você fala">
             <input type="range" min={1} max={60} value={settings.vadThreshold} onChange={(e) => update({ vadThreshold: Number(e.target.value) })} />
-            <MicMeter deviceId={settings.inputDeviceId} />
+            {!monitor && <MicMeter deviceId={settings.inputDeviceId} filter={settings.noiseFilter} monitor={false} />}
           </Field>
         )}
       </section>

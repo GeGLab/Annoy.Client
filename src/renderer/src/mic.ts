@@ -1,13 +1,14 @@
 // Microphone capture with voice-activity or push-to-talk gating, shared by
-// every voice backend. The analyser listens to the raw track; the gate only
-// toggles the transmitted clone, so detection keeps working while closed.
+// every voice backend. The analyser listens to the filtered signal (so a
+// keyboard doesn't open the gate); the gate only toggles the transmitted
+// track, so detection keeps working while closed.
+import { openMic, type Mic } from "./noise.ts";
 import type { Settings } from "./store.ts";
 
 const VAD_HOLD_MS = 400;
 
 export class MicGate {
-  private stream: MediaStream | null = null;
-  private ctx: AudioContext | null = null;
+  private mic: Mic | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastVoiceAt = 0;
   private pttDown = false;
@@ -22,16 +23,11 @@ export class MicGate {
   ) {}
 
   async start(): Promise<MediaStreamTrack> {
-    const deviceId = this.settings.inputDeviceId === "default" ? undefined : { exact: this.settings.inputDeviceId };
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-    const raw = this.stream.getAudioTracks()[0]!;
-    this.track = raw.clone();
-    this.ctx = new AudioContext();
-    const analyser = this.ctx.createAnalyser();
+    this.mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter);
+    this.track = this.mic.track;
+    const analyser = this.mic.ctx.createAnalyser();
     analyser.fftSize = 512;
-    this.ctx.createMediaStreamSource(new MediaStream([raw])).connect(analyser);
+    this.mic.output.connect(analyser);
     const buf = new Uint8Array(analyser.fftSize);
     this.timer = setInterval(() => {
       analyser.getByteTimeDomainData(buf);
@@ -68,9 +64,8 @@ export class MicGate {
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
-    this.track?.stop();
-    for (const t of this.stream?.getTracks() ?? []) t.stop();
-    void this.ctx?.close();
+    this.mic?.stop();
+    this.mic = null;
     this.track = null;
   }
 }

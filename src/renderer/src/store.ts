@@ -11,6 +11,7 @@ import type {
 import { produce, type Draft } from "immer";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
 import type { UpdateState } from "../../shared/update.ts";
+import type { NoiseFilter } from "./noise.ts";
 import { useSyncExternalStore } from "react";
 
 export interface Account {
@@ -86,6 +87,7 @@ export interface Settings {
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
+  noiseFilter: NoiseFilter;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
@@ -123,6 +125,7 @@ const DEFAULT_SETTINGS: Settings = {
   selfMute: false,
   selfDeaf: false,
   notifications: true,
+  noiseFilter: "gtcrn",
   servicePlacement: "before",
   serviceDisplay: "full",
 };
