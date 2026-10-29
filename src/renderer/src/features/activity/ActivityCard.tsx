@@ -3,6 +3,7 @@ import type { UserActivity } from "@distopic/protocol";
 import { useState } from "react";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { DevelopmentIcon } from "./DevelopmentIcon.tsx";
+import { GameIcon } from "./GameIcon.tsx";
 
 export function ActivityCard({ activity, compact = false }: { activity: UserActivity; compact?: boolean }) {
   const game = activity.kind === "game";
@@ -18,7 +19,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
           : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : <Headphones size={compact ? 20 : 28} aria-hidden />}
       </span>
       <div>
-        <small className="activity-provider">{game ? <Gamepad2 size={compact ? 12 : 16} aria-hidden /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? `Programando · ${{ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": "Visual Studio" }[activity.provider as "vscode"] ?? activity.provider}` : game ? "Jogando" : `Ouvindo no ${activity.provider === "spotify" ? "Spotify" : "Apple Music"}`}</small>
+        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? `Programando · ${{ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": "Visual Studio" }[activity.provider as "vscode"] ?? activity.provider}` : game ? "Jogando" : `Ouvindo no ${activity.provider === "spotify" ? "Spotify" : "Apple Music"}`}</small>
         <strong title={activity.name}>{activity.name}</strong>
         {activity.artist && <span title={activity.artist}>{activity.artist}</span>}
         {development && activity.file && <span className="activity-file" title={activity.file}><DevelopmentIcon name={activity.language ?? "code"} size={14} />{activity.file}</span>}

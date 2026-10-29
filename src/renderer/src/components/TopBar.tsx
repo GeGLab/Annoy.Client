@@ -11,6 +11,7 @@ import { VoicePanel, DeviceMenu } from "./VoicePanel.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import { visibleUserActivities } from "../../../shared/activity.ts";
+import { ServerTabMenu } from "./ServerTabMenu.tsx";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -30,19 +31,19 @@ function ServerTab({ account, server, inst }: { account: Account; server: Server
   const active = view.kind === "server" && view.accountId === account.id && view.serverId === server.id;
   const unread = unreadFor(inst, inst?.serverStates[server.id]?.channels.map((c) => c.id) ?? []);
   return (
-    <Tooltip content={`${server.name} · ${account.instanceName}`}>
+    <ServerTabMenu account={account} server={server} inst={inst}>
       <button
         className={`tab-item${active ? " active" : ""}${unread.count ? " unread" : ""}${inst?.status === "ready" ? "" : " offline"}`}
         onClick={() => void openServer(account.id, server.id)}
         aria-label={`${server.name} · ${account.instanceName}`}
         aria-current={active ? "page" : undefined}
-        title={`${server.name} · ${account.instanceName}`}
+        title={`${server.name} · ${account.instanceName} · botão direito para opções`}
       >
         <span className="tab-tile">{initials(server.name)}</span>
         <span className="rail-label">{server.name}</span>
         {unread.mention && <span className="tab-badge">{unread.count}</span>}
       </button>
-    </Tooltip>
+    </ServerTabMenu>
   );
 }
 

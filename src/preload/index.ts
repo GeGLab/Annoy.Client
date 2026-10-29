@@ -10,6 +10,7 @@ const bridge = {
     configure: (preferences: ActivityPreferences) =>
       ipcRenderer.invoke("activity:configure", preferences) as Promise<DesktopActivitySnapshot>,
     get: () => ipcRenderer.invoke("activity:get") as Promise<DesktopActivitySnapshot>,
+    gameIcon: (appId: string) => ipcRenderer.invoke("activity:game-icon", appId) as Promise<string | null>,
     onSnapshot(listener: (snapshot: DesktopActivitySnapshot) => void): () => void {
       const handler = (_event: IpcRendererEvent, snapshot: DesktopActivitySnapshot) => listener(snapshot);
       ipcRenderer.on("activity:snapshot", handler);

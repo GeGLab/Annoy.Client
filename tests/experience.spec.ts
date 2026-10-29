@@ -296,9 +296,16 @@ test("call membership sounds, stable participants, status icons and channel swit
 });
 
 test("voice names show local and online game activity, respecting sharing and friendship", async () => {
-  const { page, close } = await launch();
+  const { page, app, close } = await launch();
   try {
     await seed(page);
+    const icon = "https://shared.fastly.steamstatic.com/community_assets/images/apps/730/" + "a".repeat(40) + ".jpg";
+    const iconJpeg = await app.evaluate(({ nativeImage }, path) => nativeImage.createFromPath(path).resize({ width: 32 }).toJPEG(75).toString("base64"), resolve("build/icon.png"));
+    await page.route(icon, (route) => route.fulfill({ contentType: "image/jpeg", body: Buffer.from(iconJpeg, "base64") }));
+    await app.evaluate(({ ipcMain }, icon) => {
+      ipcMain.removeHandler("activity:game-icon");
+      ipcMain.handle("activity:game-icon", (_event, appId) => appId === "730" ? icon : null);
+    }, icon);
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
@@ -319,6 +326,8 @@ test("voice names show local and online game activity, respecting sharing and fr
     const self = page.locator('.voice-user[data-user-id="person"]');
     const friend = page.locator('.voice-user[data-user-id="friend"]');
     await expect(self.getByRole("img", { name: "Jogando Local game", exact: true })).toBeVisible();
+    await expect(self.locator(".voice-activity-game .game-icon")).toHaveAttribute("src", icon);
+    await expect.poll(() => self.locator(".game-icon").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(32);
     await expect(self.getByRole("img", { name: "Ouvindo Song", exact: true })).toBeVisible();
     await expect(self.getByRole("img", { name: "Programando · Project", exact: true })).toBeVisible();
     await expect(friend.getByRole("img", { name: "Jogando Friend's game", exact: true })).toBeVisible();
@@ -337,6 +346,96 @@ test("voice names show local and online game activity, respecting sharing and fr
     });
     await expect(self.locator(".voice-activity")).toHaveCount(0);
     await expect(friend.getByRole("img", { name: "Jogando Friend's game", exact: true })).toBeVisible();
+  } finally { await close(); }
+});
+
+test("old server connections have a context menu and require only Confirm or Cancel to remove", async () => {
+  const { page, close } = await launch();
+  const destructiveRequests: string[] = [];
+  try {
+    await seed(page);
+    await page.route("https://old-server.test/api/**", (route) => {
+      if (route.request().method() === "DELETE") destructiveRequests.push(route.request().url());
+      return route.fulfill({ contentType: "application/json", body: "{}" });
+    });
+    await page.evaluate(async () => {
+      const { setState, getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const old = structuredClone(getState().instances.test);
+      old.status = "invalid";
+      old.servers[0].name = "Servidor antigo";
+      setState((s: any) => {
+        s.accounts.push({ ...s.accounts[0], id: "old", url: "https://old-server.test", instanceName: "Conexão antiga" });
+        s.instances.old = old;
+      });
+    });
+    const oldTab = page.getByRole("button", { name: "Servidor antigo · Conexão antiga", exact: true });
+    const currentTab = page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true });
+    await oldTab.click({ button: "right" });
+    const menu = page.getByRole("menu", { name: "Opções de Servidor antigo" });
+    await expect(menu.getByRole("menuitem", { name: "Copiar endereço", exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await menu.getByRole("menuitem", { name: "Remover da barra…", exact: true }).click();
+    const confirmation = page.getByRole("alertdialog");
+    await expect(confirmation.getByRole("heading")).toHaveText("Remover servidor?");
+    await expect(confirmation.locator(".action-dialog-description")).toHaveText("Servidor antigo");
+    await expect(confirmation).not.toContainText("https://");
+    await expect(confirmation.getByRole("textbox")).toHaveCount(0);
+    await expect(confirmation.getByRole("button")).toHaveCount(2);
+    await confirmation.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(oldTab).toBeVisible();
+    await expect(confirmation).toHaveCount(0);
+    await oldTab.focus();
+    await oldTab.press("Shift+F10");
+    await menu.getByRole("menuitem", { name: "Remover da barra…", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Confirmar", exact: true }).click();
+    await expect(oldTab).toHaveCount(0);
+    await expect(confirmation).toHaveCount(0);
+    await expect(currentTab).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts") ?? "[]").map((a: any) => a.id))).toEqual(["test"]);
+    expect(destructiveRequests).toEqual([]);
+  } finally { await close(); }
+});
+
+test("server context menu scopes unread and notifications and respects administrative permissions", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.test.unread = { general: { count: 3, mention: true }, other: { count: 2, mention: false }, dm: { count: 4, mention: false } };
+      });
+    });
+    const tab = page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true });
+    const menu = page.getByRole("menu", { name: "Opções de Comunidade de teste" });
+    await tab.click({ button: "right" });
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(menu.getByRole("menuitem", { name: "Convidar pessoas", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Configurações do servidor", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Criar canal", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Sair do servidor…", exact: true })).toHaveCount(0);
+    await menu.getByRole("menuitem", { name: "Marcar como lido", exact: true }).click();
+    expect(await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().instances.test.unread;
+    })).toEqual({ other: { count: 2, mention: false }, dm: { count: 4, mention: false } });
+    await tab.click({ button: "right" });
+    await menu.getByRole("menuitem", { name: "Silenciar servidor", exact: true }).click();
+    await tab.focus();
+    await tab.press("Shift+F10");
+    await expect(menu.getByRole("menuitem", { name: "Ativar notificações do servidor", exact: true })).toBeVisible();
+    await menu.press("Escape");
+    await expect(tab).toBeFocused();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.user.id = "other-user"; s.instances.test.serverStates.server.permissions = 0; });
+    });
+    await tab.click({ button: "right" });
+    for (const name of ["Convidar pessoas", "Configurações do servidor", "Criar canal", "Criar categoria"])
+      await expect(menu.getByRole("menuitem", { name, exact: true })).toHaveCount(0);
+    await expect(menu.getByRole("menuitem", { name: "Sair do servidor…", exact: true })).toBeVisible();
   } finally { await close(); }
 });
 

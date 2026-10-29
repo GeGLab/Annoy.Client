@@ -1,10 +1,11 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { Button } from "./button.tsx";
 import { Input } from "./input.tsx";
 type Request = {
   id: number;
   message: string;
+  title: string;
   prompt: boolean;
   /** Hide what's typed (a password). */
   secret: boolean;
@@ -21,12 +22,13 @@ function ask(
   message: string,
   prompt: boolean,
   value = "",
-  options?: { confirmLabel?: string; cancelLabel?: string; secret?: boolean },
+  options?: { title?: string; confirmLabel?: string; cancelLabel?: string; secret?: boolean },
 ): Promise<string | boolean | null> {
   return new Promise((resolve) => {
     queue.push({
       id: ++sequence,
       message,
+      title: options?.title ?? (prompt ? "Confirme os detalhes" : "Confirmar ação"),
       prompt,
       secret: options?.secret ?? false,
       value,
@@ -37,7 +39,7 @@ function ask(
     emit();
   });
 }
-export async function confirmAction(message: string, options?: { confirmLabel?: string; cancelLabel?: string }) {
+export async function confirmAction(message: string, options?: { title?: string; confirmLabel?: string; cancelLabel?: string }) {
   return (await ask(message, false, "", options)) === true;
 }
 export async function promptText(message: string, value = "", options?: { confirmLabel?: string; secret?: boolean }) {
@@ -53,6 +55,7 @@ const subscribe = (fn: () => void) => {
 /** Shared async replacement for renderer confirm/prompt. Preserves keyboard focus and queues requests. */
 export function ActionDialogHost() {
   const request = useSyncExternalStore(subscribe, () => queue[0] ?? null);
+  const input = useRef<HTMLInputElement | null>(null);
   if (!request) return null;
   const done = (accepted: boolean) => {
     const item = queue.shift();
@@ -63,18 +66,22 @@ export function ActionDialogHost() {
     <AlertDialog.Root open onOpenChange={(open) => !open && done(false)}>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="dialog-overlay action-dialog-overlay" />
-        <AlertDialog.Content key={request.id} className="dialog-content modal action-dialog">
+        <AlertDialog.Content key={request.id} className="dialog-content action-dialog" onOpenAutoFocus={(event) => {
+          if (request.prompt) { event.preventDefault(); input.current?.focus(); }
+        }}>
           <form
-            className="modal-body"
+            className="action-dialog-form"
             onSubmit={(e) => {
               e.preventDefault();
               done(true);
             }}
           >
-            <AlertDialog.Title>{request.prompt ? "Confirme os detalhes" : "Confirmar ação"}</AlertDialog.Title>
-            <AlertDialog.Description>{request.message}</AlertDialog.Description>
+            <div className="action-dialog-body">
+            <AlertDialog.Title className="action-dialog-title">{request.title}</AlertDialog.Title>
+            <AlertDialog.Description className="action-dialog-description">{request.message}</AlertDialog.Description>
             {request.prompt && (
               <Input
+                ref={input}
                 aria-label="Sua resposta"
                 type={request.secret ? "password" : "text"}
                 autoComplete={request.secret ? "current-password" : undefined}
@@ -85,10 +92,11 @@ export function ActionDialogHost() {
                 autoFocus
               />
             )}
-            <div className="form-actions">
-              <Button variant="secondary" onClick={() => done(false)}>
+            </div>
+            <div className="action-dialog-actions">
+              <AlertDialog.Cancel asChild><Button variant="secondary">
                 {request.cancelLabel}
-              </Button>
+              </Button></AlertDialog.Cancel>
               <Button type="submit">{request.confirmLabel}</Button>
             </div>
           </form>

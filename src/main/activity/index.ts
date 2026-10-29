@@ -2,6 +2,7 @@ import type { BrowserWindow, IpcMain } from "electron";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../../shared/activity.ts";
 import { probeWindows } from "./windows.ts";
 import { probeLinux } from "./linux.ts";
+import { steamGameIcon } from "./game-icon.ts";
 /** Main-process boundary: local OS details never cross preload. Detection runs only while opted in. */
 export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | null) {
   let preferences: ActivityPreferences = { games: false, music: false };
@@ -52,6 +53,11 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
       throw new Error("Invalid activity sender");
     return snapshot;
+  });
+  ipc.handle("activity:game-icon", (event, appId: unknown) => {
+    if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
+      throw new Error("Invalid activity sender");
+    return typeof appId === "string" ? steamGameIcon(appId) : null;
   });
   return () => {
     ++generation;

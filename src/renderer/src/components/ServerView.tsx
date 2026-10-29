@@ -3,7 +3,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Select } from "./ui/select.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
 import { ProviderIcon } from "../features/activity/ProviderIcon.tsx";
-import { Gamepad2, Code2 } from "lucide-react";
+import { Code2 } from "lucide-react";
+import { GameIcon } from "../features/activity/GameIcon.tsx";
 import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
@@ -75,7 +76,7 @@ function VoiceUsers({
                 : `Ouvindo ${activity.name}${activity.artist ? ` · ${activity.artist}` : ""}`;
               return <Tooltip key={activity.kind} content={label}>
                 <span className={`voice-flag voice-activity voice-activity-${activity.kind}`} role="img" aria-label={label} tabIndex={0}>
-                  {activity.kind === "game" ? <Gamepad2 size={12} aria-hidden />
+                  {activity.kind === "game" ? <GameIcon activity={activity} size={16} />
                     : activity.kind === "development" ? <Code2 size={12} aria-hidden />
                     : <ProviderIcon provider={activity.provider} size={12} />}
                 </span>

@@ -48,6 +48,7 @@
 .voice-user:has(.voice-mod):hover, .voice-user:has(.voice-mod):focus-within, .voice-user:has(.voice-mod[data-state="open"]) { grid-template-columns: 28px minmax(0, 1fr) auto 20px; }
 .voice-user .voice-mod { min-width: 0; width: 100%; overflow: hidden; }
 .voice-user-status { justify-content: flex-end; }
+.game-icon { display: block; flex: none; object-fit: contain; border-radius: 2px; }
 .voice-user .avatar { transition: box-shadow 120ms var(--ease); }
 .voice-status-bar { animation: call-connected 220ms var(--ease); }
 .settings-content { animation: settings-category 180ms var(--ease); }

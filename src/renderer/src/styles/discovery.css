@@ -160,7 +160,19 @@
 }
 .action-dialog {
   z-index: 151;
+  width: min(400px, calc(100vw - 48px));
+  max-height: calc(100dvh - 84px);
+  overflow: auto;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow-overlay);
 }
+.action-dialog-form { display: flex; flex-direction: column; }
+.action-dialog-body { display: flex; flex-direction: column; gap: 10px; padding: 24px; }
+.action-dialog-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--text); }
+.action-dialog-description { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-soft); overflow-wrap: anywhere; }
+.action-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--border); background: var(--bg-main); }
 .ui-checkbox {
   display: inline-flex;
   align-items: center;

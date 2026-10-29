@@ -47,6 +47,11 @@ compartilhamento oculta seus indicadores. A atividade dos outros participantes
 continua limitada às amizades confirmadas. A apresentação de jogos usa
 **Jogando**; detalhes e vínculos de plataforma ficam nas integrações específicas.
 
+O indicador de jogo usa o ícone do próprio título, inclusive Dota 2, quando
+disponível. A consulta pública é resolvida pelo app ID no processo principal,
+com timeout, limite de leitura e cache; o renderer recebe apenas a URL da imagem.
+Sem uma imagem disponível, o controle genérico continua como alternativa.
+
 No Windows, a leitura ocorre aproximadamente a cada 15 segundos, com o processo
 auxiliar oculto, limite de execução e cancelamento ao desabilitar. Steam exige
 um jogo marcado como em execução pelo cliente Steam e um processo dentro da
@@ -95,6 +100,20 @@ Referências: [Steam OpenID](https://partner.steamgames.com/doc/features/auth#we
 e [ISteamUser](https://partner.steamgames.com/doc/webapi/ISteamUser).
 
 API Windows usada: [Global System Media Transport Controls](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmanager.requestasync?view=winrt-26100).
+
+## Conexões antigas na barra
+
+Clique com o botão direito em um servidor (ou use **Shift+F10** com a aba focada)
+para abrir um menu de contexto. Ele permite marcar como lido, silenciar ou
+reativar notificações, copiar o ID/endereço, reconectar e remover a conexão.
+Convites, configurações e criação de canais aparecem conforme suas permissões.
+Participantes também podem sair do servidor, com confirmação.
+
+**Remover da barra…** abre uma confirmação compacta com apenas o nome do servidor
+e os botões **Cancelar** e **Confirmar**. Não exige digitar nada. Cancelar mantém
+a conexão. A remoção desconecta a conta deste cliente e retira todas as abas
+daquela conexão. Não exclui o servidor, a conta no servidor ou as mensagens.
+É possível adicionar a conexão novamente depois.
 
 ## Ativação e verificação
 

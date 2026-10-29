@@ -14,6 +14,9 @@
 .ui-select-scroll { display: grid; place-items: center; height: 24px; color: var(--text-muted); }
 .ui-dropdown-content { min-width: 230px; padding: 6px; transform-origin: var(--radix-dropdown-menu-content-transform-origin); }
 .ui-dropdown-item { display: flex; align-items: center; gap: 10px; border-radius: 6px; padding: 10px; outline: none; font-size: 12px; cursor: pointer; }
+.ui-context-content { transform-origin: var(--radix-popper-transform-origin); }
+.ui-menu-label { padding: 8px 10px; color: var(--text-muted); font-size: 11px; }
+.ui-dropdown-item[data-disabled] { opacity: .45; pointer-events: none; }
 .ui-dropdown-item > svg { width: 17px; height: 17px; color: var(--text-muted); }
 .ui-dropdown-item.destructive, .ui-dropdown-item.destructive > svg { color: var(--danger); }
 .ui-dropdown-item.destructive[data-highlighted] { background: color-mix(in srgb, var(--danger) 10%, transparent); }

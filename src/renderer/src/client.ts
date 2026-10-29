@@ -164,6 +164,15 @@ export function connectAll(): void {
 
 // Navigation -----------------------------------------------------------------
 
+/** Clear only this community's counters; unrelated servers and DMs keep their unread state. */
+export function markServerRead(accountId: string, serverId: string): void {
+  setState((s) => {
+    const instance = s.instances[accountId];
+    if (!instance) return;
+    for (const channel of instance.serverStates[serverId]?.channels ?? []) delete instance.unread[channel.id];
+  });
+}
+
 export function navigate(view: View): void {
   showServiceView(view);
   setState((s) => {
