@@ -1,3 +1,4 @@
+import { screenProfile } from "./lib/screen-profile.ts";
 // Voice session for instances using Cloudflare's Realtime SFU. One
 // RTCPeerConnection carries everything; the Annoy server relays every
 // negotiation to Cloudflare and decides what we may publish or receive.
@@ -129,7 +130,7 @@ export class CloudflareVoiceSession {
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
     if (!this.pc || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
-    const profile = VIDEO_PROFILES[source];
+    const profile = source === "screen" ? screenProfile(this.settings) : VIDEO_PROFILES.camera;
     const stream =
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })

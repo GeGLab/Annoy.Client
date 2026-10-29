@@ -5,6 +5,7 @@ import type { ActivityPreferences, DesktopActivitySnapshot } from "../shared/act
 
 const bridge = {
   platform: process.platform,
+  idleSeconds: () => ipcRenderer.invoke("system:idle") as Promise<number>,
   activity: {
     configure: (preferences: ActivityPreferences) =>
       ipcRenderer.invoke("activity:configure", preferences) as Promise<DesktopActivitySnapshot>,

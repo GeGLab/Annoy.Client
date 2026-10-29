@@ -57,6 +57,52 @@
 .unsaved-dialog p { font-size: 13px; line-height: 1.7; margin: 16px 0 24px; }
 .unsaved-dialog .form-actions { gap: 7px; }
 .settings-account { margin: 18px 0; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
+.user-settings-modal { width: min(1100px, calc(100vw - 48px)); height: min(800px, calc(100dvh - 84px)); }
+.user-settings-modal > .modal-header { flex: none; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.user-settings-modal > .modal-body { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+.settings-layout { height: 100%; display: grid; grid-template-columns: 228px minmax(0, 1fr); }
+.settings-sidebar { padding: 24px 16px; overflow-y: auto; background: var(--bg-channels); border-right: 1px solid var(--border); }
+.settings-sidebar input { width: 100%; font-size: 12px; margin-bottom: 20px; }
+.settings-sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+.settings-sidebar nav button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: var(--radius); color: var(--text-muted); font-size: 13px; }
+.settings-sidebar nav button:hover { background: var(--bg-hover); color: var(--text); }
+.settings-sidebar nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
+.settings-identity { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.settings-identity > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.settings-identity strong { display: block; font-size: 13px; }
+.settings-identity small { color: var(--text-muted); font-size: 11px; }
+.settings-content { min-width: 0; overflow-y: auto; padding: 32px 40px; scrollbar-gutter: stable; }
+.has-savebar .settings-content { padding-bottom: 110px; }
+.settings-content .settings-section { padding: 0; gap: 16px; max-width: 720px; margin: 0 auto; border: 0; }
+.settings-content .settings-section h3 { font-size: 24px; letter-spacing: -.02em; margin: 0 0 8px; }
+.settings-content .settings-section h4 { font-size: 14px; margin: 16px 0 0; }
+.settings-content .settings-section > p { font-size: 13px; line-height: 1.65; margin: 0; }
+.settings-content .field { margin: 0; }
+.settings-content .switch-setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.switch-setting > span { min-width: 0; }
+.switch-setting strong { display: block; font-size: 13px; font-weight: 600; }
+.switch-setting small { display: block; margin-top: 6px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.switch-setting > button { flex: none; }
+.self-profile-activity { display: flex; flex-direction: column; gap: 12px; margin-block: 20px; }
+.self-profile-activity h3 { font-size: 13px; }
+.self-profile-activity p { font-size: 12px; line-height: 1.6; margin: 0; }
+.self-profile .member-card-name { display: block; overflow-wrap: anywhere; }
+.self-profile > .btn { width: 100%; justify-content: center; }
+.pending-files { gap: 12px; padding: 12px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+.pending-file { display: flex; flex: 0 0 240px; flex-direction: column; align-items: stretch; width: 240px; max-width: 100%; padding: 0; gap: 0; border-radius: var(--radius); overflow: hidden; }
+.pending-preview { height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; background: var(--bg-deep); }
+.pending-preview img, .pending-preview video { width: 100%; height: 100%; object-fit: contain; }
+.pending-preview audio { width: calc(100% - 16px); height: 36px; }
+.pending-preview-file { color: var(--text-muted); font-size: 11px; }
+.pending-file-details { display: flex; align-items: center; gap: 8px; padding: 8px; font-size: 12px; }
+.pending-file-details > .truncate { flex: 1; min-width: 0; }
+.pending-file-size { flex: none; white-space: nowrap; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pending-file-details > button { flex: none; }
+@media (max-width: 1000px) {
+  .settings-layout { grid-template-columns: 204px minmax(0, 1fr); }
+  .settings-content { padding: 24px; }
+  .settings-sidebar { padding-inline: 12px; }
+}
 .profile-editor { display: flex; gap: 26px; align-items: flex-start; }
 .profile-preview { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; width: 165px; flex: none; }
 .profile-preview > span:last-of-type { color: var(--text-muted); font-size: 11px; }

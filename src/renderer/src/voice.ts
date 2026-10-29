@@ -1,3 +1,4 @@
+import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
 import type { GatewayEvent, MediaSource } from "@distopic/protocol";
@@ -140,7 +141,7 @@ export class VoiceSession {
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
     if (!this.send || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
-    const profile = VIDEO_PROFILES[source];
+    const profile = source === "screen" ? screenProfile(this.settings) : VIDEO_PROFILES.camera;
     const stream =
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })

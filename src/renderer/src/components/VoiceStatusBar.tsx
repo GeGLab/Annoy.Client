@@ -3,20 +3,22 @@ import { useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 
-export const VOICE_BAR_HEIGHT = 56;
+export const VOICE_BAR_HEIGHT = 36;
 export function VoiceStatusBar() {
   const voice = useStore((s) => s.voice);
+  const visible = useStore((s) => s.settings.showVoiceBar);
+  const contextVisible = useStore((s) => s.settings.voiceBarMode === "always" || s.view.kind === "service");
   const state = useStore((s) => (s.voice ? s.instances[s.voice.accountId]?.serverStates[s.voice.serverId] : undefined));
-  if (!voice) return null;
+  if (!voice || !visible || !contextVisible) return null;
   const channel = state?.channels.find((c) => c.id === voice.channelId);
   const count = state?.voiceStates.filter((v) => v.channelId === voice.channelId).length ?? 0;
   return (
     <div className={`voice-status-bar ${voice.status}`}>
       <span className="voice-connection-icon">
-        <Icon name={voice.status === "connected" ? "radio" : "loader"} size={23} />
+        <Icon name={voice.status === "connected" ? "radio" : "loader"} size={16} />
       </span>
       <div className="voice-status-copy">
-        <span role="status">{voice.status === "connected" ? "Você está conectado à voz" : "Conectando à chamada…"}</span>
+        <span role="status">{voice.status === "connected" ? "Voz conectada" : "Conectando…"}</span>
         <strong className="truncate">
           {channel?.name ?? "Canal de voz"}
           <span>

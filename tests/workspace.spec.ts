@@ -76,6 +76,7 @@ async function seed(page: Page) {
           mentionsEveryone: false,
         })),
       };
+      s.settings.voiceBarMode = "always";
       s.view = { kind: "server", accountId: "workspace", serverId: "server", channelId: "general" };
     });
   });
@@ -124,7 +125,8 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
     await page.getByRole("button", { name: "Alternar painel de membros" }).click();
     await expect(page.locator(".members")).toBeVisible();
 
-    await page.locator(".rail-settings").click();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
     await page.getByRole("button", { name: "Cor de destaque", exact: true }).click();
     await page.getByLabel("Código hexadecimal de Cor de destaque").fill("#3182ed");
     await page.getByRole("button", { name: "Usar cor", exact: true }).click();
@@ -160,7 +162,7 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
         ];
       });
     });
-    await expect(page.getByText("Você está conectado à voz", { exact: true })).toBeVisible();
+    await expect(page.locator(".voice-status-bar")).toContainText("Voz conectada");
     await expect(page.getByText("Na sala", { exact: true })).toBeVisible();
     await page.screenshot({ path: join(screenshots, "workspace-personalized.png") });
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
@@ -188,7 +190,7 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
-    await expect(page.locator(".rail-settings").click({ trial: true, timeout: 300 })).rejects.toThrow();
+    await expect(page.getByRole("button", { name: "Configurações", exact: true }).click({ trial: true, timeout: 300 })).rejects.toThrow();
     await page.screenshot({ path: join(screenshots, "workspace-reconnecting.png") });
     await page.routeWebSocket("ws://workspace.test/gateway", (ws) =>
       ws.onMessage((raw) => {
@@ -271,7 +273,8 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
       }
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(method === "GET" ? { installations, canManage } : {}) });
     });
-    await page.getByRole("button", { name: "Loja de bots", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Loja de bots", exact: true })).toHaveCount(0);
+    await page.evaluate(async () => { const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); navigate({ kind: "marketplace", accountId: "workspace", serverId: "server" }); });
     await expect(page.getByRole("heading", { name: "A loja precisa do suporte da sua instância" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Revisar e instalar" })).toHaveCount(0);
     await page.screenshot({ path: join(screenshots, "bots-unsupported.png") });

@@ -4,11 +4,13 @@ import { type Account } from "../../store.ts";
 import { Avatar, Icon } from "../ui.tsx";
 import { Input } from "../ui/input.tsx";
 import { Button } from "../ui/button.tsx";
+import { Textarea } from "../ui/textarea.tsx";
 
 const AvatarCropper = lazy(() => import("./AvatarCropper.tsx"));
 export interface ProfileDraft {
   displayName: string;
   avatar?: Blob | null;
+  bio?: string;
 }
 export function ProfileEditor({
   account,
@@ -85,6 +87,7 @@ export function ProfileEditor({
             onChange={(event) => onChange({ ...draft, displayName: event.target.value })}
           />
         </label>
+        <label className="field"><span className="field-label">Biografia</span><Textarea aria-label={`Biografia de ${user.username}`} value={draft.bio ?? user.bio ?? ""} maxLength={1000} rows={4} disabled={disabled} placeholder="Conte um pouco sobre você…" onChange={(event) => onChange({ ...draft, bio: event.target.value })} /><span className="field-hint">{(draft.bio ?? user.bio ?? "").length}/1.000 · Aparece no seu perfil. A prévia ocupa até três linhas.</span></label>
         <div className="profile-actions">
           <Button variant="secondary" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
             <Icon name="upload" size={15} />

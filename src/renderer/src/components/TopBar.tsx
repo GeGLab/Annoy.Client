@@ -1,5 +1,6 @@
 import type { ServerSummary } from "@distopic/protocol";
-import { leaveVoice, navigate, openServer, reconnect, updateVoiceSettings } from "../client.ts";
+import * as Popover from "@radix-ui/react-popover";
+import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
 import { initials } from "../format.tsx";
 import { setState, useStore, type Account, type InstanceState } from "../store.ts";
 import { Avatar, Icon, openModal } from "./ui.tsx";
@@ -7,6 +8,8 @@ import { ServiceTab, tabLayout } from "./Services.tsx";
 import { Brand } from "./Brand.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import { VoicePanel, DeviceMenu } from "./VoicePanel.tsx";
+import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { EMPTY_ACTIVITIES } from "../store.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -48,15 +51,10 @@ export function UserPanel() {
   const accounts = useStore((s) => s.accounts);
   const accountId = "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
+  const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
+  const snapshot = useStore((s) => s.desktopActivity);
+  const activities = settings.shareActivity ? (snapshot?.activities ?? EMPTY_ACTIVITIES) : EMPTY_ACTIVITIES;
 
-  const toggle = (key: "selfMute" | "selfDeaf") => {
-    setState((s) => {
-      s.settings[key] = !s.settings[key];
-      // Undeafening also unmutes.
-      if (key === "selfDeaf" && !s.settings.selfDeaf) s.settings.selfMute = false;
-    });
-    updateVoiceSettings();
-  };
   const openSettings = () =>
     setState((s) => {
       s.modal = { kind: "userSettings" };
@@ -66,18 +64,39 @@ export function UserPanel() {
     <footer className="user-panel">
       <VoicePanel />
       <div className="user-panel-row">
-        <button className="user-identity" onClick={openSettings} aria-label="Abrir configurações de usuário">
-          {user ? <Avatar user={user} size={32} presence="online" /> : <Brand size={32} />}
-          <span className="user-identity-text">
-            <strong className="truncate">{user?.displayName ?? "Seu espaço"}</strong>
-            <span>{user ? `@${user.username}` : "Vamos conversar?"}</span>
-          </span>
-        </button>
+        <Popover.Root>
+          <Popover.Trigger asChild>
+          <button className="user-identity" aria-label="Abrir meu perfil">
+            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : <Brand size={32} />}
+            <span className="user-identity-text">
+              <strong className="truncate">{user?.displayName ?? "Seu espaço"}</strong>
+              <span>{user ? `@${user.username}` : "Vamos conversar?"}</span>
+            </span>
+          </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label="Meu perfil">
+              <div className="member-card-head">
+                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : <Brand size={48} />}
+                <div><strong className="member-card-name">{user?.displayName ?? "Seu espaço"}</strong>{user && <div className="muted">@{user.username}</div>}</div>
+              </div>
+              {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
+              <div className="self-profile-activity">
+                <h3>Minha atividade</h3>
+                {activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
+                {!activities.length && <p className="muted">{!settings.shareActivity ? "O compartilhamento está desativado." : snapshot?.error ?? "Nenhum jogo ou música detectado agora."}</p>}
+                {activities.length > 0 && <p className="muted">Compartilhada com seus amigos nesta instância.</p>}
+              </div>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />Editar perfil</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" size={16} />Trocar de conta</button></Popover.Close>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
         <div className="user-control-pair">
           <Tooltip content={settings.selfMute ? "Ativar microfone" : "Silenciar microfone"} side="top">
             <button
               className={`icon-btn${settings.selfMute ? " danger" : ""}`}
-              onClick={() => toggle("selfMute")}
+              onClick={() => toggleVoiceSetting("selfMute")}
               aria-label={settings.selfMute ? "Ativar microfone" : "Silenciar microfone"}
               aria-pressed={settings.selfMute}
             >
@@ -90,7 +109,7 @@ export function UserPanel() {
           <Tooltip content={settings.selfDeaf ? "Ativar áudio" : "Desativar áudio"} side="top">
             <button
               className={`icon-btn${settings.selfDeaf ? " danger" : ""}`}
-              onClick={() => toggle("selfDeaf")}
+              onClick={() => toggleVoiceSetting("selfDeaf")}
               aria-label={settings.selfDeaf ? "Ativar áudio" : "Desativar áudio"}
               aria-pressed={settings.selfDeaf}
             >
@@ -119,6 +138,7 @@ export function TopBar() {
   const shown = services.filter((sv) => !sv.hidden);
   const before = shown.filter((sv) => tabLayout(sv, settings).placement === "before");
   const after = shown.filter((sv) => tabLayout(sv, settings).placement === "after");
+  const directMessages = accounts.flatMap((account) => (instances[account.id]?.dms ?? []).filter((dm) => dm.lastMessageId || instances[account.id]?.unread[dm.id]).map((dm) => ({ account, dm, unread: instances[account.id]?.unread[dm.id]?.count ?? 0 })));
 
   let homeCount = 0;
   for (const a of accounts) {
@@ -129,9 +149,9 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="rail-brand" title="Annoy">
+      <button className="rail-brand" title="Novidades do Annoy" aria-label="Novidades do Annoy" aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}>
         <Brand size={settings.barPosition === "top" ? 30 : 42} />
-      </div>
+      </button>
       <nav className="tabs-strip" aria-label="Navegação do Annoy">
         <span className="rail-section-label">Atalhos</span>
         <button
@@ -149,9 +169,16 @@ export function TopBar() {
           <span className="rail-label">Início</span>
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
+        {directMessages.map(({ account, dm, unread }) => {
+          const user = dm.recipients[0];
+          if (!user) return null;
+          const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
+          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname}${unread ? ` · ${unread} novas mensagens` : ""}`}><button className={`tab-item dm-shortcut${view.kind === "home" && view.accountId === account.id && view.dmId === dm.id ? " active" : ""}`} aria-label={`Conversa com ${nickname}${unread ? `, ${unread} mensagens não lidas` : ""}`} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} />{unread > 0 && <span key={unread} className="tab-badge">{unread}</span>}</button></Tooltip>;
+        })}
         {before.map((service) => (
           <ServiceTab key={service.id} service={service} />
         ))}
+        {/* Loja de bots temporariamente oculta enquanto a compatibilidade é definida.
         <Tooltip content="Loja de bots">
           <button
             className={`tab-item${view.kind === "marketplace" ? " active" : ""}`}
@@ -171,6 +198,7 @@ export function TopBar() {
             <span className="rail-label">Loja</span>
           </button>
         </Tooltip>
+        */}
         <span className="rail-divider" />
         <span className="rail-section-label">Servidores</span>
         {accounts.map((account) => {
@@ -212,19 +240,6 @@ export function TopBar() {
           <span className="rail-label">Nova aba</span>
         </button>
       </nav>
-      <Tooltip content="Configurações">
-        <button
-          className="rail-settings icon-btn"
-          aria-label="Configurações"
-          onClick={() =>
-            setState((s) => {
-              s.modal = { kind: "userSettings" };
-            })
-          }
-        >
-          <Icon name="gear" size={21} />
-        </button>
-      </Tooltip>
     </header>
   );
 }

@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron, type Page } from "@playwright/test";
+import { test, expect, _electron as electron, type Page, type WebSocketRoute } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,15 +22,16 @@ async function fullyInside(page: Page, selector: string, top = 12) {
     })
     .toBe(true);
 }
-async function launch() {
+async function launch({ fakeMedia = false } = {}) {
   const root = resolve(tmpdir()),
     data = await mkdtemp(join(root, "distopic-experience-"));
   const env = { ...process.env, DISTOPIC_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
-  const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
+  const app = await electron.launch({ executablePath: require("electron"), args: [...(fakeMedia ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] : []), resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".welcome")).toBeVisible();
+  await page.evaluate(() => window.distopic?.activity.configure({ games: false, music: false, development: false }));
   await mkdir(capture, { recursive: true });
   const close = async () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.destroy())).catch(() => undefined);
@@ -41,8 +42,8 @@ async function launch() {
   return { app, page, close };
 }
 
-async function seed(page: Page) {
-  await page.routeWebSocket("ws://experience.test/gateway", () => {});
+async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
+  await page.routeWebSocket("ws://experience.test/gateway", (socket) => onSocket?.(socket));
   await page.route("http://experience.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
   await page.route("http://experience.test/image.png", async (route) =>
     route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
@@ -115,6 +116,7 @@ async function seed(page: Page) {
           },
         ],
       };
+      s.settings.voiceBarMode = "always";
       s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "general" };
     });
   });
@@ -137,6 +139,413 @@ function silence() {
   result.writeUInt32LE(result.length - 44, 40);
   return result;
 }
+
+test("attachment previews, compact call bar, profile activity and shared voice controls", async () => {
+  const { page, app, close } = await launch();
+  try {
+    await seed(page);
+    await page.locator('input[type="file"]').setInputFiles([
+      { name: "Anexo com nome muito longo para verificar tamanho sem quebra.png", mimeType: "image/png", buffer: await readFile("build/icon.png") },
+      { name: "video.webm", mimeType: "video/webm", buffer: await readFile("tests/fixtures/flower.webm") },
+      { name: "audio.wav", mimeType: "audio/wav", buffer: silence() },
+    ]);
+    await expect(page.locator(".pending-preview img")).toBeVisible();
+    await expect.poll(() => page.locator(".pending-preview img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".pending-preview video").evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThan(0);
+    await expect(page.locator(".pending-preview audio")).toBeVisible();
+    await expect(page.locator(".pending-file-size").first()).toHaveCSS("white-space", "nowrap");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const create = AudioContext.prototype.createOscillator;
+      (window as any).cueCount = 0;
+      AudioContext.prototype.createOscillator = function () { (window as any).cueCount++; return create.call(this); };
+      setState((s: any) => {
+        s.voice = { accountId: "test", serverId: "server", channelId: "voice", status: "connected", canStream: false, camera: false, screen: false };
+        s.desktopActivity = { supported: true, error: null, activities: [{ kind: "music", provider: "spotify", name: "Faixa de teste", artist: "Artista" }] };
+      });
+    });
+    await expect(page.locator(".voice-status-bar")).toHaveCSS("height", "36px");
+    await expect(page.locator(".rail-settings")).toHaveCount(0);
+    await page.getByRole("button", { name: "Desativar áudio", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Ativar microfone", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Ativar áudio", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Silenciar microfone", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await page.getByRole("button", { name: "Silenciar microfone", exact: true }).click();
+    await page.getByRole("button", { name: "Ativar microfone", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).cueCount)).toBe(8);
+    await page.screenshot({ path: join(capture, "composer-previews-call-dark.png") });
+    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Meu perfil", exact: true })).toContainText("Faixa de teste");
+    const card = (await page.locator(".self-profile").boundingBox())!;
+    const identity = (await page.locator(".user-identity").boundingBox())!;
+    expect(card.y + card.height).toBeLessThan(identity.y);
+    await page.screenshot({ path: join(capture, "self-profile-activity-dark.png") });
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Barra e abas", exact: true }).click();
+    await page.getByRole("switch", { name: "Mostrar barra da chamada", exact: true }).uncheck();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.locator(".voice-status-bar")).toHaveCount(0);
+    await page.getByRole("button", { name: "Voz e vídeo", exact: true }).click();
+    await page.screenshot({ path: join(capture, "settings-voice-organized-dark.png") });
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
+    await page.getByRole("button", { name: "Claro", exact: true }).click();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.getByRole("button", { name: "Voz e vídeo", exact: true }).click();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
+    await expect.poll(() => page.locator(".settings-content").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: join(capture, "settings-voice-organized-light-minimum.png") });
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+    await page.screenshot({ path: join(capture, "composer-previews-light-minimum.png") });
+    await page.getByRole("button", { name: /^Remover Anexo/ }).click();
+    await expect(page.locator(".pending-file")).toHaveCount(2);
+  } finally { await close(); }
+});
+
+test("call membership sounds, stable participants, status icons and channel switching", async () => {
+  const { page, close } = await launch();
+  const methods: string[] = [];
+  let socket: WebSocketRoute;
+  let currentChannel: string | null = null;
+  const state = (userId: string, channelId: string, extra = {}) => ({ userId, serverId: "server", channelId, selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: false, screen: false, ...extra });
+  const update = (userId: string, value: unknown) => socket.send(JSON.stringify({ t: "VOICE_STATE_UPDATE", d: { userId, serverId: "server", state: value } }));
+  try {
+    await seed(page, (ws) => {
+      socket = ws;
+      ws.onMessage((raw) => {
+        const message = JSON.parse(String(raw));
+        if (message.op !== "voice") return;
+        methods.push(message.method);
+        if (message.method === "join") {
+          currentChannel = message.data.channelId;
+          update("person", state("person", currentChannel!));
+        } else if (message.method === "leave") {
+          currentChannel = null;
+          update("person", null);
+        }
+        ws.send(JSON.stringify({ t: "VOICE_REPLY", d: { id: message.id, ok: true, data: {} } }));
+      });
+    });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { VoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice.ts`);
+      const { gatewayFor } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      // Keep real client/gateway lifecycle, replacing only hardware/SFU negotiation.
+      VoiceSession.prototype.start = async function () { await gatewayFor("test")!.voice("join", { channelId: this.channelId }); };
+      const create = AudioContext.prototype.createOscillator;
+      (window as any).callTones = 0;
+      AudioContext.prototype.createOscillator = function () { (window as any).callTones++; return create.call(this); };
+      setState((s: any) => {
+        const server = s.instances.test.serverStates.server;
+        server.channels.push({ ...server.channels[1], id: "other-voice", name: "Outra chamada" });
+        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, displayName: id === "friend" ? "Amiga na chamada" : "Visitante", avatarUrl: null } });
+        s.instances.test.relationships = [{ user: server.members[1].user, status: "friend" }];
+        s.instances.test.activities.friend = [{ kind: "music", provider: "spotify", name: "Faixa de teste" }];
+      });
+    });
+    const tones = () => page.evaluate(() => (window as any).callTones);
+    const users = page.locator(".voice-user");
+    await page.locator(".channel.voice").filter({ hasText: "Sala de conversa" }).click();
+    await expect.poll(tones).toBe(3); // Local join, without a second cue for our gateway echo.
+    update("friend", state("friend", "voice", { selfMute: true, selfDeaf: true, video: true, screen: true }));
+    await expect.poll(tones).toBe(6);
+    const friend = users.filter({ hasText: "Amiga na chamada" });
+    await expect(friend.getByRole("img")).toHaveCount(5);
+    await friend.hover();
+    await friend.getByRole("button", { name: "Ações de voz de Amiga na chamada" }).click();
+    await expect(page.getByRole("menuitem", { name: "Silenciar no servidor", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Desconectar da voz", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    update("visitor", state("visitor", "voice"));
+    await expect.poll(tones).toBe(9);
+    await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
+    update("person", state("person", "voice", { speaking: true }));
+    update("friend", state("friend", "voice", { speaking: true }));
+    await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
+    await expect.poll(tones).toBe(9); // Speaking, mute and media updates never announce membership.
+    await page.locator('.channel-name').filter({ hasText: /^geral$/ }).click();
+    const avatar = (await friend.locator(".avatar").boundingBox())!;
+    const channel = (await page.locator(".channel.voice").first().boundingBox())!;
+    expect(avatar.x - channel.x).toBeGreaterThan(30);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    update("friend", state("friend", "voice", { selfMute: true, selfDeaf: true, video: true, screen: true }));
+    await expect(friend.getByRole("img")).toHaveCount(5);
+    await page.waitForTimeout(250); // Capture settled connection/theme transitions.
+    await page.screenshot({ path: join(capture, "voice-roster-icons-dark.png") });
+    await expect(page.locator(".voice-status-bar")).toHaveCSS("animation-name", "call-connected");
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: join(capture, "voice-roster-icons-light-minimum.png") });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(page.locator(".voice-status-bar")).toHaveCSS("animation-name", "none");
+    update("visitor", state("visitor", "other-voice"));
+    await expect.poll(tones).toBe(12); // Leaving our room for another channel.
+    update("visitor", state("visitor", "other-voice", { speaking: true }));
+    await expect.poll(tones).toBe(12);
+    update("friend", null);
+    await expect.poll(tones).toBe(15);
+    await page.locator(".channel.voice").filter({ hasText: "Outra chamada" }).click();
+    await expect.poll(tones).toBe(21); // Local leave + local join on channel switch.
+    expect(methods).toEqual(["join", "leave", "join"]);
+    await page.getByRole("button", { name: "Sair da chamada de voz", exact: true }).click();
+    await expect.poll(tones).toBe(24);
+    expect(methods).toEqual(["join", "leave", "join", "leave"]);
+    await expect(page.locator(".voice-status-bar")).toHaveCount(0);
+  } finally { await close(); }
+});
+
+test("activity cards show platform marks and album/game artwork with fallback", async () => {
+  const { page, app, close } = await launch();
+  try {
+    await seed(page);
+    const jpeg = await app.evaluate(({ nativeImage }, path) => nativeImage.createFromPath(path).resize({ width: 128 }).toJPEG(75).toString("base64"), resolve("build/icon.png"));
+    const cover = `data:image/jpeg;base64,${jpeg}`;
+    await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/730/header.jpg", (route) => route.fulfill({ contentType: "image/jpeg", body: Buffer.from(jpeg, "base64") }));
+    await page.evaluate(async (cover) => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [
+        { kind: "music", provider: "spotify", name: "NO FEAR", artist: "Artista de teste", album: "Álbum de teste", artwork: cover },
+        { kind: "game", provider: "steam", name: "Jogo de teste", appId: "730", artwork: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/730/header.jpg" },
+      ] }; });
+    }, cover);
+    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
+    await expect(page.locator(".self-profile .provider-spotify")).toBeVisible();
+    await expect(page.locator(".self-profile .provider-steam")).toBeVisible();
+    for (const img of await page.locator(".self-profile .activity-artwork img").all()) await expect.poll(() => img.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(page.getByRole("link", { name: "Abrir NO FEAR no Spotify" })).toHaveAttribute("href", /open.spotify.com\/search\//);
+    await page.screenshot({ path: join(capture, "activity-artwork-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await page.screenshot({ path: join(capture, "activity-artwork-light-minimum.png") });
+    await fullyInside(page, ".self-profile");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity.activities[0].artwork = "data:image/jpeg;base64,/9j/AA=="; });
+    });
+    await expect(page.locator(".self-profile .activity-music .no-artwork")).toBeVisible();
+    await expect(page.locator(".self-profile .activity-music")).toContainText("NO FEAR");
+  } finally { await close(); }
+});
+
+test("message sounds, channel/server mute, DM shortcuts, hover layout and settings cards", async () => {
+  const { page, app, close } = await launch();
+  let socket: WebSocketRoute;
+  const friend = { id: "friend", username: "amiga", displayName: "Amiga", avatarUrl: null };
+  const send = (id: string, channelId = "general", author = friend) => socket.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id, channelId, author, content: `Mensagem ${id}`, createdAt: new Date().toISOString(), editedAt: null, replyToId: null, attachments: [], mentionIds: [], mentionsEveryone: false } }));
+  try {
+    await seed(page, (ws) => { socket = ws; });
+    await page.evaluate(async () => {
+      const create = AudioContext.prototype.createOscillator; (window as any).messageTones = 0;
+      AudioContext.prototype.createOscillator = function () { (window as any).messageTones++; return create.call(this); };
+    });
+    const tones = () => page.evaluate(() => (window as any).messageTones);
+    send("sound-1"); await expect.poll(tones).toBe(2);
+    send("sound-1"); await expect.poll(tones).toBe(2);
+    await page.getByRole("button", { name: "Notificações de geral", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Silenciar canal", exact: true }).click();
+    send("sound-2"); await expect(page.getByText("Mensagem sound-2", { exact: true })).toBeVisible(); expect(await tones()).toBe(2);
+    await page.getByRole("button", { name: "Notificações de geral", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Ativar notificações do canal", exact: true }).click();
+    send("sound-3"); await expect.poll(tones).toBe(4);
+    await page.getByRole("button", { name: "Menu de Comunidade de teste", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Silenciar servidor", exact: true }).click();
+    send("sound-4"); await expect(page.getByText("Mensagem sound-4", { exact: true })).toBeVisible(); expect(await tones()).toBe(4);
+    await page.getByRole("button", { name: "Menu de Comunidade de teste", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Ativar notificações do servidor", exact: true }).click();
+    socket!.send(JSON.stringify({ t: "DM_CREATE", d: { id: "private", recipients: [friend], lastMessageId: null } }));
+    send("private-1", "private"); send("private-2", "private");
+    await expect(page.getByRole("button", { name: "Conversa com Amiga, 2 mensagens não lidas", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Conversa com Amiga, 2 mensagens não lidas", exact: true }).click();
+    await expect(page.locator(".chat-header h1")).toHaveText("Amiga");
+    send("private-3", "private");
+    await expect(page.locator('[data-message-id="private-3"]')).toHaveClass(/message-received/);
+    send("private-own", "private", { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null });
+    await expect(page.locator('[data-message-id="private-own"]')).toHaveClass(/message-sent/);
+    await expect(page.getByRole("button", { name: "Loja de bots", exact: true })).toHaveCount(0);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "general" }; s.voice = { accountId: "test", serverId: "server", channelId: "voice", status: "connected", canStream: true, camera: false, screen: false }; s.settings.voiceBarMode = "external"; });
+    });
+    await expect(page.locator(".voice-status-bar")).toHaveCount(0);
+    await page.mouse.move(900, 500);
+    const channel = page.locator(".channel.voice").first(), badge = channel.locator(".voice-here");
+    const original = (await badge.boundingBox())!;
+    const channelBox = (await channel.boundingBox())!;
+    expect(channelBox.x + channelBox.width - original.x - original.width).toBeLessThan(12);
+    await channel.hover();
+    await expect.poll(async () => (await badge.boundingBox())!.x).toBeLessThan(original.x - 20);
+    await page.mouse.move(900, 500);
+    await expect.poll(async () => Math.abs((await badge.boundingBox())!.x - original.x)).toBeLessThan(2);
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Voz e vídeo", exact: true }).click();
+    await expect(page.locator(".preference-card")).toHaveCount(3);
+    await page.screenshot({ path: join(capture, "preferences-cards-dark.png") });
+    await page.getByRole("button", { name: "Notificações", exact: true }).click();
+    await page.getByRole("switch", { name: "Sons de mensagens", exact: true }).uncheck();
+    await page.getByRole("combobox", { name: "Tempo para ficar ausente", exact: true }).click();
+    await page.getByRole("option", { name: "5 minutos", exact: true }).click();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    const count = await tones(); send("silent-5"); await expect(page.getByText("Mensagem silent-5", { exact: true })).toBeAttached(); expect(await tones()).toBe(count);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
+    await page.getByRole("button", { name: "Claro", exact: true }).click();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.getByRole("button", { name: "Notificações", exact: true }).click();
+    await page.screenshot({ path: join(capture, "preferences-notifications-light-minimum.png") });
+    await expect.poll(() => page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  } finally { await close(); }
+});
+
+test("private video calls ring, negotiate WebRTC media and release devices on hangup", async () => {
+  const left = await launch({ fakeMedia: true }), right = await launch({ fakeMedia: true });
+  const sockets = new Map<string, WebSocketRoute>();
+  const users = { alice: { id: "alice", username: "alice", displayName: "Alice", avatarUrl: null }, bob: { id: "bob", username: "bob", displayName: "Bob", avatarUrl: null } };
+  let call: any;
+  const publish = () => { for (const socket of sockets.values()) socket.send(JSON.stringify({ t: "CALL_UPDATE", d: call })); };
+  try {
+    for (const [id, session] of [["alice", left], ["bob", right]] as const) {
+      const other = id === "alice" ? "bob" : "alice";
+      await session.page.route("http://private.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+      await session.page.route("http://private.test/api/calls", async (route) => {
+        const body = route.request().postDataJSON();
+        call = { id: "private-call", callerId: id, calleeId: other, video: body.video, status: "ringing", callerDeviceId: body.deviceId, iceServers: [] };
+        publish(); await route.fulfill({ contentType: "application/json", body: JSON.stringify(call) });
+      });
+      await session.page.routeWebSocket("ws://private.test/gateway", (socket) => {
+        sockets.set(id, socket);
+        socket.onMessage((raw) => {
+          const message = JSON.parse(String(raw));
+          if (message.op === "identify") socket.send(JSON.stringify({ t: "READY", d: { user: users[id], servers: [], dms: [], relationships: [{ user: users[other], status: "friend" }], presences: { [other]: "online" }, activities: {}, instance: { isAdmin: false, registration: "open", voiceBackend: "builtin", directCalls: true } } }));
+          if (message.op !== "call") return;
+          if (message.action === "accept") { call.status = "active"; call.calleeDeviceId = message.deviceId; publish(); }
+          if (message.action === "end" || message.action === "reject") { call.status = "ended"; publish(); }
+          if (message.action === "signal") sockets.get(other)?.send(JSON.stringify({ t: "CALL_SIGNAL", d: { callId: call.id, signal: message.signal } }));
+        });
+      });
+      await session.page.evaluate(async (id) => {
+        const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); (window as any).callStreams = [];
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          const stream = await original({ audio: constraints?.audio, video: false });
+          if (constraints?.video) {
+            const canvas = document.createElement("canvas"); canvas.width = 320; canvas.height = 180;
+            const context = canvas.getContext("2d")!;
+            const paint = () => { context.fillStyle = id === "alice" ? "#315c8c" : "#794d80"; context.fillRect(0, 0, 320, 180); context.fillStyle = "white"; context.font = "24px sans-serif"; context.fillText(id, 24, 90); context.fillRect(Date.now() % 280, 150, 20, 10); };
+            paint();
+            const video = canvas.captureStream(15).getVideoTracks()[0]!;
+            const timer = setInterval(paint, 60), stop = video.stop.bind(video);
+            video.stop = () => { clearInterval(timer); stop(); };
+            stream.addTrack(video);
+          }
+          (window as any).callStreams.push(stream); return stream;
+        };
+        const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+        addAccount({ id, url: "http://private.test", token: "synthetic", userId: id, instanceName: "Chamadas de teste" });
+      }, id);
+      await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].displayName}`, exact: true })).toBeVisible();
+    }
+    await left.page.getByRole("button", { name: "Chamada de vídeo com Bob", exact: true }).click();
+    await expect(right.page.getByRole("dialog", { name: "Chamada recebida", exact: true })).toBeVisible();
+    await right.page.screenshot({ path: join(capture, "private-call-incoming.png") });
+    await right.page.getByRole("button", { name: "Atender", exact: true }).click();
+    for (const session of [left, right]) {
+      await expect(session.page.locator(".direct-call-panel")).toBeVisible();
+      await expect(session.page.getByText("Chamada conectada", { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => session.page.locator(".direct-call-video video").first().evaluate((video: HTMLVideoElement) => video.videoWidth)).toBeGreaterThan(0);
+    }
+    await left.page.screenshot({ path: join(capture, "private-video-call-connected.png") });
+    await left.page.getByRole("button", { name: "Encerrar", exact: true }).click();
+    for (const session of [left, right]) {
+      await expect(session.page.locator(".direct-call-panel")).toHaveCount(0);
+      await expect.poll(() => session.page.evaluate(() => (window as any).callStreams.every((stream: MediaStream) => stream.getTracks().every((track) => track.readyState === "ended")))).toBe(true);
+    }
+  } finally { await left.close(); await right.close(); }
+});
+
+test("profile biography, screen quality, Annoy news and remembered sign-in", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.instance = { isAdmin: false, registration: "open", voiceBackend: "builtin", socialProfiles: true }; });
+    });
+    await page.route("http://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null, ...route.request().postDataJSON() }) }));
+    await page.route("http://experience.test/api/info", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ name: "Instância de teste", registrationOpen: true, registration: "open", discordLogin: false }) }));
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    const bio = page.getByRole("textbox", { name: "Biografia de tester", exact: true });
+    await bio.fill("Uma biografia de teste com conteúdo para conferir o limite e a apresentação. ".repeat(14).slice(0, 1000));
+    await expect(bio).toHaveAttribute("maxlength", "1000");
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
+    await expect(page.locator(".self-profile .profile-bio")).toHaveCSS("-webkit-line-clamp", "3");
+    await page.keyboard.press("Escape");
+    await page.evaluate(async () => { const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); openModal({ kind: "screenPicker" }); });
+    await page.getByRole("combobox", { name: "Resolução da transmissão", exact: true }).click();
+    await page.getByRole("option", { name: "2K (2048 × 1080)", exact: true }).click();
+    await page.getByRole("combobox", { name: "FPS da transmissão", exact: true }).click();
+    await page.getByRole("option", { name: "60 FPS", exact: true }).click();
+    expect(await page.evaluate(async () => { const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); const { screenProfile, screenQualityLabel } = await import(/* @vite-ignore */ `${location.origin}/src/lib/screen-profile.ts`); return screenQualityLabel(screenProfile(getState().settings).quality); })).toBe("2K 60 FPS");
+    await page.screenshot({ path: join(capture, "screen-quality-picker.png") });
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+    await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Novidades do Annoy", exact: true })).toBeVisible();
+    await page.screenshot({ path: join(capture, "annoy-news.png") });
+    await page.evaluate(async () => { const { removeAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); removeAccount("test"); openModal({ kind: "switchAccount" }); });
+    await expect(page.locator(".saved-account")).toHaveCount(1);
+    expect(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("distopic.rememberedAccounts")!)))).not.toContain("token");
+    await page.locator(".saved-account").click();
+    await expect(page.getByRole("textbox", { name: "Usuário", exact: true })).toHaveValue("tester");
+    await page.screenshot({ path: join(capture, "remembered-login.png") });
+    await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+    await page.screenshot({ path: join(capture, "register-redesign.png") });
+  } finally { await close(); }
+});
+
+test("Spotify activity publishes on ready, clears when disabled and resumes after reconnect", async () => {
+  const { page, close } = await launch();
+  const sent: any[] = [];
+  let socket: any;
+  const ready = { t: "READY", d: { user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {}, instance: { name: "Teste", activityArtwork: false } } };
+  try {
+    await page.route("http://sharing.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+    await page.routeWebSocket("ws://sharing.test/gateway", (ws) => {
+      socket = ws;
+      ws.onMessage((message) => {
+        const data = JSON.parse(String(message));
+        if (data.op === "identify") ws.send(JSON.stringify(ready));
+        if (data.op === "activity") sent.push(data.activities);
+      });
+    });
+    await page.evaluate(async () => {
+      const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      const { setState, getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      if (!getState().settings.shareActivity) throw new Error("Activity must default to enabled");
+      setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [{ kind: "music", provider: "spotify", name: "Faixa publicada", artist: "Artista", artwork: "data:image/jpeg;base64,/9j/AA==" }] }; });
+      addAccount({ id: "sharing", url: "http://sharing.test", token: "synthetic", userId: "me", instanceName: "Teste" });
+    });
+    await expect.poll(() => sent.some((items) => items[0]?.name === "Faixa publicada")).toBe(true);
+    expect(sent.find((items) => items[0]?.name === "Faixa publicada")[0].artwork).toBeUndefined();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Atividade", exact: true }).click();
+    await expect(page.getByRole("switch")).toHaveCount(1);
+    await page.getByRole("switch", { name: "Compartilhar minha atividade", exact: true }).uncheck();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect.poll(() => sent.at(-1)).toEqual([]);
+    await page.getByRole("switch", { name: "Compartilhar minha atividade", exact: true }).check();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [{ kind: "music", provider: "spotify", name: "Faixa após reconexão", artist: "Artista", artwork: "data:image/jpeg;base64,/9j/AA==" }] }; });
+    });
+    sent.length = 0;
+    ready.d.instance.activityArtwork = true;
+    socket.close({ code: 1001 });
+    await expect.poll(() => sent.some((items) => items[0]?.name === "Faixa após reconexão")).toBe(true);
+    expect(sent.find((items) => items[0]?.name === "Faixa após reconexão")[0].artwork).toBe("data:image/jpeg;base64,/9j/AA==");
+  } finally { await close(); }
+});
 
 test("searchable permission targets distinguish roles and people and guard changes", async () => {
   const { page, close } = await launch();
@@ -335,12 +744,14 @@ test("friend activity is distinct from public membership and shared action dialo
     await page.getByRole("textbox", { name: "Sua resposta" }).fill("Annoy");
     await page.getByRole("button", { name: "Confirmar", exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as any).answers)).toEqual([false, "Annoy"]);
-    await page.locator(".rail-settings").click();
-    await page.getByRole("switch", { name: "Compartilhar jogos da Steam com amigos" }).check();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Atividade", exact: true }).click();
+    await expect(page.getByRole("switch", { name: /Compartilhar minha atividade/ })).toBeChecked();
+    await page.getByRole("switch", { name: /Compartilhar minha atividade/ }).uncheck();
     await expect(page.locator(".settings-savebar")).toBeVisible();
     await page.screenshot({ path: join(capture, "activity-settings.png") });
     await page.getByRole("button", { name: "Redefinir", exact: true }).click();
-    await expect(page.getByRole("switch", { name: "Compartilhar jogos da Steam com amigos" })).not.toBeChecked();
+    await expect(page.getByRole("switch", { name: /Compartilhar minha atividade/ })).toBeChecked();
   } finally {
     await close();
   }
@@ -438,7 +849,8 @@ test("animated menus, custom selects, color history and unsaved settings", async
           },
         ] as MediaDeviceInfo[];
     });
-    await page.locator(".rail-settings").click();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Voz e vídeo", exact: true }).click();
     await page.getByRole("combobox", { name: "Microfone", exact: true }).click();
     await expect(page.getByRole("listbox")).toBeVisible();
     await page.screenshot({ path: join(capture, "custom-select.png") });
@@ -447,6 +859,7 @@ test("animated menus, custom selects, color history and unsaved settings", async
       "default",
     );
     await expect(page.getByRole("button", { name: "Salvar alterações", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
     await page.getByRole("button", { name: "Cor de destaque", exact: true }).click();
     await page.getByLabel("Código hexadecimal de Cor de destaque").fill("#d25cbb");
     await page.getByRole("button", { name: "Usar cor", exact: true }).click();
@@ -505,7 +918,7 @@ test("profile crop, deferred upload, save and removal failure retain draft", asy
     await page.route("http://experience.test/avatar.png", async (route) =>
       route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
     );
-    await page.locator(".rail-settings").click();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await page.getByLabel("Selecionar foto de tester").setInputFiles("build/icon.png");
     await expect(page.getByRole("heading", { name: "Encontre o melhor enquadramento" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Usar este recorte", exact: true })).toBeEnabled();

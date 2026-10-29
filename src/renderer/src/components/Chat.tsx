@@ -22,6 +22,36 @@ import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
+import { notificationKey } from "../lib/notification-preferences.ts";
+import { UserProfile } from "./UserProfile.tsx";
+
+function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
+  const [url, setUrl] = useState<string>();
+  const [failed, setFailed] = useState(false);
+  const media = /^(image|video|audio)\//.test(file.type);
+  useEffect(() => {
+    if (!media) return;
+    const source = URL.createObjectURL(file);
+    setUrl(source);
+    return () => URL.revokeObjectURL(source);
+  }, [file, media]);
+  return (
+    <div className="pending-file">
+      {media && !failed ? (
+        <div className="pending-preview">
+          {file.type.startsWith("image/") ? <img src={url} alt={`Prévia de ${file.name}`} onError={() => setFailed(true)} />
+            : file.type.startsWith("video/") ? <video src={url} controls muted playsInline preload="metadata" aria-label={`Prévia de ${file.name}`} onError={() => setFailed(true)} />
+            : <><Icon name="music" size={24} /><audio src={url} controls preload="metadata" aria-label={`Prévia de ${file.name}`} onError={() => setFailed(true)} /></>}
+        </div>
+      ) : <div className="pending-preview pending-preview-file"><Icon name="paperclip" size={24} /><span>{failed ? "Prévia indisponível" : "Arquivo anexado"}</span></div>}
+      <div className="pending-file-details">
+        <span className="truncate" title={file.name}>{file.name}</span>
+        <span className="pending-file-size">{formatSize(file.size)}</span>
+        <button className="icon-btn tiny" disabled={disabled} onClick={onRemove} aria-label={`Remover ${file.name}`}><Icon name="x" size={14} /></button>
+      </div>
+    </div>
+  );
+}
 
 const ImageViewer = lazy(() => import("./ImageViewer.tsx"));
 const MediaViewer = lazy(() => import("./MediaViewer.tsx"));
@@ -171,6 +201,8 @@ function MessageRow({
   onReply: (m: Message) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const recent = useStore((s) => s.recentMessages[notificationKey(accountId, message.id)]);
+  const arrival = recent && Date.now() - recent.at < 4000 ? (recent.own ? " message-sent" : " message-received") : "";
   const [draft, setDraft] = useState(message.content);
   const own = message.author.id === me;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
@@ -191,7 +223,7 @@ function MessageRow({
   };
 
   return (
-    <div data-message-id={message.id} className={`message${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
+    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -213,7 +245,7 @@ function MessageRow({
           {!compact && (
             <div className="message-head">
               <Avatar user={message.author} size={22} />
-              <span className="message-author">{name}</span>
+              <UserProfile accountId={accountId} user={message.author}><span className="message-author">{name}</span></UserProfile>
             </div>
           )}
           {editing ? (
@@ -436,14 +468,7 @@ function Composer({
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <span key={`${f.name}-${i}`} className="pending-file">
-              <Icon name="paperclip" size={14} />
-              <span className="truncate">{f.name}</span>
-              <span className="muted">{formatSize(f.size)}</span>
-              <button className="icon-btn tiny" onClick={() => setFiles((list) => list.filter((_, j) => j !== i))}>
-                <Icon name="x" size={12} />
-              </button>
-            </span>
+            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={sending} onRemove={() => setFiles((list) => list.filter((_, j) => j !== i))} />
           ))}
         </div>
       )}

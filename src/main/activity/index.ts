@@ -36,14 +36,14 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
       throw new Error("Invalid activity sender");
     const values = input as Partial<ActivityPreferences> | null;
-    preferences = { games: values?.games === true, music: values?.music === true };
+    preferences = { games: values?.games === true, music: values?.music === true, development: values?.development === true };
     ++generation;
     controller?.abort();
     if (timer) clearTimeout(timer);
     timer = null;
     snapshot = { supported: process.platform === "win32", activities: [], error: null };
     publish();
-    if (snapshot.supported && (preferences.games || preferences.music)) void poll(generation);
+    if (snapshot.supported && (preferences.games || preferences.music || preferences.development)) void poll(generation);
     return snapshot;
   });
   ipc.handle("activity:get", (event) => {
