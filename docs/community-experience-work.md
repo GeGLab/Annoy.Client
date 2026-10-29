@@ -22,7 +22,7 @@ User scope, 2026-10-29. Client and companion server changes are developed on
 - [x] Final tests: 17 desktop, 7 activity, 5 discovery and 2 profile tests; both typechecks and client build.
 - [x] Fetch/integrate client upstream 0.4.4 and server 0.4.3; resolve capture/settings conflicts.
 - [x] Post-merge checks: 16 desktop passes plus the updated settings test passing separately, 7 activity and 7 server tests, typechecks and build.
-- [ ] Linked PR publication.
+- [x] Linked PR publication as guilhermeSDB: [client #2](https://github.com/GeGLab/annoy-client/pull/2), [server #2](https://github.com/GeGLab/annoy-server/pull/2).
 
 Git commit identity is configured globally and in both repositories as
 GuilhermeSDB <guilhermescarmagnani@outlook.com>. Git Credential Manager and the
