@@ -2,14 +2,18 @@ import { existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
 import { startUpdater } from "./updater.ts";
+import { registerActivity } from "./activity/index.ts";
 
 /** Must match --topbar-height in the renderer stylesheet; the Discord view sits below the tab bar. */
-const TOPBAR_HEIGHT = 56;
+const TOPBAR_HEIGHT = 36;
+const RAIL_WIDTH = 76;
 const DISCORD_URL = "https://discord.com/app";
 const DISCORD_HOSTS = /^(?:[a-z0-9-]+\.)*(discord\.com|discordapp\.com|discord\.gg|discord\.new|discordapp\.net|discord\.media)$/;
 const MEDIA_PERMISSIONS = new Set(["media", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
 let win: BrowserWindow | null = null;
+const stopActivity = registerActivity(ipcMain, () => win);
+app.on("before-quit", stopActivity);
 let discord: WebContentsView | null = null;
 let discordVisible = false;
 /** Space reserved above the Discord view for in-app banners (e.g. an available update). */
@@ -83,7 +87,7 @@ function layoutDiscord(): void {
   if (!win || !discord) return;
   const { width, height } = win.getContentBounds();
   const top = TOPBAR_HEIGHT + discordTopInset;
-  discord.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
+  discord.setBounds({ x: RAIL_WIDTH, y: top, width: Math.max(0, width - RAIL_WIDTH), height: Math.max(0, height - top) });
 }
 
 /** Created lazily and kept alive, so switching back is instant and the session persists. */
@@ -139,8 +143,12 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
-    backgroundColor: "#1e1f24",
+    backgroundColor: "#171621",
     title: "Annoy",
+    titleBarStyle: "hidden",
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
+    icon: join(import.meta.dirname, "../renderer/icon.png"),
+
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
@@ -159,6 +167,9 @@ function createWindow(): void {
     }
   });
   win.on("resize", layoutDiscord);
+  const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
+  win.on("maximize", sendWindowState);
+  win.on("unmaximize", sendWindowState);
   win.on("closed", () => {
     win = null;
     discord = null;
@@ -167,6 +178,15 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
+
+// Only the local, isolated renderer may control the desktop window.
+ipcMain.on("window:control", (event, action: unknown) => {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) return;
+  if (action === "minimize") win.minimize();
+  else if (action === "maximize") win.isMaximized() ? win.unmaximize() : win.maximize();
+  else if (action === "close") win.close();
+});
+ipcMain.handle("window:maximized", (event) => event.sender === win?.webContents && win.isMaximized());
 
 ipcMain.on("discord:show", () => setDiscordVisible(true));
 ipcMain.on("discord:hide", () => setDiscordVisible(false));

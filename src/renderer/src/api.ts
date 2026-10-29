@@ -93,8 +93,9 @@ export class Api {
     private readonly token: string,
   ) {}
 
-  async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T = unknown>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api${path}`, {
+      signal,
       method,
       headers: {
         authorization: `Bearer ${this.token}`,
@@ -110,6 +111,11 @@ export class Api {
   patch = <T>(path: string, body: unknown) => this.request<T>("PATCH", path, body);
   put = <T>(path: string, body: unknown = {}) => this.request<T>("PUT", path, body);
   del = <T>(path: string) => this.request<T>("DELETE", path);
+
+  async uploadAvatar<T>(photo: Blob): Promise<T> {
+    const body = new FormData(); body.append("avatar", photo, "avatar.webp");
+    return parse<T>(await fetch(`${this.baseUrl}/api/users/@me/avatar`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
+  }
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null): Promise<T> {
     if (files.length === 0) return this.post<T>(`/channels/${channelId}/messages`, { content, replyToId });

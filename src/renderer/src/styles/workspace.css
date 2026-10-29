@@ -1,0 +1,44 @@
+.resizable-panel { position: relative; flex: none; min-width: 0; padding: 0; overflow: hidden; }
+.panel-content { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
+.resizable-panel.channels .channels-header { padding-right: 49px; }
+.resizable-panel.members > .panel-content { display: block; padding: 46px 12px 20px; overflow-y: auto; }
+.panel-collapse { position: absolute; z-index: 2; right: 9px; top: 15px; }
+.panel-resize { position: absolute; z-index: 5; top: 0; bottom: 0; width: 7px; cursor: col-resize; touch-action: none; outline-offset: -2px; }
+.panel-resize-channels { right: 0; }
+.panel-resize-members { left: 0; }
+.panel-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background-color var(--duration); }
+.panel-resize:hover::after, .panel-resize:focus-visible::after, .panel-resize:active::after { background: var(--accent); }
+.collapsed-panel { display: flex; justify-content: center; width: 38px; flex: none; background: var(--bg-channels); padding-top: 12px; }
+.collapsed-channels { border-right: 1px solid var(--border); }
+.collapsed-members { border-left: 1px solid var(--border); }
+.personal-colors { margin-top: 20px; }
+.personal-colors > p { line-height: 1.6; margin: 0 0 12px; }
+.personal-colors > .ui-button { margin-top: 12px; }
+.color-field { display: grid; grid-template-columns: 1fr 44px; gap: 8px 12px; align-items: center; min-width: 0; font-size: 12px; }
+.color-field > span:last-child { grid-column: 1 / -1; font-size: 11px; }
+.color-field input { padding: 3px; width: 44px; height: 34px; min-height: 34px; cursor: pointer; }
+.voice-status-bar { height: 56px; flex: none; display: flex; align-items: center; gap: 13px; padding: 8px 20px; background: color-mix(in srgb, var(--ok) 9%, var(--bg-channels)); border-bottom: 1px solid color-mix(in srgb, var(--ok) 28%, var(--border)); color: var(--ok); }
+.voice-status-bar.connecting { color: var(--warn); }
+.voice-connection-icon { display: grid; place-items: center; flex: none; }
+.voice-status-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.voice-status-copy > span { font-size: 11px; font-weight: 650; }
+.voice-status-copy strong { font-size: 13px; color: var(--text); font-weight: 600; }
+.voice-status-copy strong > span { font-weight: 400; color: var(--text-muted); }
+.voice-status-bar .ui-button:last-child { color: var(--danger); }
+.voice-status-bar.connecting .voice-connection-icon { animation: spin 1.5s linear infinite; }
+.voice-here { font-size: 9px; color: var(--ok); white-space: nowrap; font-weight: 650; padding: 3px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.voice-here.connecting { color: var(--warn); }
+.connection-dialog { z-index: 121; width: min(540px, calc(100vw - 48px)); max-height: calc(100dvh - 92px); overflow-y: auto; display: flex; align-items: center; flex-direction: column; gap: 18px; padding: 36px 30px 28px; border-radius: 16px; background: var(--bg-main); box-shadow: var(--shadow-overlay); text-align: center; }
+.connection-dialog h2 { font-size: 22px; letter-spacing: -.025em; }
+.connection-dialog > p { color: var(--text-muted); max-width: 380px; margin: 0; font-size: 13px; line-height: 1.7; }
+.connection-dialog + [data-radix-focus-guard] { z-index: 122; }
+.reconnect-symbol { position: relative; display: grid; place-items: center; width: 110px; height: 110px; margin-bottom: 2px; }
+.reconnect-symbol > .reconnect-wave { position: absolute; inset: 0; border: 1px solid var(--accent-line); border-radius: 50%; animation: reconnect-wave 2.4s var(--ease) infinite; }
+.reconnect-symbol > .reconnect-wave:nth-child(2) { animation-delay: 1.2s; }
+.connection-accounts { align-self: stretch; display: flex; flex-direction: column; gap: 10px; }
+.connection-account { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; text-align: left; min-width: 0; flex-wrap: wrap; }
+.connection-account > .icon { color: var(--warn); }
+.connection-account > span { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.connection-account small { color: var(--text-muted); font-size: 11px; }
+@keyframes reconnect-wave { 0% { transform: scale(.65); opacity: 0; } 20% { opacity: .8; } 100% { transform: scale(1.05); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .reconnect-symbol > .reconnect-wave, .voice-status-bar.connecting .voice-connection-icon { animation: none; } }

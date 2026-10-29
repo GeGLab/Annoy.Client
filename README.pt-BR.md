@@ -87,3 +87,7 @@ Discord web.
 ## Licença
 
 [MIT](LICENSE) © Gustavo Cruz. O Annoy não é afiliado ao Discord Inc.
+
+## Desenvolvimento da interface
+
+Veja [desenvolvimento](docs/development.md) para a preparação automática do Electron, componentes compartilhados e testes isolados. [Busca e atividades privadas](docs/search-activity.md) descreve os módulos e a integração com o servidor.

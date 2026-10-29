@@ -4,3 +4,6 @@ dist/
 data/
 *.log
 .env
+test-results/
+playwright-report/
+.impeccable/review/
