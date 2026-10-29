@@ -12,23 +12,31 @@ import { ResizablePanel } from "./layout/ResizablePanel.tsx";
 import { Brand } from "./Brand.tsx";
 import { UserPanel } from "./TopBar.tsx";
 import { Button } from "./ui/button.tsx";
+import { UserProfile } from "./UserProfile.tsx";
+import { startDirectCall } from "../features/direct-calls.ts";
+import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 
 type Tab = "online" | "all" | "pending" | "add";
 
 function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relationship; online: boolean }) {
+  const presence = useStore((s) => s.instances[accountId]?.presences[rel.user.id] ?? "offline");
   const activities = useStore((s) => s.instances[accountId]?.activities?.[rel.user.id] ?? EMPTY_ACTIVITIES);
   const api = apiFor(accountId);
   return (
     <div className="friend">
-      <Avatar user={rel.user} size={36} presence={online ? "online" : "offline"} />
+      <Avatar user={rel.user} size={36} presence={presence} />
       <div className="friend-names">
-        <strong>{rel.user.displayName}</strong>
+        <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || rel.user.displayName}</strong></UserProfile>
+        {rel.nicknameByOther && <small className="muted">Te chama de {rel.nicknameByOther}</small>}
         <span className="muted">
-          {rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : online ? "Online" : "Offline"}
+          {rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : presence === "idle" ? "Ausente" : online ? "Online" : "Offline"}
         </span>
         {rel.status === "friend" && activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} compact />)}
       </div>
       <span className="spacer" />
+      {rel.status === "friend" && (
+        <><button className="icon-btn" aria-label={`Ligar para ${rel.user.displayName}`} onClick={() => void startDirectCall(accountId, rel.user.id, false)}><Icon name="phone" /></button><button className="icon-btn" aria-label={`Chamada de vídeo com ${rel.user.displayName}`} onClick={() => void startDirectCall(accountId, rel.user.id, true)}><Icon name="camera" /></button></>
+      )}
       {rel.status === "friend" && (
         <button className="icon-btn" title="Mensagem" onClick={() => void openDm(accountId, rel.user.id)}>
           <Icon name="message" />
@@ -58,7 +66,7 @@ function Friends({ accountId }: { accountId: string }) {
   const [tab, setTab] = useState<Tab>("online");
   const [username, setUsername] = useState("");
   const rels = inst?.relationships ?? [];
-  const online = (id: string) => inst?.presences[id] === "online";
+  const online = (id: string) => inst?.presences[id] === "online" || inst?.presences[id] === "idle";
   const pending = rels.filter((r) => r.status !== "friend");
   const list =
     tab === "online"
@@ -133,6 +141,7 @@ function Friends({ accountId }: { accountId: string }) {
 }
 
 export function Home({ accountId, dmId }: { accountId: string | null; dmId: string | null }) {
+  const settings = useStore((s) => s.settings);
   const accounts = useStore((s) => s.accounts);
   const inst = useStore((s) => (accountId ? s.instances[accountId] : undefined));
   const unread = inst?.unread;
@@ -248,7 +257,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
                   onClick={() => navigate({ kind: "home", accountId, dmId: d.id })}
                 >
                   <Avatar user={r} size={28} presence={inst.presences[r.id] ?? "offline"} />
-                  <span className="channel-name">{r.displayName}</span>
+                  <span className="channel-name">{inst.relationships.find((relationship) => relationship.user.id === r.id)?.nickname || r.displayName}</span>
                   {u && <span className="badge">{u.count}</span>}
                 </div>
               </li>
@@ -263,12 +272,13 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           key={dm.id}
           accountId={accountId}
           channelId={dm.id}
-          title={other.displayName}
+          title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}
+          headerExtra={<><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" aria-label="Ligar para este amigo" onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" aria-label="Chamada de vídeo com este amigo" onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "Ativar notificações da conversa" : "Silenciar conversa"} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
           icon={null}
           canSend
           canAttach
           canModerate={false}
-          nameOf={(id) => (id === me.id ? me.displayName : dm.recipients.find((r) => r.id === id)?.displayName)}
+          nameOf={(id) => (id === me.id ? me.displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || dm.recipients.find((r) => r.id === id)?.displayName)}
           mentionables={dm.recipients.map((r) => ({ id: r.id, name: r.displayName, username: r.username }))}
         />
       ) : (

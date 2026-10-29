@@ -121,3 +121,49 @@ principal, que posiciona o WebContentsView do Discord abaixo e ao lado delas.
 Impeccable: decisões do produto em `PRODUCT.md`, sistema em `DESIGN.md`, tokens
 legíveis por ferramentas em `.impeccable/design.json` e direção da superfície
 em `.impeccable/surfaces/desktop.md`.
+
+## Capas de atividades
+
+O Windows fornece a miniatura da sessão de música; o adaptador a converte em
+JPEG de até 160px e 16KB, sem enviar caminhos locais. A capa da Steam é resolvida
+pelo app ID na API pública da loja, incluindo URLs com hash. As marcas das
+plataformas ficam em `src/renderer/src/assets/providers`.
+
+Publique também as alterações de `Annoy.Server` para compartilhar capas:
+o gateway anuncia `READY.d.instance.activityArtwork`. Sem essa capacidade,
+o cliente omite o novo campo para continuar compatível com servidores antigos.
+As imagens seguem a mesma regra de amizade e expiração da atividade.
+
+## Conversas e preferências
+
+O botão da marca abre Novidades; os atalhos da loja estão comentados até existir
+uma plataforma compatível de bots. Preferências agrupam dispositivos e ações em
+cards explicativos. Os sons de mensagem podem ser desligados globalmente ou
+silenciados por instância/servidor/canal; o menu do servidor, o menu do canal e o
+cabeçalho de DM permitem alterar esse estado. Alertas do sistema são silenciosos
+para não duplicar o aviso reproduzido pelo cliente.
+
+O perfil aceita biografia de até 1.000 caracteres e mostra três linhas na prévia.
+Apelidos são escolhidos por amigo e ambos podem ver a atribuição. Sair remove a
+sessão e lembra apenas dados da conta para facilitar novo login, sem senha/token.
+Contas já conectadas podem ser alternadas pelo perfil ou pelas configurações.
+
+Chamadas privadas usam o gateway para convite/sinalização e WebRTC para mídia.
+O cliente libera as faixas ao encerrar e impede a captura simultânea com a sala
+de voz. A configuração de TURN e os endpoints estão descritos no repositório
+complementar em `Annoy.Server/docs/social-experience.md`.
+
+Transmissão permite escolher resolução e FPS antes da fonte de captura. A tag
+mostra a qualidade selecionada; o dispositivo pode fornecer menos. A barra global
+da sala aparece por padrão apenas sobre serviços externos, com opção de exibição
+permanente. O status ausente usa a inatividade do sistema operacional; o padrão
+é dez minutos, ajustável nas preferências de Notificações.
+
+A detecção de programação usa títulos de janelas de editores conhecidos. O
+adaptador publica nomes de arquivo/projeto e linguagem, sem caminhos completos
+nem conteúdo de arquivos. O compartilhamento geral também controla essa categoria.
+
+A integração com upstream 0.4.4 preserva áudio de sistema no Windows, captura
+com resolução nativa/FPS sem limite, orçamento por transmissão e recuperação
+de sala após reinícios. Preferências antigas de FPS são migradas para o seletor
+novo. Os valores zero de qualidade indicam resolução nativa ou FPS sem limite.

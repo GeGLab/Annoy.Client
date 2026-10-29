@@ -8,8 +8,9 @@ export interface WindowsProbe {
   steamPath: string;
   running: string[];
   paths: string[];
-  media: { source: string; title: string; artist: string; album: string }[];
+  media: { source: string; title: string; artist: string; album: string; artwork?: string }[];
   mediaError: boolean;
+  editors?: { process: string; title: string; active?: boolean }[];
 }
 export interface InstalledGame {
   appId: string;
@@ -65,13 +66,29 @@ export function detectActivities(probe: WindowsProbe, games: InstalledGame[], pr
         name: media.title.slice(0, 160),
         artist: media.artist?.slice(0, 160),
         album: media.album?.slice(0, 160),
+        ...(media.artwork && media.artwork.length <= 24_000 && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]+={0,2}$/.test(media.artwork)
+          ? { artwork: media.artwork } : {}),
       });
+  }
+  if (preferences.development) {
+    const editor = [...(probe.editors ?? [])].sort((a, b) => Number(!!b.active) - Number(!!a.active)).find((item) => item.title);
+    if (editor) {
+      const provider = /code/i.test(editor.process) ? "vscode" : /idea|pycharm/i.test(editor.process) ? "intellij" : /dbeaver/i.test(editor.process) ? "dbeaver" : /ssms/i.test(editor.process) ? "ssms" : "visual-studio";
+      const parts = editor.title.replace(/^[●*\s]+/, "").split(/\s+[-–—]\s+/).filter((part) => !/^(Visual Studio Code|IntelliJ IDEA|Microsoft Visual Studio|DBeaver|SQL Server Management Studio)(\b|$)/i.test(part));
+      const clean = (value: string) => value.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]/g, "").slice(0, 160);
+      const extensions = new Set(["tsx", "jsx", "ts", "js", "mjs", "cjs", "py", "cs", "sql", "java", "kt", "vue", "svelte", "go", "rs", "rb", "php", "cpp", "c", "h", "html", "css", "scss", "json", "yaml", "yml", "xml", "md", "ipynb", "sln", "csproj"]);
+      const file = clean(parts.find((part) => extensions.has(/\.([a-z0-9]{1,12})(?:\s|$)/i.exec(clean(part))?.[1]?.toLowerCase() ?? "")) ?? "");
+      const project = clean(parts.find((part) => clean(part) !== file) ?? parts[0] ?? "");
+      const extension = /\.([a-z0-9]{1,12})(?:\s|$)/i.exec(file)?.[1]?.toLowerCase();
+      const language = extension === "tsx" || extension === "jsx" ? "react" : extension === "ts" ? "typescript" : extension === "js" ? "javascript" : extension === "py" ? "python" : extension === "cs" ? "csharp" : extension === "sql" ? "sql" : extension === "vue" ? "vue" : extension;
+      activities.push({ kind: "development", provider, name: project || "Programando", ...(file && { file }), ...(project && { project }), ...(language && { language }) });
+    }
   }
   return activities;
 }
 export async function probeWindows(preferences: ActivityPreferences, signal?: AbortSignal): Promise<DesktopActivitySnapshot> {
   const script =
-    `$detectGames=$${preferences.games ? "true" : "false"}; $detectMusic=$${preferences.music ? "true" : "false"}\n` + windowsProbe;
+    `$detectGames=$${preferences.games ? "true" : "false"}; $detectMusic=$${preferences.music ? "true" : "false"}; $detectDevelopment=$${preferences.development ? "true" : "false"}\n` + windowsProbe;
   const probe = await new Promise<WindowsProbe>((resolveProbe, reject) =>
     execFile(
       "powershell.exe",
@@ -88,12 +105,41 @@ export async function probeWindows(preferences: ActivityPreferences, signal?: Ab
     ),
   );
   signal?.throwIfAborted();
+  const activities = detectActivities(probe, preferences.games ? await installedGames(probe.steamPath) : [], preferences);
+  for (const activity of activities) {
+    if (activity.kind === "game" && activity.appId) activity.artwork = await steamArtwork(activity.appId, signal);
+  }
   return {
     supported: true,
-    activities: detectActivities(probe, preferences.games ? await installedGames(probe.steamPath) : [], preferences),
+    activities,
     error:
       preferences.music && probe.mediaError
         ? "O Windows não disponibilizou a sessão de música. Confira se o aplicativo está reproduzindo e tente novamente."
         : null,
   };
+}
+
+const artworkCache = new Map<string, { expiresAt: number; url: string }>();
+export async function steamArtwork(appId: string, signal?: AbortSignal): Promise<string | undefined> {
+  if (!/^\d{1,10}$/.test(appId)) return undefined;
+  const cached = artworkCache.get(appId);
+  if (cached && Date.now() < cached.expiresAt) return cached.url;
+  let url = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+  let cacheMs = 60_000;
+  try {
+    const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&filters=basic`, {
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
+    });
+    if (response.ok) {
+      const data = await response.json() as Record<string, { success: boolean; data?: { header_image?: string } }>;
+      const artwork = data[appId]?.success && data[appId]?.data?.header_image;
+      if (artwork && /^https:\/\/[a-z0-9.-]+\.steamstatic\.com\/(?:store_item_assets\/)?steam\/apps\/\d+\/[a-zA-Z0-9_/.?=&%-]+$/.test(artwork)) {
+        url = artwork;
+        cacheMs = 3_600_000;
+      }
+    }
+  } catch { signal?.throwIfAborted(); }
+  if (artworkCache.size >= 64) artworkCache.delete(artworkCache.keys().next().value!);
+  artworkCache.set(appId, { expiresAt: Date.now() + cacheMs, url });
+  return url;
 }

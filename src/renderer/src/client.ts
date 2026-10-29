@@ -7,6 +7,10 @@ import { emptyInstance, getState, setState, subscribe, toast, type Account, type
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
+import { playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/voice-feedback.ts";
+import { isMessageMuted, notificationKey } from "./lib/notification-preferences.ts";
+import { screenProfile } from "./lib/screen-profile.ts";
+import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -94,10 +98,12 @@ export function connectAccount(account: Account): void {
     account.url,
     account.token,
     (event) => onEvent(account.id, event),
-    (status) =>
+    (status) => {
+      if (status === "offline" || status === "invalid") disconnectDirectCall(account.id);
       patchInstance(account.id, (inst) => {
         inst.status = status;
-      }),
+      });
+    },
   );
   live.set(account.id, { api, gateway });
   setState((s) => {
@@ -131,9 +137,15 @@ export function addAccountQuietly(account: Account): void {
 }
 
 export function removeAccount(accountId: string): void {
+  const account = getState().accounts.find((item) => item.id === accountId);
+  const user = getState().instances[accountId]?.user;
+  disconnectDirectCall(accountId);
+  if (account && user) setState((s) => {
+    const { token: _token, ...remembered } = account;
+    s.rememberedAccounts = [...s.rememberedAccounts.filter((item) => item.id !== accountId), { ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }];
+  });
   // Leaving on purpose: the global vault forgets it too, so it doesn't come back.
-  const url = getState().accounts.find((a) => a.id === accountId)?.url;
-  if (url && getState().global) void import("./global.ts").then((g) => g.forgetServer(url));
+  if (account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.gateway.close();
@@ -331,6 +343,7 @@ export function sendTyping(accountId: string, channelId: string): void {
 // Voice --------------------------------------------------------------------
 
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
+  if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
   const gateway = gatewayFor(accountId);
@@ -364,6 +377,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         s.voice.canStream = session.canStream;
       }
     });
+    playCallFeedback("join");
     if (!session.canSpeak) toast("Você está conectado sem permissão para falar");
   } catch (err) {
     if (voice?.session === session) leaveVoice();
@@ -378,17 +392,31 @@ function rejoinVoice(target: { accountId: string; serverId: string; channelId: s
 }
 
 export function leaveVoice(notifyServer = true): void {
+  const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
   voice = null;
   setState((s) => {
     s.voice = null;
   });
+  if (connected) playCallFeedback("leave");
 }
 
 export function updateVoiceSettings(): void {
+  updateDirectCallMute();
   const settings = getState().settings;
   voice?.session.updateSettings(settings);
-  if (voice) gatewayFor(voice.accountId)?.send({ op: "voice_state", selfMute: settings.selfMute, selfDeaf: settings.selfDeaf });
+  if (voice) gatewayFor(voice.accountId)?.send({ op: "voice_state", selfMute: settings.selfMute, selfDeaf: settings.selfDeaf, ...(voice.session.isSharing("screen") && { screenQuality: screenProfile(settings).quality }) });
+}
+
+/** Shared by the profile controls and the call stage. */
+export function toggleVoiceSetting(key: "selfMute" | "selfDeaf"): void {
+  setState((s) => {
+    s.settings[key] = !s.settings[key];
+    if (key === "selfDeaf") s.settings.selfMute = s.settings.selfDeaf;
+    else if (!s.settings.selfMute) s.settings.selfDeaf = false;
+  });
+  updateVoiceSettings();
+  playVoiceFeedback(getState().settings[key]);
 }
 
 export async function toggleCamera(): Promise<void> {
@@ -410,14 +438,12 @@ export async function toggleScreenShare(): Promise<void> {
   const session = voice?.session;
   if (!session) return;
   if (session.isSharing("screen")) return void (await session.stopVideo("screen"));
-  const mode = (await window.distopic?.screen.mode()) ?? "system";
-  if (mode === "app") {
+  {
     setState((s) => {
       s.modal = { kind: "screenPicker" };
     });
     return;
   }
-  await startScreenShare(null);
 }
 
 export async function startScreenShare(sourceId: string | null): Promise<void> {
@@ -425,7 +451,9 @@ export async function startScreenShare(sourceId: string | null): Promise<void> {
   if (!session) return;
   if (sourceId) window.distopic?.screen.choose(sourceId);
   try {
+    session.updateSettings(getState().settings);
     await session.startVideo("screen");
+    updateVoiceSettings();
   } catch (err) {
     // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
     if ((err as DOMException).name !== "NotAllowedError") toast(`Tela: ${(err as Error).message}`);
@@ -437,11 +465,14 @@ export function setPushToTalk(down: boolean): void {
 }
 
 // Gateway events -------------------------------------------------------------
+const receivedMessages = new Set<string>();
 
 function notify(accountId: string, message: Message, isDm: boolean): void {
   const s = getState();
   if (!s.settings.notifications) return;
   const inst = s.instances[accountId];
+  const serverId = Object.values(inst?.serverStates ?? {}).find((st) => st.channels.some((c) => c.id === message.channelId))?.server.id;
+  if (isMessageMuted(s.settings, accountId, message.channelId, serverId)) return;
   const me = inst?.user?.id;
   if (!me || message.author.id === me) return;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
@@ -456,7 +487,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
     };
     const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
     const body = previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
-    const n = new Notification(message.author.displayName, { body, silent: false });
+    const n = new Notification(message.author.displayName, { body, silent: true });
     n.onclick = () => window.focus();
   }
 }
@@ -472,6 +503,10 @@ function onEvent(accountId: string, event: GatewayEvent): void {
   if (voice?.accountId === accountId) voice.session.handleEvent(event);
 
   switch (event.t) {
+    case "CALL_UPDATE":
+    case "CALL_SIGNAL":
+      void handleDirectCallEvent(accountId, event);
+      return;
     case "READY": {
       patchInstance(accountId, (inst) => {
         inst.user = event.d.user;
@@ -550,6 +585,12 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       const s = getState();
       const inst = s.instances[accountId];
       if (!inst) return;
+      const receipt = notificationKey(accountId, msg.id);
+      if (receivedMessages.has(receipt)) return;
+      receivedMessages.add(receipt);
+      if (receivedMessages.size > 2000) receivedMessages.delete(receivedMessages.values().next().value!);
+      const serverId = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === msg.channelId))?.server.id;
+      if (s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
       const viewing =
         (s.view.kind === "server" && s.view.accountId === accountId && s.view.channelId === msg.channelId) ||
         (s.view.kind === "home" && s.view.accountId === accountId && s.view.dmId === msg.channelId);
@@ -570,6 +611,10 @@ function onEvent(accountId: string, event: GatewayEvent): void {
           u.count++;
           if (isDm || msg.mentionsEveryone || (me && msg.mentionIds.includes(me))) u.mention = true;
         }
+      });
+      setState((draft) => {
+        draft.recentMessages[receipt] = { own: msg.author.id === me, at: Date.now() };
+        if (Object.keys(draft.recentMessages).length > 200) delete draft.recentMessages[Object.keys(draft.recentMessages)[0]!];
       });
       notify(accountId, msg, isDm);
       return;
@@ -605,13 +650,27 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       });
     case "USER_UPDATE":
       return patchInstance(accountId, (inst) => replaceUser(inst, event.d));
-    case "VOICE_STATE_UPDATE":
+    case "VOICE_STATE_UPDATE": {
+      const current = getState();
+      const instance = current.instances[accountId];
+      const previous = instance?.serverStates[event.d.serverId]?.voiceStates.find((v) => v.userId === event.d.userId);
+      const room = current.voice;
+      const listening = room?.status === "connected" && room.accountId === accountId && room.serverId === event.d.serverId;
+      if (listening && event.d.userId !== instance?.user?.id) {
+        const wasHere = previous?.channelId === room.channelId;
+        const isHere = event.d.state?.channelId === room.channelId;
+        if (wasHere !== isHere) playCallFeedback(isHere ? "join" : "leave");
+      }
       return patchInstance(accountId, (inst) => {
         const st = inst.serverStates[event.d.serverId];
         if (!st) return;
-        st.voiceStates = st.voiceStates.filter((v) => v.userId !== event.d.userId);
-        if (event.d.state) st.voiceStates.push(event.d.state);
+        const index = st.voiceStates.findIndex((v) => v.userId === event.d.userId);
+        if (event.d.state) {
+          if (index === -1) st.voiceStates.push(event.d.state);
+          else st.voiceStates[index] = event.d.state;
+        } else if (index !== -1) st.voiceStates.splice(index, 1);
       });
+    }
     case "VOICE_KICKED":
       leaveVoice(false);
       toast(event.d.reason);

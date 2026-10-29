@@ -3,8 +3,7 @@ import { gatewayFor } from "../../client.ts";
 import { getState, setState, useStore } from "../../store.ts";
 /** OS adapter -> sanitized preload -> authenticated gateways. No OS fields in profile entities. */
 export function useDesktopActivity() {
-  const games = useStore((s) => s.settings.shareGames),
-    music = useStore((s) => s.settings.shareMusic);
+  const sharing = useStore((s) => s.settings.shareActivity);
   const ready = useStore((s) =>
     Object.entries(s.instances)
       .filter(([, i]) => i.status === "ready")
@@ -19,28 +18,32 @@ export function useDesktopActivity() {
         s.desktopActivity = snapshot;
       }),
     );
-    void activity.get().then((snapshot) =>
-      setState((s) => {
-        s.desktopActivity = snapshot;
-      }),
-    );
+    void activity.get()
+      .then((snapshot) => setState((s) => { s.desktopActivity = snapshot; }))
+      .catch(() => undefined);
     return unsubscribe;
   }, []);
   useEffect(() => {
-    void window.distopic?.activity?.configure({ games, music });
-  }, [games, music]);
+    void window.distopic?.activity?.configure({ games: sharing, music: sharing, development: sharing });
+  }, [sharing]);
   const snapshot = useStore((s) => s.desktopActivity);
   useEffect(() => {
     const publish = () => {
       const s = getState();
-      const activities = (s.desktopActivity?.activities ?? []).filter((a) =>
-        a.kind === "game" ? s.settings.shareGames : s.settings.shareMusic,
-      );
+      const activities = s.settings.shareActivity ? (s.desktopActivity?.activities ?? []) : [];
       for (const [id, instance] of Object.entries(s.instances))
-        if (instance.status === "ready") gatewayFor(id)?.send({ op: "activity", activities });
+        if (instance.status === "ready") gatewayFor(id)?.send({
+          op: "activity",
+          // Older instances validate activity strictly: don't disconnect their users with a new field.
+          activities: activities.filter((activity) => activity.kind !== "development" || instance.instance?.developmentActivity).map((activity) => {
+            if (instance.instance?.activityArtwork) return activity;
+            const { artwork: _artwork, ...legacy } = activity;
+            return legacy;
+          }),
+        });
     };
     publish();
     const timer = setInterval(publish, 25_000);
     return () => clearInterval(timer);
-  }, [snapshot, ready, games, music]);
+  }, [snapshot, ready, sharing]);
 }

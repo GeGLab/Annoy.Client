@@ -1,6 +1,6 @@
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
-import { confirmAction } from "../ui/action-dialog.tsx";
+import { confirmAction, promptText } from "../ui/action-dialog.tsx";
 import type { DiscordLoginBegin, User } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
@@ -9,10 +9,10 @@ import { getState, setState, toast, useStore, type Settings } from "../../store.
 import { applyTheme } from "../../lib/theme.ts";
 import { registerNavigationGuard, requestNavigation } from "../../lib/navigation-guard.ts";
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
-import { Brand } from "../Brand.tsx";
-import { Field, Icon, Modal, openModal } from "../ui.tsx";
-import { Button } from "../ui/button.tsx";
 import { Input } from "../ui/input.tsx";
+import { ActivityCard } from "../../features/activity/ActivityCard.tsx";
+import { Avatar, Field, Icon, Modal, openModal, type IconName } from "../ui.tsx";
+import { Button } from "../ui/button.tsx";
 import { Select } from "../ui/select.tsx";
 import { RadioGroup } from "../ui/radio-group.tsx";
 import { Switch } from "../ui/switch.tsx";
@@ -21,9 +21,20 @@ import { UpdateSettings } from "../Updates.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
+import { screenAudioSupported } from "../../media-profiles.ts";
+import { PreferenceCard } from "./PreferenceCard.tsx";
 import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
-import { promptText } from "../ui/action-dialog.tsx";
-import { SCREEN_QUALITIES, screenAudioSupported, type ScreenQuality } from "../../media-profiles.ts";
+
+const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
+  { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta global login unificar" },
+  { id: "voice", label: "Voz e vídeo", icon: "mic", search: "microfone áudio câmera ruído sensibilidade teste som" },
+  { id: "appearance", label: "Aparência", icon: "palette", search: "tema cores escuro claro" },
+  { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
+  { id: "activity", label: "Atividade", icon: "radio", search: "compartilhar jogos Steam Spotify música Apple amigos" },
+  { id: "notifications", label: "Notificações", icon: "message", search: "menções mensagens" },
+  { id: "updates", label: "Atualizações", icon: "download", search: "versão atualizar" },
+];
+const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
 function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold: number; filter: NoiseFilter }) {
@@ -130,22 +141,6 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       setLinking(false);
     }
   };
-  const sync = async () => {
-    if (!account) return;
-    setSyncing(true);
-    try {
-      await discordLogin(
-        account.url,
-        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }),
-        new AbortController().signal,
-      );
-      toast("Perfil do Discord sincronizado");
-    } catch (error) {
-      toast((error as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  };
   /** Item 1.9: two users of the same person on this server become this one. */
   const offerMerge = async (reason: string) => {
     if (!account || !linkable) return;
@@ -165,6 +160,22 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       toast(`Contas unificadas em ${account.instanceName}`);
     } catch (error) {
       toast((error as Error).message);
+    }
+  };
+  const sync = async () => {
+    if (!account) return;
+    setSyncing(true);
+    try {
+      await discordLogin(
+        account.url,
+        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }),
+        new AbortController().signal,
+      );
+      toast("Perfil do Discord sincronizado");
+    } catch (error) {
+      toast((error as Error).message);
+    } finally {
+      setSyncing(false);
     }
   };
   return (
@@ -208,7 +219,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
  * Annoy Global: one account for many servers. Signing in happens here, right
  * away (not on "save"), since it's a login rather than a preference.
  */
-function GlobalAccountSection({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
+function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
   const account = useStore((s) => s.global);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -228,8 +239,7 @@ function GlobalAccountSection({ draft, update }: { draft: Settings; update: (pat
     }
   };
   return (
-    <section className="settings-section">
-      <h3>Conta global</h3>
+    <PreferenceCard icon="shield" title="Conta global" description="Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.">
       {account ? (
         <>
           <p>
@@ -239,9 +249,7 @@ function GlobalAccountSection({ draft, update }: { draft: Settings; update: (pat
             <Checkbox checked={draft.globalDefault} onChange={(event) => update({ globalDefault: event.target.checked })} />
             Usar como conta padrão
           </label>
-          <p className="muted small">
-            Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.
-          </p>
+          <p className="muted small">Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.</p>
           <div className="row">
             <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
               Gerenciar conta
@@ -253,7 +261,6 @@ function GlobalAccountSection({ draft, update }: { draft: Settings; update: (pat
         </>
       ) : (
         <form className="form" onSubmit={(event) => void submit(event)}>
-          <p className="muted">Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.</p>
           <div className="grid-2">
             <Field label="E-mail">
               <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
@@ -273,14 +280,21 @@ function GlobalAccountSection({ draft, update }: { draft: Settings; update: (pat
           </div>
         </form>
       )}
-    </section>
+    </PreferenceCard>
   );
 }
 
 export function UserSettingsModal() {
+  const [page, setPage] = useState(() => {
+    const modal = getState().modal;
+    return modal?.kind === "userSettings" ? modal.section ?? "profile" : "profile";
+  });
+  const [search, setSearch] = useState("");
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
+  const profileUser = accounts[0] ? instances[accounts[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
+  const filteredPages = SETTINGS_PAGES.filter((item) => normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
   const desktopActivity = useStore((s) => s.desktopActivity);
   const [draft, setDraft] = useState<Settings>(() => ({ ...getState().settings }));
   const [profiles, setProfiles] = useState<Record<string, ProfileDraft>>({});
@@ -293,7 +307,7 @@ export function UserSettingsModal() {
   const dirtyProfiles = accounts.filter((account) => {
     const change = profiles[account.id],
       user = instances[account.id]?.user;
-    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined);
+    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? ""));
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0;
   const update = (patch: Partial<Settings>) => setDraft((current) => ({ ...current, ...patch }));
@@ -373,8 +387,10 @@ export function UserSettingsModal() {
         const name = change.displayName.trim();
         if (!name) throw new Error("Informe um nome de exibição.");
         const api = apiFor(account.id);
-        if (name !== user.displayName) {
-          const updated = await api.patch<User>("/users/@me", { displayName: name });
+        const bioChanged = change.bio !== undefined && change.bio !== (user.bio ?? "");
+        if (bioChanged && !getState().instances[account.id]?.instance?.socialProfiles) throw new Error("Atualize esta instância para salvar biografias.");
+        if (name !== user.displayName || bioChanged) {
+          const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) });
           applyUserUpdate(account.id, updated);
         }
         if (change.avatar !== undefined) {
@@ -452,219 +468,249 @@ export function UserSettingsModal() {
           ) : null
         }
       >
-        <section className="settings-section appearance-section">
-          <div className="settings-brand">
-            <Brand size={36} wordmark />
-            <span>Um espaço com a sua cara.</span>
-          </div>
-          <h3>Aparência</h3>
-          <p className="muted">Escolha como o Annoy aparece para você.</p>
-          <div className="theme-options" role="group" aria-label="Tema do aplicativo">
-            {(["dark", "light", "system"] as const).map((theme) => (
-              <button
-                key={theme}
-                className={`theme-option${draft.theme === theme ? " selected" : ""}`}
-                aria-pressed={draft.theme === theme}
-                onClick={() => update({ theme })}
-                disabled={saving}
-              >
-                <Icon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "monitor"} size={20} />
-                <span>{theme === "dark" ? "Escuro" : theme === "light" ? "Claro" : "Sistema"}</span>
-                {draft.theme === theme && <Icon name="check" size={16} />}
-              </button>
-            ))}
-          </div>
-          <AppearanceSettings settings={draft} update={update} />
-        </section>
-        <GlobalAccountSection draft={draft} update={update} />
-        <section className="settings-section">
-          <h3>Meu perfil e contas</h3>
-          {accounts.map((account) => {
-            const user = instances[account.id]?.user;
-            return (
-              user && (
-                <div className="settings-account" key={account.id}>
-                  <ProfileEditor
-                    account={account}
-                    user={user}
-                    draft={profiles[account.id] ?? { displayName: user.displayName }}
-                    onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
-                    disabled={saving}
-                  />
-                  <AccountActions accountId={account.id} busy={saving} />
+        <div className="settings-layout">
+          <aside className="settings-sidebar">
+            {profileUser && (
+              <div className="settings-identity">
+                <Avatar user={profileUser} size={36} />
+                <span><strong className="truncate">{profileUser.displayName}</strong><small>Suas configurações</small></span>
+              </div>
+            )}
+            <Input type="search" placeholder="Buscar configurações" aria-label="Buscar configurações" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <nav aria-label="Categorias de configurações">
+              {filteredPages.map((item) => (
+                <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => setPage(item.id)}>
+                  <Icon name={item.icon} size={18} />{item.label}
+                </button>
+              ))}
+              {!filteredPages.length && <p className="muted small" role="status">Nenhuma categoria encontrada.</p>}
+            </nav>
+          </aside>
+          <div className="settings-content" key={page}>
+            {page === "appearance" && (
+              <section className="settings-section appearance-section">
+                <h3><Icon name="palette" size={24} />Aparência</h3>
+                <p className="muted">Escolha como o Annoy aparece para você.</p>
+                <div className="theme-options" role="group" aria-label="Tema do aplicativo">
+                  {(["dark", "light", "system"] as const).map((theme) => (
+                    <button
+                      key={theme}
+                      className={`theme-option${draft.theme === theme ? " selected" : ""}`}
+                      aria-pressed={draft.theme === theme}
+                      onClick={() => update({ theme })}
+                      disabled={saving}
+                      aria-label={theme === "dark" ? "Escuro" : theme === "light" ? "Claro" : "Sistema"}
+                    >
+                      <Icon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "monitor"} size={20} />
+                      <span><strong>{theme === "dark" ? "Escuro" : theme === "light" ? "Claro" : "Sistema"}</strong><small>{theme === "dark" ? "Menos brilho em ambientes escuros." : theme === "light" ? "Fundos claros para o dia a dia." : "Acompanha o tema do seu computador."}</small></span>
+                      {draft.theme === theme && <Icon name="check" size={16} />}
+                    </button>
+                  ))}
                 </div>
-              )
-            );
-          })}
-          <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>
-            <Icon name="plus" size={16} />
-            Conectar a outra instância
-          </Button>
-        </section>
-        <section className="settings-section">
-          <h3>Voz e vídeo</h3>
-          <div className="grid-2">
-            {deviceSelect("Microfone", "audioinput", draft.inputDeviceId, "inputDeviceId")}
-            {deviceSelect("Saída de áudio", "audiooutput", draft.outputDeviceId, "outputDeviceId")}
-          </div>
-          {deviceSelect("Câmera", "videoinput", draft.cameraDeviceId, "cameraDeviceId")}
-          <Field
-            label="Filtro de ruído"
-            hint={`${NOISE_FILTERS.find((f) => f.value === draft.noiseFilter)?.hint ?? ""} Vale para a próxima conexão de voz.`}
-          >
-            <Select
-              aria-label="Filtro de ruído"
-              value={draft.noiseFilter}
-              onChange={(event) => update({ noiseFilter: event.target.value as NoiseFilter })}
-              disabled={saving}
-            >
-              {NOISE_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field
-            label="Transmissão de tela"
-            hint={`${SCREEN_QUALITIES.find((q) => q.value === draft.screenQuality)?.hint ?? ""} Vale para a próxima transmissão.`}
-          >
-            <Select
-              aria-label="Qualidade da transmissão de tela"
-              value={draft.screenQuality}
-              onChange={(event) => update({ screenQuality: event.target.value as ScreenQuality })}
-              disabled={saving}
-            >
-              {SCREEN_QUALITIES.map((q) => (
-                <option key={q.value} value={q.value}>
-                  {q.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {screenAudioSupported() ? (
-            <label className="check">
-              <Checkbox checked={draft.screenAudio} onChange={(event) => update({ screenAudio: event.target.checked })} />
-              Transmitir o som do computador junto com a tela
-            </label>
-          ) : (
-            <p className="muted small">O som do computador junto com a tela por enquanto só é transmitido no Windows.</p>
-          )}
-          <Field label="Modo de entrada" hint="O modo de entrada vale para a próxima conexão de voz">
-            <RadioGroup
-              label="Modo de entrada"
-              value={draft.inputMode}
-              onValueChange={(value) => update({ inputMode: value as "vad" | "ptt" })}
-              options={[
-                { value: "vad", label: "Detecção de voz" },
-                { value: "ptt", label: "Apertar para falar" },
-              ]}
-            />
-          </Field>
-          {draft.inputMode === "ptt" ? (
-            <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Annoy em foco">
-              <Button variant="secondary" onClick={() => setCapturing(true)}>
-                {capturing
-                  ? "Pressione uma tecla… (Esc cancela)"
-                  : draft.pttKey
-                      .replace(/^Key/, "")
-                      .replace(/^Digit/, "")
-                      .replace("Backquote", "` (crase)")}
-              </Button>
-            </Field>
-          ) : (
-            <Field label={`Sensibilidade: ${draft.vadThreshold}`} hint="Teste e ajuste até a barra ficar verde só quando você falar">
-              <Slider
-                aria-label="Sensibilidade do microfone"
+                <AppearanceSettings settings={draft} update={update} />
+              </section>
+            )}
+            {page === "profile" && (
+              <section className="settings-section">
+                <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
+                <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
+                <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
+                <GlobalAccountCard draft={draft} update={update} />
+                {accounts.map((account) => {
+                  const user = instances[account.id]?.user;
+                  return (
+                    user && (
+                      <div className="settings-account" key={account.id}>
+                        <ProfileEditor
+                          account={account}
+                          user={user}
+                          draft={profiles[account.id] ?? { displayName: user.displayName }}
+                          onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
+                          disabled={saving}
+                        />
+                        <AccountActions accountId={account.id} busy={saving} />
+                      </div>
+                    )
+                  );
+                })}
+                <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>
+                  <Icon name="plus" size={16} />
+                  Conectar a outra instância
+                </Button>
+              </section>
+            )}
+            {page === "voice" && (
+              <section className="settings-section">
+                <h3><Icon name="mic" size={24} />Voz e vídeo</h3>
+                <p className="muted">Escolha seus dispositivos e ajuste como sua voz chega à chamada.</p>
+                <PreferenceCard icon="headphones" title="Dispositivos" description="Escolha de onde sua voz entra, onde você ouve e qual câmera usar.">
+                <div className="grid-2">
+                  {deviceSelect("Microfone", "audioinput", draft.inputDeviceId, "inputDeviceId")}
+                  {deviceSelect("Saída de áudio", "audiooutput", draft.outputDeviceId, "outputDeviceId")}
+                </div>
+                {deviceSelect("Câmera", "videoinput", draft.cameraDeviceId, "cameraDeviceId")}
+                </PreferenceCard>
+                <PreferenceCard icon="monitor" title="Transmissão de tela" description="Escolha resolução e FPS ao iniciar. O som do computador pode acompanhar a imagem no Windows.">
+                  <label className="check">
+                    <Switch checked={draft.screenAudio} disabled={saving || !screenAudioSupported()} onCheckedChange={(checked) => update({ screenAudio: checked })} />
+                    Transmitir o som do computador junto com a tela
+                  </label>
+                  {!screenAudioSupported() && <p className="muted small">Captura de som do computador disponível no Windows.</p>}
+                </PreferenceCard>
+                <PreferenceCard icon="sliders" title="Entrada de voz" description="Reduza ruídos e controle quando o microfone transmite sua voz.">
+                <Field
+                  label="Filtro de ruído"
+                  hint={`${NOISE_FILTERS.find((f) => f.value === draft.noiseFilter)?.hint ?? ""} Vale para a próxima conexão de voz.`}
+                >
+                  <Select
+                    aria-label="Filtro de ruído"
+                    value={draft.noiseFilter}
+                    onChange={(event) => update({ noiseFilter: event.target.value as NoiseFilter })}
+                    disabled={saving}
+                  >
+                    {NOISE_FILTERS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Modo de entrada" hint="O modo de entrada vale para a próxima conexão de voz">
+                  <RadioGroup
+                    label="Modo de entrada"
+                    value={draft.inputMode}
+                    onValueChange={(value) => update({ inputMode: value as "vad" | "ptt" })}
+                    options={[
+                      { value: "vad", label: "Detecção de voz" },
+                      { value: "ptt", label: "Apertar para falar" },
+                    ]}
+                  />
+                </Field>
+                </PreferenceCard>
+                {draft.inputMode === "ptt" ? (
+                  <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Annoy em foco">
+                    <Button variant="secondary" onClick={() => setCapturing(true)}>
+                      {capturing
+                        ? "Pressione uma tecla… (Esc cancela)"
+                        : draft.pttKey
+                            .replace(/^Key/, "")
+                            .replace(/^Digit/, "")
+                            .replace("Backquote", "` (crase)")}
+                    </Button>
+                  </Field>
+                ) : (
+                  <Field label={`Sensibilidade: ${draft.vadThreshold}`} hint="Teste e ajuste até a barra ficar verde só quando você falar">
+                    <Slider
+                      aria-label="Sensibilidade do microfone"
 
-                min={1}
-                max={60}
-                value={draft.vadThreshold}
-                onChange={(event) => update({ vadThreshold: Number(event.target.value) })}
-              />
-            </Field>
-          )}
-          <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} />
-        </section>
-        <section className="settings-section">
-          <h3>Atualizações</h3>
-          <UpdateSettings />
-        </section>
-        <section className="settings-section">
-          <h3>Barra e abas</h3>
-          <Field label="Posição da barra">
-            <RadioGroup
-              label="Posição da barra"
-              value={draft.barPosition}
-              onValueChange={(value) => update({ barPosition: value as Settings["barPosition"] })}
-              options={[
-                { value: "side", label: "Lateral" },
-                { value: "top", label: "Topo" },
-              ]}
-            />
-          </Field>
-          <div className="grid-2">
-            <Field label="Abas de serviço">
-              <Select
-                aria-label="Posição padrão das abas de serviço"
-                value={draft.servicePlacement}
-                onChange={(event) => update({ servicePlacement: event.target.value as Settings["servicePlacement"] })}
-              >
-                <option value="before">Antes dos servidores Annoy</option>
-                <option value="after">Depois dos servidores Annoy</option>
-              </Select>
-            </Field>
-            <Field label="Na barra">
-              <Select
-                aria-label="Como as abas de serviço aparecem"
-                value={draft.serviceDisplay}
-                onChange={(event) => update({ serviceDisplay: event.target.value as Settings["serviceDisplay"] })}
-              >
-                <option value="full">Ícone e nome</option>
-                <option value="icon">Só ícone</option>
-              </Select>
-            </Field>
-          </div>
-          <p className="muted small">Cada aba de serviço pode ter a sua: clique com o botão direito nela.</p>
-          <HiddenServices />
-        </section>
-        <section className="settings-section">
-          <h3>Atividade para amigos</h3>
-          <p className="muted">
-            Somente amizades confirmadas nesta instância recebem sua atividade. Membros do servidor e contatos por DM não recebem esses
-            dados.
-          </p>
-          {window.distopic?.platform === "win32" ? (
-            <>
-              <label className="switch-setting">
-                <span>Compartilhar jogos da Steam com amigos</span>
-                <Switch checked={draft.shareGames} onCheckedChange={(checked) => update({ shareGames: checked })} />
-              </label>
-              <label className="switch-setting">
-                <span>Compartilhar música do Spotify e Apple Music com amigos</span>
-                <Switch checked={draft.shareMusic} onCheckedChange={(checked) => update({ shareMusic: checked })} />
-              </label>
-              <p className="muted small">
-                A leitura começa após salvar. Use os aplicativos para Windows com a música em reprodução. Pausar a música ou fechar o jogo
-                encerra a atividade detectada.
-              </p>
-              {desktopActivity?.error && (
-                <p className="error" role="status">
-                  {desktopActivity.error}
+                      min={1}
+                      max={60}
+                      value={draft.vadThreshold}
+                      onChange={(event) => update({ vadThreshold: Number(event.target.value) })}
+                    />
+                  </Field>
+                )}
+                <PreferenceCard icon="mic" title="Teste do microfone" description="Confira o nível da sua voz antes de entrar. A opção de retorno reproduz sua voz nos fones.">
+                <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} />
+                </PreferenceCard>
+              </section>
+            )}
+            {page === "updates" && (
+              <section className="settings-section">
+                <h3>Atualizações</h3>
+                <UpdateSettings />
+              </section>
+            )}
+            {page === "tabs" && (
+              <section className="settings-section">
+                <h3><Icon name="sliders" size={24} />Barra e abas</h3>
+                <p className="muted">Organize a navegação e escolha quando acompanhar sua chamada no topo.</p>
+                <label className="switch-setting">
+                  <span><strong><Icon name="radio" />Mostrar barra da chamada</strong><small>Por padrão, aparece sobre WhatsApp, Discord e outros serviços, para lembrar que você está em uma sala.</small></span>
+                  <Switch aria-label="Mostrar barra da chamada" checked={draft.showVoiceBar} onCheckedChange={(checked) => update({ showVoiceBar: checked })} />
+                </label>
+                {draft.showVoiceBar && <Field label="Quando mostrar a chamada"><RadioGroup label="Quando mostrar a chamada" cards value={draft.voiceBarMode} onValueChange={(value) => update({ voiceBarMode: value as Settings["voiceBarMode"] })} options={[{ value: "external", label: "Em outros serviços", hint: "Oculta durante a navegação no Annoy." }, { value: "always", label: "Sempre", hint: "Também aparece nos canais e nas conversas do Annoy." }]} /></Field>}
+                <Field label="Posição da barra">
+                  <RadioGroup
+                    label="Posição da barra"
+                    cards
+                    value={draft.barPosition}
+                    onValueChange={(value) => update({ barPosition: value as Settings["barPosition"] })}
+                    options={[
+                      { value: "side", label: <><Icon name="panelLeft" />Lateral</>, hint: "Comunidades e conversas à esquerda." },
+                      { value: "top", label: <><Icon name="monitor" />Topo</>, hint: "Mais espaço horizontal para os canais." },
+                    ]}
+                  />
+                </Field>
+                <div className="grid-2">
+                  <Field label="Abas de serviço">
+                    <Select
+                      aria-label="Posição padrão das abas de serviço"
+                      value={draft.servicePlacement}
+                      onChange={(event) => update({ servicePlacement: event.target.value as Settings["servicePlacement"] })}
+                    >
+                      <option value="before">Antes dos servidores Annoy</option>
+                      <option value="after">Depois dos servidores Annoy</option>
+                    </Select>
+                  </Field>
+                  <Field label="Na barra">
+                    <Select
+                      aria-label="Como as abas de serviço aparecem"
+                      value={draft.serviceDisplay}
+                      onChange={(event) => update({ serviceDisplay: event.target.value as Settings["serviceDisplay"] })}
+                    >
+                      <option value="full">Ícone e nome</option>
+                      <option value="icon">Só ícone</option>
+                    </Select>
+                  </Field>
+                </div>
+                <p className="muted small">Cada aba de serviço pode ter a sua: clique com o botão direito nela.</p>
+                <HiddenServices />
+              </section>
+            )}
+            {page === "activity" && (
+              <section className="settings-section">
+                <h3><Icon name="radio" size={24} />Atividade para amigos</h3>
+                <p className="muted">
+                  Somente amizades confirmadas nesta instância recebem sua atividade. Membros do servidor e contatos por DM não recebem esses
+                  dados.
                 </p>
-              )}
-            </>
-          ) : (
-            <p className="muted">A detecção automática está disponível no Windows.</p>
-          )}
-        </section>
-        <section className="settings-section">
-          <h3>Geral</h3>
-          <label className="check">
-            <Checkbox checked={draft.notifications} onChange={(event) => update({ notifications: event.target.checked })} />
-            Notificar menções e mensagens diretas
-          </label>
-        </section>
+                {window.distopic?.platform === "win32" ? (
+                  <>
+                    <label className="switch-setting">
+                      <span><strong><Icon name="radio" />Compartilhar minha atividade</strong><small>Mostre aos amigos jogos, músicas e programação. Editores podem exibir nome do arquivo, linguagem e projeto; caminhos completos e conteúdo dos arquivos não são enviados.</small></span>
+                      <Switch aria-label="Compartilhar minha atividade" checked={draft.shareActivity} onCheckedChange={(checked) => update({ shareActivity: checked })} />
+                    </label>
+                    <p className="muted small">
+                      A leitura começa após salvar. Use os aplicativos para Windows com a música em reprodução. Pausar a música ou fechar o jogo
+                      encerra a atividade detectada.
+                    </p>
+                    <h4>Detectado agora</h4>
+                    {(desktopActivity?.activities ?? []).map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
+                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? "Nenhum jogo ou música em reprodução detectado." : "Salve o compartilhamento ativado para iniciar a detecção."}</p>}
+                    {desktopActivity?.error && (
+                      <p className="error" role="status">
+                        {desktopActivity.error}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">A detecção automática está disponível no Windows.</p>
+                )}
+              </section>
+            )}
+            {page === "notifications" && (
+              <section className="settings-section">
+                <h3><Icon name="bell" size={24} />Notificações e presença</h3>
+                <p className="muted">Controle os avisos que chegam e quando seus amigos veem você como ausente.</p>
+                <label className="switch-setting preference-toggle"><span><strong><Icon name="bell" />Alertas na área de trabalho</strong><small>Notifica menções e mensagens privadas quando o Annoy está em segundo plano.</small></span><Switch aria-label="Alertas na área de trabalho" checked={draft.notifications} onCheckedChange={(value) => update({ notifications: value })} /></label>
+                <label className="switch-setting preference-toggle"><span><strong><Icon name="speaker" />Sons de mensagens</strong><small>Toca um aviso ao receber uma mensagem nova, inclusive na conversa aberta. Servidores e canais silenciados não tocam.</small></span><Switch aria-label="Sons de mensagens" checked={draft.messageSounds} onCheckedChange={(value) => update({ messageSounds: value })} /></label>
+                <PreferenceCard icon="clock" title="Ausente automaticamente" description="O mouse e o teclado do computador mantêm você online. Ao voltar a usar o computador, o status volta a online."><Field label="Tempo sem atividade"><Select aria-label="Tempo para ficar ausente" value={String(draft.awayMinutes)} onChange={(event) => update({ awayMinutes: Number(event.target.value) })}>{[1, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutos</option>)}<option value="0">Nunca ficar ausente automaticamente</option></Select></Field></PreferenceCard>
+                <p className="muted small">Para silenciar uma comunidade inteira, abra o menu do servidor. Para um canal, use o menu ao lado do nome. Mensagens e contadores continuam disponíveis.</p>
+              </section>
+            )}
+          </div>
+        </div>
       </Modal>
       {pending && (
         <Dialog open onOpenChange={(open) => !open && !saving && setPending(null)}>

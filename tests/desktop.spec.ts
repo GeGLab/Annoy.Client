@@ -32,7 +32,8 @@ test("desktop navigation, themes, window controls and image attachments", async 
     await page.evaluate(() => {
       navigator.mediaDevices.enumerateDevices = async () => (["audioinput", "audiooutput", "videoinput"].map((kind, i) => ({ kind, deviceId: `test-device-${i}`, groupId: "test", label: `Dispositivo de teste com um nome muito longo para verificar o dimensionamento da coluna ${i}`, toJSON() { return this; } })) as MediaDeviceInfo[]);
     });
-    await page.locator(".rail-settings").click();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
     await page.getByRole("button", { name: "Claro", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect.poll(() => page.locator(".modal-body").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -98,7 +99,8 @@ test("desktop navigation, themes, window controls and image attachments", async 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
     await page.screenshot({ path: join(screenshots, "desktop-minimum.png") });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator(".rail-settings").click();
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
     await page.getByRole("button", { name: "Claro", exact: true }).click();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await page.keyboard.press("Escape");

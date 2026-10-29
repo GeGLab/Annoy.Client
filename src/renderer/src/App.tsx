@@ -8,6 +8,9 @@ import { ConnectionOverlay, useConnectionBlocked } from "./components/Connection
 import { VoiceStatusBar } from "./components/VoiceStatusBar.tsx";
 import { SettingsGuard } from "./components/settings/SettingsGuard.tsx";
 import { useDesktopActivity } from "./features/activity/use-activity.ts";
+import { useAwayStatus } from "./features/activity/use-away.ts";
+import { DirectCallPanel } from "./components/DirectCallPanel.tsx";
+import { News } from "./components/News.tsx";
 import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
 import { connectAll, navigate, setPushToTalk, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
@@ -19,6 +22,7 @@ import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
 const AddAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.AddAccountModal })));
+const SwitchAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.SwitchAccountModal })));
 const CreateServerModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.CreateServerModal })));
 const ImportDiscordModal = lazy(() => import("./components/ImportModal.tsx").then(m => ({ default: m.ImportDiscordModal })));
 const DeleteAccountModal = lazy(() => import("./components/InstanceAdmin.tsx").then(m => ({ default: m.DeleteAccountModal })));
@@ -36,6 +40,7 @@ function Modals() {
   const modal = useStore((s) => s.modal);
   if (!modal) return null;
   switch (modal.kind) {
+    case "switchAccount": return <SwitchAccountModal />;
     case "search": return <SearchDialog accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId}/>;
     case "addAccount":
       return <AddAccountModal />;
@@ -71,7 +76,7 @@ const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.i
 export function App() {
   const view = useStore((s) => s.view);
   const service = useStore((s) => (s.view.kind === "service" ? s.services.find((sv) => sv.id === (s.view as { serviceId: string }).serviceId) : undefined));
-  const modalOpen = useStore((s) => s.modal !== null);
+  const modalOpen = useStore((s) => s.modal !== null || s.directCall !== null);
   const toast = useStore((s) => s.toast);
   const blocking = useStore((s) => isBlocking(s.update));
   const bannerVisible = useBannerVisible();
@@ -84,6 +89,7 @@ export function App() {
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
   useDesktopActivity();
+  useAwayStatus();
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor });
@@ -160,7 +166,7 @@ export function App() {
       <UpdateBanner />
       <VoiceStatusBar />
       <main className="main" ref={mainRef}>
-        {view.kind === "service" ? (
+        {view.kind === "news" ? <News /> : view.kind === "service" ? (
           !service ? (
             <Home accountId={null} dmId={null} />
           ) : service.kind === "teamspeak" ? (
@@ -181,6 +187,7 @@ export function App() {
       <Suspense fallback={<div className="overlay-loading" role="status">Abrindo…</div>}><Modals /></Suspense>
       <MandatoryUpdate />
       <ActionDialogHost />
+      <DirectCallPanel />
       {/* An offline Annoy server must not lock the browser services, which don't depend on it. */}
       {!blocking && <ConnectionOverlay blocked={connectionBlocked && view.kind !== "service"} />}
       {toast && (
