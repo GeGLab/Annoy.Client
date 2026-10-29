@@ -127,6 +127,15 @@ export function addAccount(account: Account): void {
   connectAccount(account);
 }
 
+/** Adds a server account in the background (servers coming back from the global vault). */
+export function addAccountQuietly(account: Account): void {
+  if (getState().accounts.some((a) => a.url === account.url)) return;
+  setState((s) => {
+    s.accounts.push(account);
+  });
+  connectAccount(account);
+}
+
 export function removeAccount(accountId: string): void {
   const account = getState().accounts.find((item) => item.id === accountId);
   const user = getState().instances[accountId]?.user;
@@ -135,6 +144,8 @@ export function removeAccount(accountId: string): void {
     const { token: _token, ...remembered } = account;
     s.rememberedAccounts = [...s.rememberedAccounts.filter((item) => item.id !== accountId), { ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }];
   });
+  // Leaving on purpose: the global vault forgets it too, so it doesn't come back.
+  if (account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.gateway.close();

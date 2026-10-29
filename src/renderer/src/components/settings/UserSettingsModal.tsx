@@ -1,6 +1,6 @@
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
-import { confirmAction } from "../ui/action-dialog.tsx";
+import { confirmAction, promptText } from "../ui/action-dialog.tsx";
 import type { DiscordLoginBegin, User } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
@@ -23,9 +23,10 @@ import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
+import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
-  { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância" },
+  { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta global login unificar" },
   { id: "voice", label: "Voz e vídeo", icon: "mic", search: "microfone áudio câmera ruído sensibilidade teste som" },
   { id: "appearance", label: "Aparência", icon: "palette", search: "tema cores escuro claro" },
   { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
@@ -109,13 +110,58 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const signedInGlobal = useStore((s) => s.global !== null);
+  const self = useStore((s) => s.instances[accountId]?.user);
+  /** This server's Global ID when it takes global accounts and this one doesn't use it yet. */
+  const [linkable, setLinkable] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
   useEffect(() => {
-    if (account)
-      void fetchInfo(account.url).then(
-        (info) => setDiscord(info.discordLogin),
-        () => undefined,
-      );
-  }, [account?.url]);
+    if (!account) return;
+    void fetchInfo(account.url).then(
+      async (info) => {
+        setDiscord(info.discordLogin);
+        if (!info.globalServerId) return setLinkable(null);
+        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me");
+        setLinkable(me.global ? null : info.globalServerId);
+      },
+      () => undefined,
+    );
+  }, [account?.url, signedInGlobal]);
+  const link = async () => {
+    if (!account || !linkable) return;
+    setLinking(true);
+    try {
+      await linkAccount(account, linkable);
+      setLinkable(null);
+      toast(`Agora você também entra em ${account.instanceName} com a conta global`);
+    } catch (error) {
+      if (error instanceof GlobalError && error.code === "global_in_use") await offerMerge(error.message);
+      else toast((error as Error).message);
+    } finally {
+      setLinking(false);
+    }
+  };
+  /** Item 1.9: two users of the same person on this server become this one. */
+  const offerMerge = async (reason: string) => {
+    if (!account || !linkable) return;
+    const ok = await confirmAction(
+      `${reason}. Unificar com @${self?.username ?? "esta conta"}? Servidores, mensagens, cargos e amigos do outro usuário passam para esta conta, e você entra nela com a conta global ou com a senha. O outro usuário deixa de existir.`,
+      { confirmLabel: "Unificar" },
+    );
+    if (!ok) return;
+    const password = await promptText(`Para confirmar, digite a senha de @${self?.username ?? "esta conta"} em ${account.instanceName}.`, "", { confirmLabel: "Unificar", secret: true });
+    if (password === null) return;
+    try {
+      const removed = await mergeAccount(account, linkable, password);
+      setLinkable(null);
+      // The other user is gone: drop it if this app also had it signed in.
+      const stale = getState().accounts.find((a) => a.url === account.url && a.userId === removed);
+      if (stale) removeAccount(stale.id);
+      toast(`Contas unificadas em ${account.instanceName}`);
+    } catch (error) {
+      toast((error as Error).message);
+    }
+  };
   const sync = async () => {
     if (!account) return;
     setSyncing(true);
@@ -137,6 +183,11 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       {discord && (
         <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>
           Sincronizar Discord
+        </Button>
+      )}
+      {linkable && signedInGlobal && (
+        <Button variant="secondary" size="sm" disabled={busy} loading={linking} onClick={() => void link()}>
+          Entrar também com a conta global
         </Button>
       )}
       {admin && (
@@ -161,6 +212,75 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         Excluir conta
       </Button>
     </div>
+  );
+}
+
+/**
+ * Annoy Global: one account for many servers. Signing in happens here, right
+ * away (not on "save"), since it's a login rather than a preference.
+ */
+function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
+  const account = useStore((s) => s.global);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await signInGlobal(email, password);
+      setPassword("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <PreferenceCard icon="shield" title="Conta global" description="Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.">
+      {account ? (
+        <>
+          <p>
+            Você entrou como <strong>{account.name}</strong> <span className="muted">({account.email})</span>.
+          </p>
+          <label className="check">
+            <Checkbox checked={draft.globalDefault} onChange={(event) => update({ globalDefault: event.target.checked })} />
+            Usar como conta padrão
+          </label>
+          <p className="muted small">Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.</p>
+          <div className="row">
+            <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
+              Gerenciar conta
+            </a>
+            <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>
+              Sair da conta global
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form className="form" onSubmit={(event) => void submit(event)}>
+          <div className="grid-2">
+            <Field label="E-mail">
+              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+            </Field>
+            <Field label="Senha">
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+            </Field>
+          </div>
+          {error && <p className="error small">{error}</p>}
+          <div className="row">
+            <Button type="submit" size="sm" loading={busy}>
+              {busy ? "Protegendo sua senha…" : "Entrar"}
+            </Button>
+            <a href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
+              Criar conta global
+            </a>
+          </div>
+        </form>
+      )}
+    </PreferenceCard>
   );
 }
 
@@ -395,6 +515,7 @@ export function UserSettingsModal() {
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
+                <GlobalAccountCard draft={draft} update={update} />
                 {accounts.map((account) => {
                   const user = instances[account.id]?.user;
                   return (

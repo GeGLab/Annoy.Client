@@ -8,6 +8,7 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
+import { GlobalError, signInServer, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -21,6 +22,30 @@ export function AddAccountModal() {
   const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const globalAccount = useStore((s) => s.global);
+  const globalDefault = useStore((s) => s.settings.globalDefault);
+  /** First global sign-in on this server: it asks for a username here. */
+  const [globalFirst, setGlobalFirst] = useState(false);
+
+  /** Annoy Global: no password for this server; its own identity and a blind token instead. */
+  async function withGlobal(e?: FormEvent) {
+    e?.preventDefault();
+    if (!info?.info.globalServerId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const first = globalFirst ? { username, ...(displayName && { displayName }), ...(inviteCode.trim() && { inviteCode: inviteCode.trim() }) } : undefined;
+      const auth = await signInServer(info.url, info.info.globalServerId, first);
+      addAccount(toAccount(info.url, info.info, auth));
+    } catch (err) {
+      if (err instanceof GlobalError && err.code === "global_new_account") {
+        setGlobalFirst(true);
+        if (!username && globalAccount) setUsername(globalAccount.name.toLowerCase().replace(/[^a-z0-9_.]/g, "").slice(0, 32));
+      } else setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     if (!remembered) return;
     let active = true;
@@ -104,8 +129,44 @@ export function AddAccountModal() {
             </Button>
           </div>
         </form>
+      ) : globalFirst ? (
+        <form onSubmit={(e) => void withGlobal(e)} className="form">
+          <p className="muted">
+            Primeira vez neste servidor com a conta global. Escolha como você aparece aqui: ele não fica sabendo da sua conta global.
+          </p>
+          <Field label="Nome de usuário neste servidor">
+            <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" required />
+          </Field>
+          <Field label="Nome de exibição" hint="Opcional; você pode mudar depois">
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          </Field>
+          {needsInvite && (
+            <Field label="Convite de cadastro" hint="Peça a quem hospeda esta instância">
+              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
+            </Field>
+          )}
+          {error && <p className="error">{error}</p>}
+          <div className="form-actions">
+            <Button type="button" variant="secondary" onClick={() => setGlobalFirst(false)}>
+              Voltar
+            </Button>
+            <Button type="submit" loading={busy}>
+              {busy ? "Aguarde…" : "Entrar"}
+            </Button>
+          </div>
+        </form>
       ) : (
         <form onSubmit={submit} className="form">
+          {info.info.globalServerId && globalAccount && (
+            <>
+              <Button type="button" variant={globalDefault ? "default" : "outline"} loading={busy} onClick={() => void withGlobal()}>
+                Entrar com a conta global ({globalAccount.name})
+              </Button>
+              <div className="or">
+                <span>ou com uma conta deste servidor</span>
+              </div>
+            </>
+          )}
           <div className="tabs">
             <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => { setMode("login"); if (remembered) setUsername(remembered.username); }}>
               Entrar

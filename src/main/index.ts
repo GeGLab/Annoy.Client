@@ -1,6 +1,6 @@
-import { existsSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, desktopCapturer, powerMonitor, ipcMain, session, shell, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -27,6 +27,14 @@ if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
 }
 
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
+// Chromium picks the keychain by desktop name and falls back to no encryption
+// on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
+// (KWallet's ksecretd, GNOME Keyring, KeePassXC). Ask for it by its standard
+// interface there; without one, Chromium still falls back. Existing cookies
+// (service logins) keep working either way.
+if (process.platform === "linux" && !app.commandLine.hasSwitch("password-store") && !/KDE|GNOME|Unity|Cinnamon|Pantheon|XFCE|Deepin/i.test(process.env.XDG_CURRENT_DESKTOP ?? "")) {
+  app.commandLine.appendSwitch("password-store", "gnome-libsecret");
+}
 // Windows only shows notifications for apps with an explicit AppUserModelID; it must match build.appId.
 if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
 
@@ -209,6 +217,38 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
+
+// Secrets the renderer keeps across restarts (the Annoy Global keys), sealed by
+// the OS keychain. Without a real keychain nothing is written: the app asks for
+// the password again next time instead of storing keys in the clear.
+const SECRET_NAMES = new Set(["global"]);
+const secretsFile = () => join(app.getPath("userData"), "secrets.json");
+const keychainAvailable = () =>
+  safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+function readSecrets(): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(secretsFile(), "utf8")) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+ipcMain.handle("secrets:get", (event, name: unknown) => {
+  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name) || !keychainAvailable()) return null;
+  const sealed = readSecrets()[name];
+  try {
+    return sealed ? safeStorage.decryptString(Buffer.from(sealed, "base64")) : null;
+  } catch {
+    return null;
+  }
+});
+ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
+  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name)) return false;
+  const all = readSecrets();
+  if (typeof value === "string" && keychainAvailable()) all[name] = safeStorage.encryptString(value).toString("base64");
+  else delete all[name];
+  writeFileSync(secretsFile(), JSON.stringify(all), { mode: 0o600 });
+  return name in all;
+});
 
 // Only the local, isolated renderer may control the desktop window.
 ipcMain.on("window:control", (event, action: unknown) => {

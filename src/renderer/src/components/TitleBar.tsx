@@ -16,7 +16,7 @@ export function TitleBar() {
   const channel = view.kind === "server" ? server?.channels.find((c) => c.id === view.channelId) : null;
   const title =
     view.kind === "marketplace"
-      ? "Loja de bots · Annoy"
+      ? "Integrações · Annoy"
       : view.kind === "service"
         ? (service?.name ?? "Annoy")
         : view.kind === "home"

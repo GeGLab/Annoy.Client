@@ -6,6 +6,8 @@ type Request = {
   id: number;
   message: string;
   prompt: boolean;
+  /** Hide what's typed (a password). */
+  secret: boolean;
   value: string;
   confirmLabel: string;
   cancelLabel: string;
@@ -19,13 +21,14 @@ function ask(
   message: string,
   prompt: boolean,
   value = "",
-  options?: { confirmLabel?: string; cancelLabel?: string },
+  options?: { confirmLabel?: string; cancelLabel?: string; secret?: boolean },
 ): Promise<string | boolean | null> {
   return new Promise((resolve) => {
     queue.push({
       id: ++sequence,
       message,
       prompt,
+      secret: options?.secret ?? false,
       value,
       confirmLabel: options?.confirmLabel ?? (prompt ? "Confirmar" : "Confirmar ação"),
       cancelLabel: options?.cancelLabel ?? "Cancelar",
@@ -37,8 +40,8 @@ function ask(
 export async function confirmAction(message: string, options?: { confirmLabel?: string; cancelLabel?: string }) {
   return (await ask(message, false, "", options)) === true;
 }
-export async function promptText(message: string, value = "") {
-  const result = await ask(message, true, value);
+export async function promptText(message: string, value = "", options?: { confirmLabel?: string; secret?: boolean }) {
+  const result = await ask(message, true, value, options);
   return typeof result === "string" ? result : null;
 }
 const subscribe = (fn: () => void) => {
@@ -73,6 +76,8 @@ export function ActionDialogHost() {
             {request.prompt && (
               <Input
                 aria-label="Sua resposta"
+                type={request.secret ? "password" : "text"}
+                autoComplete={request.secret ? "current-password" : undefined}
                 defaultValue={request.value}
                 onChange={(e) => {
                   request.value = e.target.value;
