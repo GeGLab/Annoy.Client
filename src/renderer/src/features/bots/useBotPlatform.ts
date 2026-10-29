@@ -27,7 +27,7 @@ export function useBotPlatform(accountId: string, serverId: string) {
     } catch (error) {
       if (!mounted.current || controller.signal.aborted) return;
       setStatus(error instanceof UnsupportedBotPlatform ? "unsupported" : "error");
-      setError((error as Error).message || "Não foi possível carregar a loja. Tente novamente.");
+      setError((error as Error).message || "Não foi possível carregar as integrações. Tente novamente.");
     }
   }, [accountId, serverId]);
   useEffect(() => {

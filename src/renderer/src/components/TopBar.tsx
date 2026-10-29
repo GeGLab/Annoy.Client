@@ -152,10 +152,10 @@ export function TopBar() {
         {before.map((service) => (
           <ServiceTab key={service.id} service={service} />
         ))}
-        <Tooltip content="Loja de bots">
+        <Tooltip content="Integrações">
           <button
             className={`tab-item${view.kind === "marketplace" ? " active" : ""}`}
-            aria-label="Loja de bots"
+            aria-label="Integrações"
             aria-current={view.kind === "marketplace" ? "page" : undefined}
             onClick={() =>
               navigate({
@@ -166,9 +166,9 @@ export function TopBar() {
             }
           >
             <span className="tab-tile">
-              <Icon name="store" size={21} />
+              <Icon name="cable" size={21} />
             </span>
-            <span className="rail-label">Loja</span>
+            <span className="rail-label">Integrações</span>
           </button>
         </Tooltip>
         <span className="rail-divider" />

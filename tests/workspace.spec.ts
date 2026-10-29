@@ -229,7 +229,7 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
   const bot = {
     id: "greetings",
     name: "Boas-vindas de teste",
-    description: "Bot sintético para testar o contrato da loja. Não é um bot publicado.",
+    description: "Bot sintético para testar o contrato das integrações. Não é um bot publicado.",
     author: "Instância de teste",
     version: "1.0.0",
     runtime: "distopic-worker-v1",
@@ -271,8 +271,8 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
       }
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(method === "GET" ? { installations, canManage } : {}) });
     });
-    await page.getByRole("button", { name: "Loja de bots", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "A loja precisa do suporte da sua instância" })).toBeVisible();
+    await page.getByRole("button", { name: "Integrações", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "As integrações precisam do suporte da sua instância" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Revisar e instalar" })).toHaveCount(0);
     await page.screenshot({ path: join(screenshots, "bots-unsupported.png") });
     supported = true;
@@ -295,7 +295,7 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
     await expect(page.getByText("Em execução · v1.0.0", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: `Remover ${bot.name}`, exact: true }).click();
     await page.getByRole("button", { name: "Remover bot", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Seu primeiro bot começa na loja" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sua primeira integração começa aqui" })).toBeVisible();
     expect(writes).toEqual([
       { botId: bot.id, version: "1.0.0", grantedPermissions: bot.permissions },
       { enabled: false },
