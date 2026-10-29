@@ -27,6 +27,14 @@ if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
 }
 
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
+// Chromium picks the keychain by desktop name and falls back to no encryption
+// on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
+// (KWallet's ksecretd, GNOME Keyring, KeePassXC). Ask for it by its standard
+// interface there; without one, Chromium still falls back. Existing cookies
+// (service logins) keep working either way.
+if (process.platform === "linux" && !app.commandLine.hasSwitch("password-store") && !/KDE|GNOME|Unity|Cinnamon|Pantheon|XFCE|Deepin/i.test(process.env.XDG_CURRENT_DESKTOP ?? "")) {
+  app.commandLine.appendSwitch("password-store", "gnome-libsecret");
+}
 // Windows only shows notifications for apps with an explicit AppUserModelID; it must match build.appId.
 if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
 

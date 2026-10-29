@@ -21,7 +21,8 @@ import { UpdateSettings } from "../Updates.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
-import { GLOBAL_URL, linkAccount, signInGlobal, signOutGlobal } from "../../global.ts";
+import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
+import { promptText } from "../ui/action-dialog.tsx";
 import { SCREEN_QUALITIES, screenAudioSupported, type ScreenQuality } from "../../media-profiles.ts";
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
@@ -99,6 +100,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const signedInGlobal = useStore((s) => s.global !== null);
+  const self = useStore((s) => s.instances[accountId]?.user);
   /** This server's Global ID when it takes global accounts and this one doesn't use it yet. */
   const [linkable, setLinkable] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
@@ -122,7 +124,8 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       setLinkable(null);
       toast(`Agora você também entra em ${account.instanceName} com a conta global`);
     } catch (error) {
-      toast((error as Error).message);
+      if (error instanceof GlobalError && error.code === "global_in_use") await offerMerge(error.message);
+      else toast((error as Error).message);
     } finally {
       setLinking(false);
     }
@@ -141,6 +144,27 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       toast((error as Error).message);
     } finally {
       setSyncing(false);
+    }
+  };
+  /** Item 1.9: two users of the same person on this server become this one. */
+  const offerMerge = async (reason: string) => {
+    if (!account || !linkable) return;
+    const ok = await confirmAction(
+      `${reason}. Unificar com @${self?.username ?? "esta conta"}? Servidores, mensagens, cargos e amigos do outro usuário passam para esta conta, e você entra nela com a conta global ou com a senha. O outro usuário deixa de existir.`,
+      { confirmLabel: "Unificar" },
+    );
+    if (!ok) return;
+    const password = await promptText(`Para confirmar, digite a senha de @${self?.username ?? "esta conta"} em ${account.instanceName}.`, "", { confirmLabel: "Unificar", secret: true });
+    if (password === null) return;
+    try {
+      const removed = await mergeAccount(account, linkable, password);
+      setLinkable(null);
+      // The other user is gone: drop it if this app also had it signed in.
+      const stale = getState().accounts.find((a) => a.url === account.url && a.userId === removed);
+      if (stale) removeAccount(stale.id);
+      toast(`Contas unificadas em ${account.instanceName}`);
+    } catch (error) {
+      toast((error as Error).message);
     }
   };
   return (

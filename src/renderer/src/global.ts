@@ -205,6 +205,20 @@ export async function signInServer(url: string, serverId: string, first?: Pick<G
   return auth;
 }
 
+/**
+ * Item 1.9: the global account already has its own user on this server. The
+ * local user (confirmed by its password) takes everything of the other one.
+ * Returns the removed user's id, so the app can drop that account.
+ */
+export async function mergeAccount(account: Account, serverId: string, password: string): Promise<string | null> {
+  const res = await request<{ removedUserId: string | null }>(account.url, "/api/users/@me/global/merge", {
+    body: { ...(await proofFor(account.url, serverId)), password },
+    token: account.token,
+  });
+  void rememberServer({ url: account.url, serverId });
+  return res.removedUserId;
+}
+
 /** Items 1.7/1.9: a local account starts signing in with the global one too. */
 export async function linkAccount(account: Account, serverId: string): Promise<void> {
   await request(account.url, "/api/users/@me/global", { body: await proofFor(account.url, serverId), token: account.token });
