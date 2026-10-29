@@ -9,7 +9,7 @@ import type {
   User,
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
-import { CATALOG, type Service } from "../../shared/services.ts";
+import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import { useSyncExternalStore } from "react";
 
@@ -86,6 +86,9 @@ export interface Settings {
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
+  /** Defaults for service tabs; each tab can override them. */
+  servicePlacement: TabPlacement;
+  serviceDisplay: TabDisplay;
 }
 
 export interface AppState {
@@ -120,6 +123,8 @@ const DEFAULT_SETTINGS: Settings = {
   selfMute: false,
   selfDeaf: false,
   notifications: true,
+  servicePlacement: "before",
+  serviceDisplay: "full",
 };
 
 function load<T>(key: string, fallback: T): T {

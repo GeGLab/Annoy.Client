@@ -2515,3 +2515,26 @@ button.instance-status:hover { box-shadow: 0 0 0 3px rgba(255, 178, 63, 0.3); }
 .teamspeak-view > .btn {
   align-self: flex-start;
 }
+.tab-item.icon-only {
+  padding: 0 6px;
+}
+.hidden-services {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hidden-services li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.hidden-services .truncate {
+  flex: 1;
+}

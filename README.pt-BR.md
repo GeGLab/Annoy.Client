@@ -52,6 +52,7 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
 
 | | |
 | :---: | :---: |
+| <img src="docs/screenshots/chat-and-voice.png" alt="Chat e voz" width="420"><br>**Chat e voz, com WhatsApp, Telegram e Discord nas abas** | <img src="docs/screenshots/services.png" alt="Nova aba" width="420"><br>**Adicione serviços como abas** |
 | <img src="docs/screenshots/roles.png" alt="Cargos" width="420"><br>**Editor de cargos** | <img src="docs/screenshots/discord-import.png" alt="Importação" width="420"><br>**Importar do Discord escolhendo o que vem** |
 | <img src="docs/screenshots/channel-permissions.png" alt="Permissões" width="420"><br>**Permissões por canal** | <img src="docs/screenshots/sign-in.png" alt="Entrar" width="420"><br>**Entrar com Discord ou conta local** |
 

@@ -172,6 +172,13 @@ export async function removeService(id: string): Promise<void> {
   await window.distopic?.services.remove(id);
 }
 
+/** Hides a tab from the bar without removing it (or its login). */
+export function setServiceHidden(id: string, hidden: boolean): void {
+  const view = getState().view;
+  if (hidden && view.kind === "service" && view.serviceId === id) navigate({ kind: "home", accountId: getState().accounts[0]?.id ?? null, dmId: null });
+  updateService(id, (sv) => void (sv.hidden = hidden || undefined));
+}
+
 export function updateService(id: string, recipe: (service: Service) => void): void {
   setState((s) => {
     const service = s.services.find((sv) => sv.id === id);

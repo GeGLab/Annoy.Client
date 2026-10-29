@@ -20,7 +20,16 @@ export interface Service {
   /** Start page; every kind but teamspeak has one. */
   url: string;
   teamspeak?: TeamSpeakServer[];
+  /** Per-tab overrides of the defaults in Settings; unset follows the default. */
+  placement?: TabPlacement;
+  display?: TabDisplay;
+  /** Kept with its login, just not shown in the tab bar. */
+  hidden?: boolean;
 }
+
+/** Whether service tabs sit before or after the Annoy servers in the tab bar. */
+export type TabPlacement = "before" | "after";
+export type TabDisplay = "full" | "icon";
 
 export interface CatalogEntry {
   kind: Exclude<ServiceKind, "web">;

@@ -18,6 +18,7 @@ import { apiFor, openChannel, removeAccount, updateVoiceSettings } from "../clie
 import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
+import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
@@ -261,6 +262,26 @@ export function UserSettingsModal() {
         <p className="muted small">
           Você sempre é avisado de versões novas e decide quando atualizar. A única exceção é uma correção de segurança crítica, que é obrigatória.
         </p>
+      </section>
+
+      <section className="settings-section">
+        <h3>Abas de serviço</h3>
+        <div className="grid-2">
+          <Field label="Posição padrão">
+            <select value={settings.servicePlacement} onChange={(e) => update({ servicePlacement: e.target.value as Settings["servicePlacement"] })}>
+              <option value="before">Antes dos servidores Annoy</option>
+              <option value="after">Depois dos servidores Annoy</option>
+            </select>
+          </Field>
+          <Field label="Na barra">
+            <select value={settings.serviceDisplay} onChange={(e) => update({ serviceDisplay: e.target.value as Settings["serviceDisplay"] })}>
+              <option value="full">Ícone e nome</option>
+              <option value="icon">Só ícone</option>
+            </select>
+          </Field>
+        </div>
+        <p className="muted small">Cada aba pode ter a sua: clique com o botão direito nela.</p>
+        <HiddenServices />
       </section>
 
       <section className="settings-section">

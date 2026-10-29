@@ -3,7 +3,7 @@ import logo from "../assets/logo.svg";
 import { leaveVoice, navigate, openServer, reconnect, updateVoiceSettings } from "../client.ts";
 import { initials } from "../format.tsx";
 import { setState, useStore, type Account, type InstanceState } from "../store.ts";
-import { ServiceTab } from "./Services.tsx";
+import { ServiceTab, tabLayout } from "./Services.tsx";
 import { Avatar, Icon, openModal } from "./ui.tsx";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
@@ -101,6 +101,10 @@ export function TopBar() {
   const instances = useStore((s) => s.instances);
   const view = useStore((s) => s.view);
   const services = useStore((s) => s.services);
+  const settings = useStore((s) => s.settings);
+  const shown = services.filter((sv) => !sv.hidden);
+  const before = shown.filter((sv) => tabLayout(sv, settings).placement === "before");
+  const after = shown.filter((sv) => tabLayout(sv, settings).placement === "after");
 
   let homeCount = 0;
   for (const a of accounts) {
@@ -126,7 +130,7 @@ export function TopBar() {
           <span className="tab-label">Início</span>
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
-        {services.map((service) => (
+        {before.map((service) => (
           <ServiceTab key={service.id} service={service} />
         ))}
         <span className="tabs-sep" />
@@ -145,6 +149,10 @@ export function TopBar() {
             </div>
           );
         })}
+        {after.length > 0 && accounts.length > 0 && <span className="tabs-sep" />}
+        {after.map((service) => (
+          <ServiceTab key={service.id} service={service} />
+        ))}
         <button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" onClick={() => openModal({ kind: "addTab" })}>
           <Icon name="plus" size={18} />
         </button>

@@ -80,7 +80,7 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 | <img src="docs/screenshots/member-card.png" alt="Member card" width="420"><br>**Member card with roles and moderation** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
 | <img src="docs/screenshots/roles.png" alt="Role editor" width="420"><br>**Role editor** | <img src="docs/screenshots/channel-permissions.png" alt="Channel permissions" width="420"><br>**Per-channel permissions** |
 | <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Sign in with Discord or a local account** |
-| <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** | |
+| <img src="docs/screenshots/services.png" alt="New tab menu with services" width="420"><br>**Add Discord, WhatsApp, Telegram, TeamSpeak and more as tabs** | <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** |
 
 ## Build from source
 

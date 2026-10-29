@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { CATALOG, catalogEntry, teamspeakLink, type CatalogEntry, type Service, type TeamSpeakServer } from "../../../shared/services.ts";
-import { addService, navigate, removeService, updateService } from "../client.ts";
+import { CATALOG, catalogEntry, teamspeakLink, type CatalogEntry, type Service, type TabDisplay, type TabPlacement, type TeamSpeakServer } from "../../../shared/services.ts";
+import { addService, navigate, removeService, setServiceHidden, updateService } from "../client.ts";
 import { initials } from "../format.tsx";
-import { getState, useStore } from "../store.ts";
+import { getState, useStore, type Settings } from "../store.ts";
 import { closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 
 const newId = () => crypto.randomUUID();
@@ -19,13 +19,19 @@ function tileOf(service: Service): { text: string; color: string | undefined } {
   return { text: entry?.tile ?? initials(service.name), color: entry?.color };
 }
 
+/** A tab's placement and display, falling back to the defaults in Settings. */
+export function tabLayout(service: Service, settings: Settings): { placement: TabPlacement; display: TabDisplay } {
+  return { placement: service.placement ?? settings.servicePlacement, display: service.display ?? settings.serviceDisplay };
+}
+
 export function ServiceTab({ service }: { service: Service }) {
+  const iconOnly = useStore((s) => tabLayout(service, s.settings).display === "icon");
   const active = useStore((s) => s.view.kind === "service" && s.view.serviceId === service.id);
   const badge = useStore((s) => s.serviceBadges[service.id]);
   const tile = tileOf(service);
   return (
     <button
-      className={`tab-item service${active ? " active" : ""}`}
+      className={`tab-item service${active ? " active" : ""}${iconOnly ? " icon-only" : ""}`}
       onClick={() => navigate({ kind: "service", serviceId: service.id })}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -36,9 +42,34 @@ export function ServiceTab({ service }: { service: Service }) {
       <span className="tab-tile" style={tile.color ? { background: tile.color, color: "#fff" } : undefined}>
         {tile.text}
       </span>
-      <span className="tab-label">{service.name}</span>
+      {!iconOnly && <span className="tab-label">{service.name}</span>}
       {badge && <span className="tab-badge">{badge}</span>}
     </button>
+  );
+}
+
+/** Hidden tabs keep their login; this lists them so they can come back. */
+export function HiddenServices() {
+  // Selectors must return stored references, so filter outside of it.
+  const hidden = useStore((s) => s.services).filter((sv) => sv.hidden);
+  if (hidden.length === 0) return null;
+  return (
+    <ul className="hidden-services">
+      {hidden.map((service) => {
+        const tile = tileOf(service);
+        return (
+          <li key={service.id}>
+            <span className="tab-tile" style={tile.color ? { background: tile.color, color: "#fff" } : undefined}>
+              {tile.text}
+            </span>
+            <span className="truncate">{service.name}</span>
+            <button className="btn btn-ghost btn-small" onClick={() => setServiceHidden(service.id, false)}>
+              Mostrar
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -61,6 +92,7 @@ function ServiceCard({ entry }: { entry: CatalogEntry }) {
 /** What the tab bar's "+" offers: Annoy communities first, then browser services. */
 export function AddTabModal() {
   const accounts = useStore((s) => s.accounts);
+  const hasHidden = useStore((s) => s.services.some((sv) => sv.hidden));
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +134,15 @@ export function AddTabModal() {
           ))}
         </div>
       </div>
+      {hasHidden && (
+        <>
+          <hr />
+          <div className="form">
+            <h3>Abas ocultas</h3>
+            <HiddenServices />
+          </div>
+        </>
+      )}
       <hr />
       <form className="form" onSubmit={addWeb}>
         <h3>Outro site</h3>
@@ -126,11 +167,22 @@ export function AddTabModal() {
 
 export function ServiceSettingsModal({ serviceId }: { serviceId: string }) {
   const service = useStore((s) => s.services.find((sv) => sv.id === serviceId));
+  const defaults = useStore((s) => s.settings);
   const [name, setName] = useState(service?.name ?? "");
+  const [placement, setPlacement] = useState<TabPlacement | "">(service?.placement ?? "");
+  const [display, setDisplay] = useState<TabDisplay | "">(service?.display ?? "");
   if (!service) return null;
   const save = (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim()) updateService(service.id, (sv) => void (sv.name = name.trim()));
+    updateService(service.id, (sv) => {
+      if (name.trim()) sv.name = name.trim();
+      sv.placement = placement || undefined;
+      sv.display = display || undefined;
+    });
+    closeModal();
+  };
+  const hide = () => {
+    setServiceHidden(service.id, true);
     closeModal();
   };
   const remove = () => {
@@ -144,7 +196,26 @@ export function ServiceSettingsModal({ serviceId }: { serviceId: string }) {
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </Field>
         {service.kind !== "teamspeak" && <p className="muted small">{service.url}</p>}
+        <div className="grid-2">
+          <Field label="Posição">
+            <select value={placement} onChange={(e) => setPlacement(e.target.value as TabPlacement | "")}>
+              <option value="">Padrão ({defaults.servicePlacement === "before" ? "antes" : "depois"} dos servidores)</option>
+              <option value="before">Antes dos servidores Annoy</option>
+              <option value="after">Depois dos servidores Annoy</option>
+            </select>
+          </Field>
+          <Field label="Na barra">
+            <select value={display} onChange={(e) => setDisplay(e.target.value as TabDisplay | "")}>
+              <option value="">Padrão ({defaults.serviceDisplay === "full" ? "ícone e nome" : "só ícone"})</option>
+              <option value="full">Ícone e nome</option>
+              <option value="icon">Só ícone</option>
+            </select>
+          </Field>
+        </div>
         <div className="form-actions">
+          <button type="button" className="btn btn-ghost" onClick={hide} title="Some da barra, mas continua logado. Volta pelo + ou em Configurações.">
+            Ocultar
+          </button>
           {service.kind !== "teamspeak" && (
             <button
               type="button"
