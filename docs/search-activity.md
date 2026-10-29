@@ -40,6 +40,13 @@ para as contas conectadas; cada instância só entrega a atividade às suas amiz
 confirmadas nos dois sentidos. Participar do mesmo servidor ou ter uma DM não
 concede acesso. Desfazer a amizade retira imediatamente a atividade do destinatário.
 
+Na lista de voz, jogos, música e programação aparecem como indicadores ao lado
+do nome; o tooltip identifica a atividade. Sua própria linha inclui o jogo
+detectado localmente ou informado pela integração conectada. Desativar o
+compartilhamento oculta seus indicadores. A atividade dos outros participantes
+continua limitada às amizades confirmadas. A apresentação de jogos usa
+**Jogando**; detalhes e vínculos de plataforma ficam nas integrações específicas.
+
 No Windows, a leitura ocorre aproximadamente a cada 15 segundos, com o processo
 auxiliar oculto, limite de execução e cancelamento ao desabilitar. Steam exige
 um jogo marcado como em execução pelo cliente Steam e um processo dentro da

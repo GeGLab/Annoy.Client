@@ -3,6 +3,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Select } from "./ui/select.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
 import { ProviderIcon } from "../features/activity/ProviderIcon.tsx";
+import { Gamepad2, Code2 } from "lucide-react";
+import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
@@ -48,10 +50,13 @@ function VoiceUsers({
         const member = state.members.find((m) => m.user.id === v.userId);
         if (!member) return null;
         const isSelf = v.userId === me;
-        const activities = isSelf
-          ? (shareActivity ? localActivity?.activities : undefined)
-          : instance?.relationships.some((r) => r.user.id === v.userId && r.status === "friend") ? instance.activities[v.userId] : undefined;
-        const music = activities?.find((activity) => activity.kind === "music");
+        const activities = visibleUserActivities({
+          isSelf,
+          sharing: shareActivity,
+          isFriend: instance?.relationships.some((r) => r.user.id === v.userId && r.status === "friend") ?? false,
+          local: localActivity?.activities,
+          reported: instance?.activities[v.userId],
+        });
         return (
           <li key={v.userId} className="voice-user" data-user-id={v.userId} tabIndex={canModerate && !isSelf ? 0 : undefined}>
             <Avatar user={member.user} size={22} speaking={v.speaking && !v.selfMute && !v.serverMute} />
@@ -64,7 +69,18 @@ function VoiceUsers({
             {v.screen && <VoiceFlag icon="monitor" label="Compartilhando a tela" />}
             {v.screen && v.screenQuality && <span className="stream-quality" title="Qualidade selecionada por quem transmite">{screenQualityLabel(v.screenQuality)}</span>}
             {v.selfDeaf && <VoiceFlag icon="headphonesOff" label="Áudio desativado" />}
-            {music && <Tooltip content={`Ouvindo ${music.name}${music.artist ? ` · ${music.artist}` : ""}`}><span className="voice-flag" role="img" aria-label={`Ouvindo ${music.name}`}><ProviderIcon provider={music.provider} size={12} /></span></Tooltip>}
+            {activities.map((activity) => {
+              const label = activity.kind === "game" ? `Jogando ${activity.name}`
+                : activity.kind === "development" ? `Programando · ${activity.name}`
+                : `Ouvindo ${activity.name}${activity.artist ? ` · ${activity.artist}` : ""}`;
+              return <Tooltip key={activity.kind} content={label}>
+                <span className={`voice-flag voice-activity voice-activity-${activity.kind}`} role="img" aria-label={label} tabIndex={0}>
+                  {activity.kind === "game" ? <Gamepad2 size={12} aria-hidden />
+                    : activity.kind === "development" ? <Code2 size={12} aria-hidden />
+                    : <ProviderIcon provider={activity.provider} size={12} />}
+                </span>
+              </Tooltip>;
+            })}
             </span>
             {canModerate && !isSelf && (
               <DropdownMenu>

@@ -295,6 +295,51 @@ test("call membership sounds, stable participants, status icons and channel swit
   } finally { await close(); }
 });
 
+test("voice names show local and online game activity, respecting sharing and friendship", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test, server = inst.serverStates.server;
+        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, displayName: id, avatarUrl: null } });
+        server.voiceStates = ["person", "friend", "visitor"].map((userId) => ({ userId, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, video: false, screen: false }));
+        inst.relationships = [{ user: server.members[1].user, status: "friend" }];
+        inst.activities.person = [{ kind: "game", provider: "steam", name: "Online game", appId: "480" }];
+        inst.activities.friend = [{ kind: "game", provider: "steam", name: "Friend's game", appId: "480" }];
+        inst.activities.visitor = [{ kind: "game", provider: "steam", name: "Private game", appId: "480" }];
+        s.desktopActivity = { supported: true, error: null, activities: [
+          { kind: "game", provider: "steam", name: "Local game", appId: "730" },
+          { kind: "music", provider: "spotify", name: "Song" },
+          { kind: "development", provider: "vscode", name: "Project" },
+        ] };
+      });
+    });
+    const self = page.locator('.voice-user[data-user-id="person"]');
+    const friend = page.locator('.voice-user[data-user-id="friend"]');
+    await expect(self.getByRole("img", { name: "Jogando Local game", exact: true })).toBeVisible();
+    await expect(self.getByRole("img", { name: "Ouvindo Song", exact: true })).toBeVisible();
+    await expect(self.getByRole("img", { name: "Programando · Project", exact: true })).toBeVisible();
+    await expect(friend.getByRole("img", { name: "Jogando Friend's game", exact: true })).toBeVisible();
+    await expect(page.locator('.voice-user[data-user-id="visitor"] .voice-activity')).toHaveCount(0);
+    await self.getByRole("img", { name: "Jogando Local game", exact: true }).hover();
+    await expect(page.getByRole("tooltip")).toHaveText("Jogando Local game");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity.activities = []; });
+    });
+    await expect(self.getByRole("img", { name: "Jogando Online game", exact: true })).toBeVisible();
+    await expect(self.getByRole("img", { name: "Jogando Local game", exact: true })).toHaveCount(0);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.shareActivity = false; });
+    });
+    await expect(self.locator(".voice-activity")).toHaveCount(0);
+    await expect(friend.getByRole("img", { name: "Jogando Friend's game", exact: true })).toBeVisible();
+  } finally { await close(); }
+});
+
 test("activity cards show platform marks and album/game artwork with fallback", async () => {
   const { page, app, close } = await launch();
   try {
@@ -311,7 +356,7 @@ test("activity cards show platform marks and album/game artwork with fallback", 
     }, cover);
     await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
     await expect(page.locator(".self-profile .provider-spotify")).toBeVisible();
-    await expect(page.locator(".self-profile .provider-steam")).toBeVisible();
+    await expect(page.locator(".self-profile .activity-game .activity-provider")).toHaveText("Jogando");
     for (const img of await page.locator(".self-profile .activity-artwork img").all()) await expect.poll(() => img.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
     await expect(page.getByRole("link", { name: "Abrir NO FEAR no Spotify" })).toHaveAttribute("href", /open.spotify.com\/search\//);
     await page.screenshot({ path: join(capture, "activity-artwork-dark.png") });

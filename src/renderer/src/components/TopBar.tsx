@@ -10,7 +10,7 @@ import { Tooltip } from "./ui/tooltip.tsx";
 import { VoicePanel, DeviceMenu } from "./VoicePanel.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
 import { EMPTY_ACTIVITIES } from "../store.ts";
-import { withSteamFallback } from "../../../shared/steam-activity.ts";
+import { visibleUserActivities } from "../../../shared/activity.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -54,9 +54,8 @@ export function UserPanel() {
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
   const snapshot = useStore((s) => s.desktopActivity);
-  const ownGame = useStore((s) => accountId && user ? s.instances[accountId]?.activities[user.id]?.find((a) => a.kind === "game") : undefined);
-  const local = snapshot?.activities ?? EMPTY_ACTIVITIES;
-  const activities = settings.shareActivity ? withSteamFallback(local, ownGame) : EMPTY_ACTIVITIES;
+  const reported = useStore((s) => (accountId && user ? s.instances[accountId]?.activities[user.id] : undefined) ?? EMPTY_ACTIVITIES);
+  const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: snapshot?.activities, reported });
 
   const openSettings = () =>
     setState((s) => {
@@ -87,7 +86,7 @@ export function UserPanel() {
               <div className="self-profile-activity">
                 <h3>Minha atividade</h3>
                 {activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
-                {!activities.length && <p className="muted">{!settings.shareActivity ? "O compartilhamento está desativado." : snapshot?.error ?? "Nenhum jogo ou música detectado agora."}</p>}
+                {!activities.length && <p className="muted">{!settings.shareActivity ? "O compartilhamento está desativado." : snapshot?.error ?? "Nenhuma atividade detectada agora."}</p>}
                 {activities.length > 0 && <p className="muted">Compartilhada com seus amigos nesta instância.</p>}
               </div>
               <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />Editar perfil</button></Popover.Close>
