@@ -106,10 +106,15 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
         </aside>
         <div className="empty-main welcome">
           <h1>Bem-vindo ao Annoy</h1>
-          <p>O Discord oficial fica no botão DC da barra lateral. Para conversar nos seus próprios servidores, conecte-se a uma instância Annoy.</p>
-          <button className="btn" onClick={() => openModal({ kind: "addAccount" })}>
-            Conectar a um servidor Annoy
-          </button>
+          <p>Junte suas comunidades num lugar só: servidores Annoy e os serviços que você já usa, como Discord, WhatsApp e TeamSpeak, cada um na sua aba.</p>
+          <div className="form-actions center">
+            <button className="btn" onClick={() => openModal({ kind: "addAccount" })}>
+              Conectar a um servidor Annoy
+            </button>
+            <button className="btn btn-ghost" onClick={() => openModal({ kind: "addTab" })}>
+              Adicionar serviço
+            </button>
+          </div>
         </div>
       </div>
     );

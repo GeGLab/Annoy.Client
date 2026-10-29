@@ -4,6 +4,7 @@ import { previewText } from "./format.tsx";
 import { Gateway } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
 import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
+import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
 
@@ -135,15 +136,47 @@ export function connectAll(): void {
 // Navigation -----------------------------------------------------------------
 
 export function navigate(view: View): void {
-  const bridge = window.distopic;
-  if (view.kind === "discord") bridge?.showDiscord();
-  else if (getState().view.kind === "discord") bridge?.hideDiscord();
+  showServiceView(view);
   setState((s) => {
     s.view = view;
     const channelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
     if (channelId && "accountId" in view && view.accountId) delete s.instances[view.accountId]?.unread[channelId];
   });
   if (view.kind === "server") void ensureServer(view.accountId, view.serverId);
+}
+
+/** Shows the native view of a browser service, or hides it for anything else. */
+export function showServiceView(view: View): void {
+  const service = view.kind === "service" ? getState().services.find((sv) => sv.id === view.serviceId) : undefined;
+  if (service && service.kind !== "teamspeak") window.distopic?.services.show(service);
+  else window.distopic?.services.hide();
+}
+
+export function addService(service: Service): void {
+  setState((s) => {
+    s.services.push(service);
+    s.modal = null;
+  });
+  navigate({ kind: "service", serviceId: service.id });
+}
+
+export async function removeService(id: string): Promise<void> {
+  const next = getState().services.find((sv) => sv.id !== id);
+  const view = getState().view;
+  if (view.kind === "service" && view.serviceId === id) navigate(next ? { kind: "service", serviceId: next.id } : { kind: "home", accountId: getState().accounts[0]?.id ?? null, dmId: null });
+  setState((s) => {
+    s.services = s.services.filter((sv) => sv.id !== id);
+    delete s.serviceBadges[id];
+    s.modal = null;
+  });
+  await window.distopic?.services.remove(id);
+}
+
+export function updateService(id: string, recipe: (service: Service) => void): void {
+  setState((s) => {
+    const service = s.services.find((sv) => sv.id === id);
+    if (service) recipe(service as Service);
+  });
 }
 
 /** Opens a server at its last-viewed (or first readable) text channel. */
@@ -372,7 +405,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
   if (!isDm && !mentioned) return;
   window.distopic?.flashWindow();
-  if (!document.hasFocus() || s.view.kind === "discord") {
+  if (!document.hasFocus() || s.view.kind === "service") {
     const server = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === message.channelId));
     const dm = inst.dms.find((d) => d.id === message.channelId);
     const nameOf = (id: string) => {

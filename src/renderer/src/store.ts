@@ -9,6 +9,7 @@ import type {
   User,
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
+import { CATALOG, type Service } from "../../shared/services.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import { useSyncExternalStore } from "react";
 
@@ -45,7 +46,8 @@ export interface InstanceState {
 }
 
 export type View =
-  | { kind: "discord" }
+  /** A browser service (Discord, WhatsApp…) or a TeamSpeak launcher. */
+  | { kind: "service"; serviceId: string }
   | { kind: "home"; accountId: string | null; dmId: string | null }
   | { kind: "server"; accountId: string; serverId: string; channelId: string | null };
 
@@ -60,7 +62,9 @@ export type Modal =
   | { kind: "userSettings" }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
-  | { kind: "deleteAccount"; accountId: string };
+  | { kind: "deleteAccount"; accountId: string }
+  | { kind: "addTab" }
+  | { kind: "serviceSettings"; serviceId: string };
 
 export interface VoiceUi {
   accountId: string;
@@ -91,7 +95,9 @@ export interface AppState {
   modal: Modal | null;
   voice: VoiceUi | null;
   settings: Settings;
-  discordBadge: string | null;
+  /** Browser services and launchers shown as tabs, in tab order. */
+  services: Service[];
+  serviceBadges: Record<string, string | null>;
   toast: { id: number; text: string } | null;
   /** Owned by the main process; null outside Electron. */
   update: UpdateState | null;
@@ -102,6 +108,7 @@ export interface AppState {
 const ACCOUNTS_KEY = "distopic.accounts";
 const SETTINGS_KEY = "distopic.settings";
 const VIEW_KEY = "distopic.view";
+const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
   inputMode: "vad",
@@ -149,14 +156,31 @@ export const emptyInstance = (): InstanceState => ({
   instance: null,
 });
 
+/**
+ * Up to 0.3 Discord was a fixed tab. Existing installs keep it (and its login)
+ * as a service; fresh installs start with no services.
+ */
+function initialServices(): Service[] {
+  if (localStorage.getItem(SERVICES_KEY) !== null) return loadArray<Service>(SERVICES_KEY);
+  const existingInstall = [ACCOUNTS_KEY, SETTINGS_KEY, VIEW_KEY].some((k) => localStorage.getItem(k) !== null);
+  const discord = CATALOG.find((c) => c.kind === "discord")!;
+  return existingInstall ? [{ id: "discord", kind: "discord", name: discord.name, url: discord.url }] : [];
+}
+
+function initialView(): View {
+  const view = load<View | { kind: "discord" }>(VIEW_KEY, { kind: "home", accountId: null, dmId: null });
+  return view.kind === "discord" ? { kind: "service", serviceId: "discord" } : view;
+}
+
 let state: AppState = {
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
-  view: load<View>(VIEW_KEY, { kind: "home", accountId: null, dmId: null }),
+  view: initialView(),
   modal: null,
   voice: null,
   settings: load(SETTINGS_KEY, DEFAULT_SETTINGS),
-  discordBadge: null,
+  services: initialServices(),
+  serviceBadges: {},
   toast: null,
   update: null,
   updateDismissed: null,
@@ -173,6 +197,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   if (state.accounts !== prev.accounts) localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(state.accounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
   if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
+  if (state.services !== prev.services) localStorage.setItem(SERVICES_KEY, JSON.stringify(state.services));
   for (const l of listeners) l();
 }
 

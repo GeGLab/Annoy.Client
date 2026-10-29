@@ -2,7 +2,7 @@
 
 # Annoy Client
 
-**One desktop app for your self-hosted Annoy servers and the official Discord.**
+**One desktop app for all your communities: self-hosted Annoy servers plus Discord, WhatsApp, TeamSpeak and more, each in its own tab.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
@@ -11,7 +11,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GeGLab/annoy-server)
+[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How service tabs work](#how-service-tabs-work) · [Server](https://github.com/GeGLab/annoy-server)
 
 <img src="docs/screenshots/chat-and-voice.png" alt="Annoy client: channel list with voice, chat and member list" width="860">
 
@@ -41,9 +41,10 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 
 ## Features
 
-- **Discord and Annoy side by side.** The **DC** button opens the official
-  Discord web app in a persistent, isolated view. Your Annoy servers sit in
-  the same sidebar, and switching between them is one click.
+- **One hub, many services.** Add Discord, WhatsApp, Telegram, Element, Slack
+  or any website as a tab next to your Annoy servers. Each one keeps its own
+  login, and switching is one click. TeamSpeak tabs keep your servers and join
+  them in the official app with your nickname.
 - **Many instances at once.** Connect to any number of
   [Annoy servers](https://github.com/GeGLab/annoy-server). Their
   servers show up together in the sidebar.
@@ -65,8 +66,8 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   then watch the import progress live.
 - **Sign in with Discord.** Uses the official OAuth2 in your browser and pulls
   your username, name and avatar.
-- **Notifications** for mentions and DMs, plus unread badges, including Discord's
-  own unread count.
+- **Notifications** for mentions and DMs, plus unread badges, including the
+  counts of your service tabs.
 
 > The interface is currently in Portuguese (pt-BR); localization is on the
 > [roadmap](#roadmap). The screenshots below show the English labels planned for it.
@@ -116,30 +117,34 @@ install. Only the person hosting the community runs
 [annoy-server](https://github.com/GeGLab/annoy-server), once,
 with a single `docker compose up`.
 
-## How the Discord tab works
+## How service tabs work
 
-The client does **not** reimplement Discord or call its private user API, which
-would violate Discord's Terms and put your account at risk. Instead it loads
-`https://discord.com/app` in a dedicated Electron view:
+The client does **not** reimplement any service or call private APIs, which
+would break their terms and put your account at risk. Each service tab loads the
+service's own web app (for example `https://discord.com/app`) in a dedicated
+Electron view:
 
-- **Separate session.** It uses its own persistent partition (`persist:discord`),
-  so the Discord login, cookies and storage stay apart from your Annoy
-  accounts.
+- **Separate session per tab.** Every tab has its own persistent partition, so
+  its login, cookies and storage stay apart from your Annoy accounts and from
+  other tabs. Two WhatsApp tabs can hold two accounts. Removing a tab erases its
+  data.
 - **Plain Chrome identity.** It presents a standard Chrome user agent, the same
   approach as [Vesktop](https://github.com/Vencord/Vesktop).
 - **Unread badge.** The count is read from the page title.
-- **External links** open in your system browser.
+- **External links** (anything outside the service's own domains) open in your
+  system browser.
+- **TeamSpeak** has no web app, so its tab stores your servers and opens them in
+  the official TeamSpeak client through `ts3server://` links.
 - **Permissions.** Microphone, notifications and screen sharing (through the
   PipeWire portal on Linux) are allowed.
 
-Voice, video, Nitro and everything else in that tab behave exactly like the web
-version of Discord.
+Inside a tab, everything behaves exactly like the service's web version.
 
 ## Project layout
 
 ```
-src/main/            Electron main process: window, Discord view, permissions
-src/preload/         minimal bridge (show/hide Discord, unread badge)
+src/main/            Electron main process: window, service views, permissions
+src/preload/         minimal bridge (service views, unread badges, updates)
 src/renderer/        React app
   src/client.ts      accounts, gateways, event handling, navigation
   src/store.ts       app state (immer + useSyncExternalStore)
@@ -175,6 +180,3 @@ npm run build
 ## License
 
 [MIT](LICENSE) © Gustavo Cruz
-
-Annoy is not affiliated with or endorsed by Discord Inc. "Discord" is a
-trademark of Discord Inc.

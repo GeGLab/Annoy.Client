@@ -269,11 +269,6 @@ export function UserSettingsModal() {
           <input type="checkbox" checked={settings.notifications} onChange={(e) => update({ notifications: e.target.checked })} />
           Notificar menções e mensagens diretas
         </label>
-        <div className="form-actions start">
-          <button className="btn btn-ghost" onClick={() => window.distopic?.reloadDiscord()}>
-            <Icon name="refresh" size={16} /> Recarregar Discord
-          </button>
-        </div>
       </section>
     </Modal>
   );

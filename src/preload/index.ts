@@ -1,13 +1,24 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { Service } from "../shared/services.ts";
 import type { UpdateState } from "../shared/update.ts";
 
 const bridge = {
   platform: process.platform,
-  showDiscord: () => ipcRenderer.send("discord:show"),
-  hideDiscord: () => ipcRenderer.send("discord:hide"),
-  reloadDiscord: () => ipcRenderer.send("discord:reload"),
   flashWindow: () => ipcRenderer.send("window:flash"),
-  setDiscordTopInset: (px: number) => ipcRenderer.send("discord:inset", px),
+  services: {
+    show: (service: Service) => ipcRenderer.send("service:show", { id: service.id, kind: service.kind, name: service.name, url: service.url }),
+    hide: () => ipcRenderer.send("service:hide"),
+    reload: (id: string) => ipcRenderer.send("service:reload", id),
+    /** Closes the view and clears its login. */
+    remove: (id: string) => ipcRenderer.invoke("service:remove", id) as Promise<void>,
+    setTopInset: (px: number) => ipcRenderer.send("service:inset", px),
+    onBadge(listener: (id: string, badge: string | null) => void): () => void {
+      const handler = (_e: IpcRendererEvent, id: string, badge: string | null) => listener(id, badge);
+      ipcRenderer.on("service:badge", handler);
+      return () => ipcRenderer.off("service:badge", handler);
+    },
+  },
+  openTeamSpeak: (link: string) => ipcRenderer.send("teamspeak:open", link),
   screen: {
     /** "system": the OS portal picks the source (Wayland); "app": show Annoy's own picker. */
     mode: () => ipcRenderer.invoke("screen:mode") as Promise<"system" | "app">,
@@ -24,11 +35,6 @@ const bridge = {
       ipcRenderer.on("update:state", handler);
       return () => ipcRenderer.off("update:state", handler);
     },
-  },
-  onDiscordBadge(listener: (badge: string | null) => void): () => void {
-    const handler = (_e: IpcRendererEvent, badge: string | null) => listener(badge);
-    ipcRenderer.on("discord:badge", handler);
-    return () => ipcRenderer.off("discord:badge", handler);
   },
 };
 

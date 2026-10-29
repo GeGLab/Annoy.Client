@@ -1,11 +1,12 @@
 import { useEffect } from "react";
-import { connectAll, navigate, setPushToTalk } from "./client.ts";
+import { connectAll, navigate, setPushToTalk, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
 import { AddAccountModal, CreateServerModal } from "./components/AccountModals.tsx";
 import { Home } from "./components/Home.tsx";
 import { ImportDiscordModal } from "./components/ImportModal.tsx";
 import { DeleteAccountModal, InstanceAdminModal } from "./components/InstanceAdmin.tsx";
 import { ServerView } from "./components/ServerView.tsx";
+import { AddTabModal, ServicePlaceholder, ServiceSettingsModal, TeamSpeakView } from "./components/Services.tsx";
 import { ChannelSettingsModal, CreateChannelModal, InviteModal, ServerSettingsModal, UserSettingsModal } from "./components/Settings.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { ScreenPickerModal } from "./components/VoiceStage.tsx";
@@ -37,6 +38,10 @@ function Modals() {
       return <DeleteAccountModal accountId={modal.accountId} />;
     case "importDiscord":
       return <ImportDiscordModal accountId={modal.accountId} serverId={modal.serverId} />;
+    case "addTab":
+      return <AddTabModal />;
+    case "serviceSettings":
+      return <ServiceSettingsModal serviceId={modal.serviceId} />;
   }
 }
 
@@ -44,6 +49,7 @@ const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.i
 
 export function App() {
   const view = useStore((s) => s.view);
+  const service = useStore((s) => (s.view.kind === "service" ? s.services.find((sv) => sv.id === (s.view as { serviceId: string }).serviceId) : undefined));
   const modalOpen = useStore((s) => s.modal !== null);
   const toast = useStore((s) => s.toast);
   const blocking = useStore((s) => isBlocking(s.update));
@@ -52,25 +58,24 @@ export function App() {
 
   useEffect(() => {
     connectAll();
-    if (getState().view.kind === "discord") navigate(getState().view);
-    else if (getState().view.kind === "server") navigate(getState().view);
-    return window.distopic?.onDiscordBadge((badge) =>
+    if (getState().view.kind !== "home") navigate(getState().view);
+    return window.distopic?.services.onBadge((id, badge) =>
       setState((s) => {
-        s.discordBadge = badge;
+        s.serviceBadges[id] = badge;
       }),
     );
   }, []);
 
-  // The Discord view is a native layer above the page; hide it while a modal is open.
+  // Browser services are a native layer above the page; hide it while a modal is open.
   useEffect(() => {
-    if (view.kind !== "discord") return;
-    if (modalOpen || blocking) window.distopic?.hideDiscord();
-    else window.distopic?.showDiscord();
-  }, [modalOpen, blocking, view.kind]);
+    if (view.kind !== "service") return;
+    if (modalOpen || blocking) window.distopic?.services.hide();
+    else showServiceView(view);
+  }, [modalOpen, blocking, view]);
 
-  // Keep the update banner visible above the Discord view.
+  // Keep the update banner visible above service views.
   useEffect(() => {
-    window.distopic?.setDiscordTopInset(bannerVisible ? BANNER_HEIGHT : 0);
+    window.distopic?.services.setTopInset(bannerVisible ? BANNER_HEIGHT : 0);
   }, [bannerVisible]);
 
   // Push-to-talk while the window has focus.
@@ -103,10 +108,14 @@ export function App() {
       <div className="content">
       <UpdateBanner />
       <main className="main">
-        {view.kind === "discord" ? (
-          <div className="discord-placeholder">
-            <p>Carregando o Discord…</p>
-          </div>
+        {view.kind === "service" ? (
+          !service ? (
+            <Home accountId={null} dmId={null} />
+          ) : service.kind === "teamspeak" ? (
+            <TeamSpeakView service={service} />
+          ) : (
+            <ServicePlaceholder service={service} />
+          )
         ) : view.kind === "server" ? (
           <ServerView accountId={view.accountId} serverId={view.serverId} channelId={view.channelId} />
         ) : (

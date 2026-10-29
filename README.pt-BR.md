@@ -2,7 +2,7 @@
 
 # Annoy Client
 
-**Um app desktop para os seus servidores Annoy e o Discord oficial.**
+**Um app desktop para todas as suas comunidades: servidores Annoy e também Discord, WhatsApp, TeamSpeak e outros, cada um na sua aba.**
 
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
@@ -29,9 +29,10 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
 
 ## Funcionalidades
 
-- **Discord e Annoy lado a lado:** o botão **DC** abre o Discord oficial numa
-  visão isolada e persistente. Os servidores Annoy ficam na mesma barra, e a
-  troca é com um clique.
+- **Um hub, vários serviços:** adicione Discord, WhatsApp, Telegram, Element,
+  Slack ou qualquer site como aba, ao lado dos seus servidores Annoy. Cada um
+  guarda o próprio login, e a troca é com um clique. A aba do TeamSpeak guarda
+  seus servidores e entra neles pelo app oficial, já com o seu apelido.
 - **Várias instâncias ao mesmo tempo:** conecte em quantos
   [servidores Annoy](https://github.com/GeGLab/annoy-server)
   quiser.
@@ -44,8 +45,8 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
   banir.
 - **Amigos e DMs:** pedidos de amizade, presença e mensagens diretas.
 - **Importar do Discord** e **Entrar com Discord**, pela API oficial.
-- **Notificações** de menção e DM, e contadores de não lidas (inclusive o do
-  Discord).
+- **Notificações** de menção e DM, e contadores de não lidas (inclusive os das
+  abas de serviço).
 
 ## Capturas de tela
 
@@ -76,14 +77,17 @@ porta, usa a `8787`). Depois, entre com Discord ou crie uma conta.
 servidor nenhum. Só quem hospeda roda o
 [annoy-server](https://github.com/GeGLab/annoy-server), uma vez.
 
-## Sobre a aba do Discord
+## Como funcionam as abas de serviço
 
-O client **não** reimplementa o Discord nem usa a API privada de usuário, que
-viola os termos e arrisca a sua conta. Ele abre o `discord.com/app` numa visão
-separada (`persist:discord`), com o mesmo modelo do
-[Vesktop](https://github.com/Vencord/Vesktop). Lá dentro tudo funciona como no
-Discord web.
+O client **não** reimplementa nenhum serviço nem usa APIs privadas, o que
+violaria os termos e arriscaria a sua conta. Cada aba abre o próprio site do
+serviço (por exemplo `discord.com/app`) numa visão separada, com sessão própria:
+o login de uma aba não se mistura com as outras nem com as contas Annoy, e
+remover a aba apaga esses dados. É o mesmo modelo do
+[Vesktop](https://github.com/Vencord/Vesktop). Lá dentro tudo funciona como na
+versão web do serviço. O TeamSpeak não tem versão web, então a aba dele guarda
+os servidores e abre o app oficial do TeamSpeak.
 
 ## Licença
 
-[MIT](LICENSE) © Gustavo Cruz. O Annoy não é afiliado ao Discord Inc.
+[MIT](LICENSE) © Gustavo Cruz.

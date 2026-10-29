@@ -3,7 +3,8 @@ import logo from "../assets/logo.svg";
 import { leaveVoice, navigate, openServer, reconnect, updateVoiceSettings } from "../client.ts";
 import { initials } from "../format.tsx";
 import { setState, useStore, type Account, type InstanceState } from "../store.ts";
-import { Avatar, Icon } from "./ui.tsx";
+import { ServiceTab } from "./Services.tsx";
+import { Avatar, Icon, openModal } from "./ui.tsx";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -94,12 +95,12 @@ function Controls() {
   );
 }
 
-/** Tab bar: Discord, home and every server of every connected instance, plus global controls. */
+/** Tab bar: home, browser services and every server of every connected instance, plus global controls. */
 export function TopBar() {
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
   const view = useStore((s) => s.view);
-  const badge = useStore((s) => s.discordBadge);
+  const services = useStore((s) => s.services);
 
   let homeCount = 0;
   for (const a of accounts) {
@@ -114,11 +115,6 @@ export function TopBar() {
         <img src={logo} alt="" width="28" height="28" />
       </div>
       <nav className="tabs-strip" aria-label="Servidores">
-        <button className={`tab-item fixed${view.kind === "discord" ? " active" : ""}`} onClick={() => navigate({ kind: "discord" })} title="Discord">
-          <span className="tab-tile">DC</span>
-          <span className="tab-label">Discord</span>
-          {badge && <span className="tab-badge">{badge}</span>}
-        </button>
         <button
           className={`tab-item fixed${view.kind === "home" ? " active" : ""}`}
           onClick={() => navigate({ kind: "home", accountId: view.kind === "home" ? view.accountId : (accounts[0]?.id ?? null), dmId: null })}
@@ -130,6 +126,9 @@ export function TopBar() {
           <span className="tab-label">Início</span>
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
+        {services.map((service) => (
+          <ServiceTab key={service.id} service={service} />
+        ))}
         <span className="tabs-sep" />
         {accounts.map((account) => {
           const inst = instances[account.id];
@@ -146,15 +145,7 @@ export function TopBar() {
             </div>
           );
         })}
-        <button
-          className="tabbar-add"
-          title="Adicionar servidor"
-          onClick={() =>
-            setState((s) => {
-              s.modal = accounts.length === 0 ? { kind: "addAccount" } : { kind: "createServer", accountId: accounts[0]!.id };
-            })
-          }
-        >
+        <button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" onClick={() => openModal({ kind: "addTab" })}>
           <Icon name="plus" size={18} />
         </button>
       </nav>
