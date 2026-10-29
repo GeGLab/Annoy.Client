@@ -116,6 +116,11 @@ export class VoiceSession {
     }
   }
 
+  /** Media runs through the server, so a reconnect always means rejoining. */
+  resume(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   setPushToTalk(down: boolean): void {
     this.micGate?.setPushToTalk(down);
   }

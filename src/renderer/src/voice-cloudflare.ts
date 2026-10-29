@@ -10,6 +10,8 @@ import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, scre
 
 interface Remote {
   source: MediaSource;
+  /** Our section for this track, reported when resuming the session. */
+  mid: string;
   audio: HTMLAudioElement | null;
 }
 
@@ -25,6 +27,10 @@ export class CloudflareVoiceSession {
   private opus = new Map<string, Record<string, number>>();
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
+  /** Lets this session survive a reconnect or a server restart (servers 0.4.3+). */
+  private resumeKey: { sessionId: string; resumeToken: string } | null = null;
+  /** What we publish, by track name, reported when resuming. */
+  private published = new Map<string, { mid: string; kind: "audio" | "video"; source: MediaSource; maxBitrate?: number }>();
   private remote = new Map<string, Remote>();
   private closed = false;
   canSpeak = false;
@@ -46,7 +52,14 @@ export class CloudflareVoiceSession {
   }
 
   async start(): Promise<void> {
-    const joined = await this.gw.voice<{ iceServers: RTCIceServer[]; canSpeak: boolean; canStream: boolean; screenAudio?: boolean }>("join", {
+    const joined = await this.gw.voice<{
+      iceServers: RTCIceServer[];
+      canSpeak: boolean;
+      canStream: boolean;
+      screenAudio?: boolean;
+      sessionId?: string;
+      resumeToken?: string;
+    }>("join", {
       channelId: this.channelId,
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
@@ -54,6 +67,7 @@ export class CloudflareVoiceSession {
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
+    if (joined.sessionId && joined.resumeToken) this.resumeKey = { sessionId: joined.sessionId, resumeToken: joined.resumeToken };
     const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle" });
     this.pc = pc;
     pc.addEventListener("connectionstatechange", () => {
@@ -83,6 +97,7 @@ export class CloudflareVoiceSession {
         ...(maxBitrate && { maxBitrate }),
       });
       await this.setRemote(pc, "answer", res.sdp);
+      if (transceiver.mid) this.published.set(res.producerId, { mid: transceiver.mid, kind, source, maxBitrate });
       return { trackName: res.producerId, transceiver };
     });
   }
@@ -115,7 +130,7 @@ export class CloudflareVoiceSession {
       } else {
         putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([track]), local: false });
       }
-      this.remote.set(producerId, { source, audio });
+      this.remote.set(producerId, { source, mid: res.mid, audio });
     });
   }
 
@@ -209,12 +224,40 @@ export class CloudflareVoiceSession {
 
   private unpublish(entry: { trackName: string; transceiver: RTCRtpTransceiver }): Promise<void> {
     const pc = this.pc!;
+    this.published.delete(entry.trackName);
     return this.serial(async () => {
       entry.transceiver.direction = "inactive";
       await pc.setLocalDescription(await pc.createOffer());
       const res = await this.gw.voice<{ sdp?: string }>("closeProducer", { producerId: entry.trackName, sdp: pc.localDescription!.sdp });
       if (res.sdp) await this.setRemote(pc, "answer", res.sdp);
     }).catch((err: unknown) => console.warn("close track failed", err));
+  }
+
+  /**
+   * After the gateway comes back (a network blip or a server restart), takes
+   * the same Cloudflare session back: media never stopped, so nobody hears a
+   * gap. False means the caller must rejoin from scratch.
+   */
+  async resume(): Promise<boolean> {
+    const pc = this.pc;
+    if (this.closed || !pc || !this.resumeKey || pc.connectionState === "failed" || pc.connectionState === "closed") return false;
+    try {
+      const res = await this.gw.voice<{ canSpeak: boolean; canStream: boolean; producers: { producerId: string; userId: string; source: MediaSource }[] }>("resume", {
+        channelId: this.channelId,
+        ...this.resumeKey,
+        selfMute: this.settings.selfMute,
+        selfDeaf: this.settings.selfDeaf,
+        published: [...this.published].map(([trackName, t]) => ({ trackName, ...t })),
+        pulled: [...this.remote].map(([trackName, r]) => ({ trackName, mid: r.mid })),
+      });
+      this.canSpeak = res.canSpeak;
+      this.canStream = res.canStream;
+      for (const p of res.producers) if (!this.remote.has(p.producerId)) void this.subscribeSoon(p.producerId, p.userId, p.source);
+      return true;
+    } catch (err) {
+      console.warn("voice resume failed", err);
+      return false;
+    }
   }
 
   updateSettings(settings: Settings): void {
