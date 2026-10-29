@@ -23,7 +23,7 @@ export type UpdateState =
   | { status: "blocked"; currentVersion: string; advisory: Advisory; releaseUrl: string }
   | { status: "error"; currentVersion: string; message: string; mandatory: boolean; advisory: Advisory | null; releaseUrl: string };
 
-export const RELEASES_URL = "https://github.com/GustavoHSCruz/annoy-client/releases";
+export const RELEASES_URL = "https://github.com/GeGLab/annoy-client/releases";
 
 /** Numeric x.y.z comparison; a pre-release sorts before its release. */
 export function compareVersions(a: string, b: string): number {

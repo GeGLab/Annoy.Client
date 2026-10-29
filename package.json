@@ -47,16 +47,16 @@
     "esbuild@0.28.2": true
   },
   "productName": "Annoy",
-  "author": "Gustavo Cruz",
+  "author": "GeGLab",
   "homepage": "https://distopic.geg.dev.br",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GustavoHSCruz/annoy-client.git"
+    "url": "https://github.com/GeGLab/annoy-client.git"
   },
   "build": {
     "appId": "br.dev.geg.distopic",
     "productName": "Annoy",
-    "copyright": "Copyright © 2026 Gustavo Cruz",
+    "copyright": "Copyright © 2026 GeGLab",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -70,7 +70,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "GustavoHSCruz",
+        "owner": "GeGLab",
         "repo": "annoy-client",
         "releaseType": "release"
       }

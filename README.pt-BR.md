@@ -16,11 +16,11 @@
 
 ## Download
 
-- **Windows 10/11:** [Annoy-Setup-x64.exe](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-Setup-x64.exe).
+- **Windows 10/11:** [Annoy-Setup-x64.exe](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-Setup-x64.exe).
   Instala só para o seu usuário, sem pedir administrador. Como o instalador
   ainda não é assinado, o Windows pode mostrar *"O Windows protegeu o
   computador"*: clique em **Mais informações → Executar assim mesmo**.
-- **Linux:** [Annoy-x86_64.AppImage](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-x86_64.AppImage).
+- **Linux:** [Annoy-x86_64.AppImage](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-x86_64.AppImage).
   Rode `chmod +x` e abra.
 
 **Atualizações:** o app avisa quando sai uma versão nova e você decide quando
@@ -33,7 +33,7 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
   visão isolada e persistente. Os servidores Annoy ficam na mesma barra, e a
   troca é com um clique.
 - **Várias instâncias ao mesmo tempo:** conecte em quantos
-  [servidores Annoy](https://github.com/GustavoHSCruz/annoy-server)
+  [servidores Annoy](https://github.com/GeGLab/annoy-server)
   quiser.
 - **Texto:** histórico com rolagem infinita, respostas, edição, menções com
   autocompletar, markdown, arrastar e colar arquivos, prévia de imagem e
@@ -63,7 +63,7 @@ Mais capturas no [README em inglês](README.md#screenshots).
 Precisa do Node.js 22.13 ou mais novo.
 
 ```bash
-git clone https://github.com/GustavoHSCruz/annoy-client.git
+git clone https://github.com/GeGLab/annoy-client.git
 cd annoy-client
 npm install
 npm run dev
@@ -74,7 +74,7 @@ porta, usa a `8787`). Depois, entre com Discord ou crie uma conta.
 
 **Vai entrar na comunidade de alguém?** Basta o client; você não instala
 servidor nenhum. Só quem hospeda roda o
-[annoy-server](https://github.com/GustavoHSCruz/annoy-server), uma vez.
+[annoy-server](https://github.com/GeGLab/annoy-server), uma vez.
 
 ## Sobre a aba do Discord
 
@@ -86,4 +86,4 @@ Discord web.
 
 ## Licença
 
-[MIT](LICENSE) © Gustavo Cruz. O Annoy não é afiliado ao Discord Inc.
+[MIT](LICENSE) © GeGLab. O Annoy não é afiliado ao Discord Inc.

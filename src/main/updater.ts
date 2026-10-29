@@ -9,7 +9,7 @@ import { blockingAdvisory, compareVersions, RELEASES_URL, type Advisory, type Up
 const { autoUpdater } = updaterPkg;
 
 /** Public, versioned list of security advisories for the client. */
-const POLICY_URL = process.env.ANNOY_UPDATE_POLICY_URL || "https://raw.githubusercontent.com/GustavoHSCruz/annoy-client/main/security/advisories.json";
+const POLICY_URL = process.env.ANNOY_UPDATE_POLICY_URL || "https://raw.githubusercontent.com/GeGLab/annoy-client/main/security/advisories.json";
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
 let win: BrowserWindow | null = null;

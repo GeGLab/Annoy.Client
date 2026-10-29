@@ -11,7 +11,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GustavoHSCruz/annoy-server)
+[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GeGLab/annoy-server)
 
 <img src="docs/screenshots/chat-and-voice.png" alt="Annoy client: channel list with voice, chat and member list" width="860">
 
@@ -21,8 +21,8 @@
 
 | Platform | File |
 | --- | --- |
-| **Windows 10/11** (x64) | [Annoy-Setup-x64.exe](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-Setup-x64.exe) |
-| **Linux** (x64) | [Annoy-x86_64.AppImage](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-x86_64.AppImage) |
+| **Windows 10/11** (x64) | [Annoy-Setup-x64.exe](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-Setup-x64.exe) |
+| **Linux** (x64) | [Annoy-x86_64.AppImage](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-x86_64.AppImage) |
 
 **Windows:** run the installer. It installs for your user only, so no admin
 rights are needed, and it creates Start menu and desktop shortcuts. The
@@ -45,7 +45,7 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   Discord web app in a persistent, isolated view. Your Annoy servers sit in
   the same sidebar, and switching between them is one click.
 - **Many instances at once.** Connect to any number of
-  [Annoy servers](https://github.com/GustavoHSCruz/annoy-server). Their
+  [Annoy servers](https://github.com/GeGLab/annoy-server). Their
   servers show up together in the sidebar.
 - **Text chat.** History with infinite scroll, replies, edits, `@mentions` with
   autocomplete, Markdown, drag-and-drop and paste-to-upload, image previews, and
@@ -86,7 +86,7 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 Requires Node.js 22.13 or newer.
 
 ```bash
-git clone https://github.com/GustavoHSCruz/annoy-client.git
+git clone https://github.com/GeGLab/annoy-client.git
 cd annoy-client
 npm install
 npm run dev        # development with hot reload
@@ -113,7 +113,7 @@ GitHub release is published.
 
 **Joining someone's community?** The client is all you need: no server
 install. Only the person hosting the community runs
-[annoy-server](https://github.com/GustavoHSCruz/annoy-server), once,
+[annoy-server](https://github.com/GeGLab/annoy-server), once,
 with a single `docker compose up`.
 
 ## How the Discord tab works
@@ -174,7 +174,7 @@ npm run build
 
 ## License
 
-[MIT](LICENSE) © Gustavo Cruz
+[MIT](LICENSE) © GeGLab
 
 Annoy is not affiliated with or endorsed by Discord Inc. "Discord" is a
 trademark of Discord Inc.
