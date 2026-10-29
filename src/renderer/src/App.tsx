@@ -95,6 +95,7 @@ export function App() {
 
   useEffect(() => {
     connectAll();
+    void import("./global.ts").then((g) => g.initGlobal());
     if (getState().view.kind !== "home") navigate(getState().view);
     return window.distopic?.services.onBadge((id, badge) =>
       setState((s) => {

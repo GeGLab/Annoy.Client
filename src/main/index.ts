@@ -1,6 +1,6 @@
-import { existsSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, safeStorage, session, shell, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -209,6 +209,38 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
+
+// Secrets the renderer keeps across restarts (the Annoy Global keys), sealed by
+// the OS keychain. Without a real keychain nothing is written: the app asks for
+// the password again next time instead of storing keys in the clear.
+const SECRET_NAMES = new Set(["global"]);
+const secretsFile = () => join(app.getPath("userData"), "secrets.json");
+const keychainAvailable = () =>
+  safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+function readSecrets(): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(secretsFile(), "utf8")) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+ipcMain.handle("secrets:get", (event, name: unknown) => {
+  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name) || !keychainAvailable()) return null;
+  const sealed = readSecrets()[name];
+  try {
+    return sealed ? safeStorage.decryptString(Buffer.from(sealed, "base64")) : null;
+  } catch {
+    return null;
+  }
+});
+ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
+  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name)) return false;
+  const all = readSecrets();
+  if (typeof value === "string" && keychainAvailable()) all[name] = safeStorage.encryptString(value).toString("base64");
+  else delete all[name];
+  writeFileSync(secretsFile(), JSON.stringify(all), { mode: 0o600 });
+  return name in all;
+});
 
 // Only the local, isolated renderer may control the desktop window.
 ipcMain.on("window:control", (event, action: unknown) => {

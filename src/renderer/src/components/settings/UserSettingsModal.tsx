@@ -12,6 +12,7 @@ import { AppearanceSettings } from "../AppearanceSettings.tsx";
 import { Brand } from "../Brand.tsx";
 import { Field, Icon, Modal, openModal } from "../ui.tsx";
 import { Button } from "../ui/button.tsx";
+import { Input } from "../ui/input.tsx";
 import { Select } from "../ui/select.tsx";
 import { RadioGroup } from "../ui/radio-group.tsx";
 import { Switch } from "../ui/switch.tsx";
@@ -20,6 +21,7 @@ import { UpdateSettings } from "../Updates.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
+import { GLOBAL_URL, linkAccount, signInGlobal, signOutGlobal } from "../../global.ts";
 import { SCREEN_QUALITIES, screenAudioSupported, type ScreenQuality } from "../../media-profiles.ts";
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
@@ -96,13 +98,35 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const signedInGlobal = useStore((s) => s.global !== null);
+  /** This server's Global ID when it takes global accounts and this one doesn't use it yet. */
+  const [linkable, setLinkable] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
   useEffect(() => {
-    if (account)
-      void fetchInfo(account.url).then(
-        (info) => setDiscord(info.discordLogin),
-        () => undefined,
-      );
-  }, [account?.url]);
+    if (!account) return;
+    void fetchInfo(account.url).then(
+      async (info) => {
+        setDiscord(info.discordLogin);
+        if (!info.globalServerId) return setLinkable(null);
+        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me");
+        setLinkable(me.global ? null : info.globalServerId);
+      },
+      () => undefined,
+    );
+  }, [account?.url, signedInGlobal]);
+  const link = async () => {
+    if (!account || !linkable) return;
+    setLinking(true);
+    try {
+      await linkAccount(account, linkable);
+      setLinkable(null);
+      toast(`Agora você também entra em ${account.instanceName} com a conta global`);
+    } catch (error) {
+      toast((error as Error).message);
+    } finally {
+      setLinking(false);
+    }
+  };
   const sync = async () => {
     if (!account) return;
     setSyncing(true);
@@ -124,6 +148,11 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       {discord && (
         <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>
           Sincronizar Discord
+        </Button>
+      )}
+      {linkable && signedInGlobal && (
+        <Button variant="secondary" size="sm" disabled={busy} loading={linking} onClick={() => void link()}>
+          Entrar também com a conta global
         </Button>
       )}
       {admin && (
@@ -148,6 +177,79 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         Excluir conta
       </Button>
     </div>
+  );
+}
+
+/**
+ * Annoy Global: one account for many servers. Signing in happens here, right
+ * away (not on "save"), since it's a login rather than a preference.
+ */
+function GlobalAccountSection({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
+  const account = useStore((s) => s.global);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await signInGlobal(email, password);
+      setPassword("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="settings-section">
+      <h3>Conta global</h3>
+      {account ? (
+        <>
+          <p>
+            Você entrou como <strong>{account.name}</strong> <span className="muted">({account.email})</span>.
+          </p>
+          <label className="check">
+            <Checkbox checked={draft.globalDefault} onChange={(event) => update({ globalDefault: event.target.checked })} />
+            Usar como conta padrão
+          </label>
+          <p className="muted small">
+            Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.
+          </p>
+          <div className="row">
+            <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
+              Gerenciar conta
+            </a>
+            <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>
+              Sair da conta global
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form className="form" onSubmit={(event) => void submit(event)}>
+          <p className="muted">Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.</p>
+          <div className="grid-2">
+            <Field label="E-mail">
+              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+            </Field>
+            <Field label="Senha">
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+            </Field>
+          </div>
+          {error && <p className="error small">{error}</p>}
+          <div className="row">
+            <Button type="submit" size="sm" loading={busy}>
+              {busy ? "Protegendo sua senha…" : "Entrar"}
+            </Button>
+            <a href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
+              Criar conta global
+            </a>
+          </div>
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -350,6 +452,7 @@ export function UserSettingsModal() {
           </div>
           <AppearanceSettings settings={draft} update={update} />
         </section>
+        <GlobalAccountSection draft={draft} update={update} />
         <section className="settings-section">
           <h3>Meu perfil e contas</h3>
           {accounts.map((account) => {

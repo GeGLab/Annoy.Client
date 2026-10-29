@@ -104,6 +104,8 @@ export interface Settings {
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
+  /** "Usar como conta padrão" (Annoy Global): new servers sign in with it first. */
+  globalDefault: boolean;
   /** Frame rate (and bitrate cap) for screen sharing. */
   screenQuality: ScreenQuality;
   /** Share the computer's sound with the screen, where the platform can capture it. */
@@ -131,6 +133,14 @@ export interface AppState {
   chatNavigation: number;
   messageFocus: { accountId: string; channelId: string; messageId: string } | null;
   desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
+  /** The signed-in Annoy Global account, if any (keys stay in global.ts, never in the store). */
+  global: GlobalAccount | null;
+}
+
+export interface GlobalAccount {
+  id: string;
+  name: string;
+  email: string;
 }
 
 const ACCOUNTS_KEY = "distopic.accounts";
@@ -160,6 +170,7 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
+  globalDefault: false,
   screenQuality: "60",
   screenAudio: true,
   shareGames: false,
@@ -232,6 +243,7 @@ let state: AppState = {
   chatNavigation: 0,
   messageFocus: null,
   desktopActivity: null,
+  global: null,
 };
 
 const listeners = new Set<() => void>();
