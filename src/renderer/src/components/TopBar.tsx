@@ -1,4 +1,5 @@
 import type { ServerSummary } from "@distopic/protocol";
+import logo from "../assets/logo.svg";
 import { leaveVoice, navigate, openServer, reconnect, updateVoiceSettings } from "../client.ts";
 import { initials } from "../format.tsx";
 import { setState, useStore, type Account, type InstanceState } from "../store.ts";
@@ -110,11 +111,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="brand-mark" aria-hidden>
-        <svg viewBox="0 0 64 64" width="26" height="26">
-          <rect width="64" height="64" rx="18" fill="var(--accent)" />
-          <path d="M20 18h13c9 0 15 6 15 14s-6 14-15 14H20z" fill="none" stroke="var(--on-accent)" strokeWidth="6" strokeLinejoin="round" />
-          <circle cx="33" cy="32" r="4" fill="var(--on-accent)" />
-        </svg>
+        <img src={logo} alt="" width="28" height="28" />
       </div>
       <nav className="tabs-strip" aria-label="Servidores">
         <button className={`tab-item fixed${view.kind === "discord" ? " active" : ""}`} onClick={() => navigate({ kind: "discord" })} title="Discord">

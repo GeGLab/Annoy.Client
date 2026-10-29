@@ -22,10 +22,10 @@ jobs:
         include:
           - os: windows-latest
             target: --win --x64
-            files: dist/Distopic-Setup-x64.exe dist/Distopic-Setup-x64.exe.blockmap dist/latest.yml
+            files: dist/Annoy-Setup-x64.exe dist/Annoy-Setup-x64.exe.blockmap dist/latest.yml
           - os: ubuntu-latest
             target: --linux
-            files: dist/Distopic-x86_64.AppImage dist/latest-linux.yml
+            files: dist/Annoy-x86_64.AppImage dist/latest-linux.yml
     runs-on: ${{ matrix.os }}
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}

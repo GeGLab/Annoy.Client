@@ -1,4 +1,4 @@
-import type { AdminOverview, AdminServer, AdminUser, InstanceSettings, RegistrationMode, SignupInvite } from "@distopic/protocol";
+import type { AdminOverview, AdminServer, AdminUser, InstanceSettings, RegistrationMode, SignupInvite, VoiceUsage } from "@distopic/protocol";
 import { useEffect, useState } from "react";
 import { apiFor, removeAccount } from "../client.ts";
 import { formatSize, formatTime } from "../format.tsx";
@@ -12,6 +12,33 @@ const MODE_TEXT: Record<RegistrationMode, string> = {
   invite: "Só quem tem um convite de cadastro gerado aqui.",
   closed: "Ninguém cria conta nova; quem já tem continua entrando.",
 };
+
+const LEVEL_TEXT: Record<VoiceUsage["level"], string> = {
+  ok: "Estimativa pelo bitrate máximo; o uso real fica abaixo. Câmera e tela pausam em 80%, a voz em 95%.",
+  video_off: "Câmera e tela estão pausadas até o próximo mês para não passar do limite.",
+  off: "A voz está pausada até o próximo mês para não passar do limite.",
+};
+
+/** Cloudflare bills decimal gigabytes. */
+const gb = (bytes: number) => `${(bytes / 1e9).toLocaleString("pt-BR", { maximumFractionDigits: bytes < 1e10 ? 2 : 0 })} GB`;
+
+function VoiceUsageBar({ usage }: { usage: VoiceUsage }) {
+  const pct = usage.limitBytes > 0 ? Math.min(100, (usage.bytes / usage.limitBytes) * 100) : 0;
+  return (
+    <Field
+      label={`Tráfego de voz no Cloudflare (${usage.month})`}
+      hint={usage.limitBytes > 0 ? LEVEL_TEXT[usage.level] : "Sem limite configurado (ANNOY_CF_SFU_MONTHLY_GB=0)."}
+    >
+      <div className="usage-meter">
+        <div className={`usage-fill ${usage.level}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="muted">
+        {gb(usage.bytes)}
+        {usage.limitBytes > 0 && ` de ${gb(usage.limitBytes)} (${pct.toFixed(1)}%)`}
+      </span>
+    </Field>
+  );
+}
 
 function SettingsTab({ accountId }: { accountId: string }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
@@ -33,6 +60,7 @@ function SettingsTab({ accountId }: { accountId: string }) {
         <div><strong>{overview.messageCount.toLocaleString("pt-BR")}</strong><span>mensagens</span></div>
         <div><strong>{formatSize(overview.uploadsBytes)}</strong><span>em anexos</span></div>
       </div>
+      {overview.voiceUsage && <VoiceUsageBar usage={overview.voiceUsage} />}
       <Field label="Cadastro de contas novas" hint={MODE_TEXT[draft.registration]}>
         <div className="segmented">
           {(["open", "invite", "closed"] as const).map((m) => (
@@ -79,7 +107,7 @@ function InvitesTab({ accountId }: { accountId: string }) {
       .post<SignupInvite>("/admin/invites", { maxUses: maxUses ? Number(maxUses) : null, expiresInHours: expires ? Number(expires) : null })
       .then((inv) => {
         load();
-        void navigator.clipboard.writeText(`Crie sua conta no Distopic\nEndereço: ${address}\nConvite de cadastro: ${inv.code}`);
+        void navigator.clipboard.writeText(`Crie sua conta no Annoy\nEndereço: ${address}\nConvite de cadastro: ${inv.code}`);
         toast("Convite criado e copiado");
       }, (e: Error) => toast(e.message));
   const now = new Date().toISOString();

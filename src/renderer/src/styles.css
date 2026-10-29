@@ -1,31 +1,31 @@
 :root {
   --sidebar-width: 72px; /* must match SIDEBAR_WIDTH in the main process */
-  /* Orange on graphite: deliberately far from Discord's cool grey and blurple. */
+  /* Amber on indigo graphite, taken from the logo: far from Discord's grey and blurple. */
   --topbar-height: 56px; /* must match TOPBAR_HEIGHT in the main process */
-  --bg-rail: #0c0b0b;
-  --bg-channels: #151313;
-  --bg-main: #1a1817;
-  --bg-elev: #232020;
-  --bg-hover: #2a2625;
-  --bg-active: #342f2d;
-  --bg-input: #1f1c1b;
-  --bg-deep: #100e0e;
-  --border: #2f2a28;
-  --border-strong: #463d38;
-  --text: #f3eeea;
-  --text-soft: #d5cbc4;
-  --text-muted: #9b8f88;
-  --accent: #ff7a1a;
-  --accent-hover: #ff8f3d;
-  --accent-strong: #ffa462;
-  --accent-soft: rgba(255, 122, 26, 0.14);
-  --accent-line: rgba(255, 122, 26, 0.45);
-  --on-accent: #1f0c00;
-  --link: #ffab6e;
+  --bg-rail: #0a0912;
+  --bg-channels: #12111b;
+  --bg-main: #171621;
+  --bg-elev: #201e2c;
+  --bg-hover: #282535;
+  --bg-active: #322e42;
+  --bg-input: #1c1a27;
+  --bg-deep: #0e0d16;
+  --border: #2c2939;
+  --border-strong: #423c55;
+  --text: #f2f0f8;
+  --text-soft: #d1cde0;
+  --text-muted: #938ca8;
+  --accent: #ffb020;
+  --accent-hover: #ffc04d;
+  --accent-strong: #ffd27a;
+  --accent-soft: rgba(255, 176, 32, 0.14);
+  --accent-line: rgba(255, 176, 32, 0.45);
+  --on-accent: #1f1400;
+  --link: #ffc55c;
   --danger: #f2554b;
   --ok: #43c59e;
-  --warn: #ffb23f;
-  --mention: rgba(255, 122, 26, 0.08);
+  --warn: #ff8a3d;
+  --mention: rgba(255, 176, 32, 0.08);
   --radius: 10px;
   --panel-radius: 14px;
   --gap: 8px;
@@ -1001,7 +1001,7 @@ h3 {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(255, 122, 26, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   border: 2px dashed var(--accent);
   font-size: 1.3rem;
   font-weight: 700;
@@ -1810,7 +1810,7 @@ img.avatar-face {
   align-items: center;
   gap: 10px;
   padding: 0 14px;
-  background: linear-gradient(90deg, rgba(255, 122, 26, 0.22), rgba(255, 122, 26, 0.06));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
   border-bottom: 1px solid var(--accent-line);
   font-size: 0.88rem;
 }
@@ -1884,7 +1884,7 @@ img.avatar-face {
 }
 
 /* =========================================================================
-   Distopic identity layer (orange preview).
+   Annoy identity layer (orange preview).
    A tab bar instead of a server rail, controls at the top right, floating
    panels and a log-style message list keep the app clearly apart from Discord.
    ========================================================================= */
@@ -1929,7 +1929,7 @@ body {
 .update-banner {
   border-radius: var(--panel-radius);
   border: 1px solid var(--accent-line);
-  background: linear-gradient(90deg, rgba(255, 122, 26, 0.2), rgba(255, 122, 26, 0.05));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent) 5%, transparent));
 }
 
 /* Tab bar. */
@@ -2281,7 +2281,7 @@ img.avatar-face {
   padding: 0 4px;
 }
 .mention-me {
-  background: rgba(255, 122, 26, 0.28);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: #ffd2ad;
 }
 .day-divider {
@@ -2419,6 +2419,10 @@ select:focus {
 .tag.accent { background: var(--accent-soft); color: var(--accent); }
 .tag.danger { background: rgba(242, 85, 75, 0.15); color: var(--danger); }
 .account-row { flex-wrap: wrap; }
+.usage-meter { height: 8px; border-radius: 99px; background: var(--bg-deep); border: 1px solid var(--border); overflow: hidden; }
+.usage-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.usage-fill.video_off { background: var(--warn); }
+.usage-fill.off { background: var(--danger); }
 
 /* Offline instance */
 .tab-item.offline { opacity: 0.55; }

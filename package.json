@@ -1,8 +1,8 @@
 {
-  "name": "distopic-client",
-  "version": "0.2.0",
+  "name": "annoy-client",
+  "version": "0.3.0",
   "private": true,
-  "description": "Desktop client for Distopic servers, with the official Discord one click away",
+  "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
@@ -46,17 +46,17 @@
     "electron@45.1.0": true,
     "esbuild@0.28.2": true
   },
-  "productName": "Distopic",
+  "productName": "Annoy",
   "author": "Gustavo Cruz",
   "homepage": "https://distopic.geg.dev.br",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GustavoHSCruz/distopic-client.git"
+    "url": "https://github.com/GustavoHSCruz/annoy-client.git"
   },
   "build": {
     "appId": "br.dev.geg.distopic",
-    "productName": "Distopic",
-    "copyright": "Copyright \u00a9 2026 Gustavo Cruz",
+    "productName": "Annoy",
+    "copyright": "Copyright © 2026 Gustavo Cruz",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -71,7 +71,7 @@
       {
         "provider": "github",
         "owner": "GustavoHSCruz",
-        "repo": "distopic-client",
+        "repo": "annoy-client",
         "releaseType": "release"
       }
     ],
@@ -92,10 +92,10 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Distopic",
+      "shortcutName": "Annoy",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "artifactName": "Distopic-Setup-x64.${ext}"
+      "artifactName": "Annoy-Setup-x64.${ext}"
     },
     "linux": {
       "target": [
@@ -103,7 +103,7 @@
       ],
       "icon": "build/icon.png",
       "category": "Network;Chat",
-      "artifactName": "Distopic-${arch}.${ext}"
+      "artifactName": "Annoy-${arch}.${ext}"
     }
   }
 }

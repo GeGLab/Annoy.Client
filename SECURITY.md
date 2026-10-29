@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not** open a public issue. Use
-[GitHub private vulnerability reporting](https://github.com/GustavoHSCruz/distopic-client/security/advisories/new)
+[GitHub private vulnerability reporting](https://github.com/GustavoHSCruz/annoy-client/security/advisories/new)
 and include the affected version, impact and steps to reproduce. You will get an
 answer within a few days.
 
@@ -29,7 +29,7 @@ on the `main` branch:
       "severity": "critical",
       "fixedIn": "0.1.2",
       "summary": "One-line description users will see.",
-      "url": "https://github.com/GustavoHSCruz/distopic-client/security/advisories/GHSA-xxxx"
+      "url": "https://github.com/GustavoHSCruz/annoy-client/security/advisories/GHSA-xxxx"
     }
   ]
 }

@@ -1,5 +1,5 @@
 // Voice session for instances using Cloudflare's Realtime SFU. One
-// RTCPeerConnection carries everything; the Distopic server relays every
+// RTCPeerConnection carries everything; the Annoy server relays every
 // negotiation to Cloudflare and decides what we may publish or receive.
 import type { GatewayEvent, MediaSource } from "@distopic/protocol";
 import type { Gateway } from "./gateway.ts";

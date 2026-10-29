@@ -105,10 +105,10 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           <div className="channel-scroll" />
         </aside>
         <div className="empty-main welcome">
-          <h1>Bem-vindo ao Distopic</h1>
-          <p>O Discord oficial fica no botão DC da barra lateral. Para conversar nos seus próprios servidores, conecte-se a uma instância Distopic.</p>
+          <h1>Bem-vindo ao Annoy</h1>
+          <p>O Discord oficial fica no botão DC da barra lateral. Para conversar nos seus próprios servidores, conecte-se a uma instância Annoy.</p>
           <button className="btn" onClick={() => openModal({ kind: "addAccount" })}>
-            Conectar a um servidor Distopic
+            Conectar a um servidor Annoy
           </button>
         </div>
       </div>

@@ -1,8 +1,8 @@
 <div align="center">
 
-# Distopic Client
+# Annoy Client
 
-**One desktop app for your self-hosted Distopic servers and the official Discord.**
+**One desktop app for your self-hosted Annoy servers and the official Discord.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
@@ -11,9 +11,9 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GustavoHSCruz/distopic-server)
+[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [How Discord works here](#how-the-discord-tab-works) · [Server](https://github.com/GustavoHSCruz/annoy-server)
 
-<img src="docs/screenshots/chat-and-voice.png" alt="Distopic client: channel list with voice, chat and member list" width="860">
+<img src="docs/screenshots/chat-and-voice.png" alt="Annoy client: channel list with voice, chat and member list" width="860">
 
 </div>
 
@@ -21,15 +21,15 @@
 
 | Platform | File |
 | --- | --- |
-| **Windows 10/11** (x64) | [Distopic-Setup-x64.exe](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-Setup-x64.exe) |
-| **Linux** (x64) | [Distopic-x86_64.AppImage](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-x86_64.AppImage) |
+| **Windows 10/11** (x64) | [Annoy-Setup-x64.exe](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-Setup-x64.exe) |
+| **Linux** (x64) | [Annoy-x86_64.AppImage](https://github.com/GustavoHSCruz/annoy-client/releases/latest/download/Annoy-x86_64.AppImage) |
 
 **Windows:** run the installer. It installs for your user only, so no admin
 rights are needed, and it creates Start menu and desktop shortcuts. The
 installer is not code-signed yet, so Windows SmartScreen may show *"Windows
 protected your PC"*. Click **More info → Run anyway**.
 
-**Linux:** `chmod +x Distopic-x86_64.AppImage` and run it. AppImages need FUSE 2
+**Linux:** `chmod +x Annoy-x86_64.AppImage` and run it. AppImages need FUSE 2
 (`libfuse2`), which most distributions ship.
 
 ### Updates
@@ -41,11 +41,11 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 
 ## Features
 
-- **Discord and Distopic side by side.** The **DC** button opens the official
-  Discord web app in a persistent, isolated view. Your Distopic servers sit in
+- **Discord and Annoy side by side.** The **DC** button opens the official
+  Discord web app in a persistent, isolated view. Your Annoy servers sit in
   the same sidebar, and switching between them is one click.
 - **Many instances at once.** Connect to any number of
-  [Distopic servers](https://github.com/GustavoHSCruz/distopic-server). Their
+  [Annoy servers](https://github.com/GustavoHSCruz/annoy-server). Their
   servers show up together in the sidebar.
 - **Text chat.** History with infinite scroll, replies, edits, `@mentions` with
   autocomplete, Markdown, drag-and-drop and paste-to-upload, image previews, and
@@ -86,8 +86,8 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 Requires Node.js 22.13 or newer.
 
 ```bash
-git clone https://github.com/GustavoHSCruz/distopic-client.git
-cd distopic-client
+git clone https://github.com/GustavoHSCruz/annoy-client.git
+cd annoy-client
 npm install
 npm run dev        # development with hot reload
 ```
@@ -96,8 +96,8 @@ To run a production build locally, or to package installers:
 
 ```bash
 npm run build && npm start
-npm run dist:linux     # dist/Distopic-x86_64.AppImage
-npm run dist:win       # dist/Distopic-Setup-x64.exe (needs Windows or Wine; CI builds it on Windows)
+npm run dist:linux     # dist/Annoy-x86_64.AppImage
+npm run dist:win       # dist/Annoy-Setup-x64.exe (needs Windows or Wine; CI builds it on Windows)
 ```
 
 Releases are built by [GitHub Actions](.github/workflows/release.yml) when a
@@ -105,7 +105,7 @@ GitHub release is published.
 
 ## First launch
 
-1. Choose **Conectar a um servidor Distopic** (Connect to a Distopic server) and type the server address, for
+1. Choose **Conectar a um servidor Annoy** (Connect to an Annoy server) and type the server address, for
    example `192.168.0.10` or `chat.example.com`. Without a port, the client
    uses `8787`.
 2. Sign in with Discord (if the server enables it) or create a local account.
@@ -113,7 +113,7 @@ GitHub release is published.
 
 **Joining someone's community?** The client is all you need: no server
 install. Only the person hosting the community runs
-[distopic-server](https://github.com/GustavoHSCruz/distopic-server), once,
+[annoy-server](https://github.com/GustavoHSCruz/annoy-server), once,
 with a single `docker compose up`.
 
 ## How the Discord tab works
@@ -123,7 +123,7 @@ would violate Discord's Terms and put your account at risk. Instead it loads
 `https://discord.com/app` in a dedicated Electron view:
 
 - **Separate session.** It uses its own persistent partition (`persist:discord`),
-  so the Discord login, cookies and storage stay apart from your Distopic
+  so the Discord login, cookies and storage stay apart from your Annoy
   accounts.
 - **Plain Chrome identity.** It presents a standard Chrome user agent, the same
   approach as [Vesktop](https://github.com/Vencord/Vesktop).
@@ -145,14 +145,14 @@ src/renderer/        React app
   src/store.ts       app state (immer + useSyncExternalStore)
   src/voice.ts       mediasoup-client session, VAD / push-to-talk gating
   src/components/    UI
-packages/protocol/   wire contract, vendored from distopic-server
+packages/protocol/   wire contract, vendored from annoy-server
 ```
 
 The protocol is owned by the server repository. After pulling server changes,
 run:
 
 ```bash
-npm run sync:protocol -- ../distopic-server/packages/protocol/src
+npm run sync:protocol -- ../annoy-server/packages/protocol/src
 ```
 
 ## Roadmap
@@ -176,5 +176,5 @@ npm run build
 
 [MIT](LICENSE) © Gustavo Cruz
 
-Distopic is not affiliated with or endorsed by Discord Inc. "Discord" is a
+Annoy is not affiliated with or endorsed by Discord Inc. "Discord" is a
 trademark of Discord Inc.

@@ -184,7 +184,7 @@ export function UserSettingsModal() {
   return (
     <Modal title="Configurações" wide>
       <section className="settings-section">
-        <h3>Contas Distopic</h3>
+        <h3>Contas Annoy</h3>
         {accounts.map((a) => (
           <AccountRow key={a.id} accountId={a.id} />
         ))}
@@ -242,7 +242,7 @@ export function UserSettingsModal() {
           </div>
         </Field>
         {settings.inputMode === "ptt" ? (
-          <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Distopic em foco">
+          <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Annoy em foco">
             <button className="btn btn-ghost key-capture" onClick={() => setCapturing(true)}>
               {capturing ? "Pressione uma tecla… (Esc cancela)" : keyLabel(settings.pttKey)}
             </button>
@@ -722,7 +722,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
   useEffect(create, [accountId, serverId]);
 
   const address = account?.url.replace(/^https?:\/\//, "") ?? "";
-  const shareText = invite ? `Entre no ${state?.server.name ?? "servidor"} no Distopic\nEndereço: ${address}\nConvite: ${invite.code}` : "";
+  const shareText = invite ? `Entre no ${state?.server.name ?? "servidor"} no Annoy\nEndereço: ${address}\nConvite: ${invite.code}` : "";
 
   return (
     <Modal title={`Convidar para ${state?.server.name ?? "servidor"}`}>

@@ -1,6 +1,8 @@
 import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { Api } from "./api.ts";
+import { previewText } from "./format.tsx";
 import { Gateway } from "./gateway.ts";
+import { displayNameOf } from "./perms.ts";
 import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
@@ -276,7 +278,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
     }),
     () =>
       toast(
-        "Sem áudio: o app não alcançou a porta de voz do servidor. Quem hospeda deve conferir DISTOPIC_ANNOUNCED_IP e liberar a porta 40000 (UDP e TCP).",
+        "Sem áudio: o app não alcançou a porta de voz do servidor. Quem hospeda deve conferir ANNOY_ANNOUNCED_IP e liberar a porta 40000 (UDP e TCP).",
         12000,
       ),
   );
@@ -371,7 +373,15 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
   if (!isDm && !mentioned) return;
   window.distopic?.flashWindow();
   if (!document.hasFocus() || s.view.kind === "discord") {
-    const n = new Notification(message.author.displayName, { body: message.content || "Enviou um anexo", silent: false });
+    const server = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === message.channelId));
+    const dm = inst.dms.find((d) => d.id === message.channelId);
+    const nameOf = (id: string) => {
+      const member = server?.members.find((m) => m.user.id === id);
+      return member ? displayNameOf(member) : (dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null))?.displayName;
+    };
+    const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
+    const body = previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
+    const n = new Notification(message.author.displayName, { body, silent: false });
     n.onclick = () => window.focus();
   }
 }

@@ -46,7 +46,7 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
         </li>
         <li>Cole o token abaixo; no próximo passo você adiciona o bot ao seu servidor com um link pronto.</li>
       </ol>
-      <Field label="Token do bot" hint="Usado só durante a importação; o Distopic não salva o token">
+      <Field label="Token do bot" hint="Usado só durante a importação; o Annoy não salva o token">
         <input type="password" autoFocus value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTIz…" autoComplete="off" required />
       </Field>
       <div className="form-actions">

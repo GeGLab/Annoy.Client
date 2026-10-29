@@ -1,7 +1,7 @@
 import { LIMITS, type Message } from "@distopic/protocol";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { apiFor, loadMessages, sendTyping } from "../client.ts";
-import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
+import { formatClock, formatDay, formatSize, formatTime, previewText, renderContent, type NameOf } from "../format.tsx";
 import { useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 
@@ -101,7 +101,7 @@ function MessageRow({
           {replyTo ? (
             <>
               <strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
-              <span className="truncate">{replyTo.content || "anexo"}</span>
+              <span className="truncate">{previewText(replyTo.content, nameOf, channelOf) || "anexo"}</span>
             </>
           ) : (
             <span className="muted">mensagem original não carregada</span>

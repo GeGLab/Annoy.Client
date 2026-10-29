@@ -9,7 +9,7 @@ const bridge = {
   flashWindow: () => ipcRenderer.send("window:flash"),
   setDiscordTopInset: (px: number) => ipcRenderer.send("discord:inset", px),
   screen: {
-    /** "system": the OS portal picks the source (Wayland); "app": show Distopic's own picker. */
+    /** "system": the OS portal picks the source (Wayland); "app": show Annoy's own picker. */
     mode: () => ipcRenderer.invoke("screen:mode") as Promise<"system" | "app">,
     sources: () => ipcRenderer.invoke("screen:sources") as Promise<{ id: string; name: string; kind: "screen" | "window"; thumbnail: string }[]>,
     choose: (id: string) => ipcRenderer.send("screen:choose", id),
