@@ -48,7 +48,7 @@
   },
   "productName": "Annoy",
   "author": "Gustavo Cruz",
-  "homepage": "https://distopic.geg.dev.br",
+  "homepage": "https://annoy.geg.dev.br",
   "repository": {
     "type": "git",
     "url": "https://github.com/GeGLab/annoy-client.git"
