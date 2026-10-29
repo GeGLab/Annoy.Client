@@ -52,6 +52,12 @@ requested behavior and configuration additions, not a new visual world.
   and selected capture-quality labels retain the compact desktop density.
 - Provider marks include Apple Music and code editors; activity artwork and
   sanitized project/file metadata retain the friendship visibility boundary.
+- File activities put the file-type glyph in the large artwork position, keeping
+  the editor mark by its name. Member popovers include self activity and biography.
+- The self profile provides immediate, persisted manual status selection. Online
+  enables OS-idle detection; explicit idle/DND/invisible remain until changed.
+  DND suppresses incoming message/call alerts. Invisible hides published activity.
+  The existing compact scale is retained, including the tiny DND minus glyph.
 
 Tests use synthetic API data plus real gateway and peer-media integration.
 Live bot runtime remains outside scope.

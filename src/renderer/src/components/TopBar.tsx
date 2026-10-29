@@ -54,6 +54,7 @@ export function UserPanel() {
   const accountId = "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
+  const manualSupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
   const snapshot = useStore((s) => s.desktopActivity);
   const activities = settings.shareActivity ? (snapshot?.activities ?? EMPTY_ACTIVITIES) : EMPTY_ACTIVITIES;
 
@@ -89,6 +90,7 @@ export function UserPanel() {
                 </Select>
               </label>
               <p className="muted small">{settings.manualPresence === "online" ? "Fica ausente automaticamente após o tempo configurado." : settings.manualPresence === "idle" ? "Permanece ausente até você mudar o status." : settings.manualPresence === "dnd" ? "Silencia avisos de mensagens e chamadas." : "Você continua conectado, mas aparece offline e oculta suas atividades."}</p>
+              {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">Atualize esta instância para seus amigos também verem o status manual.</p>}
               <div className="self-profile-activity">
                 <h3>Minha atividade</h3>
                 {activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}

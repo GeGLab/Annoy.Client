@@ -182,9 +182,14 @@ test("native idle, manual presence and member profile file activity", async () =
     expect(await page.evaluate(() => (window as any).cueCount)).toBe(0);
     await selectStatus("Aparecer como offline");
     await expect(page.locator(".user-identity .presence-offline")).toBeVisible();
+    await expect.poll(() => ops.filter((op) => op.op === "activity").at(-1)?.activities).toEqual([]);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).manualPresence)).toBe("offline");
     await selectStatus("Online");
     await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    await nativeIdle(601);
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible({ timeout: 10_000 });
+    await nativeIdle(0);
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible({ timeout: 10_000 });
     await page.screenshot({ path: join(capture, "manual-presence-profile.png") });
     await page.keyboard.press("Escape");
     await page.locator(".members .member").first().click();
