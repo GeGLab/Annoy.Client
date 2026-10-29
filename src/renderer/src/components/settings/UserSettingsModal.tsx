@@ -20,6 +20,7 @@ import { UpdateSettings } from "../Updates.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
+import { SCREEN_QUALITIES, screenAudioSupported, type ScreenQuality } from "../../media-profiles.ts";
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
 function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold: number; filter: NoiseFilter }) {
@@ -397,6 +398,31 @@ export function UserSettingsModal() {
               ))}
             </Select>
           </Field>
+          <Field
+            label="Transmissão de tela"
+            hint={`${SCREEN_QUALITIES.find((q) => q.value === draft.screenQuality)?.hint ?? ""} Vale para a próxima transmissão.`}
+          >
+            <Select
+              aria-label="Qualidade da transmissão de tela"
+              value={draft.screenQuality}
+              onChange={(event) => update({ screenQuality: event.target.value as ScreenQuality })}
+              disabled={saving}
+            >
+              {SCREEN_QUALITIES.map((q) => (
+                <option key={q.value} value={q.value}>
+                  {q.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {screenAudioSupported() ? (
+            <label className="check">
+              <Checkbox checked={draft.screenAudio} onChange={(event) => update({ screenAudio: event.target.checked })} />
+              Transmitir o som do computador junto com a tela
+            </label>
+          ) : (
+            <p className="muted small">O som do computador junto com a tela por enquanto só é transmitido no Windows.</p>
+          )}
           <Field label="Modo de entrada" hint="O modo de entrada vale para a próxima conexão de voz">
             <RadioGroup
               label="Modo de entrada"

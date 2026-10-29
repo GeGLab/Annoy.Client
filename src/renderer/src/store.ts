@@ -9,6 +9,7 @@ import type {
   User,
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
+import type { ScreenQuality } from "./media-profiles.ts";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
@@ -103,6 +104,10 @@ export interface Settings {
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
+  /** Frame rate (and bitrate cap) for screen sharing. */
+  screenQuality: ScreenQuality;
+  /** Share the computer's sound with the screen, where the platform can capture it. */
+  screenAudio: boolean;
   shareGames: boolean;
   shareMusic: boolean;
 }
@@ -155,6 +160,8 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
+  screenQuality: "60",
+  screenAudio: true,
   shareGames: false,
   shareMusic: false,
 };
