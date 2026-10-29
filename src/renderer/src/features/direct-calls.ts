@@ -76,7 +76,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       if (call.status === "active" && me === call.calleeId && call.calleeDeviceId !== callDeviceId) { if (getState().directCall?.call.id === call.id) { cleanup(); setState((s) => { s.directCall = null; }); } return; }
       if (call.status === "ended") { if (getState().directCall?.call.id !== call.id) return; cleanup(); setState((s) => { s.directCall = null; }); playCallFeedback("leave"); if (call.reason) toast(call.reason); return; }
       const existed = getState().directCall?.call;
-      if (incomingNotificationNeeded(call, me, existed?.id)) {
+      if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
         window.distopic?.flashWindow();
         if (!document.hasFocus()) try { const notification = new Notification("Chamada recebida", { body: `${getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? "Um amigo"} está chamando você.`, silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }

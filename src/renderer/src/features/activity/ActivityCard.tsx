@@ -14,7 +14,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   return (
     <div className={`activity-card activity-${activity.kind}${compact ? " compact" : ""}`}>
       <span className={`activity-artwork${image ? "" : " no-artwork"}`}>
-        {development ? <DevelopmentIcon name={activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? `Capa de ${activity.name}` : `Capa do álbum ${activity.album || activity.name}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
+        {development ? <DevelopmentIcon name={activity.file ? activity.language ?? "code" : activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? `Capa de ${activity.name}` : `Capa do álbum ${activity.album || activity.name}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
           : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : <Headphones size={compact ? 20 : 28} aria-hidden />}
       </span>
       <div>

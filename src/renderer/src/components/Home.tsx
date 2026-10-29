@@ -29,7 +29,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
         <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || rel.user.displayName}</strong></UserProfile>
         {rel.nicknameByOther && <small className="muted">Te chama de {rel.nicknameByOther}</small>}
         <span className="muted">
-          {rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : presence === "idle" ? "Ausente" : online ? "Online" : "Offline"}
+          {rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : presence === "idle" ? "Ausente" : presence === "dnd" ? "Não incomodar" : online ? "Online" : "Offline"}
         </span>
         {rel.status === "friend" && activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} compact />)}
       </div>
@@ -66,7 +66,7 @@ function Friends({ accountId }: { accountId: string }) {
   const [tab, setTab] = useState<Tab>("online");
   const [username, setUsername] = useState("");
   const rels = inst?.relationships ?? [];
-  const online = (id: string) => inst?.presences[id] === "online" || inst?.presences[id] === "idle";
+  const online = (id: string) => ["online", "idle", "dnd"].includes(inst?.presences[id] ?? "offline");
   const pending = rels.filter((r) => r.status !== "friend");
   const list =
     tab === "online"

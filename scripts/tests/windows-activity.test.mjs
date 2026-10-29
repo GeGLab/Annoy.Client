@@ -3,8 +3,18 @@ import assert from "node:assert/strict";
 import { sep } from "node:path";
 import { detectActivities, steamArtwork } from "../../src/main/activity/windows.ts";
 import { isAway } from "../../src/shared/presence.ts";
+import { effectivePresence } from "../../src/shared/presence.ts";
 const directory = ["F:", "Steam", "common", "Synthetic"].join(sep),
   game = { appId: "480", name: "Synthetic game", directory };
+
+test("manual presence overrides inactivity; online mode resumes automatic away", () => {
+  assert.equal(effectivePresence("online", 601, 10), "idle");
+  assert.equal(effectivePresence("online", 0, 10), "online");
+  for (const status of ["idle", "dnd", "offline"]) {
+    assert.equal(effectivePresence(status, 0, 10), status);
+    assert.equal(effectivePresence(status, 601, 10), status);
+  }
+});
 const probe = {
   steamPath: "F:/Steam",
   running: ["480"],

@@ -114,6 +114,7 @@ export interface Settings {
   showVoiceBar: boolean;
   voiceBarMode: "external" | "always";
   awayMinutes: number;
+  manualPresence: import("../../shared/presence.ts").ManualPresence;
   screenHeight: number;
   screenFps: number;
   screenAudio: boolean;
@@ -177,6 +178,7 @@ const DEFAULT_SETTINGS: Settings = {
   showVoiceBar: true,
   voiceBarMode: "external",
   awayMinutes: 10,
+  manualPresence: "online",
   screenHeight: 1080,
   screenFps: 30,
   screenAudio: true,
