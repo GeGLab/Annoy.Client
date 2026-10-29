@@ -11,6 +11,7 @@ import { registerNavigationGuard, requestNavigation } from "../../lib/navigation
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
 import { Input } from "../ui/input.tsx";
 import { ActivityCard } from "../../features/activity/ActivityCard.tsx";
+import { SteamConnection } from "../../features/activity/SteamConnection.tsx";
 import { Avatar, Field, Icon, Modal, openModal, type IconName } from "../ui.tsx";
 import { Button } from "../ui/button.tsx";
 import { Select } from "../ui/select.tsx";
@@ -675,19 +676,18 @@ export function UserSettingsModal() {
                   Somente amizades confirmadas nesta instância recebem sua atividade. Membros do servidor e contatos por DM não recebem esses
                   dados.
                 </p>
-                {window.distopic?.platform === "win32" ? (
+                {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
-                      <span><strong><Icon name="radio" />Compartilhar minha atividade</strong><small>Mostre aos amigos jogos, músicas e programação. Editores podem exibir nome do arquivo, linguagem e projeto; caminhos completos e conteúdo dos arquivos não são enviados.</small></span>
+                      <span><strong><Icon name="radio" />Compartilhar minha atividade</strong><small>{window.distopic?.platform === "linux" ? "Mostre aos amigos seus jogos da Steam, nativos ou via Proton. A detecção usa a Steam instalada neste computador e não precisa vincular uma conta." : "Mostre aos amigos jogos, músicas e programação. Editores podem exibir nome do arquivo, linguagem e projeto; caminhos completos e conteúdo dos arquivos não são enviados."}</small></span>
                       <Switch aria-label="Compartilhar minha atividade" checked={draft.shareActivity} onCheckedChange={(checked) => update({ shareActivity: checked })} />
                     </label>
                     <p className="muted small">
-                      A leitura começa após salvar. Use os aplicativos para Windows com a música em reprodução. Pausar a música ou fechar o jogo
-                      encerra a atividade detectada.
+                      {window.distopic?.platform === "linux" ? "A leitura começa após salvar. Abra o jogo pela Steam; ao fechá-lo, a atividade é encerrada. Música e programação continuam disponíveis no Windows." : "A leitura começa após salvar. Use os aplicativos para Windows com a música em reprodução. Pausar a música ou fechar o jogo encerra a atividade detectada."}
                     </p>
                     <h4>Detectado agora</h4>
                     {(desktopActivity?.activities ?? []).map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
-                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? "Nenhum jogo ou música em reprodução detectado." : "Salve o compartilhamento ativado para iniciar a detecção."}</p>}
+                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? (window.distopic?.platform === "linux" ? "Nenhum jogo da Steam em execução detectado." : "Nenhum jogo ou música em reprodução detectado.") : "Salve o compartilhamento ativado para iniciar a detecção."}</p>}
                     {desktopActivity?.error && (
                       <p className="error" role="status">
                         {desktopActivity.error}
@@ -695,8 +695,9 @@ export function UserSettingsModal() {
                     )}
                   </>
                 ) : (
-                  <p className="muted">A detecção automática está disponível no Windows.</p>
+                  <p className="muted">A detecção automática está disponível no Windows e, para jogos da Steam, no Linux.</p>
                 )}
+                {accounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
               </section>
             )}
             {page === "notifications" && (

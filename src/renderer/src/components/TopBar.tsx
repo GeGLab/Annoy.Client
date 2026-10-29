@@ -10,6 +10,7 @@ import { Tooltip } from "./ui/tooltip.tsx";
 import { VoicePanel, DeviceMenu } from "./VoicePanel.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
 import { EMPTY_ACTIVITIES } from "../store.ts";
+import { withSteamFallback } from "../../../shared/steam-activity.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -53,7 +54,9 @@ export function UserPanel() {
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
   const snapshot = useStore((s) => s.desktopActivity);
-  const activities = settings.shareActivity ? (snapshot?.activities ?? EMPTY_ACTIVITIES) : EMPTY_ACTIVITIES;
+  const ownGame = useStore((s) => accountId && user ? s.instances[accountId]?.activities[user.id]?.find((a) => a.kind === "game") : undefined);
+  const local = snapshot?.activities ?? EMPTY_ACTIVITIES;
+  const activities = settings.shareActivity ? withSteamFallback(local, ownGame) : EMPTY_ACTIVITIES;
 
   const openSettings = () =>
     setState((s) => {

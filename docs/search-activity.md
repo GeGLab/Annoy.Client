@@ -9,7 +9,7 @@
   abertura da mensagem no contexto. Calendário é carregado com a busca.
 - `features/activity`: publicação da atividade sanitizada e sua apresentação
   entre amigos. Atividade não é incorporada ao objeto público `User`/`Member`.
-- `src/main/activity`: detecção do Windows, isolada do renderer. O preload expõe
+- `src/main/activity`: detecção local no Windows e Linux, isolada do renderer. O preload expõe
   somente preferências e o resultado sanitizado de `src/shared/activity.ts`.
 - `annoy-server/src/routes/search.ts`: consulta indexada e filtrada por acesso.
   `annoy-server/src/activity.ts`: validação, expiração e audiência de atividade.
@@ -34,8 +34,8 @@ servidor; esconder um controle no cliente não substitui essa verificação.
 
 ## Atividade para amigos
 
-Em **Configurações → Atividade para amigos**, habilite jogos e/ou música e salve.
-Ambas as opções começam desligadas. As preferências são deste cliente e valem
+Em **Configurações → Atividade**, ajuste **Compartilhar minha atividade** e salve.
+O compartilhamento começa ativado. As preferências são deste cliente e valem
 para as contas conectadas; cada instância só entrega a atividade às suas amizades
 confirmadas nos dois sentidos. Participar do mesmo servidor ou ter uma DM não
 concede acesso. Desfazer a amizade retira imediatamente a atividade do destinatário.
@@ -54,6 +54,38 @@ tokens de serviços e capturas de tela não atravessam o preload. Não há hist�
 de atividade no banco. Conexões desligadas são limpas; em perda silenciosa, a
 expiração e a varredura do gateway eliminam o estado (até cerca de 105 segundos).
 Sem detecção compatível, a interface permanece sem atividade, sem inventar dados.
+
+No Linux, jogos Steam são detectados a cada 15 segundos, inclusive nativos e via
+Proton. A leitura encontra instalações nativas, XDG e Flatpak e bibliotecas em
+outros discos. Exige um processo do próprio usuário com app ID Steam e executável
+na pasta do jogo; processos auxiliares do Wine e a biblioteca instalada sozinha
+não contam. Ambientes que bloqueiam `/proc` ou isolam os processos podem impedir
+a detecção. Música e programação continuam usando o adaptador existente do Windows.
+
+### Vincular a conta Steam
+
+Com o servidor atualizado, a mesma tela mostra **Steam** para cada conta
+conectada. **Conectar Steam** abre a autorização oficial no navegador; o Annoy
+confirma a resposta OpenID com a Steam e guarda apenas o SteamID, sem senha ou
+token Steam. O vínculo pertence à conta naquela instância e não é um login do
+Annoy. É possível cancelar ou desconectar pela mesma tela.
+
+A vinculação não precisa de chave. Para também consultar atividade online,
+o administrador configura `ANNOY_STEAM_API_KEY` no servidor e reinicia a instância.
+Configure `ANNOY_PUBLIC_URL` com a URL pública quando houver proxy. O callback é
+`/api/auth/steam/callback`. Mais detalhes em
+arquivo `docs/steam.md` do repositório `annoy-server`.
+
+Com o compartilhamento ativado e sem jogo local, o cliente consulta o jogo
+público da Steam pela instância a cada 25 segundos. A detecção local tem
+prioridade. Música e programação permanecem ao lado do jogo. A atividade online
+vai apenas para a instância da conta vinculada, seguindo as regras de amizade
+existentes. Perfil privado, jogo oculto ou falha de consulta deixam o complemento
+vazio. Desativar o compartilhamento interrompe as consultas e limpa a publicação.
+Não há consulta em segundo plano no servidor quando nenhum cliente solicita.
+
+Referências: [Steam OpenID](https://partner.steamgames.com/doc/features/auth#website)
+e [ISteamUser](https://partner.steamgames.com/doc/webapi/ISteamUser).
 
 API Windows usada: [Global System Media Transport Controls](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmanager.requestasync?view=winrt-26100).
 
@@ -76,5 +108,7 @@ npm run test:discovery
 
 Os testes de atividade do servidor usam conexões WebSocket reais e contas SQLite
 temporárias. No cliente, cenários de rede/perfil usam respostas controladas.
-A leitura real do Windows foi executada sem erro; reprodução ativa em jogos,
-Spotify e Apple Music ainda requer validação com esses aplicativos em execução.
+A suíte inclui bibliotecas Steam temporárias, metadados de processos Proton e
+um executável real em `/proc`, cobrindo início e encerramento. A autorização Steam
+é testada com respostas controladas. Validação manual com jogos reais e login
+Steam no navegador ainda é necessária.

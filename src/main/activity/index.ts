@@ -1,10 +1,12 @@
 import type { BrowserWindow, IpcMain } from "electron";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../../shared/activity.ts";
 import { probeWindows } from "./windows.ts";
+import { probeLinux } from "./linux.ts";
 /** Main-process boundary: local OS details never cross preload. Detection runs only while opted in. */
 export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | null) {
   let preferences: ActivityPreferences = { games: false, music: false };
-  let snapshot: DesktopActivitySnapshot = { supported: process.platform === "win32", activities: [], error: null };
+  const supported = process.platform === "win32" || process.platform === "linux";
+  let snapshot: DesktopActivitySnapshot = { supported, activities: [], error: null };
   let timer: ReturnType<typeof setTimeout> | null = null,
     generation = 0;
   let controller: AbortController | null = null;
@@ -12,7 +14,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
   const poll = async (version: number) => {
     try {
       controller = new AbortController();
-      const next = await probeWindows(preferences, controller.signal);
+      const next = await (process.platform === "linux" ? probeLinux : probeWindows)(preferences, controller.signal);
       if (version !== generation) return;
       next.activities = next.activities.map((item) => {
         const old = snapshot.activities.find(
@@ -26,7 +28,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
       snapshot = {
         supported: true,
         activities: [],
-        error: "Não foi possível ler a atividade do Windows. A leitura será tentada novamente.",
+        error: "Não foi possível ler a atividade. A leitura será tentada novamente.",
       };
     }
     publish();
@@ -41,7 +43,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     controller?.abort();
     if (timer) clearTimeout(timer);
     timer = null;
-    snapshot = { supported: process.platform === "win32", activities: [], error: null };
+    snapshot = { supported, activities: [], error: null };
     publish();
     if (snapshot.supported && (preferences.games || preferences.music || preferences.development)) void poll(generation);
     return snapshot;

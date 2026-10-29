@@ -506,6 +506,75 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
   } finally { await close(); }
 });
 
+test("Steam connection publishes online fallback, prefers local games and clears on unlink or disabled sharing", async () => {
+  const { page, close } = await launch();
+  const sent: any[] = [];
+  let linked = false;
+  let activityRequests = 0;
+  try {
+    await page.evaluate(() => { window.open = () => null; });
+    await page.route("http://steam.test/api/**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const connection = linked ? { steamId: "76561198000000001", profileUrl: "https://steamcommunity.com/profiles/76561198000000001/" } : null;
+      let body: unknown = [];
+      if (path === "/api/users/@me/steam") {
+        if (route.request().method() === "DELETE") linked = false;
+        body = { connection: linked ? connection : null, onlineActivityAvailable: true };
+      } else if (path === "/api/auth/steam/begin") body = { url: "https://steamcommunity.com/openid/login", handoff: "synthetic-secret-handoff" };
+      else if (path === "/api/auth/steam/poll") { linked = true; body = { status: "done", connection: { steamId: "76561198000000001", profileUrl: "https://steamcommunity.com/profiles/76561198000000001/" } }; }
+      else if (path === "/api/users/@me/steam/activity") {
+        activityRequests++;
+        body = { activities: linked ? [{ kind: "game", provider: "steam", name: "Steam online game", appId: "480" }] : [] };
+      }
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.routeWebSocket("ws://steam.test/gateway", (socket) => socket.onMessage((message) => {
+      const data = JSON.parse(String(message));
+      if (data.op === "identify") socket.send(JSON.stringify({ t: "READY", d: {
+        user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {},
+        instance: { name: "Steam test", activityArtwork: true, steamConnection: true, developmentActivity: true },
+      } }));
+      if (data.op === "activity") sent.push(data.activities);
+    }));
+    await page.evaluate(async () => {
+      const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      addAccount({ id: "steam", url: "http://steam.test", token: "synthetic", userId: "me", instanceName: "Steam test" });
+    });
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Atividade", exact: true }).click();
+    await page.getByRole("button", { name: "Conectar Steam", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Perfil Steam · 76561198000000001" })).toBeVisible();
+    await expect.poll(() => sent.at(-1)?.[0]?.appId).toBe("480");
+    expect(JSON.stringify(sent)).not.toContain("76561198000000001");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [
+        { kind: "game", provider: "steam", name: "Local Steam game", appId: "730" },
+        { kind: "music", provider: "spotify", name: "Current song" },
+      ] }; });
+    });
+    await expect.poll(() => sent.at(-1)?.map((a: any) => a.name)).toEqual(["Local Steam game", "Current song"]);
+    await page.getByRole("switch", { name: "Compartilhar minha atividade", exact: true }).uncheck();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect.poll(() => sent.at(-1)).toEqual([]);
+    const before = activityRequests;
+    await page.evaluate(() => window.dispatchEvent(new Event("steam-connection-changed")));
+    await page.waitForTimeout(100);
+    expect(activityRequests).toBe(before);
+    await page.getByRole("switch", { name: "Compartilhar minha atividade", exact: true }).check();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [] }; });
+    });
+    await expect.poll(() => sent.at(-1)?.[0]?.appId).toBe("480");
+    await page.getByRole("button", { name: "Desconectar Steam", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Conectar Steam", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Perfil Steam · 76561198000000001" })).toHaveCount(0);
+    await expect.poll(() => sent.at(-1)).toEqual([]);
+  } finally { await close(); }
+});
+
 test("Spotify activity publishes on ready, clears when disabled and resumes after reconnect", async () => {
   const { page, close } = await launch();
   const sent: any[] = [];
