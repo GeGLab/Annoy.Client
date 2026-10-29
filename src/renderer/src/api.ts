@@ -12,15 +12,35 @@ export class RequestError extends Error {
 export const DEFAULT_PORT = 8787;
 
 /**
- * Accepts "host", "host:port" or a full URL and returns a canonical origin.
- * A bare host gets the default Annoy port, TeamSpeak style.
+ * Addresses to try for what the user typed: a full URL is used as is. A bare
+ * name ("chat.example.com") is tried over HTTPS first, as behind a proxy or
+ * tunnel, then on the default Annoy port, TeamSpeak style ("192.168.0.10").
  */
-export function normalizeUrl(input: string): string {
+export function candidateUrls(input: string): string[] {
   const trimmed = input.trim().replace(/\/+$/, "");
-  const explicitScheme = /^https?:\/\//i.test(trimmed);
-  const url = new URL(explicitScheme ? trimmed : `http://${trimmed}`);
-  if (!explicitScheme && !url.port) url.port = String(DEFAULT_PORT);
-  return url.origin;
+  if (/^https?:\/\//i.test(trimmed)) return [new URL(trimmed).origin];
+  const bare = new URL(`http://${trimmed}`);
+  const secure = new URL(`https://${trimmed}`).origin;
+  if (bare.port) return [bare.origin, secure];
+  bare.port = String(DEFAULT_PORT);
+  return [secure, bare.origin];
+}
+
+/** Finds the Annoy server behind what the user typed, trying each candidate address in turn. */
+export async function findInstance(input: string): Promise<{ url: string; info: InstanceInfo }> {
+  const urls = candidateUrls(input);
+  let lastError: unknown;
+  for (const url of urls) {
+    try {
+      // A host that drops HTTPS silently must not stall the fallback.
+      const res = await fetch(`${url}/api/info`, { signal: AbortSignal.timeout(urls.length > 1 ? 5000 : 15000) });
+      const info = await parse<InstanceInfo>(res);
+      if (typeof info?.name === "string") return { url, info };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof RequestError ? lastError : new TypeError("unreachable");
 }
 
 async function parse<T>(res: Response): Promise<T> {

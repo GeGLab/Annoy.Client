@@ -1,7 +1,7 @@
 import { Select } from "./ui/select.tsx";
 import type { InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
 import { useRef, useState, type FormEvent } from "react";
-import { authenticate, beginDiscordLogin, DEFAULT_PORT, discordLogin, fetchInfo, normalizeUrl } from "../api.ts";
+import { authenticate, beginDiscordLogin, DEFAULT_PORT, discordLogin, findInstance } from "../api.ts";
 import { addAccount, apiFor, openServer } from "../client.ts";
 import { setState, toast, useStore } from "../store.ts";
 import { closeModal, Field, Modal } from "./ui.tsx";
@@ -25,8 +25,7 @@ export function AddAccountModal() {
     setError(null);
     setBusy(true);
     try {
-      const url = normalizeUrl(address);
-      setInfo({ url, info: await fetchInfo(url) });
+      setInfo(await findInstance(address));
     } catch (err) {
       setError(err instanceof TypeError ? "Não foi possível alcançar o servidor" : (err as Error).message);
     } finally {
@@ -82,10 +81,10 @@ export function AddAccountModal() {
       {!info ? (
         <form onSubmit={probe} className="form">
           <p className="muted">
-            Digite o endereço do servidor, como no TeamSpeak. Sem porta, o client usa a {DEFAULT_PORT}.
+            Digite só o endereço do servidor, sem https://, como no TeamSpeak. Se ele não responder pelo endereço, o client tenta a porta {DEFAULT_PORT}.
           </p>
           <Field label="Endereço">
-            <Input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.0.10 ou chat.exemplo.com" required />
+            <Input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required />
           </Field>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
