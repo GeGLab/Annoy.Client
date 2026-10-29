@@ -21,6 +21,10 @@
 .profile-contact-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 .member-profile > .activity-card { margin-top: 12px; }
 .presence-idle { background: var(--warn); }
+.presence-dnd { background: var(--danger); }
+.presence-dnd::after { content: ""; position: absolute; left: 22%; right: 22%; top: 43%; height: 2px; background: var(--bg-channels); border-radius: 1px; }
+.profile-status-choice { display: grid; gap: 8px; margin-top: 16px; font-weight: 600; }
+.self-profile { max-height: calc(100vh - 100px); overflow-y: auto; }
 .activity-card .activity-artwork > .provider-icon { width: 44px; height: 44px; }
 .activity-card.compact .activity-artwork > .provider-icon { width: 28px; height: 28px; }
 .activity-card .activity-file { display: flex; align-items: center; gap: 6px; }

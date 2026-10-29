@@ -19,11 +19,11 @@ export function DirectCallPanel() {
   const audio = useRef<HTMLAudioElement>(null);
   const ringing = entry?.call.status === "ringing";
   useEffect(() => {
-    if (!ringing) return;
+    if (!ringing || settings.manualPresence === "dnd") return;
     playCallFeedback("join");
     const timer = setInterval(() => playCallFeedback("join"), 1800);
     return () => clearInterval(timer);
-  }, [ringing]);
+  }, [ringing, settings.manualPresence]);
   useEffect(() => {
     const element = audio.current;
     if (!element) return;

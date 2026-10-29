@@ -140,6 +140,71 @@ function silence() {
   return result;
 }
 
+test("native idle, manual presence and member profile file activity", async () => {
+  const { page, app, close } = await launch();
+  const ops: any[] = [];
+  let socket: WebSocketRoute;
+  const nativeIdle = async (seconds: number) => app.evaluate(({ ipcMain }, seconds) => {
+    ipcMain.removeHandler("system:idle"); ipcMain.handle("system:idle", () => seconds);
+  }, seconds);
+  try {
+    await nativeIdle(601);
+    await seed(page, (ws) => { socket = ws; ws.onMessage((raw) => {
+      const op = JSON.parse(String(raw)); ops.push(op);
+      if (op.op === "presence") socket.send(JSON.stringify({ t: "PRESENCE_UPDATE", d: { userId: "person", presence: op.status && op.status !== "online" ? op.status : op.idle ? "idle" : "online" } }));
+    }); });
+    // Older servers must not prevent the local OS-idle indicator from working.
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible();
+    await nativeIdle(0); await page.mouse.move(600, 200);
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.test.instance = { presenceStatus: true, manualPresence: true };
+        s.instances.test.user.bio = "Minha biografia na lista de membros.";
+        s.instances.test.serverStates.server.members[0].user.bio = s.instances.test.user.bio;
+        s.desktopActivity = { supported: true, error: null, activities: [{ kind: "development", provider: "vscode", name: "Annoy.Client", project: "Annoy.Client", file: "package.json", language: "json" }] };
+      });
+    });
+    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
+    const selectStatus = async (label: string) => {
+      await page.getByRole("combobox", { name: "Meu status", exact: true }).click();
+      await page.getByRole("option", { name: label, exact: true }).click();
+    };
+    await selectStatus("Ausente");
+    await expect.poll(() => ops.filter((op) => op.op === "presence").at(-1)?.status).toBe("idle");
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible();
+    await selectStatus("Não incomodar");
+    await expect(page.locator(".user-identity .presence-dnd")).toBeVisible();
+    await page.evaluate(() => { const original = AudioContext.prototype.createOscillator; (window as any).cueCount = 0; AudioContext.prototype.createOscillator = function () { (window as any).cueCount++; return original.call(this); }; });
+    socket!.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id: "dnd-message", channelId: "general", author: { id: "other", username: "other", displayName: "Other", avatarUrl: null }, content: "Mensagem silenciosa", createdAt: new Date().toISOString(), editedAt: null, attachments: [], replyToId: null, mentionIds: [], mentionsEveryone: false } }));
+    await expect(page.getByText("Mensagem silenciosa", { exact: true })).toBeAttached();
+    expect(await page.evaluate(() => (window as any).cueCount)).toBe(0);
+    await selectStatus("Aparecer como offline");
+    await expect(page.locator(".user-identity .presence-offline")).toBeVisible();
+    await expect.poll(() => ops.filter((op) => op.op === "activity").at(-1)?.activities).toEqual([]);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).manualPresence)).toBe("offline");
+    await selectStatus("Online");
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    await nativeIdle(601);
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible({ timeout: 10_000 });
+    await nativeIdle(0);
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: join(capture, "manual-presence-profile.png") });
+    await page.keyboard.press("Escape");
+    await page.locator(".members .member").first().click();
+    const card = page.getByRole("dialog", { name: "Perfil de Pessoa de teste", exact: true });
+    await expect(card).toContainText("Minha biografia na lista de membros.");
+    await expect(card).toContainText("package.json");
+    await expect(card.locator(".activity-artwork .provider-json")).toBeVisible();
+    await expect.poll(() => card.locator(".activity-artwork img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(card.locator(".activity-provider .provider-vscode")).toBeVisible();
+    await page.screenshot({ path: join(capture, "member-json-activity-dark.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await page.screenshot({ path: join(capture, "member-json-activity-light.png") });
+  } finally { await close(); }
+});
+
 test("attachment previews, compact call bar, profile activity and shared voice controls", async () => {
   const { page, app, close } = await launch();
   try {

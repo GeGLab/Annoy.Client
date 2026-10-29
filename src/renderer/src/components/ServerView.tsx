@@ -318,7 +318,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
 function MemberCard({
   accountId,
   state,
-  member,
+  member: supplied,
   me,
   at,
   onClose,
@@ -331,6 +331,7 @@ function MemberCard({
   onClose: () => void;
 }) {
   const relationships = useStore((s) => s.instances[accountId]?.relationships);
+  const member = useStore((s) => s.instances[accountId]?.serverStates[state.server.id]?.members.find((item) => item.user.id === supplied.user.id) ?? supplied);
   const perms = state.permissions;
   const myRank = rankOf(state, me);
   const isSelf = member.user.id === me;
@@ -338,7 +339,7 @@ function MemberCard({
   const api = apiFor(accountId);
   const sid = state.server.id;
   const rel = relationships?.find((r) => r.user.id === member.user.id);
-  const activities = useStore((s) => s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const activities = useStore((s) => isSelf ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
   return (
@@ -364,9 +365,9 @@ function MemberCard({
             </div>
           </div>
           {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
-          {rel?.status === "friend" && activities.length > 0 && (
+          {(isSelf || rel?.status === "friend") && activities.length > 0 && (
             <div className="member-card-section">
-              <div className="section-label">Atividade · Só para amigos</div>
+              <div className="section-label">{isSelf ? "Minha atividade" : "Atividade · Só para amigos"}</div>
               {activities.map((activity) => (
                 <ActivityCard key={activity.kind} activity={activity} />
               ))}

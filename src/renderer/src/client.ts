@@ -472,7 +472,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
   if (!s.settings.notifications) return;
   const inst = s.instances[accountId];
   const serverId = Object.values(inst?.serverStates ?? {}).find((st) => st.channels.some((c) => c.id === message.channelId))?.server.id;
-  if (isMessageMuted(s.settings, accountId, message.channelId, serverId)) return;
+  if (s.settings.manualPresence === "dnd" || isMessageMuted(s.settings, accountId, message.channelId, serverId)) return;
   const me = inst?.user?.id;
   if (!me || message.author.id === me) return;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
@@ -590,7 +590,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       receivedMessages.add(receipt);
       if (receivedMessages.size > 2000) receivedMessages.delete(receivedMessages.values().next().value!);
       const serverId = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === msg.channelId))?.server.id;
-      if (s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
+      if (s.settings.manualPresence !== "dnd" && s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
       const viewing =
         (s.view.kind === "server" && s.view.accountId === accountId && s.view.channelId === msg.channelId) ||
         (s.view.kind === "home" && s.view.accountId === accountId && s.view.dmId === msg.channelId);

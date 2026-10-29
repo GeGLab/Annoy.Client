@@ -4,6 +4,7 @@ import { getState, setState, useStore } from "../../store.ts";
 /** OS adapter -> sanitized preload -> authenticated gateways. No OS fields in profile entities. */
 export function useDesktopActivity() {
   const sharing = useStore((s) => s.settings.shareActivity);
+  const invisible = useStore((s) => s.settings.manualPresence === "offline");
   const ready = useStore((s) =>
     Object.entries(s.instances)
       .filter(([, i]) => i.status === "ready")
@@ -30,7 +31,7 @@ export function useDesktopActivity() {
   useEffect(() => {
     const publish = () => {
       const s = getState();
-      const activities = s.settings.shareActivity ? (s.desktopActivity?.activities ?? []) : [];
+      const activities = s.settings.shareActivity && s.settings.manualPresence !== "offline" ? (s.desktopActivity?.activities ?? []) : [];
       for (const [id, instance] of Object.entries(s.instances))
         if (instance.status === "ready") gatewayFor(id)?.send({
           op: "activity",
@@ -45,5 +46,5 @@ export function useDesktopActivity() {
     publish();
     const timer = setInterval(publish, 25_000);
     return () => clearInterval(timer);
-  }, [snapshot, ready, sharing]);
+  }, [snapshot, ready, sharing, invisible]);
 }

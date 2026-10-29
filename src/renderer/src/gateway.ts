@@ -1,5 +1,6 @@
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
 import { deviceId } from "./lib/device-id.ts";
+import { getState } from "./store.ts";
 
 const HEARTBEAT_MS = 30_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -35,7 +36,7 @@ export class Gateway {
     const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
     this.socket = socket;
     this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
-    socket.onopen = () => this.send({ op: "identify", token: this.token, deviceId, features: ["developmentActivity", "idlePresence", "directCalls"] });
+    socket.onopen = () => this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
       try { this.receive(JSON.parse(String(e.data)) as GatewayEvent); }
