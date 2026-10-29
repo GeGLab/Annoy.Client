@@ -48,7 +48,7 @@ export function UpdateBanner() {
       {update.status === "available" && (
         <>
           <span>
-            <strong>Distopic {update.version}</strong> está disponível (você usa a {update.currentVersion}).
+            <strong>Annoy {update.version}</strong> está disponível (você usa a {update.currentVersion}).
           </span>
           <a href={update.releaseUrl} target="_blank" rel="noreferrer">
             Novidades
@@ -71,7 +71,7 @@ export function UpdateBanner() {
       )}
       {update.status === "downloading" && (
         <>
-          <span>Baixando Distopic {update.version}…</span>
+          <span>Baixando Annoy {update.version}…</span>
           <div className="update-progress">
             <div style={{ width: `${update.percent}%` }} />
           </div>
@@ -81,7 +81,7 @@ export function UpdateBanner() {
       {update.status === "ready" && (
         <>
           <span>
-            <strong>Distopic {update.version}</strong> foi baixado. Ele também é instalado quando você fechar o app.
+            <strong>Annoy {update.version}</strong> foi baixado. Ele também é instalado quando você fechar o app.
           </span>
           <span className="spacer" />
           <button className="btn btn-small" onClick={() => void api?.install()}>
@@ -109,7 +109,7 @@ export function MandatoryUpdate() {
           </div>
           <h2 id="mandatory-title">Atualização de segurança obrigatória</h2>
           <p>
-            Foi encontrada uma vulnerabilidade crítica na versão {update.currentVersion}. Para proteger você e seus servidores, o Distopic precisa ser
+            Foi encontrada uma vulnerabilidade crítica na versão {update.currentVersion}. Para proteger você e seus servidores, o Annoy precisa ser
             atualizado antes de continuar.
           </p>
           {advisory && (
@@ -198,7 +198,7 @@ export function UpdateSettings() {
   return (
     <div className="update-settings">
       <div>
-        <strong>Distopic {update.currentVersion}</strong>
+        <strong>Annoy {update.currentVersion}</strong>
         {text && <div className="muted small">{text}</div>}
       </div>
       {update.status === "available" && (

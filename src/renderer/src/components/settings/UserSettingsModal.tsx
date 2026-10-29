@@ -329,7 +329,7 @@ export function UserSettingsModal() {
             <span>Um espaço com a sua cara.</span>
           </div>
           <h3>Aparência</h3>
-          <p className="muted">Escolha como o Distopic aparece para você.</p>
+          <p className="muted">Escolha como o Annoy aparece para você.</p>
           <div className="theme-options" role="group" aria-label="Tema do aplicativo">
             {(["dark", "light", "system"] as const).map((theme) => (
               <button
@@ -390,7 +390,7 @@ export function UserSettingsModal() {
             />
           </Field>
           {draft.inputMode === "ptt" ? (
-            <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Distopic em foco">
+            <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Annoy em foco">
               <Button variant="secondary" onClick={() => setCapturing(true)}>
                 {capturing
                   ? "Pressione uma tecla… (Esc cancela)"

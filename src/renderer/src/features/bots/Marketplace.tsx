@@ -30,7 +30,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
         <Icon name="bot" size={44} />
         <h2>A loja precisa do suporte da sua instância</h2>
         <p>
-          Este servidor ainda não oferece instalação e execução de bots Distopic. Quem hospeda a instância precisa habilitar a plataforma
+          Este servidor ainda não oferece instalação e execução de bots Annoy. Quem hospeda a instância precisa habilitar a plataforma
           antes de você instalar um bot.
         </p>
         <p className="muted">
@@ -291,7 +291,7 @@ export default function Marketplace({ accountId, serverId }: { accountId: string
       <header className="chat-header">
         <Icon name="store" size={21} />
         <h1>Loja de bots</h1>
-        <span className="marketplace-context">Distopic</span>
+        <span className="marketplace-context">Annoy</span>
         <span className="spacer" />
         {selected && (
           <Select
@@ -317,7 +317,7 @@ export default function Marketplace({ accountId, serverId }: { accountId: string
         <div className="bot-platform-empty">
           <Icon name="store" size={44} />
           <h2>Conecte sua comunidade para explorar bots</h2>
-          <p>Os bots são instalados por servidor. Conecte uma instância Distopic e escolha um servidor para começar.</p>
+          <p>Os bots são instalados por servidor. Conecte uma instância Annoy e escolha um servidor para começar.</p>
           <Button onClick={() => openModal({ kind: "addAccount" })}>Conectar uma instância</Button>
         </div>
       )}

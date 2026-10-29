@@ -3,7 +3,7 @@ import { Resvg } from "@resvg/resvg-js";
 import pngToIco from "png-to-ico";
 
 // The authored vector is the single source for renderer, taskbar and installer.
-const svg = await readFile(new URL("../src/renderer/src/assets/distopic.svg", import.meta.url));
+const svg = await readFile(new URL("../src/renderer/src/assets/logo.svg", import.meta.url));
 const render = width => Buffer.from(new Resvg(svg, { fitTo: { mode: "width", value: width } }).render().asPng());
 await mkdir(new URL("../src/renderer/public/", import.meta.url), { recursive: true });
 await Promise.all([
@@ -13,4 +13,4 @@ await Promise.all([
   writeFile(new URL("../src/renderer/public/favicon.svg", import.meta.url), svg),
   writeFile(new URL("../src/renderer/public/icon.png", import.meta.url), render(512)),
 ]);
-console.log("Distopic icons generated from src/renderer/src/assets/distopic.svg");
+console.log("Annoy icons generated from src/renderer/src/assets/logo.svg");

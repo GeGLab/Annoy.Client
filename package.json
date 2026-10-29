@@ -1,8 +1,8 @@
 {
-  "name": "distopic-client",
-  "version": "0.2.0",
+  "name": "annoy-client",
+  "version": "0.3.1",
   "private": true,
-  "description": "Desktop client for Distopic servers, with the official Discord one click away",
+  "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
@@ -10,20 +10,20 @@
     "packages/*"
   ],
   "scripts": {
-    "test:activity": "node --experimental-strip-types --test scripts/tests/windows-activity.test.mjs",
-    "test:desktop": "npm run build && playwright test",
-    "brand:icons": "node scripts/generate-icons.mjs",
-    "electron:install": "node scripts/ensure-electron.mjs",
-    "postinstall": "node scripts/ensure-electron.mjs",
-    "predev": "node scripts/ensure-electron.mjs",
-    "prestart": "node scripts/ensure-electron.mjs",
     "dev": "electron-vite dev --watch",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc -p . && tsc -p packages/protocol",
     "sync:protocol": "node scripts/sync-protocol.mjs",
     "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
-    "dist:linux": "electron-vite build && electron-builder --linux --publish never"
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
+    "test:activity": "node --experimental-strip-types --test scripts/tests/windows-activity.test.mjs",
+    "test:desktop": "npm run build && playwright test",
+    "brand:icons": "node scripts/generate-icons.mjs",
+    "electron:install": "node scripts/ensure-electron.mjs",
+    "postinstall": "node scripts/ensure-electron.mjs",
+    "predev": "node scripts/ensure-electron.mjs",
+    "prestart": "node scripts/ensure-electron.mjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -33,6 +33,21 @@
   },
   "devDependencies": {
     "@distopic/protocol": "*",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "immer": "^11.0.0",
+    "mediasoup-client": "^3.25.3",
+    "pe-library": "^2.0.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "resedit": "^3.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
     "@playwright/test": "^1.64.1",
     "@radix-ui/react-alert-dialog": "^1.2.1",
     "@radix-ui/react-checkbox": "^1.4.1",
@@ -47,48 +62,33 @@
     "@radix-ui/react-tooltip": "^1.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.6.5",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
-    "electron": "^45.1.0",
-    "electron-builder": "^26.18.0",
-    "electron-vite": "^6.0.0",
     "framer-motion": "^14.7.1",
-    "immer": "^11.0.0",
     "lucide-react": "^1.63.0",
-    "mediasoup-client": "^3.25.3",
-    "pe-library": "^2.0.1",
     "png-to-ico": "^3.0.2",
-    "react": "^19.3.1",
     "react-colorful": "^5.8.1",
     "react-day-picker": "^10.0.2",
-    "react-dom": "^19.3.1",
     "react-easy-crop": "^6.2.4",
-    "resedit": "^3.1.0",
     "tailwind-merge": "^3.7.0",
-    "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "tailwindcss": "^4.3.3"
   },
   "allowScripts": {
     "electron@45.1.0": true,
     "esbuild@0.28.2": true
   },
-  "productName": "Distopic",
+  "productName": "Annoy",
   "author": "Gustavo Cruz",
-  "homepage": "https://distopic.geg.dev.br",
+  "homepage": "https://annoy.geg.dev.br",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GustavoHSCruz/distopic-client.git"
+    "url": "https://github.com/GeGLab/annoy-client.git"
   },
   "build": {
     "appId": "br.dev.geg.distopic",
-    "productName": "Distopic",
+    "productName": "Annoy",
     "copyright": "Copyright © 2026 Gustavo Cruz",
     "directories": {
       "output": "dist",
@@ -103,8 +103,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "GustavoHSCruz",
-        "repo": "distopic-client",
+        "owner": "GeGLab",
+        "repo": "annoy-client",
         "releaseType": "release"
       }
     ],
@@ -125,10 +125,10 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Distopic",
+      "shortcutName": "Annoy",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "artifactName": "Distopic-Setup-x64.${ext}"
+      "artifactName": "Annoy-Setup-x64.${ext}"
     },
     "linux": {
       "target": [
@@ -136,7 +136,7 @@
       ],
       "icon": "build/icon.png",
       "category": "Network;Chat",
-      "artifactName": "Distopic-${arch}.${ext}"
+      "artifactName": "Annoy-${arch}.${ext}"
     }
   }
 }

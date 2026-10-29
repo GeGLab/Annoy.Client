@@ -21,7 +21,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 const snapshot = () => recent;
-const presets = ["#f7a66a", "#ef6a79", "#c47be8", "#8394f7", "#5daceb", "#61c8bd", "#8cb879", "#e6c36d"];
+const presets = ["#ffb020", "#ef6a79", "#c47be8", "#8394f7", "#5daceb", "#61c8bd", "#8cb879", "#e6c36d"];
 function remember(color: string) {
   recent = [color.toLowerCase(), ...recent.filter((value) => value.toLowerCase() !== color.toLowerCase())].slice(0, 12);
   localStorage.setItem(KEY, JSON.stringify(recent));

@@ -15,12 +15,12 @@ export function TitleBar() {
   const channel = view.kind === "server" ? server?.channels.find((c) => c.id === view.channelId) : null;
   const title =
     view.kind === "marketplace"
-      ? "Loja de bots · Distopic"
+      ? "Loja de bots · Annoy"
       : view.kind === "discord"
         ? "Discord"
         : view.kind === "home"
           ? "Seu espaço para conversar"
-          : [server?.server.name, channel?.name].filter(Boolean).join(" / ") || "Distopic";
+          : [server?.server.name, channel?.name].filter(Boolean).join(" / ") || "Annoy";
   return (
     <header className={`titlebar${window.distopic?.platform === "darwin" ? " titlebar-mac" : ""}`}>
       <Brand size={18} wordmark />
@@ -29,11 +29,11 @@ export function TitleBar() {
       <div className="window-controls">
         <a
           className="window-control window-help"
-          href="https://github.com/GustavoHSCruz/distopic-client#readme"
+          href="https://github.com/GeGLab/annoy-client#readme"
           target="_blank"
           rel="noreferrer"
-          aria-label="Ajuda do Distopic"
-          title="Ajuda do Distopic"
+          aria-label="Ajuda do Annoy"
+          title="Ajuda do Annoy"
         >
           <Icon name="info" size={15} />
         </a>

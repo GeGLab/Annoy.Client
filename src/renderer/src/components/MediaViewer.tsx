@@ -81,7 +81,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
           <Icon name={video ? "film" : "music"} size={22} />
           <div className="viewer-file-info">
             <DialogTitle className="truncate">{media.filename}</DialogTitle>
-            <span className="muted small">{video ? "Vídeo" : "Áudio"} · Player Distopic</span>
+            <span className="muted small">{video ? "Vídeo" : "Áudio"} · Player Annoy</span>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar player">
             <Icon name="x" />

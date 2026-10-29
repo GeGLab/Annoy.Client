@@ -613,7 +613,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
   useEffect(create, [accountId, serverId]);
 
   const address = account?.url.replace(/^https?:\/\//, "") ?? "";
-  const shareText = invite ? `Entre no ${state?.server.name ?? "servidor"} no Distopic\nEndereço: ${address}\nConvite: ${invite.code}` : "";
+  const shareText = invite ? `Entre no ${state?.server.name ?? "servidor"} no Annoy\nEndereço: ${address}\nConvite: ${invite.code}` : "";
 
   return (
     <Modal title={`Convidar para ${state?.server.name ?? "servidor"}`}>

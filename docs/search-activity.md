@@ -11,8 +11,8 @@
   entre amigos. Atividade não é incorporada ao objeto público `User`/`Member`.
 - `src/main/activity`: detecção do Windows, isolada do renderer. O preload expõe
   somente preferências e o resultado sanitizado de `src/shared/activity.ts`.
-- `Distopic.Server/src/routes/search.ts`: consulta indexada e filtrada por acesso.
-  `Distopic.Server/src/activity.ts`: validação, expiração e audiência de atividade.
+- `annoy-server/src/routes/search.ts`: consulta indexada e filtrada por acesso.
+  `annoy-server/src/activity.ts`: validação, expiração e audiência de atividade.
 
 Novos formulários usam `Input`, `Textarea`, `Checkbox`, `RadioGroup`, `Slider`,
 `Switch`, `Select` e `DatePicker`. Menus usam `DropdownMenu`/`EntityPicker`.

@@ -13,7 +13,7 @@ export const DEFAULT_PORT = 8787;
 
 /**
  * Accepts "host", "host:port" or a full URL and returns a canonical origin.
- * A bare host gets the default Distopic port, TeamSpeak style.
+ * A bare host gets the default Annoy port, TeamSpeak style.
  */
 export function normalizeUrl(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, "");
@@ -53,7 +53,7 @@ const POLL_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * Runs "Entrar com Discord": opens Discord's authorize page in the system
- * browser and polls the Distopic server until the browser leg finishes.
+ * browser and polls the Annoy server until the browser leg finishes.
  * `begin` is the (optionally authenticated) call that starts the login.
  */
 export async function discordLogin(url: string, begin: () => Promise<DiscordLoginBegin>, signal: AbortSignal): Promise<Extract<DiscordLoginPoll, { status: "done" }>> {

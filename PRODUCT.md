@@ -1,4 +1,4 @@
-# Distopic
+# Annoy
 
 <!-- impeccable:product-schema 1 -->
 
@@ -10,7 +10,7 @@ Electron desktop client for Windows and Linux; React renderer, isolated preload 
 
 ## Product Purpose
 
-Connect to independently hosted Distopic instances, communicate through text, direct messages and voice, and access the official Discord in an isolated persistent view.
+Connect to independently hosted Annoy instances, communicate through text, direct messages and voice, and access the official Discord in an isolated persistent view.
 
 ## Users
 
@@ -18,11 +18,11 @@ Inference from the repository and supplied reference: people participating in on
 
 ## Capabilities and Constraints
 
-Preserve existing authentication, multiple accounts, relationships, server administration, permissions, uploads, voice/video, screen sharing, imports and updates. All interface copy is Brazilian Portuguese. Keep the renderer lightweight and share presentation primitives. The user authorized companion server changes for profile photos at `F:/projects/geglabs/Distopic.Server`.
+Preserve existing authentication, multiple accounts, relationships, server administration, permissions, uploads, voice/video, screen sharing, imports and updates. All interface copy is Brazilian Portuguese. Keep the renderer lightweight and share presentation primitives. The user authorized companion server changes for profile photos, search and private activity.
 
 ## Brand Commitments
 
-The product is named Distopic. The user requests a new logo throughout the application, familiar Discord-like interaction patterns with a distinct visual identity, an in-app image viewer and a custom window bar.
+The product is named Annoy. Preserve the upstream Annoy logo, amber/indigo identity, package metadata and repository ownership. The user requested familiar Discord-like interaction patterns with a distinct visual identity, an in-app image viewer and a custom window bar. Earlier Distopic naming and speech/D identity are superseded by the collaborator's upstream 0.3.1 rename, which the user explicitly requested preserving when preparing the PRs.
 
 ## Product Principles
 
@@ -42,7 +42,7 @@ The user confirmed both dark and light themes and implementation directly in the
 The user subsequently requested local personal colors, persisted resizable and
 collapsible channel/member panels, latest-message navigation, blocking animated
 connection recovery and more visible voice participation. Bot marketplace scope
-was clarified as **Distopic servers**, with the necessary server support to be
+was clarified as **Annoy servers**, with the necessary server support to be
 defined. The client must never present Discord bots as directly compatible or
 pretend that a local flag installs, stops or removes a server-side bot. See
 `docs/bot-platform.md` for the proposed API/runtime boundary.
@@ -62,7 +62,7 @@ Further confirmed scope: searchable role/member selection, shared styled form
 controls and async confirmations, server-backed message search with filters and
 context navigation, and opt-in Windows detection of Steam games and music from
 Spotify/Apple Music desktop sessions. Activity is ephemeral and delivered only
-to mutual friends on each Distopic instance. Sharing a server or DM grants no
+to mutual friends on each Annoy instance. Sharing a server or DM grants no
 activity access; removing friendship immediately clears the visible activity.
 Separate saved controls enable game/music sharing, initially off. This expands
 the companion server authorization to search and private activity delivery.

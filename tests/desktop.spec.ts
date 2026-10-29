@@ -74,7 +74,7 @@ test("desktop navigation, themes, window controls and image attachments", async 
         inst.status = "ready"; inst.user = me; inst.servers = [server];
         inst.presences = { me: "online", friend: "online" };
         inst.serverStates.test = { server, channels: [channel("community", "Comunidade", "category", null), channel("general", "geral"), channel("ideas", "ideias"), channel("images", "imagens"), channel("voice", "Sala de conversa", "voice")], roles: [{ id: "test", serverId: "test", name: "Membros", color: null, permissions: 2147483647, position: 0 }], members: [me, friend].map(user => ({ user, nick: null, roleIds: ["test"], joinedAt: now, presence: "online" })), voiceStates: [], permissions: 2147483647 };
-        inst.messages.general = { hasMore: false, loading: false, items: [message("1", me, "Bem-vindos ao nosso espaço de conversa!"), message("2", friend, "Trouxe a nova identidade para vocês verem. O que acharam?", ["a", "b"].map(id => ({ id, filename: `identidade-${id}.png`, size: 2048, contentType: "image/png", url: `http://fixture.test/${id}.png` }))), message("3", me, "Gostei! Dá para abrir as imagens aqui mesmo no Distopic.")] };
+        inst.messages.general = { hasMore: false, loading: false, items: [message("1", me, "Bem-vindos ao nosso espaço de conversa!"), message("2", friend, "Trouxe a nova identidade para vocês verem. O que acharam?", ["a", "b"].map(id => ({ id, filename: `identidade-${id}.png`, size: 2048, contentType: "image/png", url: `http://fixture.test/${id}.png` }))), message("3", me, "Gostei! Dá para abrir as imagens aqui mesmo no Annoy.")] };
         s.settings.theme = "dark";
         s.view = { kind: "server", accountId: "fixture", serverId: "test", channelId: "general" };
       });

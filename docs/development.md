@@ -88,10 +88,10 @@ cargos, canal e sobrescritas. Ações de exclusão/conexão mantêm confirmaçã
 
 ## Fotos de perfil e mídia no servidor
 
-As rotas complementares foram implementadas em `Distopic.Server`. Atualize as
+As rotas complementares foram implementadas em `annoy-server`. Atualize as
 dependências e reinicie esse servidor para habilitar upload/remoção de foto e
 busca em mídia por byte ranges. A documentação completa fica em
-`Distopic.Server/docs/profile-media.md`. Nenhuma instância publicada foi alterada.
+`annoy-server/docs/profile-media.md`. Nenhuma instância publicada foi alterada.
 O recorte aceita PNG/JPEG/WebP de até 8 MiB; a imagem só é enviada ao salvar.
 O servidor valida o conteúdo e publica uma cópia WebP 512×512 sem metadados.
 
@@ -107,8 +107,8 @@ demanda. Respeite `prefers-reduced-motion` e não anime o histórico de mensagen
 
 ## Identidade e janela
 
-A fonte única da marca é `src/renderer/src/assets/distopic.svg`: um D formado
-por balões de conversa, em tangerina. `npm run brand:icons` gera SVG, PNG e ICO
+A fonte da marca é `src/renderer/src/assets/logo.svg`, preservada da identidade
+Annoy do projeto de origem. `npm run brand:icons` gera SVG, PNG e ICO
 para o aplicativo, instalador e favicon. Os arquivos gerados são versionados;
 quem clona não precisa gerar a marca para executar ou empacotar.
 

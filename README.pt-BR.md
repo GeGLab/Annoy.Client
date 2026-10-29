@@ -1,10 +1,8 @@
 <div align="center">
 
-<img src="build/icon.svg" alt="Distopic" width="72">
+# Annoy Client
 
-# Distopic Client
-
-**Um app desktop para os seus servidores Distopic e o Discord oficial.**
+**Um app desktop para os seus servidores Annoy e o Discord oficial.**
 
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
@@ -12,17 +10,17 @@
 
 [English](README.md) · **Português (Brasil)**
 
-<img src="docs/screenshots/chat-and-voice.png" alt="Client Distopic: canais, voz, chat e membros" width="860">
+<img src="docs/screenshots/chat-and-voice.png" alt="Client Annoy: canais, voz, chat e membros" width="860">
 
 </div>
 
 ## Download
 
-- **Windows 10/11:** [Distopic-Setup-x64.exe](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-Setup-x64.exe).
+- **Windows 10/11:** [Annoy-Setup-x64.exe](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-Setup-x64.exe).
   Instala só para o seu usuário, sem pedir administrador. Como o instalador
   ainda não é assinado, o Windows pode mostrar *"O Windows protegeu o
   computador"*: clique em **Mais informações → Executar assim mesmo**.
-- **Linux:** [Distopic-x86_64.AppImage](https://github.com/GustavoHSCruz/distopic-client/releases/latest/download/Distopic-x86_64.AppImage).
+- **Linux:** [Annoy-x86_64.AppImage](https://github.com/GeGLab/annoy-client/releases/latest/download/Annoy-x86_64.AppImage).
   Rode `chmod +x` e abra.
 
 **Atualizações:** o app avisa quando sai uma versão nova e você decide quando
@@ -31,11 +29,11 @@ obrigatória. Veja o [SECURITY.md](SECURITY.md).
 
 ## Funcionalidades
 
-- **Discord e Distopic lado a lado:** o botão **DC** abre o Discord oficial numa
-  visão isolada e persistente. Os servidores Distopic ficam na mesma barra, e a
+- **Discord e Annoy lado a lado:** o botão **DC** abre o Discord oficial numa
+  visão isolada e persistente. Os servidores Annoy ficam na mesma barra, e a
   troca é com um clique.
 - **Várias instâncias ao mesmo tempo:** conecte em quantos
-  [servidores Distopic](https://github.com/GustavoHSCruz/distopic-server)
+  [servidores Annoy](https://github.com/GeGLab/annoy-server)
   quiser.
 - **Texto:** histórico com rolagem infinita, respostas, edição, menções com
   autocompletar, markdown, arrastar e colar arquivos, prévia de imagem e
@@ -65,31 +63,18 @@ Mais capturas no [README em inglês](README.md#screenshots).
 Precisa do Node.js 22.13 ou mais novo.
 
 ```bash
-git clone https://github.com/GustavoHSCruz/distopic-client.git
-cd distopic-client
+git clone https://github.com/GeGLab/annoy-client.git
+cd annoy-client
 npm install
 npm run dev
 ```
 
-O `postinstall` prepara o executável do Electron automaticamente. Os comandos
-`dev` e `start` também verificam a instalação antes de abrir o app, inclusive
-depois de `npm ci --ignore-scripts`. Essa verificação evita o erro
-`Electron uninstall` do electron-vite com o download sob demanda do Electron 45.
-Se o download falhar, confira a conexão e rode `npm run electron:install`.
-
-**Interface:** temas claro, escuro e do sistema em **Configurações → Aparência**,
-barra de janela personalizada e visualizador de imagens integrado (clique em
-um anexo; use Esc para fechar, as setas para navegar e os controles para zoom).
-
-Veja [a estrutura e os comandos de desenvolvimento](docs/development.md) para
-os componentes, tokens, ícones, animações e testes da interface.
-
-No app, clique em **Conectar a um servidor Distopic** e digite o endereço (sem
+No app, clique em **Conectar a um servidor Annoy** e digite o endereço (sem
 porta, usa a `8787`). Depois, entre com Discord ou crie uma conta.
 
 **Vai entrar na comunidade de alguém?** Basta o client; você não instala
 servidor nenhum. Só quem hospeda roda o
-[distopic-server](https://github.com/GustavoHSCruz/distopic-server), uma vez.
+[annoy-server](https://github.com/GeGLab/annoy-server), uma vez.
 
 ## Sobre a aba do Discord
 
@@ -101,4 +86,8 @@ Discord web.
 
 ## Licença
 
-[MIT](LICENSE) © Gustavo Cruz. O Distopic não é afiliado ao Discord Inc.
+[MIT](LICENSE) © Gustavo Cruz. O Annoy não é afiliado ao Discord Inc.
+
+## Desenvolvimento da interface
+
+Veja [desenvolvimento](docs/development.md) para a preparação automática do Electron, componentes compartilhados e testes isolados. [Busca e atividades privadas](docs/search-activity.md) descreve os módulos e a integração com o servidor.

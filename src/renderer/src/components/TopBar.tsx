@@ -124,10 +124,10 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="rail-brand" title="Distopic">
+      <div className="rail-brand" title="Annoy">
         <Brand size={42} />
       </div>
-      <nav className="tabs-strip" aria-label="Navegação do Distopic">
+      <nav className="tabs-strip" aria-label="Navegação do Annoy">
         <span className="rail-section-label">Atalhos</span>
         <button
           className={`tab-item fixed${view.kind === "discord" ? " active" : ""}`}

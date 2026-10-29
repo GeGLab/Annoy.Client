@@ -12,7 +12,7 @@ export function AppearanceSettings({ settings, update }: { settings: Settings; u
           <span>Cor de destaque</span>
           <ColorPicker
             label="Cor de destaque"
-            value={validColor(settings.accentColor) ? settings.accentColor : "#f7a66a"}
+            value={validColor(settings.accentColor) ? settings.accentColor : "#ffb020"}
             onChange={(accentColor) => update({ accentColor })}
           />
           <span className="muted">Botões, seleção e links</span>
@@ -21,7 +21,7 @@ export function AppearanceSettings({ settings, update }: { settings: Settings; u
           <span>Tom dos painéis</span>
           <ColorPicker
             label="Tom dos painéis"
-            value={validColor(settings.surfaceColor) ? settings.surfaceColor : "#27292f"}
+            value={validColor(settings.surfaceColor) ? settings.surfaceColor : "#171621"}
             onChange={(surfaceColor) => update({ surfaceColor })}
           />
           <span className="muted">Uma tonalidade sutil no fundo</span>

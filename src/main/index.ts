@@ -1,3 +1,4 @@
+import { existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
 import { startUpdater } from "./updater.ts";
@@ -18,6 +19,16 @@ let discordVisible = false;
 /** Space reserved above the Discord view for in-app banners (e.g. an available update). */
 let discordTopInset = 0;
 
+// 0.3 renamed the app from Distopic to Annoy; keep the existing profile (accounts, Discord login).
+const legacyProfile = join(app.getPath("appData"), "Distopic");
+if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
+  try {
+    renameSync(legacyProfile, app.getPath("userData"));
+  } catch {
+    app.setPath("userData", legacyProfile);
+  }
+}
+
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
 // Windows only shows notifications for apps with an explicit AppUserModelID; it must match build.appId.
 if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
@@ -30,8 +41,8 @@ app.on("second-instance", () => {
 
 /** Discord gates features on the user agent; present plain Chrome like Vesktop does. */
 function chromeUserAgent(s: Session): string {
-  // Drops the "Electron/x" and app ("Distopic/x", "distopic-client/x") tokens.
-  return s.getUserAgent().replace(/\s(Electron|distopic[\w-]*)\/\S+/gi, "");
+  // Drops the "Electron/x" and app ("Annoy/x", "annoy-client/x") tokens.
+  return s.getUserAgent().replace(/\s(Electron|annoy[\w-]*|distopic[\w-]*)\/\S+/gi, "");
 }
 
 function isDiscordUrl(raw: string): boolean {
@@ -63,7 +74,7 @@ function configureSession(s: Session, own: boolean): void {
   s.setDisplayMediaRequestHandler(
     async (_request, callback) => {
       const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
-      // Distopic's own UI picks a source first; Discord (and the portal case) take what the system offers.
+      // Annoy's own UI picks a source first; Discord (and the portal case) take what the system offers.
       const picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : sources[0];
       chosenScreenSource = null;
       callback(picked ? { video: picked, audio: !own && process.platform === "win32" ? "loopback" : undefined } : {});
@@ -132,11 +143,12 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
-    backgroundColor: "#17191d",
-    title: "Distopic",
+    backgroundColor: "#171621",
+    title: "Annoy",
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
     icon: join(import.meta.dirname, "../renderer/icon.png"),
+
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),

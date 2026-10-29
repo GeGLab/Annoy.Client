@@ -78,7 +78,7 @@ export default function AvatarCropper({ file, onApply, onClose }: { file: File; 
             onChange={(e) => setZoom(Number(e.target.value))}
           />
         </label>
-        <p className="muted small">O recorte quadrado também é preservado para os avatares com cantos arredondados do Distopic.</p>
+        <p className="muted small">O recorte quadrado também é preservado para os avatares com cantos arredondados do Annoy.</p>
         {error && (
           <p className="error" role="alert">
             {error}

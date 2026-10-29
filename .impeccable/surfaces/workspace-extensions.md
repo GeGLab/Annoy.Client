@@ -1,16 +1,17 @@
 # Desktop workspace extensions
 
-Mode: Operate. Preserve the existing graphite/tangerine/ivory system. The user
+Mode: Operate. Preserve the upstream Annoy amber/indigo identity and ivory light mode. The user
 requested behavior and configuration additions, not a new visual world.
 
 - Community rail opens an instance-backed bot marketplace. Catalog and installed
   views are scoped to a server. Unsupported instances explain the missing server
   capability. No synthetic catalog ships. Installation reviews permissions;
   removal confirms scope; enabled intent is distinct from runtime health.
-- A persistent voice strip identifies the current channel/server even with the
-  channel panel collapsed or when reading text. Native Discord inset includes it.
-- Channel/member separators support pointer, keyboard, reset and collapse; user
-  preferences persist locally. The message area keeps usable width at 940px.
+- A persistent voice strip identifies the current channel/server while reading
+  text or navigating elsewhere. Native Discord inset includes it.
+- Channel/member separators support pointer, keyboard and reset. Channels remain
+  open; only the member panel collapses through one header action. Preferences
+  persist locally. The message area keeps usable width at 940px.
 - Local accent and surface tint choices retain automatic text contrast across
   light/dark/system modes. Restoring defaults removes overrides.
 - Returning to a conversation resets to latest, including clicking the already

@@ -9,7 +9,7 @@ import { blockingAdvisory, compareVersions, RELEASES_URL, type Advisory, type Up
 const { autoUpdater } = updaterPkg;
 
 /** Public, versioned list of security advisories for the client. */
-const POLICY_URL = process.env.DISTOPIC_UPDATE_POLICY_URL || "https://raw.githubusercontent.com/GustavoHSCruz/distopic-client/main/security/advisories.json";
+const POLICY_URL = process.env.ANNOY_UPDATE_POLICY_URL || "https://raw.githubusercontent.com/GeGLab/annoy-client/main/security/advisories.json";
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
 let win: BrowserWindow | null = null;
@@ -26,7 +26,7 @@ function publish(next: UpdateState): void {
 
 /** Only packaged AppImage (Linux) and NSIS (Windows) builds can replace themselves. */
 function updatable(): boolean {
-  if (!app.isPackaged && !process.env.DISTOPIC_UPDATE_FEED) return false;
+  if (!app.isPackaged && !process.env.ANNOY_UPDATE_FEED) return false;
   if (process.platform === "linux" && !process.env.APPIMAGE) return false;
   return true;
 }
@@ -101,9 +101,9 @@ export function startUpdater(window: BrowserWindow): void {
   autoUpdater.allowDowngrade = false;
   autoUpdater.logger = null;
   // Lets self-hosters or tests point at a mirror (electron-builder "generic" layout).
-  if (process.env.DISTOPIC_UPDATE_FEED) {
+  if (process.env.ANNOY_UPDATE_FEED) {
     autoUpdater.forceDevUpdateConfig = !app.isPackaged;
-    autoUpdater.setFeedURL({ provider: "generic", url: process.env.DISTOPIC_UPDATE_FEED });
+    autoUpdater.setFeedURL({ provider: "generic", url: process.env.ANNOY_UPDATE_FEED });
   }
 
   autoUpdater.on("download-progress", (p) => {

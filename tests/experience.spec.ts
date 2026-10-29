@@ -95,7 +95,7 @@ async function seed(page: Page) {
             id: "message",
             author: user,
             channelId: "general",
-            content: "Arquivos sintéticos para testar o player do Distopic.",
+            content: "Arquivos sintéticos para testar o player do Annoy.",
             createdAt: new Date().toISOString(),
             editedAt: null,
             replyToId: null,
@@ -332,9 +332,9 @@ test("friend activity is distinct from public membership and shared action dialo
     });
     await expect(page.getByRole("alertdialog")).toBeVisible();
     await page.getByRole("button", { name: "Cancelar", exact: true }).click();
-    await page.getByRole("textbox", { name: "Sua resposta" }).fill("Distopic");
+    await page.getByRole("textbox", { name: "Sua resposta" }).fill("Annoy");
     await page.getByRole("button", { name: "Confirmar", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => (window as any).answers)).toEqual([false, "Distopic"]);
+    await expect.poll(() => page.evaluate(() => (window as any).answers)).toEqual([false, "Annoy"]);
     await page.locator(".rail-settings").click();
     await page.getByRole("switch", { name: "Compartilhar jogos da Steam com amigos" }).check();
     await expect(page.locator(".settings-savebar")).toBeVisible();

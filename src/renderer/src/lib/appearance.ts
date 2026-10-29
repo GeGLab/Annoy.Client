@@ -64,7 +64,7 @@ export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfac
   const light = root.dataset.theme === "light";
   if (validColor(settings.surfaceColor)) {
     // Limit tint saturation to preserve neutral surfaces and text contrast.
-    const base = mix(light ? "#fcfbf9" : "#27292f", settings.surfaceColor, 0.12);
+    const base = mix(light ? "#fcfbf9" : "#171621", settings.surfaceColor, 0.12);
     for (const [key, amount] of Object.entries({
       "--bg-rail": 0.3,
       "--bg-channels": 0.14,

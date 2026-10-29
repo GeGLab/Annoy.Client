@@ -1,4 +1,4 @@
-# Plataforma de bots Distopic — contrato v1
+# Plataforma de bots Annoy — contrato v1
 
 **Estado:** contrato proposto e integração do cliente implementados neste
 repositório. O runtime, a persistência, o catálogo e os endpoints abaixo
@@ -9,13 +9,13 @@ requisitos do servidor.
 
 ## Compatibilidade com Discord
 
-O Distopic tem protocolo, identidades, canais, permissões e sinalização de voz
+O Annoy tem protocolo, identidades, canais, permissões e sinalização de voz
 próprios. Um bot que usa Discord REST/Gateway não passa a funcionar aqui ao ser
 instalado no cliente. A aba Discord continua executando o cliente web oficial,
 com os bots daqueles servidores.
 
-Para um bot funcionar em servidores Distopic, seu desenvolvedor precisa
-adaptar o transporte e as operações para a API Distopic. É possível preservar
+Para um bot funcionar em servidores Annoy, seu desenvolvedor precisa
+adaptar o transporte e as operações para a API Annoy. É possível preservar
 a lógica de negócio de bots cujo código está disponível e cujo licenciamento
 permite a adaptação; os recursos usados precisam existir no servidor. Bots
 hospedados como serviços por terceiros dependem da cooperação de seus autores.
@@ -48,7 +48,7 @@ catálogo e instalações. A tela carrega sob demanda. Nenhum catálogo de exemp
 
 ## Descoberta e leitura
 
-Todos os endpoints são relativos a `/api`, autenticados com a sessão Distopic
+Todos os endpoints são relativos a `/api`, autenticados com a sessão Annoy
 existente. Um endpoint ausente (`404` ou `501`) na descoberta significa
 **não suportado**, não “catálogo vazio”. Erros de rede, autorização e versão
 incompatível têm estados próprios. Não se deve converter falhas em listas vazias.
@@ -201,7 +201,7 @@ em cada operação, mesmo se a permissão constar no manifesto.
 ## Sequência de implementação no servidor
 
 1. Adicionar identidade de bot, armazenamento, permissões e auditoria.
-2. Implementar SDK/transporte Distopic para mensagens e eventos necessários.
+2. Implementar SDK/transporte Annoy para mensagens e eventos necessários.
 3. Implementar worker supervisor e semântica de parar/revogar/remover.
 4. Publicar um bot real de referência, com teste end-to-end em dois servidores
    para comprovar isolamento, persistência e revogação imediata.

@@ -1,31 +1,31 @@
 ---
-name: "Distopic"
-description: "Desktop conversations with familiar navigation, graphite and tangerine, and warm ivory light mode."
+name: "Annoy"
+description: "Desktop conversations with familiar navigation, indigo and amber, and warm ivory light mode."
 colors:
-  dark-bg-rail: "#17191d"
-  dark-bg-channels: "#202227"
-  dark-bg-main: "#27292f"
-  dark-bg-elev: "#303239"
-  dark-bg-hover: "#34363e"
-  dark-bg-active: "#3b3e47"
-  dark-bg-input: "#303239"
-  dark-bg-deep: "#1b1d22"
-  dark-border: "#383b43"
-  dark-border-strong: "#535761"
-  dark-text: "#f2f2f3"
-  dark-text-soft: "#d3d4da"
-  dark-text-muted: "#a3a6b0"
-  dark-accent: "#f7a66a"
-  dark-accent-hover: "#ffb982"
-  dark-accent-strong: "#ffc498"
-  dark-accent-soft: "#f7a66a17"
-  dark-accent-line: "#f7a66a66"
-  dark-on-accent: "#27201c"
-  dark-link: "#ffbb8a"
-  dark-danger: "#ff898d"
-  dark-ok: "#6dd7b2"
-  dark-warn: "#f3c46b"
-  dark-mention: "#f7a66a10"
+  dark-bg-rail: "#0a0912"
+  dark-bg-channels: "#12111b"
+  dark-bg-main: "#171621"
+  dark-bg-elev: "#201e2c"
+  dark-bg-hover: "#282535"
+  dark-bg-active: "#322e42"
+  dark-bg-input: "#1c1a27"
+  dark-bg-deep: "#0e0d16"
+  dark-border: "#2c2939"
+  dark-border-strong: "#423c55"
+  dark-text: "#f2f0f8"
+  dark-text-soft: "#d1cde0"
+  dark-text-muted: "#938ca8"
+  dark-accent: "#ffb020"
+  dark-accent-hover: "#ffc04d"
+  dark-accent-strong: "#ffd27a"
+  dark-accent-soft: "rgba(255, 176, 32, 0.14)"
+  dark-accent-line: "rgba(255, 176, 32, 0.45)"
+  dark-on-accent: "#1f1400"
+  dark-link: "#ffc55c"
+  dark-danger: "#f2554b"
+  dark-ok: "#43c59e"
+  dark-warn: "#ff8a3d"
+  dark-mention: "rgba(255, 176, 32, 0.08)"
   light-bg-rail: "#e9e7e3"
   light-bg-channels: "#f2f1ee"
   light-bg-main: "#fcfbf9"
@@ -39,17 +39,17 @@ colors:
   light-text: "#282724"
   light-text-soft: "#484641"
   light-text-muted: "#6b655d"
-  light-accent: "#984719"
-  light-accent-hover: "#7e3811"
-  light-accent-strong: "#8e3b12"
-  light-accent-soft: "#9847190e"
-  light-accent-line: "#98471955"
+  light-accent: "#8b5400"
+  light-accent-hover: "#724300"
+  light-accent-strong: "#805000"
+  light-accent-soft: "#8b54000e"
+  light-accent-line: "#8b540055"
   light-on-accent: "#ffffff"
-  light-link: "#984719"
+  light-link: "#8b5400"
   light-danger: "#b72d3e"
   light-ok: "#157256"
   light-warn: "#855d12"
-  light-mention: "#9847190b"
+  light-mention: "#8b54000b"
 typography:
   display:
     fontFamily: "\"Segoe UI Variable\", \"Segoe UI\", system-ui, sans-serif"
@@ -181,25 +181,27 @@ components:
     rounded: "{rounded.skeleton}"
 ---
 
-# Design System: Distopic
+# Design System: Annoy
 
 ## Overview
 
 **Creative North Star: "The Listening Room"**
 
-Distopic places community navigation and conversation in a compact desktop workspace. Familiar server, channel, message and member positions keep the product easy to read; graphite surfaces and a tangerine speech/D mark give it its own identity. Light mode uses warm ivory surfaces and a darker burnt-orange accent.
+Annoy places community navigation and conversation in a compact desktop workspace. Familiar server, channel, message and member positions keep the product easy to read; deep indigo surfaces, amber controls and the supplied Annoy logo give it its own identity. Light mode uses warm ivory surfaces and a darker amber accent.
 
-The delivered direction was implemented directly in the running application, as confirmed by the user. It uses calm tonal layers, disciplined spacing and brief state changes. Product workflows and server content stay real; all interface copy is Brazilian Portuguese. The official Discord view retains its own interface and theme.
+The interface uses calm tonal layers, disciplined spacing and brief state changes. Product workflows and server content stay real; all interface copy is Brazilian Portuguese. The official Discord view retains its own interface and theme.
 
 **Key Characteristics:**
 
-- Familiar desktop navigation with a distinct speech/D mark.
-- Graphite dark mode and warm ivory light mode.
+- Familiar desktop navigation with the supplied Annoy logo.
+- Deep indigo dark mode and warm ivory light mode.
 - Compact controls with generous message line height.
 - Flat workspace planes; lifted dialogs and feedback.
 - Shared, keyboard-accessible primitives and reduced-motion support.
 
 This document records the delivered source. `PRODUCT.md` owns product truth; `.impeccable/surfaces/desktop.md` owns the desktop composition. `src/renderer/src/styles/tokens.css` and `styles/components.css` are the implementation sources. YAML above owns extracted primitive values; `.impeccable/design.json` contains extensions and framework-independent previews. Theme prefixes identify paired values, not separate product identities. Component frontmatter uses dark defaults; the same semantic roles resolve to the paired light values at runtime. Component height entries describe the implemented minimum height.
+
+The collaborator-supplied upstream Annoy identity supersedes the earlier Distopic speech/D mark and graphite/tangerine palette. Preserve `src/renderer/src/assets/logo.svg` exactly, including its gradients and colors; do not redraw or recolor it to match theme controls. The logo's multicolor artwork is an asset-specific treatment, not an additional interface palette. User-facing branding is Annoy, with the lowercase `annoy.` wordmark. Existing internal identifiers such as `@distopic/protocol`, `window.distopic`, `distopic.*` storage keys and `distopic-worker-v1` remain compatibility contracts.
 
 Workspace extensions retain this world. `.impeccable/surfaces/workspace-extensions.md` records their composition; `styles/workspace.css` and `styles/marketplace.css` supply the added presentation rules. Shared controls, media/settings and discovery use `styles/controls.css`, `styles/media-settings.css` and `styles/discovery.css`. These are extensions of the established world, not additional token systems.
 
@@ -207,17 +209,17 @@ Workspace extensions retain this world. `.impeccable/surfaces/workspace-extensio
 
 ### Primary
 
-Tangerine (`dark-accent`) highlights primary actions, active community tiles and the brand period. The paired burnt-orange light token (`light-accent`) preserves contrast on warm ivory. Hover and strong variants support interaction and selected text. `accent-soft`, `accent-line` and `mention` are translucent companion treatments; preserve the source alpha values. `on-accent` supplies foregrounds on solid primary fills, and `link` supplies inline links.
+Amber (`dark-accent`) highlights primary actions, active community tiles and the brand period. The paired darker amber light token (`light-accent`) preserves contrast on warm ivory. Hover and strong variants support interaction and selected text. `accent-soft`, `accent-line` and `mention` are translucent companion treatments; preserve the source alpha values. `on-accent` supplies foregrounds on solid primary fills, and `link` supplies inline links.
 
 ### Neutral
 
-The dark theme progresses from the rail through channels and main conversation to elevated, hover and active surfaces. Light mode follows the same semantic ordering with warm stone and ivory. `bg-deep` anchors profile controls and media canvases. Use `text` for primary reading, `text-soft` for message prose and secondary controls, and `text-muted` for supporting metadata. `border` divides surfaces; `border-strong` supports outlines and scrollbars. No independent secondary brand accent is established.
+The dark theme progresses through deep indigo tones from the rail through channels and main conversation to elevated, hover and active surfaces. Light mode follows the same semantic ordering with warm stone and ivory. `bg-deep` anchors profile controls and media canvases. Use `text` for primary reading, `text-soft` for message prose and secondary controls, and `text-muted` for supporting metadata. `border` divides surfaces; `border-strong` supports outlines and scrollbars. No independent secondary brand accent is established.
 
 ### Status
 
 `danger` identifies errors and destructive actions; `ok` identifies connected voice and positive state; `warn` marks pending or warning state. Pair color with text or an icon. Dark and light values are separate tokens, not opacity approximations of each other.
 
-**The Semantic Palette Rule.** Use the semantic CSS variables or their Tailwind aliases in new UI; preserve dark, light and system theme behavior. Status colors communicate status, while tangerine marks selection and primary actions.
+**The Semantic Palette Rule.** Use the semantic CSS variables or their Tailwind aliases in new UI; preserve dark, light and system theme behavior. Status colors communicate status, while amber marks selection and primary actions.
 
 Personal appearance choices are local preferences, not additional fixed palette tokens. A selected surface color contributes a restrained tint (12%) to the theme's main neutral before deriving the panel layers. The selected accent is adjusted toward a readable foreground until it reaches a contrast ratio of (4.5:1) against the main surface; companion fills, links and on-accent text are derived from that result. Preserve these adjustments across light, dark and system theme changes. Restoring original colors removes the overrides.
 
@@ -367,7 +369,7 @@ Fullscreen contains the player and all of its floating controls. Pass the active
 
 Shared selects, menus, color choices, entity pickers and profile popovers enter in (160ms) and exit in (120ms), using a brief opacity/position/scale change. Reduced motion removes these transitions while retaining every state and control. State color transitions use (160ms); overlay content reveals use (160–180ms). The image canvas reveal uses Framer Motion (.18s), supplied through `LazyMotion`, `m` and a separate animation feature chunk. `MotionConfig` honors the user's reduced-motion preference, and the CSS reduced-motion query removes animations and transitions. Skeleton pulse lasts (1.6s); image-loading rotation lasts (1s). Animate feedback, not whole conversation histories.
 
-Use named Lucide imports with the shared icon wrapper: default size (18px), stroke width (1.75), hidden from assistive technology when a control already has a label. Do not dynamically load the full icon catalog. The single brand source is `src/renderer/src/assets/distopic.svg`, the interlocking speech/D mark in tangerine. `Brand.tsx` pairs it with the wordmark. `npm run brand:icons` generates versioned SVG, PNG and ICO outputs for desktop, installer and favicon use.
+Use named Lucide imports with the shared icon wrapper: default size (18px), stroke width (1.75), hidden from assistive technology when a control already has a label. Do not dynamically load the full icon catalog. The single brand source is the collaborator-supplied `src/renderer/src/assets/logo.svg`, preserved exactly with its multicolor background and white speech/robot artwork. `Brand.tsx` pairs it with the lowercase `annoy.` wordmark. `npm run brand:icons` generates versioned SVG, PNG and ICO outputs for desktop, installer and favicon use.
 
 Tailwind v4 provides semantic utilities through the official Vite plugin; shadcn-style primitives use Radix, CVA and shared classes. Add new primitives under `components/ui` and preserve existing workflow styling in `styles/legacy.css`. `docs/development.md` records source structure, code-first decisions, native-window integration and the Electron installer workflow. Avoid a parallel token or component system.
 
@@ -385,7 +387,7 @@ Tailwind v4 provides semantic utilities through the official Vite plugin; shadcn
 
 ### Don't:
 
-- **Don't** borrow the Discord mark or blurple palette for Distopic chrome.
+- **Don't** borrow the Discord mark or blurple palette for Annoy chrome.
 - **Don't** substitute synthetic conversations or members for real first-run empty states.
 - **Don't** hardcode new presentation colors outside the semantic palette.
 - **Don't** replace workspace columns with a collection of floating cards.

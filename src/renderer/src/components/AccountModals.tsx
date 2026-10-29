@@ -77,7 +77,7 @@ export function AddAccountModal() {
   }
 
   return (
-    <Modal title={info ? info.info.name : "Conectar a um servidor Distopic"}>
+    <Modal title={info ? info.info.name : "Conectar a um servidor Annoy"}>
       <div className="connection-brand"><Brand size={32} wordmark /></div>
       {!info ? (
         <form onSubmit={probe} className="form">
@@ -296,7 +296,7 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
             })
           }
         >
-          Conectar a outra instância Distopic…
+          Conectar a outra instância Annoy…
         </Button>
       </div>
     </Modal>

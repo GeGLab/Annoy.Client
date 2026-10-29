@@ -4,7 +4,7 @@ Mode: Operate. Code-first implementation, explicitly chosen by the user.
 
 Pinned direction: the supplied Discord-like desktop references take precedence over the direction seed. Navigation and interactions remain familiar; no borrowed Discord mark or blurple palette.
 
-Grounded candidates: community bulletin typography; independent radio program; record-store index; library reading room; listening-room identity; event wayfinding; conversation notebook. Seed 8c3d66c8 assigns candidate 5, listening-room identity: graphite/tangerine, warm ivory in light mode, calm compact navigation, generous conversational space. The signature move is an interlocking speech/D mark and a short, reduced-motion-aware reveal when opening an image.
+The user requested retaining the collaborator's upstream Annoy 0.3.1 rename and identity while integrating these features. Preserve its supplied logo and amber on indigo graphite palette; the light counterpart remains warm ivory with a readable amber accent. Keep the calm compact navigation, generous conversational space and short reduced-motion-aware reveal when opening an image. The earlier speech/D mark and tangerine palette are superseded by the upstream identity, not proposed as a competing brand.
 
 The split-flap challenger donates stable alignment, the record-catalog challenger donates disciplined whitespace, the map challenger donates a single color for selection, and the boarding-pass challenger donates clear state hierarchy. Their literal forms would obscure community conversation, so they are declined under the user's familiar-desktop constraint. No competing topology is introduced.
 

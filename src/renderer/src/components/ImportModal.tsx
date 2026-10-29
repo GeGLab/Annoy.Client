@@ -56,7 +56,7 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
         </li>
         <li>Cole o token abaixo; no próximo passo você adiciona o bot ao seu servidor com um link pronto.</li>
       </ol>
-      <Field label="Token do bot" hint="Usado só durante a importação; o Distopic não salva o token">
+      <Field label="Token do bot" hint="Usado só durante a importação; o Annoy não salva o token">
         <Input
           type="password"
           autoFocus

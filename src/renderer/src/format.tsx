@@ -49,6 +49,22 @@ function inline(text: string, nameOf: NameOf, channelOf: NameOf, me: string | nu
   return out;
 }
 
+/** One line of plain text for previews: markup dropped, mentions resolved. */
+export function previewText(content: string, nameOf: NameOf, channelOf: NameOf = () => undefined): string {
+  return content
+    .replace(/```(?:[a-z0-9]+\n)?([\s\S]*?)```/g, "$1")
+    .replace(/\s+/g, " ")
+    .replace(INLINE, (token) => {
+      if (token.startsWith("`")) return token.slice(1, -1);
+      if (token.startsWith("**") || token.startsWith("__") || token.startsWith("~~")) return token.slice(2, -2);
+      if (token.startsWith("*")) return token.slice(1, -1);
+      if (token.startsWith("<@")) return `@${nameOf(token.slice(2, -1)) ?? "usuário"}`;
+      if (token.startsWith("<#")) return `#${channelOf(token.slice(2, -1)) ?? "canal-desconhecido"}`;
+      return token;
+    })
+    .trim();
+}
+
 /** Small Discord-flavoured markdown: code blocks, quotes and inline styles. */
 export function renderContent(content: string, nameOf: NameOf, me: string | null, channelOf: NameOf = () => undefined): ReactNode {
   const parts = content.split(/```(?:[a-z0-9]+\n)?([\s\S]*?)```/g);
