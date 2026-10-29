@@ -20,7 +20,9 @@ export function useConnectionBlocked() {
       window.removeEventListener("offline", update);
     };
   }, []);
-  return accounts.length > 0 && (!online || accounts.some((a) => instances[a.id]?.status !== "ready"));
+  // An expired session is not a connection that will come back; its tab offers to sign in again instead.
+  const reconnecting = accounts.filter((a) => instances[a.id]?.status !== "ready" && instances[a.id]?.status !== "invalid");
+  return reconnecting.length > 0 || (!online && accounts.length > 0);
 }
 
 /** An application-level focus trap also blocks open portals and native Discord. */
@@ -29,12 +31,15 @@ export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
   const instances = useStore((s) => s.instances);
   const failed = accounts.filter((a) => instances[a.id]?.status !== "ready");
   const [authAccount, setAuthAccount] = useState<string | null>(null);
+  // "Continuar mesmo assim" hides the overlay until another server drops.
+  const failedKey = failed.map((a) => a.id).join("|");
+  const [dismissed, setDismissed] = useState<string | null>(null);
   // Authentication is the one recovery flow that must remain reachable.
   const authOpen = useStore((s) => s.modal?.kind === "addAccount");
   useEffect(() => {
     if (!authOpen) setAuthAccount(null);
   }, [authOpen]);
-  if (!blocked || (authOpen && authAccount)) return null;
+  if (!blocked || (authOpen && authAccount) || dismissed === failedKey) return null;
   return (
     <Dialog open>
       <DialogContent
@@ -87,12 +92,17 @@ export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
             </div>
           ))}
         </div>
-        <Button variant="secondary" onClick={() => reconnect()}>
-          <Icon name="refresh" size={16} />
-          Tentar agora
-        </Button>
+        <div className="form-actions center">
+          <Button variant="secondary" onClick={() => reconnect()}>
+            <Icon name="refresh" size={16} />
+            Tentar agora
+          </Button>
+          <Button variant="ghost" onClick={() => setDismissed(failedKey)}>
+            Continuar mesmo assim
+          </Button>
+        </div>
         <span className="muted small" role="status">
-          Reconexão automática em andamento
+          Reconexão automática em andamento. O servidor volta sozinho quando estiver no ar.
         </span>
       </DialogContent>
     </Dialog>
