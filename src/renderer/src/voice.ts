@@ -1,4 +1,4 @@
-import { Device } from "mediasoup-client";
+import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
 import type { GatewayEvent, MediaSource } from "@distopic/protocol";
 import { clearTiles, dropTile, putTile } from "./media.ts";
@@ -62,6 +62,8 @@ export class VoiceSession {
     });
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
+    const { Device } = await import("mediasoup-client");
+    if (this.closed) return;
     this.device = await Device.factory();
     await this.device.load({ routerRtpCapabilities: joined.rtpCapabilities });
 

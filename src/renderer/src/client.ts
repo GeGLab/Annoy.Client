@@ -24,6 +24,10 @@ export function apiFor(accountId: string): Api {
   return entry.api;
 }
 
+export function applyUserUpdate(accountId: string, user: User): void {
+  patchInstance(accountId, inst => replaceUser(inst, user));
+}
+
 export function gatewayFor(accountId: string): Gateway | undefined {
   return live.get(accountId)?.gateway;
 }
@@ -67,6 +71,7 @@ export function reconnect(accountId?: string): void {
 }
 
 window.addEventListener("online", () => reconnect());
+window.addEventListener("offline", () => { for (const entry of live.values()) entry.gateway.networkLost(); });
 
 // Keep the cache in step with the server list, whatever changed it.
 const lastServers = new Map<string, unknown>();
@@ -138,6 +143,8 @@ export function navigate(view: View): void {
   else if (getState().view.kind === "discord") bridge?.hideDiscord();
   setState((s) => {
     s.view = view;
+    if(s.messageFocus) { delete s.instances[s.messageFocus.accountId]?.messages[s.messageFocus.channelId]; s.messageFocus=null; }
+    if (view.kind === "server" || (view.kind === "home" && view.dmId)) s.chatNavigation++;
     const channelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
     if (channelId && "accountId" in view && view.accountId) delete s.instances[view.accountId]?.unread[channelId];
   });
@@ -237,6 +244,16 @@ export async function loadMessages(accountId: string, channelId: string, older =
     });
     toast((err as Error).message);
   }
+}
+
+export async function jumpToMessage(accountId:string,channelId:string,messageId:string,serverId:string|null) {
+  const items=await apiFor(accountId).get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(messageId)}`);
+  navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
+  setState(s=>{s.instances[accountId]!.messages[channelId]={items,hasMore:items.length>=26,loading:false};s.messageFocus={accountId,channelId,messageId};s.modal=null;});
+}
+export function returnToLatest(accountId:string,channelId:string) {
+  setState(s=>{delete s.instances[accountId]?.messages[channelId];s.messageFocus=null;s.chatNavigation++;});
+  void loadMessages(accountId,channelId);
 }
 
 function invalidateServerMessages(accountId: string, serverId: string): void {
@@ -394,6 +411,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.dms = event.d.dms;
         inst.relationships = event.d.relationships;
         inst.presences = event.d.presences;
+        inst.activities = Object.fromEntries(Object.entries(event.d.activities ?? {}).filter(([id])=>id===event.d.user.id || event.d.relationships.some(r=>r.user.id===id && r.status==="friend")));
         inst.instance = event.d.instance;
         // History may have gaps after a reconnect; reload lazily.
         inst.messages = {};
@@ -494,6 +512,12 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return patchInstance(accountId, (inst) => {
         (inst.typing[event.d.channelId] ??= {})[event.d.userId] = Date.now() + TYPING_MS;
       });
+    case "ACTIVITY_UPDATE":
+      patchInstance(accountId, inst => {
+        if(event.d.userId===inst.user?.id || inst.relationships.some(r=>r.user.id===event.d.userId && r.status==="friend")) inst.activities[event.d.userId]=event.d.activities;
+        else delete inst.activities[event.d.userId];
+      });
+      break;
     case "PRESENCE_UPDATE":
       return patchInstance(accountId, (inst) => {
         inst.presences[event.d.userId] = event.d.presence;
@@ -526,6 +550,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
     case "RELATIONSHIP_REMOVE":
       return patchInstance(accountId, (inst) => {
         inst.relationships = inst.relationships.filter((r) => r.user.id !== event.d.userId);
+        delete inst.activities[event.d.userId];
       });
     case "IMPORT_PROGRESS": {
       const prev = getState().instances[accountId]?.imports[event.d.id];

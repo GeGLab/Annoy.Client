@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="build/icon.svg" alt="Distopic" width="72">
+
 # Distopic Client
 
 **Um app desktop para os seus servidores Distopic e o Discord oficial.**
@@ -68,6 +70,19 @@ cd distopic-client
 npm install
 npm run dev
 ```
+
+O `postinstall` prepara o executável do Electron automaticamente. Os comandos
+`dev` e `start` também verificam a instalação antes de abrir o app, inclusive
+depois de `npm ci --ignore-scripts`. Essa verificação evita o erro
+`Electron uninstall` do electron-vite com o download sob demanda do Electron 45.
+Se o download falhar, confira a conexão e rode `npm run electron:install`.
+
+**Interface:** temas claro, escuro e do sistema em **Configurações → Aparência**,
+barra de janela personalizada e visualizador de imagens integrado (clique em
+um anexo; use Esc para fechar, as setas para navegar e os controles para zoom).
+
+Veja [a estrutura e os comandos de desenvolvimento](docs/development.md) para
+os componentes, tokens, ícones, animações e testes da interface.
 
 No app, clique em **Conectar a um servidor Distopic** e digite o endereço (sem
 porta, usa a `8787`). Depois, entre com Discord ou crie uma conta.

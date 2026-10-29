@@ -1,0 +1,48 @@
+.marketplace { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-main); border-radius: 12px 0 0; overflow: hidden; }
+.marketplace-context { color: var(--text-muted); font-size: 11px; padding-left: 12px; border-left: 1px solid var(--border); margin-left: 6px; }
+.bot-server-select { min-width: 0; max-width: 330px; font-size: 12px; }
+.bot-toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 28px; border-bottom: 1px solid var(--border); }
+.bot-toolbar .tabs { margin-right: auto; }
+.bot-toolbar > input { max-width: 240px; min-width: 120px; font-size: 12px; }
+.bot-count { display: inline-block; min-width: 17px; padding: 1px 5px; background: var(--bg-elev); border-radius: 5px; font-size: 10px; margin-left: 5px; }
+.bot-page-content { flex: 1; min-height: 0; overflow: auto; padding: 30px 32px; }
+.bot-intro { margin-bottom: 26px; }
+.bot-intro h2 { font-size: 25px; letter-spacing: -.025em; font-weight: 650; }
+.bot-intro p { color: var(--text-muted); font-size: 13px; line-height: 1.65; margin: 9px 0 0; max-width: 650px; }
+.bot-notice { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 1.6; color: var(--text-muted); padding: 14px 0; border-block: 1px solid var(--border); margin-bottom: 24px; }
+.bot-catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.bot-listing { display: flex; flex-direction: column; align-items: flex-start; padding: 22px; background: var(--bg-channels); border: 1px solid var(--border); border-radius: 12px; }
+.bot-listing-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bot-listing h3, .installed-bot h3 { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.bot-listing-heading .small { display: block; margin-top: 4px; font-size: 11px; overflow-wrap: anywhere; }
+.bot-avatar { display: grid; place-items: center; width: 46px; height: 46px; flex: none; color: var(--accent); background: var(--accent-soft); border-radius: 13px; }
+.bot-listing > p { color: var(--text-soft); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; margin: 20px 0; }
+.bot-permission-count { color: var(--text-muted); font-size: 11px; margin: auto 0 14px; }
+.bot-listing > .ui-button { width: 100%; }
+.bot-platform-empty { flex: 1; min-height: 350px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 18px; }
+.bot-platform-empty > .icon { color: var(--accent); margin-bottom: 6px; }
+.bot-platform-empty h2 { font-size: 25px; font-weight: 650; letter-spacing: -.025em; }
+.bot-platform-empty p { margin: 0; max-width: 530px; line-height: 1.75; font-size: 13px; }
+.bot-platform-empty .ui-button { margin-top: 8px; }
+.bot-list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 240px; text-align: center; gap: 13px; }
+.bot-list-empty > .icon { color: var(--text-muted); }
+.bot-list-empty h3 { font-size: 19px; font-weight: 600; }
+.bot-list-empty p { font-size: 13px; margin: 0; }
+.installed-bots { display: flex; flex-direction: column; }
+.installed-bot { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); padding: 19px 0; min-width: 0; }
+.installed-bot-info { flex: 1; min-width: 0; }
+.installed-bot-info > p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.bot-runtime { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
+.bot-runtime.running { color: var(--ok); }
+.bot-runtime.error { color: var(--danger); }
+.bot-runtime.starting { color: var(--warn); }
+.bot-confirmation .modal-body { padding: 26px; }
+.bot-confirmation h2 { font-size: 21px; line-height: 1.35; overflow-wrap: anywhere; }
+.bot-confirmation p { margin: 16px 0; font-size: 13px; line-height: 1.7; }
+.bot-permissions { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 20px 0 26px; padding: 0; }
+.bot-permissions li { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-soft); }
+.bot-permissions .icon { color: var(--accent); }
+.bot-error { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 12px; padding: 12px 0; }
+.bot-error > button { color: var(--link); text-decoration: underline; }
+.server-bot-link { width: 100%; margin-bottom: 14px; text-align: left; }
+@media (max-width: 1000px) { .bot-page-content { padding: 26px 24px; } .bot-toolbar { padding-inline: 24px; } }

@@ -1,3 +1,11 @@
+import { Checkbox } from "./ui/checkbox.tsx";
+import { Input } from "./ui/input.tsx";
+import { confirmAction, promptText } from "./ui/action-dialog.tsx";
+import { Select } from "./ui/select.tsx";
+import { EntityPicker } from "./ui/entity-picker.tsx";
+import { RadioGroup } from "./ui/radio-group.tsx";
+import { PermissionToggle } from "./ui/permission-toggle.tsx";
+import { Textarea } from "./ui/textarea.tsx";
 import {
   has,
   Permission,
@@ -19,6 +27,10 @@ import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { UpdateSettings } from "./Updates.tsx";
+import { Brand } from "./Brand.tsx";
+import { ColorPicker } from "./ui/color-picker.tsx";
+import { useSettingsDraft } from "./settings/SettingsGuard.tsx";
+import { requestNavigation } from "../lib/navigation-guard.ts";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
 const TEXT_PERMS: PermissionName[] = ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_MESSAGES", "ATTACH_FILES", "MENTION_EVERYONE"];
@@ -31,253 +43,7 @@ function useServer(accountId: string, serverId: string): { state: ServerState | 
   };
 }
 
-// User settings ------------------------------------------------------------
-
-function keyLabel(code: string): string {
-  return code.replace(/^Key/, "").replace(/^Digit/, "").replace("Backquote", "` (crase)");
-}
-
-function MicMeter({ deviceId }: { deviceId: string }) {
-  const [level, setLevel] = useState(0);
-  const threshold = useStore((s) => s.settings.vadThreshold);
-  useEffect(() => {
-    let stop = false;
-    let stream: MediaStream | null = null;
-    let ctx: AudioContext | null = null;
-    void navigator.mediaDevices
-      .getUserMedia({ audio: { deviceId: deviceId === "default" ? undefined : { exact: deviceId } } })
-      .then((s) => {
-        if (stop) return s.getTracks().forEach((t) => t.stop());
-        stream = s;
-        ctx = new AudioContext();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        ctx.createMediaStreamSource(s).connect(analyser);
-        const buf = new Uint8Array(analyser.fftSize);
-        const loop = () => {
-          if (stop) return;
-          analyser.getByteTimeDomainData(buf);
-          let peak = 0;
-          for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-          setLevel((peak / 128) * 100);
-          requestAnimationFrame(loop);
-        };
-        loop();
-      })
-      .catch(() => toast("Não foi possível acessar o microfone"));
-    return () => {
-      stop = true;
-      stream?.getTracks().forEach((t) => t.stop());
-      void ctx?.close();
-    };
-  }, [deviceId]);
-  return (
-    <div className="meter">
-      <div className={`meter-fill${level >= threshold ? " hot" : ""}`} style={{ width: `${Math.min(100, level)}%` }} />
-      <div className="meter-threshold" style={{ left: `${threshold}%` }} />
-    </div>
-  );
-}
-
-function AccountRow({ accountId }: { accountId: string }) {
-  const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
-  const user = useStore((s) => s.instances[accountId]?.user);
-  const status = useStore((s) => s.instances[accountId]?.status);
-  const isAdmin = useStore((s) => s.instances[accountId]?.instance?.isAdmin ?? false);
-  const [name, setName] = useState(user?.displayName ?? "");
-  const [discordAvailable, setDiscordAvailable] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  useEffect(() => setName(user?.displayName ?? ""), [user?.displayName]);
-  useEffect(() => {
-    if (account) void fetchInfo(account.url).then((i) => setDiscordAvailable(i.discordLogin), () => undefined);
-  }, [account?.url]);
-  if (!account) return null;
-
-  // Links Discord to this account, or refreshes name and photo if already linked.
-  const syncDiscord = async () => {
-    setSyncing(true);
-    try {
-      await discordLogin(account.url, () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }), new AbortController().signal);
-      toast("Perfil do Discord sincronizado");
-    } catch (err) {
-      toast((err as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  };
-  return (
-    <div className="account-row">
-      <div>
-        <strong>{account.instanceName}</strong> <span className="muted small">{account.url}</span>
-        <div className="muted small">
-          {user ? `@${user.username}` : ""} · {status === "ready" ? "conectado" : status === "invalid" ? "sessão expirada" : (status ?? "desconectado")}
-        </div>
-      </div>
-      <form
-        className="inline-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void act(apiFor(accountId).patch<User>("/users/@me", { displayName: name }), "Nome atualizado");
-        }}
-      >
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome de exibição" maxLength={32} />
-        <button className="btn btn-ghost" disabled={!name.trim() || name === user?.displayName}>
-          Salvar
-        </button>
-      </form>
-      {discordAvailable && (
-        <button className="btn btn-discord" onClick={() => void syncDiscord()} disabled={syncing} title="Puxa nome e foto do Discord; perfis importados dessa conta passam a ser seus">
-          {syncing ? "Aguardando…" : "Sincronizar Discord"}
-        </button>
-      )}
-      {isAdmin && (
-        <button className="btn" onClick={() => openModal({ kind: "instanceAdmin", accountId })} title="Cadastro, convites, contas e servidores desta instância">
-          Administrar instância
-        </button>
-      )}
-      <button className="btn btn-ghost" onClick={() => confirm(`Sair de ${account.instanceName}?`) && removeAccount(accountId)}>
-        Sair
-      </button>
-      <button className="icon-btn danger" title="Excluir minha conta nesta instância" onClick={() => openModal({ kind: "deleteAccount", accountId })}>
-        <Icon name="trash" size={16} />
-      </button>
-    </div>
-  );
-}
-
-export function UserSettingsModal() {
-  const accounts = useStore((s) => s.accounts);
-  const settings = useStore((s) => s.settings);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [capturing, setCapturing] = useState(false);
-
-  const update = (patch: Partial<Settings>) => {
-    setState((s) => {
-      Object.assign(s.settings, patch);
-    });
-    updateVoiceSettings();
-  };
-
-  useEffect(() => {
-    const refresh = () => void navigator.mediaDevices.enumerateDevices().then(setDevices);
-    refresh();
-    navigator.mediaDevices.addEventListener("devicechange", refresh);
-    return () => navigator.mediaDevices.removeEventListener("devicechange", refresh);
-  }, []);
-
-  useEffect(() => {
-    if (!capturing) return;
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.code !== "Escape") update({ pttKey: e.code });
-      setCapturing(false);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [capturing]);
-
-  const inputs = devices.filter((d) => d.kind === "audioinput");
-  const cameras = devices.filter((d) => d.kind === "videoinput");
-  const outputs = devices.filter((d) => d.kind === "audiooutput");
-
-  return (
-    <Modal title="Configurações" wide>
-      <section className="settings-section">
-        <h3>Contas Distopic</h3>
-        {accounts.map((a) => (
-          <AccountRow key={a.id} accountId={a.id} />
-        ))}
-        <button className="btn btn-ghost" onClick={() => openModal({ kind: "addAccount" })}>
-          <Icon name="plus" size={16} /> Conectar a outra instância
-        </button>
-      </section>
-
-      <section className="settings-section">
-        <h3>Voz</h3>
-        <div className="grid-2">
-          <Field label="Microfone">
-            <select value={settings.inputDeviceId} onChange={(e) => update({ inputDeviceId: e.target.value })}>
-              <option value="default">Padrão do sistema</option>
-              {inputs
-                .filter((d) => d.deviceId !== "default")
-                .map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || "Microfone"}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field label="Saída de áudio">
-            <select value={settings.outputDeviceId} onChange={(e) => update({ outputDeviceId: e.target.value })}>
-              <option value="default">Padrão do sistema</option>
-              {outputs
-                .filter((d) => d.deviceId !== "default")
-                .map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || "Alto-falante"}
-                  </option>
-                ))}
-            </select>
-          </Field>
-        </div>
-        <Field label="Câmera">
-          <select value={settings.cameraDeviceId} onChange={(e) => update({ cameraDeviceId: e.target.value })}>
-            <option value="default">Padrão do sistema</option>
-            {cameras.map((d) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label || "Câmera"}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Modo de entrada" hint="A mudança vale para a próxima conexão de voz">
-          <div className="radio-row">
-            <label>
-              <input type="radio" checked={settings.inputMode === "vad"} onChange={() => update({ inputMode: "vad" })} /> Detecção de voz
-            </label>
-            <label>
-              <input type="radio" checked={settings.inputMode === "ptt"} onChange={() => update({ inputMode: "ptt" })} /> Apertar para falar
-            </label>
-          </div>
-        </Field>
-        {settings.inputMode === "ptt" ? (
-          <Field label="Tecla de apertar para falar" hint="Funciona com a janela do Distopic em foco">
-            <button className="btn btn-ghost key-capture" onClick={() => setCapturing(true)}>
-              {capturing ? "Pressione uma tecla… (Esc cancela)" : keyLabel(settings.pttKey)}
-            </button>
-          </Field>
-        ) : (
-          <Field label={`Sensibilidade: ${settings.vadThreshold}`} hint="Fale e ajuste até a barra ficar verde só quando você fala">
-            <input type="range" min={1} max={60} value={settings.vadThreshold} onChange={(e) => update({ vadThreshold: Number(e.target.value) })} />
-            <MicMeter deviceId={settings.inputDeviceId} />
-          </Field>
-        )}
-      </section>
-
-      <section className="settings-section">
-        <h3>Atualizações</h3>
-        <UpdateSettings />
-        <p className="muted small">
-          Você sempre é avisado de versões novas e decide quando atualizar. A única exceção é uma correção de segurança crítica, que é obrigatória.
-        </p>
-      </section>
-
-      <section className="settings-section">
-        <h3>Geral</h3>
-        <label className="check">
-          <input type="checkbox" checked={settings.notifications} onChange={(e) => update({ notifications: e.target.checked })} />
-          Notificar menções e mensagens diretas
-        </label>
-        <div className="form-actions start">
-          <button className="btn btn-ghost" onClick={() => window.distopic?.reloadDiscord()}>
-            <Icon name="refresh" size={16} /> Recarregar Discord
-          </button>
-        </div>
-      </section>
-    </Modal>
-  );
-}
+export { UserSettingsModal } from "./settings/UserSettingsModal.tsx";
 
 // Server settings --------------------------------------------------------
 
@@ -287,34 +53,52 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
   const [color, setColor] = useState(role.color ?? "#99aab5");
   const [useColor, setUseColor] = useState(role.color !== null);
   const [perms, setPerms] = useState(role.permissions);
+  const [baseline, setBaseline] = useState(() => JSON.stringify([role.name, role.color, role.permissions]));
+  const values = JSON.stringify([name, useColor ? color : null, perms]);
   useEffect(() => {
     setName(role.name);
     setColor(role.color ?? "#99aab5");
     setUseColor(role.color !== null);
     setPerms(role.permissions);
-  }, [role]);
+    setBaseline(JSON.stringify([role.name, role.color, role.permissions]));
+  }, [role.id]);
   const editable = isEveryone || rankOf(state, me) > role.position;
   const api = apiFor(accountId);
   const path = `/servers/${state.server.id}/roles/${role.id}`;
 
-  const save = (e: FormEvent) => {
-    e.preventDefault();
+  const saveRole = async () => {
+    if (!editable) return false;
     const body = isEveryone ? { permissions: perms } : { name, color: useColor ? color : null, permissions: perms };
-    void act(api.patch(path, body), "Cargo salvo");
+    const ok = await act(api.patch(path, body), "Cargo salvo");
+    if (ok) setBaseline(values);
+    return ok;
   };
+  useSettingsDraft(`role-${role.id}`, editable && values !== baseline, saveRole, () => {
+    setName(role.name);
+    setColor(role.color ?? "#99aab5");
+    setUseColor(role.color !== null);
+    setPerms(role.permissions);
+    setBaseline(JSON.stringify([role.name, role.color, role.permissions]));
+  });
 
   return (
-    <form className="role-editor" onSubmit={save}>
+    <form
+      className="role-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void saveRole();
+      }}
+    >
       {!editable && <p className="warning">Este cargo está no seu nível ou acima; você não pode editá-lo.</p>}
       {!isEveryone && (
         <div className="grid-2">
           <Field label="Nome">
-            <input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} maxLength={100} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} maxLength={100} />
           </Field>
           <Field label="Cor">
             <div className="color-row">
-              <input type="checkbox" checked={useColor} onChange={(e) => setUseColor(e.target.checked)} disabled={!editable} />
-              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} disabled={!editable || !useColor} />
+              <Checkbox checked={useColor} onChange={(e) => setUseColor(e.target.checked)} disabled={!editable} />
+              <ColorPicker label="Cor do cargo" value={color} onChange={setColor} disabled={!editable || !useColor} />
             </div>
           </Field>
         </div>
@@ -322,8 +106,7 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
       <div className="perm-list">
         {ALL_NAMES.map((p) => (
           <label key={p} className="perm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={(perms & Permission[p]) !== 0}
               disabled={!editable || (!has(state.permissions, Permission[p]) && state.server.ownerId !== me)}
               onChange={(e) => setPerms((v) => (e.target.checked ? v | Permission[p] : v & ~Permission[p]))}
@@ -335,13 +118,27 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
       <div className="form-actions">
         {!isEveryone && editable && (
           <>
-            <button type="button" className="btn btn-ghost" title="Subir na hierarquia" onClick={() => void act(api.patch(path, { position: role.position + 1 }))}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              title="Subir na hierarquia"
+              onClick={() => void act(api.patch(path, { position: role.position + 1 }))}
+            >
               ↑ Subir
             </button>
-            <button type="button" className="btn btn-ghost" disabled={role.position <= 1} onClick={() => void act(api.patch(path, { position: role.position - 1 }))}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={role.position <= 1}
+              onClick={() => void act(api.patch(path, { position: role.position - 1 }))}
+            >
               ↓ Descer
             </button>
-            <button type="button" className="btn btn-danger" onClick={() => confirm(`Excluir o cargo ${role.name}?`) && void act(api.del(path))}>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={async () => (await confirmAction(`Excluir o cargo ${role.name}?`)) && void act(api.del(path))}
+            >
               Excluir
             </button>
           </>
@@ -356,7 +153,10 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
 
 function Bans({ accountId, serverId }: { accountId: string; serverId: string }) {
   const [bans, setBans] = useState<Ban[] | null>(null);
-  const load = () => void apiFor(accountId).get<Ban[]>(`/servers/${serverId}/bans`).then(setBans, (e: Error) => toast(e.message));
+  const load = () =>
+    void apiFor(accountId)
+      .get<Ban[]>(`/servers/${serverId}/bans`)
+      .then(setBans, (e: Error) => toast(e.message));
   useEffect(load, [accountId, serverId]);
   if (!bans) return <p className="muted">Carregando…</p>;
   if (bans.length === 0) return <p className="muted">Ninguém foi banido.</p>;
@@ -368,7 +168,10 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
             <strong>{b.user.displayName}</strong> <span className="muted">@{b.user.username}</span>
             {b.reason && <div className="muted small">{b.reason}</div>}
           </span>
-          <button className="btn btn-ghost" onClick={() => void act(apiFor(accountId).del(`/servers/${serverId}/bans/${b.user.id}`)).then(load)}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => void act(apiFor(accountId).del(`/servers/${serverId}/bans/${b.user.id}`)).then(load)}
+          >
             Revogar
           </button>
         </div>
@@ -382,6 +185,17 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const [tab, setTab] = useState<"overview" | "roles" | "bans">("overview");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
+  const [baselineName, setBaselineName] = useState(state?.server.name ?? "");
+  const saveName = async () => {
+    if (!state || !name.trim()) return false;
+    const ok = await act(apiFor(accountId).patch(`/servers/${serverId}`, { name }), "Servidor renomeado");
+    if (ok) setBaselineName(name);
+    return ok;
+  };
+  useSettingsDraft("server-name", !!state && name !== baselineName, saveName, () => {
+    setName(state?.server.name ?? "");
+    setBaselineName(state?.server.name ?? "");
+  });
   if (!state || !me) return null;
   const isOwner = state.server.ownerId === me;
   const canRoles = has(state.permissions, Permission.MANAGE_ROLES);
@@ -393,16 +207,16 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   return (
     <Modal title={`${state.server.name} · Configurações`} wide>
       <div className="tabs">
-        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => setTab("overview")}>
+        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("overview"))}>
           Visão geral
         </button>
         {canRoles && (
-          <button className={tab === "roles" ? "tab active" : "tab"} onClick={() => setTab("roles")}>
+          <button className={tab === "roles" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("roles"))}>
             Cargos
           </button>
         )}
         {canBans && (
-          <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => setTab("bans")}>
+          <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("bans"))}>
             Banimentos
           </button>
         )}
@@ -414,18 +228,19 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             className="inline-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void act(api.patch(`/servers/${serverId}`, { name }), "Servidor renomeado");
+              void saveName();
             }}
           >
             <Field label="Nome do servidor">
-              <input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer} maxLength={100} />
+              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer} maxLength={100} />
             </Field>
             <button className="btn" disabled={!canServer || !name.trim() || name === state.server.name}>
               Salvar
             </button>
           </form>
           <p className="muted small">
-            {state.members.length} membros · {state.channels.length} canais · dono: {displayNameOf(state.members.find((m) => m.user.id === state.server.ownerId)!)}
+            {state.members.length} membros · {state.channels.length} canais · dono:{" "}
+            {displayNameOf(state.members.find((m) => m.user.id === state.server.ownerId)!)}
           </p>
           {isOwner && (
             <div className="danger-zone">
@@ -433,8 +248,8 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
               <p className="muted small">Excluir o servidor apaga canais, mensagens e anexos para todos.</p>
               <button
                 className="btn btn-danger"
-                onClick={() => {
-                  if (prompt(`Digite o nome do servidor para confirmar: ${state.server.name}`) === state.server.name) {
+                onClick={async () => {
+                  if ((await promptText(`Digite o nome do servidor para confirmar: ${state.server.name}`)) === state.server.name) {
                     void act(api.del(`/servers/${serverId}`)).then((ok) => ok && closeModal());
                   }
                 }}
@@ -452,22 +267,31 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             <button
               className="btn btn-ghost full"
               onClick={() =>
-                void api
-                  .post<Role>(`/servers/${serverId}/roles`, { name: "novo cargo" })
-                  .then((r) => setRoleId(r.id), (e: Error) => toast(e.message))
+                void api.post<Role>(`/servers/${serverId}/roles`, { name: "novo cargo" }).then(
+                  (r) => requestNavigation(() => setRoleId(r.id)),
+                  (e: Error) => toast(e.message),
+                )
               }
             >
               <Icon name="plus" size={16} /> Criar cargo
             </button>
             {state.roles.map((r) => (
-              <button key={r.id} className={`role-item${r.id === roleId ? " active" : ""}`} onClick={() => setRoleId(r.id)}>
+              <button
+                key={r.id}
+                className={`role-item${r.id === roleId ? " active" : ""}`}
+                onClick={() => requestNavigation(() => setRoleId(r.id))}
+              >
                 <span className="role-dot" style={{ background: r.color ?? "var(--text-muted)" }} />
                 <span className="truncate">{r.name}</span>
               </button>
             ))}
           </div>
           <div className="roles-editor">
-            {role ? <RoleEditor accountId={accountId} state={state} role={role} me={me} /> : <p className="muted">Escolha um cargo para editar.</p>}
+            {role ? (
+              <RoleEditor key={role.id} accountId={accountId} state={state} role={role} me={me} />
+            ) : (
+              <p className="muted">Escolha um cargo para editar.</p>
+            )}
           </div>
         </div>
       )}
@@ -483,7 +307,7 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
   const targets = useMemo(
     () => [
       ...state.roles.map((r) => ({ id: r.id, type: "role" as const, label: r.name })),
-      ...state.members.map((m) => ({ id: m.user.id, type: "member" as const, label: `@${displayNameOf(m)}` })),
+      ...state.members.map((m) => ({ id: m.user.id, type: "member" as const, label: displayNameOf(m) })),
     ],
     [state.roles, state.members],
   );
@@ -491,41 +315,65 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
   const existing = channel.overwrites.find((o) => o.targetId === targetId);
   const [allow, setAllow] = useState(existing?.allow ?? 0);
   const [deny, setDeny] = useState(existing?.deny ?? 0);
+  const [baseline, setBaseline] = useState(() => `${existing?.allow ?? 0}:${existing?.deny ?? 0}`);
   const last = useRef(targetId);
   useEffect(() => {
-    if (last.current !== targetId || existing) {
+    if (last.current !== targetId) {
       setAllow(existing?.allow ?? 0);
       setDeny(existing?.deny ?? 0);
       last.current = targetId;
+      setBaseline(`${existing?.allow ?? 0}:${existing?.deny ?? 0}`);
     }
   }, [targetId, existing]);
 
   const target = targets.find((t) => t.id === targetId)!;
-  const names = channel.type === "voice" ? VOICE_PERMS : channel.type === "text" ? TEXT_PERMS : [...new Set([...TEXT_PERMS, ...VOICE_PERMS])];
+  const names =
+    channel.type === "voice" ? VOICE_PERMS : channel.type === "text" ? TEXT_PERMS : [...new Set([...TEXT_PERMS, ...VOICE_PERMS])];
   const api = apiFor(accountId);
   const set = (p: PermissionName, mode: "allow" | "inherit" | "deny") => {
     const bit = Permission[p];
     setAllow((a) => (mode === "allow" ? a | bit : a & ~bit));
     setDeny((d) => (mode === "deny" ? d | bit : d & ~bit));
   };
-  const save = () => {
+  const save = async () => {
+    if (!target || !canEdit) return false;
     const body: Overwrite & { targetType: "role" | "member" } = { targetId, targetType: target.type, allow, deny };
-    void act(api.put(`/channels/${channel.id}/overwrites/${targetId}`, body), "Permissões salvas");
+    const ok = await act(api.put(`/channels/${channel.id}/overwrites/${targetId}`, body), "Permissões salvas");
+    if (ok) setBaseline(`${allow}:${deny}`);
+    return ok;
   };
   const canEdit = has(state.permissions, Permission.MANAGE_ROLES) || state.server.ownerId === me;
+  useSettingsDraft(`overwrite-${channel.id}`, canEdit && `${allow}:${deny}` !== baseline, save, () => {
+    setAllow(existing?.allow ?? 0);
+    setDeny(existing?.deny ?? 0);
+    setBaseline(`${existing?.allow ?? 0}:${existing?.deny ?? 0}`);
+  });
 
   return (
     <div className="overwrites">
-      <Field label="Cargo ou membro">
-        <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-          {targets.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
-              {channel.overwrites.some((o) => o.targetId === t.id) ? " •" : ""}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="field">
+        <span className="field-label">Permissões para</span>
+        <EntityPicker
+          label="Cargo ou membro"
+          value={targetId}
+          onValueChange={(id) => requestNavigation(() => setTargetId(id))}
+          items={targets.map((t) => ({
+            id: t.id,
+            label: t.label,
+            group: t.type === "role" ? "Cargos" : "Membros",
+            description:
+              t.type === "role"
+                ? t.id === state.server.id
+                  ? "Todos os membros do servidor"
+                  : "Quem possui este cargo"
+                : `@${state.members.find((m) => m.user.id === t.id)?.user.username ?? ""}`,
+            color: state.roles.find((r) => r.id === t.id)?.color,
+            avatarUrl: state.members.find((m) => m.user.id === t.id)?.user.avatarUrl,
+            customized: channel.overwrites.some((o) => o.targetId === t.id),
+          }))}
+        />
+        <span className="field-hint">Cargos afetam um grupo. Membros recebem uma exceção individual.</span>
+      </div>
       <div className="tri-list">
         {names.map((p) => {
           const bit = Permission[p];
@@ -533,28 +381,30 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
           return (
             <div key={p} className="tri-row">
               <span>{PERMISSION_LABELS[p]}</span>
-              <div className="tri" role="radiogroup">
-                <button className={mode === "deny" ? "deny on" : "deny"} onClick={() => set(p, "deny")} title="Negar" disabled={!canEdit}>
-                  ✕
-                </button>
-                <button className={mode === "inherit" ? "inherit on" : "inherit"} onClick={() => set(p, "inherit")} title="Herdar" disabled={!canEdit}>
-                  /
-                </button>
-                <button className={mode === "allow" ? "allow on" : "allow"} onClick={() => set(p, "allow")} title="Permitir" disabled={!canEdit}>
-                  ✓
-                </button>
-              </div>
+              <PermissionToggle label={PERMISSION_LABELS[p]} value={mode} disabled={!canEdit} onValueChange={(mode) => set(p, mode)} />
             </div>
           );
         })}
       </div>
       <div className="form-actions">
         {existing && (
-          <button className="btn btn-ghost" disabled={!canEdit} onClick={() => void act(api.del(`/channels/${channel.id}/overwrites/${targetId}`), "Sobrescrita removida")}>
+          <button
+            className="btn btn-ghost"
+            disabled={!canEdit}
+            onClick={() =>
+              void act(api.del(`/channels/${channel.id}/overwrites/${targetId}`), "Sobrescrita removida").then((ok) => {
+                if (ok) {
+                  setAllow(0);
+                  setDeny(0);
+                  setBaseline("0:0");
+                }
+              })
+            }
+          >
             Remover sobrescrita
           </button>
         )}
-        <button className="btn" onClick={save} disabled={!canEdit}>
+        <button className="btn" onClick={() => void save()} disabled={!canEdit}>
           Salvar permissões
         </button>
       </div>
@@ -569,6 +419,27 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const [name, setName] = useState(channel?.name ?? "");
   const [topic, setTopic] = useState(channel?.topic ?? "");
   const [parentId, setParentId] = useState(channel?.parentId ?? "");
+  const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? ""]));
+  const values = JSON.stringify([name, topic, parentId]);
+  const saveChannel = async () => {
+    if (!channel || !name.trim()) return false;
+    const ok = await act(
+      apiFor(accountId).patch(`/channels/${channel.id}`, {
+        name,
+        topic,
+        ...(channel.type !== "category" && { parentId: parentId || null }),
+      }),
+      "Canal salvo",
+    );
+    if (ok) setBaseline(values);
+    return ok;
+  };
+  useSettingsDraft("channel", !!channel && values !== baseline, saveChannel, () => {
+    setName(channel?.name ?? "");
+    setTopic(channel?.topic ?? "");
+    setParentId(channel?.parentId ?? "");
+    setBaseline(JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? ""]));
+  });
   if (!state || !channel || !me) return null;
   const api = apiFor(accountId);
   const categories = state.channels.filter((c) => c.type === "category");
@@ -576,10 +447,10 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   return (
     <Modal title={`Editar ${channel.type === "category" ? "categoria" : "canal"}: ${channel.name}`} wide>
       <div className="tabs">
-        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => setTab("overview")}>
+        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("overview"))}>
           Visão geral
         </button>
-        <button className={tab === "perms" ? "tab active" : "tab"} onClick={() => setTab("perms")}>
+        <button className={tab === "perms" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("perms"))}>
           Permissões
         </button>
       </div>
@@ -588,34 +459,37 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
           className="form"
           onSubmit={(e) => {
             e.preventDefault();
-            void act(api.patch(`/channels/${channel.id}`, { name, topic, ...(channel.type !== "category" && { parentId: parentId || null }) }), "Canal salvo");
+            void saveChannel();
           }}
         >
           <Field label="Nome">
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />
           </Field>
           {channel.type === "text" && (
             <Field label="Tópico">
-              <textarea value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} rows={3} />
+              <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} rows={3} />
             </Field>
           )}
           {channel.type !== "category" && (
             <Field label="Categoria">
-              <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
                 <option value="">Sem categoria</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
           )}
           <div className="form-actions">
             <button
               type="button"
               className="btn btn-danger"
-              onClick={() => confirm(`Excluir ${channel.name}? Mensagens serão apagadas.`) && void act(api.del(`/channels/${channel.id}`)).then((ok) => ok && closeModal())}
+              onClick={async () =>
+                (await confirmAction(`Excluir ${channel.name}? Mensagens serão apagadas.`)) &&
+                void act(api.del(`/channels/${channel.id}`)).then((ok) => ok && closeModal())
+              }
             >
               Excluir
             </button>
@@ -651,7 +525,11 @@ export function CreateChannelModal({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const channel = await apiFor(accountId).post<Channel>(`/servers/${serverId}/channels`, { name, type, parentId: type === "category" ? null : parentId || null });
+      const channel = await apiFor(accountId).post<Channel>(`/servers/${serverId}/channels`, {
+        name,
+        type,
+        parentId: type === "category" ? null : parentId || null,
+      });
       closeModal();
       if (channel.type === "text") openChannel(accountId, serverId, channel.id);
     } catch (err) {
@@ -663,32 +541,45 @@ export function CreateChannelModal({
     <Modal title={type === "category" ? "Criar categoria" : "Criar canal"}>
       <form className="form" onSubmit={submit}>
         {initialType !== "category" && (
-          <div className="radio-cards">
-            {(["text", "voice"] as const).map((t) => (
-              <label key={t} className={type === t ? "radio-card active" : "radio-card"}>
-                <input type="radio" checked={type === t} onChange={() => setType(t)} />
-                <Icon name={t === "text" ? "hash" : "speaker"} />
-                <span>
-                  <strong>{t === "text" ? "Texto" : "Voz"}</strong>
-                  <span className="muted small">{t === "text" ? "Mensagens, imagens e arquivos" : "Conversa por voz em tempo real"}</span>
-                </span>
-              </label>
-            ))}
-          </div>
+          <RadioGroup
+            cards
+            label="Tipo de canal"
+            value={type}
+            onValueChange={(value) => setType(value as "text" | "voice")}
+            options={["text", "voice"].map((t) => ({
+              value: t,
+              label: (
+                <>
+                  <Icon name={t === "text" ? "hash" : "speaker"} />
+                  <span>
+                    <strong>{t === "text" ? "Texto" : "Voz"}</strong>
+                    <span className="muted small">{t === "text" ? "Mensagens, imagens e arquivos" : "Conversa por voz em tempo real"}</span>
+                  </span>
+                </>
+              ),
+            }))}
+          />
         )}
         <Field label="Nome">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "text" ? "novo-canal" : type === "voice" ? "Sala" : "Nova categoria"} required maxLength={100} />
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={type === "text" ? "novo-canal" : type === "voice" ? "Sala" : "Nova categoria"}
+            required
+            maxLength={100}
+          />
         </Field>
         {type !== "category" && categories.length > 0 && (
           <Field label="Categoria">
-            <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+            <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
               <option value="">Sem categoria</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         )}
         <div className="form-actions">
@@ -746,20 +637,20 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
       </div>
       <div className="grid-2">
         <Field label="Expira em">
-          <select value={expires} onChange={(e) => setExpires(e.target.value)}>
+          <Select value={expires} onChange={(e) => setExpires(e.target.value)}>
             <option value="1">1 hora</option>
             <option value="24">1 dia</option>
             <option value="168">7 dias</option>
             <option value="">Nunca</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Máximo de usos">
-          <select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
+          <Select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
             <option value="">Sem limite</option>
             <option value="1">1 uso</option>
             <option value="5">5 usos</option>
             <option value="25">25 usos</option>
-          </select>
+          </Select>
         </Field>
       </div>
       <div className="form-actions">

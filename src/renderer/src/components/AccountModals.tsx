@@ -1,9 +1,13 @@
+import { Select } from "./ui/select.tsx";
 import type { InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
 import { useRef, useState, type FormEvent } from "react";
 import { authenticate, beginDiscordLogin, DEFAULT_PORT, discordLogin, fetchInfo, normalizeUrl } from "../api.ts";
 import { addAccount, apiFor, openServer } from "../client.ts";
 import { setState, toast, useStore } from "../store.ts";
 import { closeModal, Field, Modal } from "./ui.tsx";
+import { Button } from "./ui/button.tsx";
+import { Input } from "./ui/input.tsx";
+import { Brand } from "./Brand.tsx";
 
 export function AddAccountModal() {
   const [address, setAddress] = useState("");
@@ -74,39 +78,41 @@ export function AddAccountModal() {
 
   return (
     <Modal title={info ? info.info.name : "Conectar a um servidor Distopic"}>
+      <div className="connection-brand"><Brand size={32} wordmark /></div>
       {!info ? (
         <form onSubmit={probe} className="form">
           <p className="muted">
             Digite o endereço do servidor, como no TeamSpeak. Sem porta, o client usa a {DEFAULT_PORT}.
           </p>
           <Field label="Endereço">
-            <input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.0.10 ou chat.exemplo.com" required />
+            <Input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.0.10 ou chat.exemplo.com" required />
           </Field>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
-            <button type="button" className="btn btn-ghost" onClick={closeModal}>
+            <Button type="button" variant="secondary" onClick={closeModal}>
               Cancelar
-            </button>
-            <button className="btn" disabled={busy}>
+            </Button>
+            <Button type="submit" loading={busy}>
               {busy ? "Conectando…" : "Continuar"}
-            </button>
+            </Button>
           </div>
         </form>
       ) : (
         <form onSubmit={submit} className="form">
           <div className="tabs">
-            <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => setMode("login")}>
+            <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => setMode("login")}>
               Entrar
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
               className={mode === "register" ? "tab active" : "tab"}
               onClick={() => setMode("register")}
               disabled={!info.info.registrationOpen}
               title={info.info.registrationOpen ? undefined : "Cadastro fechado nesta instância"}
             >
               Criar conta
-            </button>
+            </Button>
           </div>
           <p className="muted">{info.url}</p>
           {info.info.discordLogin && (
@@ -114,18 +120,18 @@ export function AddAccountModal() {
               {waitingDiscord ? (
                 <div className="discord-wait">
                   <span>Autorize no navegador que abriu…</span>
-                  <button type="button" className="btn btn-ghost" onClick={() => discordAbort.current?.abort()}>
+                  <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button type="button" className="btn btn-discord" onClick={() => void withDiscord()}>
+                <Button type="button" variant="outline" onClick={() => void withDiscord()}>
                   Entrar com Discord
-                </button>
+                </Button>
               )}
               {needsInvite && (
                 <Field label="Convite (para conta nova)" hint="Quem já tem conta pode deixar em branco">
-                  <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" />
+                  <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" />
                 </Field>
               )}
               <div className="or">
@@ -134,20 +140,20 @@ export function AddAccountModal() {
             </>
           )}
           <Field label="Usuário">
-            <input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
+            <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
           </Field>
           {mode === "register" && (
             <Field label="Nome de exibição" hint="Opcional; você pode mudar depois">
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             </Field>
           )}
           {mode === "register" && needsInvite && (
             <Field label="Convite de cadastro" hint="Peça a quem hospeda esta instância">
-              <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
+              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
             </Field>
           )}
           <Field label="Senha" hint={mode === "register" ? "Mínimo de 8 caracteres" : undefined}>
-            <input
+            <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -157,12 +163,12 @@ export function AddAccountModal() {
           </Field>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => setInfo(null)}>
+            <Button type="button" variant="secondary" onClick={() => setInfo(null)}>
               Voltar
-            </button>
-            <button className="btn" disabled={busy}>
+            </Button>
+            <Button type="submit" loading={busy}>
               {busy ? "Aguarde…" : mode === "login" ? "Entrar" : "Criar conta"}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -218,31 +224,31 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
     <Modal title="Adicionar servidor">
       {accounts.length > 1 && (
         <Field label="Instância">
-          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.instanceName} ({a.url})
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       )}
       <form onSubmit={create} className="form">
         <h3>Criar um servidor</h3>
         <Field label="Nome do servidor">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meu servidor" required maxLength={100} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meu servidor" required maxLength={100} />
         </Field>
         <div className="form-actions">
-          <button className="btn" disabled={busy || !name.trim()}>
+          <Button type="submit" loading={busy} disabled={!name.trim()}>
             Criar
-          </button>
+          </Button>
         </div>
       </form>
       <hr />
       <form onSubmit={join} className="form">
         <h3>Entrar com um convite</h3>
         <Field label="Código do convite">
-          <input
+          <Input
             value={invite}
             onChange={(e) => {
               setInvite(e.target.value);
@@ -258,9 +264,9 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
           </p>
         )}
         <div className="form-actions">
-          <button className="btn" disabled={busy || !invite.trim()}>
+          <Button type="submit" loading={busy} disabled={!invite.trim()}>
             {preview ? "Entrar no servidor" : "Verificar convite"}
-          </button>
+          </Button>
         </div>
       </form>
       <hr />
@@ -268,8 +274,8 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
         <h3>Trazer do Discord</h3>
         <p className="muted small">Copie canais, cargos, permissões e o histórico de um servidor do Discord, escolhendo o que entra.</p>
         <div className="form-actions start">
-          <button
-            className="btn btn-ghost"
+          <Button
+            variant="secondary"
             onClick={() =>
               setState((s) => {
                 s.modal = { kind: "importDiscord", accountId, serverId: null };
@@ -277,13 +283,13 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
             }
           >
             Importar do Discord…
-          </button>
+          </Button>
         </div>
       </div>
       <hr />
       <div className="form-actions">
-        <button
-          className="btn btn-ghost"
+        <Button
+          variant="secondary"
           onClick={() =>
             setState((s) => {
               s.modal = { kind: "addAccount" };
@@ -291,7 +297,7 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
           }
         >
           Conectar a outra instância Distopic…
-        </button>
+        </Button>
       </div>
     </Modal>
   );

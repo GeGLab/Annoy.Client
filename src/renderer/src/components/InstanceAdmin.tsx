@@ -1,3 +1,7 @@
+import { Checkbox } from "./ui/checkbox.tsx";
+import { Input } from "./ui/input.tsx";
+import { promptText, confirmAction } from "./ui/action-dialog.tsx";
+import { Select } from "./ui/select.tsx";
 import type { AdminOverview, AdminServer, AdminUser, InstanceSettings, RegistrationMode, SignupInvite } from "@distopic/protocol";
 import { useEffect, useState } from "react";
 import { apiFor, removeAccount } from "../client.ts";
@@ -44,7 +48,7 @@ function SettingsTab({ accountId }: { accountId: string }) {
       </Field>
       <div className="grid-2">
         <Field label="Servidores por conta" hint="Vazio = sem limite. Admins não têm limite.">
-          <input
+          <Input
             type="number"
             min={1}
             value={draft.maxServersPerUser ?? ""}
@@ -53,7 +57,7 @@ function SettingsTab({ accountId }: { accountId: string }) {
           />
         </Field>
         <Field label="Tamanho máximo por anexo (MB)">
-          <input type="number" min={1} max={500} value={draft.maxUploadMb} onChange={(e) => setDraft({ ...draft, maxUploadMb: Number(e.target.value) || 1 })} />
+          <Input type="number" min={1} max={500} value={draft.maxUploadMb} onChange={(e) => setDraft({ ...draft, maxUploadMb: Number(e.target.value) || 1 })} />
         </Field>
       </div>
       <div className="form-actions">
@@ -90,20 +94,20 @@ function InvitesTab({ accountId }: { accountId: string }) {
       </p>
       <div className="inline-form">
         <Field label="Usos">
-          <select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
+          <Select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
             <option value="1">1 pessoa</option>
             <option value="5">5 pessoas</option>
             <option value="25">25 pessoas</option>
             <option value="">Sem limite</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Expira em">
-          <select value={expires} onChange={(e) => setExpires(e.target.value)}>
+          <Select value={expires} onChange={(e) => setExpires(e.target.value)}>
             <option value="24">1 dia</option>
             <option value="168">7 dias</option>
             <option value="720">30 dias</option>
             <option value="">Nunca</option>
-          </select>
+          </Select>
         </Field>
         <button className="btn" onClick={create}>
           <Icon name="plus" size={16} /> Gerar convite
@@ -149,18 +153,18 @@ function UsersTab({ accountId }: { accountId: string }) {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [accountId, q]);
-  const ban = (u: AdminUser) => {
-    const reason = prompt(`Suspender ${u.user.displayName}? Motivo (opcional):`);
+  const ban = async (u: AdminUser) => {
+    const reason = await promptText(`Suspender ${u.user.displayName}? Motivo (opcional):`);
     if (reason !== null) void act(api.post(`/admin/users/${u.user.id}/ban`, { reason }), "Conta suspensa").then(load);
   };
-  const remove = (u: AdminUser) => {
-    if (!confirm(`Excluir a conta de ${u.user.displayName}? Os dados pessoais são apagados.`)) return;
-    const messages = confirm("Apagar também todas as mensagens dessa pessoa? (OK = apagar, Cancelar = manter como “Usuário excluído”)");
+  const remove = async (u: AdminUser) => {
+    if (!await confirmAction(`Excluir a conta de ${u.user.displayName}? Os dados pessoais são apagados.`)) return;
+    const messages = await confirmAction("Apagar também todas as mensagens dessa pessoa? Você pode mantê-las como “Usuário excluído”.", {confirmLabel:"Apagar mensagens",cancelLabel:"Manter mensagens"});
     void act(api.del(`/admin/users/${u.user.id}?deleteMessages=${messages ? 1 : 0}`), "Conta excluída").then(load);
   };
   return (
     <div className="form">
-      <input placeholder="Buscar por nome ou @usuário" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Input placeholder="Buscar por nome ou @usuário" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="list">
         {users?.map((u) => (
           <div key={u.user.id} className={`list-row user-row-admin${u.bannedAt ? " dim" : ""}`}>
@@ -226,8 +230,8 @@ function ServersTab({ accountId }: { accountId: string }) {
           <button
             className="icon-btn danger"
             title="Excluir servidor"
-            onClick={() => {
-              if (prompt(`Digite o nome do servidor para excluir: ${s.server.name}`) === s.server.name) void act(api.del(`/admin/servers/${s.server.id}`), "Servidor excluído").then(load);
+            onClick={async () => {
+              if (await promptText(`Digite o nome do servidor para excluir: ${s.server.name}`) === s.server.name) void act(api.del(`/admin/servers/${s.server.id}`), "Servidor excluído").then(load);
             }}
           >
             <Icon name="trash" size={16} />
@@ -290,15 +294,15 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
           Isto apaga sua conta nesta instância: nome, foto, vínculo com o Discord, amizades e participação nos servidores. Não dá para desfazer.
         </p>
         <label className="check">
-          <input type="checkbox" checked={deleteMessages} onChange={(e) => setDeleteMessages(e.target.checked)} />
+          <Checkbox  checked={deleteMessages} onChange={(e) => setDeleteMessages(e.target.checked)} />
           Apagar também todas as minhas mensagens e anexos
         </label>
         <p className="muted small">Sem marcar, suas mensagens continuam aparecendo como "Usuário excluído".</p>
         <Field label={`Digite @${user.username} para confirmar`}>
-          <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={user.username} />
+          <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={user.username} />
         </Field>
         <Field label="Senha" hint="Deixe em branco se você entra só pelo Discord">
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </Field>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={closeModal}>

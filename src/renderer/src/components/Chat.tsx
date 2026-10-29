@@ -1,9 +1,31 @@
+import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
-import { apiFor, loadMessages, sendTyping } from "../client.ts";
+import {
+  Fragment,
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { apiFor, loadMessages, returnToLatest, sendTyping } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
-import { useStore } from "../store.ts";
+import { toast, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
+import { ChatSkeleton } from "./ui/skeleton.tsx";
+import { Button } from "./ui/button.tsx";
+import { Textarea } from "./ui/textarea.tsx";
+
+const ImageViewer = lazy(() => import("./ImageViewer.tsx"));
+const MediaViewer = lazy(() => import("./MediaViewer.tsx"));
+const isImage = (type: string) => /^image\/(png|jpe?g|gif|webp|avif)$/i.test(type);
 
 const GROUP_WINDOW_MS = 7 * 60_000;
 const EMPTY: Message[] = [];
@@ -32,13 +54,52 @@ interface ChatProps {
 
 function Attachments({ accountId, message }: { accountId: string; message: Message }) {
   const api = apiFor(accountId);
+  const [opened, setOpened] = useState<number | null>(null);
+  const [media, setMedia] = useState<{ url: string; filename: string; contentType: string } | null>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const images = message.attachments
+    .filter((a) => isImage(a.contentType))
+    .map((a) => ({ id: a.id, url: api.resolve(a.url), filename: a.filename, size: a.size }));
   return (
     <div className="attachments">
       {message.attachments.map((a) =>
-        /^image\/(png|jpeg|gif|webp)$/.test(a.contentType) ? (
-          <a key={a.id} href={api.resolve(a.url)} target="_blank" rel="noreferrer" className="attachment-image">
-            <img src={api.resolve(a.url)} alt={a.filename} loading="lazy" />
-          </a>
+        isImage(a.contentType) ? (
+          <button
+            key={a.id}
+            type="button"
+            className="attachment-image"
+            aria-label={`Visualizar ${a.filename}`}
+            onClick={(e) => {
+              opener.current = e.currentTarget;
+              setOpened(images.findIndex((image) => image.id === a.id));
+            }}
+          >
+            <img src={api.resolve(a.url)} alt={a.filename} loading="lazy" decoding="async" />
+            <span className="attachment-expand">
+              <Icon name="maximize" size={16} />
+            </span>
+          </button>
+        ) : /^(audio|video)\//.test(a.contentType) ? (
+          <button
+            key={a.id}
+            className="attachment-media"
+            onClick={(event) => {
+              opener.current = event.currentTarget;
+              setMedia({ url: api.resolve(a.url), filename: a.filename, contentType: a.contentType });
+            }}
+            aria-label={`Reproduzir ${a.filename}`}
+          >
+            <span className="attachment-play">
+              <Icon name="play" size={21} />
+            </span>
+            <span>
+              <strong>{a.filename}</strong>
+              <small>
+                {a.contentType.startsWith("video/") ? "Vídeo" : "Áudio"} · {formatSize(a.size)}
+              </small>
+            </span>
+            <Icon name={a.contentType.startsWith("video/") ? "film" : "music"} size={22} />
+          </button>
         ) : (
           <a key={a.id} href={api.resolve(a.url)} target="_blank" rel="noreferrer" className="attachment-file">
             <Icon name="paperclip" size={20} />
@@ -48,6 +109,41 @@ function Attachments({ accountId, message }: { accountId: string; message: Messa
             </span>
           </a>
         ),
+      )}
+      {opened !== null && (
+        <Suspense
+          fallback={
+            <div className="overlay-loading" role="status">
+              Abrindo imagem…
+            </div>
+          }
+        >
+          <ImageViewer
+            images={images}
+            initialIndex={opened}
+            onClose={() => {
+              setOpened(null);
+              requestAnimationFrame(() => opener.current?.focus());
+            }}
+          />
+        </Suspense>
+      )}
+      {media && (
+        <Suspense
+          fallback={
+            <div className="overlay-loading" role="status">
+              Abrindo player…
+            </div>
+          }
+        >
+          <MediaViewer
+            media={media}
+            onClose={() => {
+              setMedia(null);
+              requestAnimationFrame(() => opener.current?.focus());
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -89,12 +185,13 @@ function MessageRow({
     setEditing(false);
   };
 
-  const remove = () => {
-    if (confirm("Excluir esta mensagem?")) void act(apiFor(accountId).del(`/channels/${message.channelId}/messages/${message.id}`));
+  const remove = async () => {
+    if (await confirmAction("Excluir esta mensagem?"))
+      void act(apiFor(accountId).del(`/channels/${message.channelId}/messages/${message.id}`));
   };
 
   return (
-    <div className={`message${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
+    <div data-message-id={message.id} className={`message${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -121,7 +218,7 @@ function MessageRow({
           )}
           {editing ? (
             <div className="edit-box">
-              <textarea
+              <Textarea
                 autoFocus
                 value={draft}
                 maxLength={LIMITS.messageMax}
@@ -186,7 +283,12 @@ function TypingLine({ accountId, channelId, me, nameOf }: { accountId: string; c
     .filter(([id, until]) => id !== me && until > now)
     .map(([id]) => nameOf(id) ?? "Alguém");
   if (names.length === 0) return <div className="typing" />;
-  const text = names.length === 1 ? `${names[0]} está digitando…` : names.length <= 3 ? `${names.join(", ")} estão digitando…` : "Várias pessoas estão digitando…";
+  const text =
+    names.length === 1
+      ? `${names[0]} está digitando…`
+      : names.length <= 3
+        ? `${names.join(", ")} estão digitando…`
+        : "Várias pessoas estão digitando…";
   return <div className="typing">{text}</div>;
 }
 
@@ -275,7 +377,7 @@ function Composer({
       setPicked([]);
       clearReply();
     } catch (err) {
-      alert((err as Error).message);
+      toast((err as Error).message);
     } finally {
       setSending(false);
     }
@@ -363,8 +465,9 @@ function Composer({
             />
           </>
         )}
-        <textarea
+        <Textarea
           ref={input}
+          aria-label={placeholder}
           rows={1}
           value={text}
           maxLength={LIMITS.messageMax}
@@ -378,6 +481,17 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="composer-send"
+          loading={sending}
+          disabled={sending || (!text.trim() && files.length === 0)}
+          onClick={() => void send()}
+          aria-label="Enviar mensagem"
+        >
+          <Icon name="send" size={19} />
+        </Button>
       </div>
     </div>
   );
@@ -394,6 +508,46 @@ export function Chat(props: ChatProps) {
   const pinned = useRef(true);
   const prevHeight = useRef<number | null>(null);
   const firstId = items[0]?.id;
+  const navigation = useStore((s) => s.chatNavigation);
+  const focus = useStore((s) =>
+    s.messageFocus?.accountId === accountId && s.messageFocus.channelId === channelId ? s.messageFocus : null,
+  );
+  const messageLog = useRef<HTMLDivElement>(null);
+  const lastTop = useRef(0);
+  useLayoutEffect(() => {
+    if (!focus) return;
+    pinned.current = false;
+    const row = scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focus.messageId)}"]`);
+    row?.scrollIntoView({ block: "center" });
+    row?.classList.add("search-highlight");
+    return () => row?.classList.remove("search-highlight");
+  }, [focus, items]);
+
+  useLayoutEffect(() => {
+    pinned.current = !focus;
+    prevHeight.current = null;
+    const el = scroller.current;
+    if (el && !focus) {
+      el.scrollTop = el.scrollHeight;
+      lastTop.current = el.scrollTop;
+    }
+  }, [accountId, channelId, navigation]);
+
+  // Images can grow after the message list mounts. Follow that growth only
+  // while the reader remains at the latest message, never while reading back.
+  useEffect(() => {
+    if (!messageLog.current) return;
+    const observer = new ResizeObserver(() => {
+      const el = scroller.current;
+      if (el && pinned.current && prevHeight.current === null) {
+        el.scrollTop = el.scrollHeight;
+        lastTop.current = el.scrollTop;
+      }
+    });
+    observer.observe(messageLog.current);
+    if (scroller.current) observer.observe(scroller.current);
+    return () => observer.disconnect();
+  }, [accountId, channelId]);
 
   useEffect(() => {
     void loadMessages(accountId, channelId);
@@ -412,7 +566,9 @@ export function Chat(props: ChatProps) {
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (el.scrollTop < lastTop.current - 1) pinned.current = false;
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) pinned.current = true;
+    lastTop.current = el.scrollTop;
     if (el.scrollTop < 200 && entry?.hasMore && !entry.loading) {
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
@@ -448,40 +604,58 @@ export function Chat(props: ChatProps) {
         {props.headerExtra}
       </header>
       <div className="messages" ref={scroller} onScroll={onScroll}>
-        {entry && !entry.hasMore && (
-          <div className="channel-start">
-            <h2>Início de {props.icon === "hash" ? `#${props.title}` : props.title}</h2>
-            <p className="muted">Este é o começo da conversa.</p>
-          </div>
-        )}
-        {entry?.loading && <div className="loading small">Carregando…</div>}
-        {items.map((m, i) => {
-          const prev = items[i - 1];
-          const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
-          const compact =
-            !newDay && !!prev && !m.replyToId && prev.author.id === m.author.id && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
-          return (
-            <Fragment key={m.id}>
-            {newDay && (
-              <div className="day-divider" role="separator">
-                <span>{formatDay(m.createdAt)}</span>
+        <div ref={messageLog} className="message-log">
+          {entry && !entry.hasMore && (
+            <div className="channel-start">
+              <h2>Início de {props.icon === "hash" ? `#${props.title}` : props.title}</h2>
+              <p className="muted">Este é o começo da conversa.</p>
+            </div>
+          )}
+          {entry?.loading &&
+            (items.length === 0 ? (
+              <ChatSkeleton />
+            ) : (
+              <div className="loading small" role="status">
+                Carregando mensagens anteriores…
               </div>
-            )}
-            <MessageRow
-              accountId={accountId}
-              message={m}
-              compact={compact}
-              me={me}
-              replyTo={m.replyToId ? byId.get(m.replyToId) : undefined}
-              nameOf={nameOf}
-              channelOf={props.channelOf}
-              canModerate={props.canModerate}
-              onReply={setReplyTo}
-            />
-            </Fragment>
-          );
-        })}
+            ))}
+          {items.map((m, i) => {
+            const prev = items[i - 1];
+            const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+            const compact =
+              !newDay &&
+              !!prev &&
+              !m.replyToId &&
+              prev.author.id === m.author.id &&
+              Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
+            return (
+              <Fragment key={m.id}>
+                {newDay && (
+                  <div className="day-divider" role="separator">
+                    <span>{formatDay(m.createdAt)}</span>
+                  </div>
+                )}
+                <MessageRow
+                  accountId={accountId}
+                  message={m}
+                  compact={compact}
+                  me={me}
+                  replyTo={m.replyToId ? byId.get(m.replyToId) : undefined}
+                  nameOf={nameOf}
+                  channelOf={props.channelOf}
+                  canModerate={props.canModerate}
+                  onReply={setReplyTo}
+                />
+              </Fragment>
+            );
+          })}
+        </div>
       </div>
+      {focus && (
+        <button className="return-latest" onClick={() => returnToLatest(accountId, channelId)}>
+          Você está vendo uma mensagem da busca · Voltar às mais recentes
+        </button>
+      )}
       <Composer
         dropRef={dropTarget}
         accountId={accountId}

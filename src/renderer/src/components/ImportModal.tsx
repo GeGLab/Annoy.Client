@@ -1,3 +1,7 @@
+import { Checkbox } from "./ui/checkbox.tsx";
+import { Input } from "./ui/input.tsx";
+import { Select } from "./ui/select.tsx";
+import { RadioGroup } from "./ui/radio-group.tsx";
 import type { ImportChannel, ImportGuild, ImportGuildList, ImportJob, ImportRequest, ImportStructure } from "@distopic/protocol";
 import { useMemo, useState, type FormEvent } from "react";
 import { apiFor, openServer } from "../client.ts";
@@ -13,7 +17,11 @@ const LIMITS = [
   { label: "Histórico completo", value: null },
 ] as const;
 
-type Step = { kind: "token" } | { kind: "guild"; list: ImportGuildList } | { kind: "select"; list: ImportGuildList; structure: ImportStructure } | { kind: "progress"; jobId: string };
+type Step =
+  | { kind: "token" }
+  | { kind: "guild"; list: ImportGuildList }
+  | { kind: "select"; list: ImportGuildList; structure: ImportStructure }
+  | { kind: "progress"; jobId: string };
 
 function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: string, list: ImportGuildList) => void }) {
   const [token, setToken] = useState("");
@@ -31,7 +39,9 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
   };
   return (
     <form className="form" onSubmit={submit}>
-      <p className="muted">A importação usa um bot pela API oficial do Discord. Sua conta não é usada, então não há risco de banimento. Para preparar o bot:</p>
+      <p className="muted">
+        A importação usa um bot pela API oficial do Discord. Sua conta não é usada, então não há risco de banimento. Para preparar o bot:
+      </p>
       <ol className="steps">
         <li>
           No{" "}
@@ -47,7 +57,15 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
         <li>Cole o token abaixo; no próximo passo você adiciona o bot ao seu servidor com um link pronto.</li>
       </ol>
       <Field label="Token do bot" hint="Usado só durante a importação; o Distopic não salva o token">
-        <input type="password" autoFocus value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTIz…" autoComplete="off" required />
+        <Input
+          type="password"
+          autoFocus
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="MTIz…"
+          autoComplete="off"
+          required
+        />
       </Field>
       <div className="form-actions">
         <button type="button" className="btn btn-ghost" onClick={closeModal}>
@@ -99,7 +117,8 @@ function GuildStep({
   return (
     <div className="form">
       <p className="muted">
-        Bot conectado: <strong>{list.bot.username}</strong>. Ele só vê os servidores em que foi adicionado. Adicionar exige a permissão "Gerenciar servidor" no Discord.
+        Bot conectado: <strong>{list.bot.username}</strong>. Ele só vê os servidores em que foi adicionado. Adicionar exige a permissão
+        "Gerenciar servidor" no Discord.
       </p>
       <div className="guild-grid">
         {list.guilds.map((g) => (
@@ -176,7 +195,7 @@ function SelectStep({
     return (
       <div key={c.id} className={`import-row${nested ? " nested" : ""}${supported ? "" : " disabled"}`}>
         <label className="check">
-          <input type="checkbox" checked={supported && on} disabled={!supported} onChange={(e) => setChannels([c.id], e.target.checked)} />
+          <Checkbox checked={supported && on} disabled={!supported} onChange={(e) => setChannels([c.id], e.target.checked)} />
           <Icon name={c.kind === "voice" ? "speaker" : "hash"} size={14} />
           <span className="truncate">{c.name}</span>
           {c.label !== "texto" && c.label !== "voz" && <span className="tag">{c.label}</span>}
@@ -184,8 +203,7 @@ function SelectStep({
         </label>
         {c.kind === "text" && (
           <label className="check history">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={historyIds.has(c.id)}
               disabled={!on}
               onChange={(e) => setHistoryIds((s) => toggle(s, [c.id], e.target.checked))}
@@ -228,24 +246,30 @@ function SelectStep({
     <div className="form import-select">
       <section>
         <h3>Destino</h3>
-        <div className="radio-row">
-          <label>
-            <input type="radio" checked={target === "new"} onChange={() => setTarget("new")} /> Novo servidor
-          </label>
-          <label title={owned.length === 0 ? "Você não é dono de nenhum servidor nesta instância" : undefined}>
-            <input type="radio" checked={target === "existing"} disabled={owned.length === 0} onChange={() => setTarget("existing")} /> Servidor existente
-          </label>
-        </div>
+        <RadioGroup
+          label="Destino da importação"
+          value={target}
+          onValueChange={(value) => setTarget(value as "new" | "existing")}
+          options={[
+            { value: "new", label: "Novo servidor" },
+            {
+              value: "existing",
+              label: "Servidor existente",
+              disabled: owned.length === 0,
+              hint: owned.length === 0 ? "Você não é dono de nenhum servidor nesta instância" : undefined,
+            },
+          ]}
+        />
         {target === "new" ? (
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Nome do servidor" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Nome do servidor" />
         ) : (
-          <select value={serverId} onChange={(e) => setServerId(e.target.value)}>
+          <Select value={serverId} onChange={(e) => setServerId(e.target.value)}>
             {owned.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </section>
 
@@ -253,10 +277,26 @@ function SelectStep({
         <div className="section-head">
           <h3>Canais</h3>
           <span className="spacer" />
-          <button className="link-btn" onClick={() => setChannels(importable.map((c) => c.id), true)}>
+          <button
+            className="link-btn"
+            onClick={() =>
+              setChannels(
+                importable.map((c) => c.id),
+                true,
+              )
+            }
+          >
             todos
           </button>
-          <button className="link-btn" onClick={() => setChannels(importable.map((c) => c.id), false)}>
+          <button
+            className="link-btn"
+            onClick={() =>
+              setChannels(
+                importable.map((c) => c.id),
+                false,
+              )
+            }
+          >
             nenhum
           </button>
           <button className="link-btn" onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>
@@ -277,14 +317,7 @@ function SelectStep({
               <div key={cat.id}>
                 <div className="import-row category">
                   <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={all}
-                      ref={(el) => {
-                        if (el) el.indeterminate = partial;
-                      }}
-                      onChange={() => setChannels(ids, !all)}
-                    />
+                    <Checkbox checked={all} indeterminate={partial} onChange={() => setChannels(ids, !all)} />
                     <span className="truncate">{cat.name.toUpperCase()}</span>
                   </label>
                 </div>
@@ -300,7 +333,7 @@ function SelectStep({
         <div className="role-picks">
           {roles.map((r) => (
             <label key={r.id} className="check role-pick">
-              <input type="checkbox" checked={roleIds.has(r.id)} onChange={(e) => setRoleIds((s) => toggle(s, [r.id], e.target.checked))} />
+              <Checkbox checked={roleIds.has(r.id)} onChange={(e) => setRoleIds((s) => toggle(s, [r.id], e.target.checked))} />
               <span className="role-dot" style={{ background: r.color ?? "var(--text-muted)" }} />
               {r.id === guild.id ? "Permissões de @everyone" : r.name}
               {r.managed && <span className="tag">bot</span>}
@@ -311,30 +344,34 @@ function SelectStep({
 
       <section className="grid-2">
         <Field label="Mensagens por canal">
-          <select value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
+          <Select value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
             {LIMITS.map((l) => (
               <option key={String(l.value)} value={String(l.value)}>
                 {l.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <div className="option-checks">
           <label className="check">
-            <input type="checkbox" checked={attachments} onChange={(e) => setAttachments(e.target.checked)} /> Baixar anexos
+            <Checkbox checked={attachments} onChange={(e) => setAttachments(e.target.checked)} /> Baixar anexos
           </label>
           <label className="check">
-            <input type="checkbox" checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} /> Permissões por canal
+            <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} /> Permissões por canal
           </label>
         </div>
       </section>
 
       <p className="muted small">
-        {channelIds.size} canais/categorias · {selectedHistory.length} com histórico · {[...roleIds].filter((id) => id !== guild.id).length} cargos. Os autores das mensagens viram perfis
-        importados (sem login); membros do Discord não viram contas aqui.
+        {channelIds.size} canais/categorias · {selectedHistory.length} com histórico · {[...roleIds].filter((id) => id !== guild.id).length}{" "}
+        cargos. Os autores das mensagens viram perfis importados (sem login); membros do Discord não viram contas aqui.
       </p>
       <div className="form-actions">
-        <button className="btn" onClick={() => void start()} disabled={busy || channelIds.size === 0 || (target === "existing" && !serverId)}>
+        <button
+          className="btn"
+          onClick={() => void start()}
+          disabled={busy || channelIds.size === 0 || (target === "existing" && !serverId)}
+        >
           {busy ? "Iniciando…" : "Importar"}
         </button>
       </div>
@@ -362,7 +399,8 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
       <p className="muted small">
-        {job.channelsDone}/{job.channelsTotal} canais · {job.messagesImported.toLocaleString("pt-BR")} mensagens · {job.attachmentsImported} anexos
+        {job.channelsDone}/{job.channelsTotal} canais · {job.messagesImported.toLocaleString("pt-BR")} mensagens · {job.attachmentsImported}{" "}
+        anexos
         {job.currentChannel && running ? ` · agora em #${job.currentChannel}` : ""}
       </p>
       {job.error && <p className="error">{job.error}</p>}
@@ -381,7 +419,14 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       )}
       <div className="form-actions">
         {running && (
-          <button className="btn btn-danger" onClick={() => void apiFor(accountId).post(`/import/jobs/${job.id}/cancel`).catch((e: Error) => toast(e.message))}>
+          <button
+            className="btn btn-danger"
+            onClick={() =>
+              void apiFor(accountId)
+                .post(`/import/jobs/${job.id}/cancel`)
+                .catch((e: Error) => toast(e.message))
+            }
+          >
             Cancelar
           </button>
         )}
@@ -438,7 +483,13 @@ export function ImportDiscordModal({ accountId, serverId }: { accountId: string;
           <button className="link-btn back" onClick={() => setStep({ kind: "guild", list: step.list })}>
             ← outro servidor
           </button>
-          <SelectStep accountId={accountId} token={token} structure={step.structure} presetServerId={serverId} onStart={(job) => setStep({ kind: "progress", jobId: job.id })} />
+          <SelectStep
+            accountId={accountId}
+            token={token}
+            structure={step.structure}
+            presetServerId={serverId}
+            onStart={(job) => setStep({ kind: "progress", jobId: job.id })}
+          />
         </>
       )}
       {step.kind === "progress" && <ProgressStep accountId={accountId} jobId={step.jobId} />}

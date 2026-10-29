@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="build/icon.svg" alt="Distopic" width="72">
+
 # Distopic Client
 
 **One desktop app for your self-hosted Distopic servers and the official Discord.**
@@ -104,6 +106,18 @@ Releases are built by [GitHub Actions](.github/workflows/release.yml) when a
 GitHub release is published.
 
 ## First launch
+
+The `postinstall` hook prepares the Electron binary automatically. `predev`
+and `prestart` also check it before launching, including after installs with
+`--ignore-scripts`. This prevents electron-vite's `Electron uninstall` error
+with Electron 45's on-demand binary download. If the download fails, check
+your connection and retry with `npm run electron:install`.
+
+The interface includes light, dark and system themes in **Configurações → Aparência**,
+a custom window bar and an integrated attachment viewer. Click an image to
+open it; use Escape to close, arrow keys to navigate and the zoom controls to
+inspect it. See [development notes](docs/development.md) for the UI structure,
+component conventions, brand assets and desktop tests.
 
 1. Choose **Conectar a um servidor Distopic** (Connect to a Distopic server) and type the server address, for
    example `192.168.0.10` or `chat.example.com`. Without a port, the client
