@@ -26,6 +26,24 @@ de configurações/perfil, recuperação de erro e a largura mínima de 940px. C
 `.impeccable/review/`, fora do Git. Voz e servidores reais precisam de uma
 instância de integração.
 
+## Atualização automática durante o desenvolvimento
+
+Execute `npm run dev` e mantenha o terminal aberto. Esse comando já usa
+`electron-vite dev --watch`:
+
+- Componentes e estilos em `src/renderer` são atualizados automaticamente pelo
+  Vite/React, preservando o estado da tela quando o componente permite.
+- Alterações em `src/preload` recompilam a ponte e recarregam a janela.
+- Alterações em `src/main` recompilam e reiniciam o Electron automaticamente.
+  Esse reinício encerra conexões e chamadas em andamento; as contas salvas
+  continuam disponíveis na nova janela.
+
+Não é necessário executar `npm run build` a cada edição. `npm start` abre o
+último build e não acompanha alterações no código. Feche outro cliente Annoy
+antes de iniciar o modo dev: o aplicativo permite apenas uma instância por perfil.
+
+Referência: [HMR e hot reload no electron-vite](https://electron-vite.org/guide/hmr-and-hot-reloading).
+
 ## Estrutura
 
 Busca, controles compartilhados e integração privada de atividade estão descritos
