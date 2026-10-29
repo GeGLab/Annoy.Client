@@ -37,6 +37,7 @@ export interface InstanceState {
   dms: DmChannel[];
   relationships: Relationship[];
   presences: Record<string, Presence>;
+  activities: Record<string, import("@distopic/protocol").UserActivity[]>;
   messages: Record<string, ChannelMessages>;
   /** channelId -> userId -> expiry timestamp */
   typing: Record<string, Record<string, number>>;
@@ -49,11 +50,13 @@ export interface InstanceState {
 export type View =
   /** A browser service (Discord, WhatsApp…) or a TeamSpeak launcher. */
   | { kind: "service"; serviceId: string }
+  | { kind: "marketplace"; accountId: string | null; serverId: string | null }
   | { kind: "home"; accountId: string | null; dmId: string | null }
   | { kind: "server"; accountId: string; serverId: string; channelId: string | null };
 
 export type Modal =
   | { kind: "addAccount" }
+  | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId: string }
   | { kind: "serverSettings"; accountId: string; serverId: string }
   | { kind: "channelSettings"; accountId: string; serverId: string; channelId: string }
@@ -78,6 +81,13 @@ export interface VoiceUi {
 }
 
 export interface Settings {
+  theme: "dark" | "light" | "system";
+  accentColor: string | null;
+  surfaceColor: string | null;
+  channelsWidth: number;
+  membersWidth: number;
+  channelsOpen: boolean;
+  membersOpen: boolean;
   inputMode: "vad" | "ptt";
   pttKey: string;
   vadThreshold: number;
@@ -91,6 +101,10 @@ export interface Settings {
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
+  /** Where the community bar sits: down the left side or across the top. */
+  barPosition: "side" | "top";
+  shareGames: boolean;
+  shareMusic: boolean;
 }
 
 export interface AppState {
@@ -108,14 +122,26 @@ export interface AppState {
   update: UpdateState | null;
   /** Version whose banner the user dismissed this session. */
   updateDismissed: string | null;
+  /** Explicit navigation, including clicking the currently open conversation. */
+  chatNavigation: number;
+  messageFocus: { accountId: string; channelId: string; messageId: string } | null;
+  desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
 }
 
 const ACCOUNTS_KEY = "distopic.accounts";
+export const EMPTY_ACTIVITIES: readonly import("@distopic/protocol").UserActivity[] = [];
 const SETTINGS_KEY = "distopic.settings";
 const VIEW_KEY = "distopic.view";
 const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
+  theme: "dark",
+  accentColor: null,
+  surfaceColor: null,
+  channelsWidth: 252,
+  membersWidth: 220,
+  channelsOpen: true,
+  membersOpen: true,
   inputMode: "vad",
   pttKey: "Backquote",
   vadThreshold: 18,
@@ -128,6 +154,9 @@ const DEFAULT_SETTINGS: Settings = {
   noiseFilter: "gtcrn",
   servicePlacement: "before",
   serviceDisplay: "full",
+  barPosition: "side",
+  shareGames: false,
+  shareMusic: false,
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -157,6 +186,7 @@ export const emptyInstance = (): InstanceState => ({
   dms: [],
   relationships: [],
   presences: {},
+  activities: {},
   messages: {},
   typing: {},
   unread: {},
@@ -192,6 +222,9 @@ let state: AppState = {
   toast: null,
   update: null,
   updateDismissed: null,
+  chatNavigation: 0,
+  messageFocus: null,
+  desktopActivity: null,
 };
 
 const listeners = new Set<() => void>();

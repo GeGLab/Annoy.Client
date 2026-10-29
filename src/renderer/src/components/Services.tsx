@@ -38,11 +38,13 @@ export function ServiceTab({ service }: { service: Service }) {
         openModal({ kind: "serviceSettings", serviceId: service.id });
       }}
       title={`${service.name} · botão direito para opções`}
+      aria-label={service.name}
+      aria-current={active ? "page" : undefined}
     >
       <span className="tab-tile" style={tile.color ? { background: tile.color, color: "#fff" } : undefined}>
         {tile.text}
       </span>
-      {!iconOnly && <span className="tab-label">{service.name}</span>}
+      {!iconOnly && <span className="rail-label">{service.name}</span>}
       {badge && <span className="tab-badge">{badge}</span>}
     </button>
   );

@@ -1,0 +1,210 @@
+/* Browser services and launchers ------------------------------------------ */
+.service-placeholder {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.service-card,
+.ts-server {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.service-card:hover {
+  border-color: var(--accent-line);
+  background: var(--bg-hover);
+}
+.service-tile {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.service-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.service-text span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.form-actions.center {
+  justify-content: center;
+}
+.teamspeak-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  overflow-y: auto;
+}
+.teamspeak-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.teamspeak-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+.teamspeak-header p {
+  margin: 0;
+}
+.ts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ts-form {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--panel-radius);
+  background: var(--bg-channels);
+}
+.teamspeak-view > .btn {
+  align-self: flex-start;
+}
+/* Icon-only service tabs drop the label under the tile in the side bar. */
+.tab-item.icon-only {
+  min-height: 46px;
+}
+.hidden-services {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hidden-services li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.hidden-services .truncate {
+  flex: 1;
+}
+
+/* Bar across the top (Settings → Barra e abas) ------------------------------ */
+.app.bar-top .workspace {
+  flex-direction: column;
+}
+.app.bar-top .topbar {
+  width: auto;
+  height: 52px;
+  flex-direction: row;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.app.bar-top .rail-brand {
+  height: 32px;
+}
+.app.bar-top .tabs-strip {
+  flex-direction: row;
+  height: 100%;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 1px;
+}
+.app.bar-top .tab-group {
+  flex-direction: row;
+  width: auto;
+  gap: 4px;
+}
+.app.bar-top .rail-section-label {
+  display: none;
+}
+.app.bar-top .rail-divider {
+  width: 1px;
+  min-height: 24px;
+  margin: 0 6px;
+}
+.app.bar-top .tab-item {
+  flex-direction: row;
+  width: auto;
+  min-height: 38px;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+  border-radius: 10px;
+}
+.app.bar-top .tab-item:hover {
+  background: var(--bg-elev);
+}
+.app.bar-top .tab-item.icon-only {
+  padding: 0 4px;
+}
+.app.bar-top .tab-item .tab-tile {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+.app.bar-top .rail-label {
+  max-width: 150px;
+  font-size: 13px;
+  line-height: normal;
+}
+.app.bar-top .tab-item.active::before {
+  left: 10px;
+  right: 10px;
+  top: auto;
+  bottom: -7px;
+  width: auto;
+  height: 3px;
+}
+.app.bar-top .tab-item.unread::after {
+  left: 50%;
+  top: auto;
+  bottom: -5px;
+}
+.app.bar-top .tab-badge {
+  top: 0;
+  right: 0;
+  bottom: auto;
+}
+.app.bar-top .tabbar-add {
+  flex-direction: row;
+  width: auto;
+  min-height: 38px;
+}
+.app.bar-top .tabbar-add .tab-tile {
+  width: 30px;
+  height: 30px;
+}
+.app.bar-top .tabbar-add .rail-label {
+  display: none;
+}
+.app.bar-top .rail-settings {
+  margin: 0 0 0 auto;
+}

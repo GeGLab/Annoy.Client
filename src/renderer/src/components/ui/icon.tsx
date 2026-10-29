@@ -1,0 +1,10 @@
+import { Film, Music2, Play, Pause, VolumeX, Upload, Crop, LogOut, Cable, SlidersHorizontal, Palette, RotateCcw, PanelLeftClose, PanelRightClose, Bot, Store, WifiOff, Radio, ArrowDownToLine, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Hash, HeadphoneOff, Headphones, House, Image, Info, Link, LoaderCircle, LockKeyhole, Maximize, MessageCircle, Mic, MicOff, Minus, Monitor, Moon, Paperclip, Pencil, PhoneOff, Plus, RefreshCw, Reply, Send, Settings, Shield, Square, Sun, Trash2, Users, UserPlus, Video, VideoOff, Volume2, X, ZoomIn, ZoomOut, Crown } from "lucide-react";
+
+const icons = { film: Film, music: Music2, play: Play, pause: Pause, volumeOff: VolumeX, upload: Upload, crop: Crop, logout: LogOut, cable: Cable, sliders: SlidersHorizontal, palette: Palette, reset: RotateCcw, panelLeft: PanelLeftClose, panelRight: PanelRightClose, bot: Bot, store: Store, wifiOff: WifiOff, radio: Radio, hash: Hash, speaker: Volume2, mic: Mic, micOff: MicOff, headphones: Headphones, headphonesOff: HeadphoneOff, gear: Settings, plus: Plus, hangup: PhoneOff, home: House, x: X, users: Users, userPlus: UserPlus, paperclip: Paperclip, reply: Reply, edit: Pencil, trash: Trash2, chevron: ChevronDown, message: MessageCircle, lock: LockKeyhole, refresh: RefreshCw, check: Check, camera: Video, cameraOff: VideoOff, monitor: Monitor, maximize: Maximize, link: Link, minus: Minus, square: Square, restore: Copy, sun: Sun, moon: Moon, info: Info, image: Image, download: ArrowDownToLine, external: ExternalLink, left: ChevronLeft, right: ChevronRight, zoomIn: ZoomIn, zoomOut: ZoomOut, loader: LoaderCircle, send: Send, shield: Shield, crown: Crown };
+export type IconName = keyof typeof icons;
+
+// Named imports let Vite discard the rest of Lucide's catalog.
+export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  const Component = icons[name];
+  return <Component className="icon" size={size} strokeWidth={1.75} aria-hidden />;
+}

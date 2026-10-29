@@ -3,17 +3,18 @@ import { join } from "node:path";
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
+import { registerActivity } from "./activity/index.ts";
 
-/** Must match --topbar-height in the renderer stylesheet; service views sit below the tab bar. */
-const TOPBAR_HEIGHT = 56;
 const MEDIA_PERMISSIONS = new Set(["media", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
 let win: BrowserWindow | null = null;
+const stopActivity = registerActivity(ipcMain, () => win);
+app.on("before-quit", stopActivity);
 /** One sandboxed view per browser service, created on first open and kept alive. */
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
-/** Space reserved above service views for in-app banners (e.g. an available update). */
-let serviceTopInset = 0;
+/** The page's main area, reported by the renderer: the bar can sit on the side or on top, with banners above. */
+let serviceArea = { x: 0, y: 0, width: 0, height: 0 };
 
 // 0.3 renamed the app from Distopic to Annoy; keep the existing profile (accounts, Discord login).
 const legacyProfile = join(app.getPath("appData"), "Distopic");
@@ -84,8 +85,9 @@ function layoutService(): void {
   const entry = shownService ? views.get(shownService) : undefined;
   if (!win || !entry) return;
   const { width, height } = win.getContentBounds();
-  const top = TOPBAR_HEIGHT + serviceTopInset;
-  entry.view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
+  const x = Math.min(serviceArea.x, width),
+    y = Math.min(serviceArea.y, height);
+  entry.view.setBounds({ x, y, width: Math.max(0, Math.min(serviceArea.width, width - x)), height: Math.max(0, Math.min(serviceArea.height, height - y)) });
 }
 
 /** The Discord tab of 0.3 and earlier keeps its login in this partition. */
@@ -170,8 +172,12 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
-    backgroundColor: "#1e1f24",
+    backgroundColor: "#171621",
     title: "Annoy",
+    titleBarStyle: "hidden",
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
+    icon: join(import.meta.dirname, "../renderer/icon.png"),
+
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
@@ -189,7 +195,9 @@ function createWindow(): void {
       openExternal(url);
     }
   });
-  win.on("resize", layoutService);
+  const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
+  win.on("maximize", sendWindowState);
+  win.on("unmaximize", sendWindowState);
   win.on("closed", () => {
     win = null;
     views.clear();
@@ -200,6 +208,15 @@ function createWindow(): void {
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
 
+// Only the local, isolated renderer may control the desktop window.
+ipcMain.on("window:control", (event, action: unknown) => {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) return;
+  if (action === "minimize") win.minimize();
+  else if (action === "maximize") win.isMaximized() ? win.unmaximize() : win.maximize();
+  else if (action === "close") win.close();
+});
+ipcMain.handle("window:maximized", (event) => event.sender === win?.webContents && win.isMaximized());
+
 ipcMain.on("service:show", (_e, raw: unknown) => {
   const service = parseService(raw);
   if (service) showService(service);
@@ -209,8 +226,10 @@ ipcMain.on("service:reload", (_e, id: unknown) => {
   if (typeof id === "string") views.get(id)?.view.webContents.reload();
 });
 ipcMain.handle("service:remove", (_e, id: unknown) => (typeof id === "string" ? removeService(id) : undefined));
-ipcMain.on("service:inset", (_e, top: unknown) => {
-  serviceTopInset = typeof top === "number" && Number.isFinite(top) ? Math.max(0, Math.min(200, Math.round(top))) : 0;
+ipcMain.on("service:bounds", (_e, raw: unknown) => {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const px = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
+  serviceArea = { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) };
   layoutService();
 });
 ipcMain.on("teamspeak:open", (_e, link: unknown) => {

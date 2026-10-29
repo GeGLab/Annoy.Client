@@ -1,15 +1,35 @@
+import { confirmAction, promptText } from "./ui/action-dialog.tsx";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "./ui/dropdown-menu.tsx";
+import { Select } from "./ui/select.tsx";
+import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { EMPTY_ACTIVITIES } from "../store.ts";
+import * as ProfilePopover from "@radix-ui/react-popover";
+import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
 import { useMemo, useState } from "react";
-import { apiFor, joinVoice, openChannel, openDm, reconnect } from "../client.ts";
+import { apiFor, joinVoice, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
 import { VoiceStage } from "./VoiceStage.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
+import { UserPanel } from "./TopBar.tsx";
+import { ChatSkeleton } from "./ui/skeleton.tsx";
+import { ResizablePanel, togglePanel } from "./layout/ResizablePanel.tsx";
 
 // Channel list -------------------------------------------------------------
 
-function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: ServerState; voiceStates: VoiceState[]; accountId: string; canModerate: boolean }) {
+function VoiceUsers({
+  state,
+  voiceStates,
+  accountId,
+  canModerate,
+}: {
+  state: ServerState;
+  voiceStates: VoiceState[];
+  accountId: string;
+  canModerate: boolean;
+}) {
   return (
     <ul className="voice-users">
       {voiceStates.map((v) => {
@@ -20,7 +40,10 @@ function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: Ser
             <Avatar user={member.user} size={22} speaking={v.speaking && !v.selfMute && !v.serverMute} />
             <span className="voice-user-name">{displayNameOf(member)}</span>
             {(v.serverMute || v.selfMute) && (
-              <span className={v.serverMute ? "voice-flag server" : "voice-flag"} title={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"}>
+              <span
+                className={v.serverMute ? "voice-flag server" : "voice-flag"}
+                title={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"}
+              >
                 <Icon name="micOff" size={14} />
               </span>
             )}
@@ -29,7 +52,11 @@ function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: Ser
                 <Icon name="camera" size={14} />
               </span>
             )}
-            {v.screen && <span className="live small" title="Compartilhando a tela">AO VIVO</span>}
+            {v.screen && (
+              <span className="live small" title="Compartilhando a tela">
+                AO VIVO
+              </span>
+            )}
             {v.selfDeaf && (
               <span className="voice-flag" title="Ensurdecido">
                 <Icon name="headphonesOff" size={14} />
@@ -40,14 +67,20 @@ function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: Ser
                 <button
                   className="icon-btn tiny"
                   title={v.serverMute ? "Remover silêncio do servidor" : "Silenciar no servidor"}
-                  onClick={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { serverMute: !v.serverMute }))}
+                  onClick={() =>
+                    void act(
+                      apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { serverMute: !v.serverMute }),
+                    )
+                  }
                 >
                   <Icon name={v.serverMute ? "mic" : "micOff"} size={14} />
                 </button>
                 <button
                   className="icon-btn tiny"
                   title="Desconectar da voz"
-                  onClick={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { disconnect: true }))}
+                  onClick={() =>
+                    void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { disconnect: true }))
+                  }
                 >
                   <Icon name="hangup" size={14} />
                 </button>
@@ -60,7 +93,19 @@ function VoiceUsers({ state, voiceStates, accountId, canModerate }: { state: Ser
   );
 }
 
-function ChannelRow({ accountId, state, channel, me, activeId }: { accountId: string; state: ServerState; channel: Channel; me: string; activeId: string | null }) {
+function ChannelRow({
+  accountId,
+  state,
+  channel,
+  me,
+  activeId,
+}: {
+  accountId: string;
+  state: ServerState;
+  channel: Channel;
+  me: string;
+  activeId: string | null;
+}) {
   const unread = useStore((s) => s.instances[accountId]?.unread[channel.id]);
   const voice = useStore((s) => s.voice);
   const perms = channelPerms(state, me, channel);
@@ -80,7 +125,7 @@ function ChannelRow({ accountId, state, channel, me, activeId }: { accountId: st
 
   if (channel.type === "voice") {
     const inChannel = state.voiceStates.filter((v) => v.channelId === channel.id);
-    const connected = voice?.channelId === channel.id;
+    const connected = voice?.accountId === accountId && voice.serverId === state.server.id && voice.channelId === channel.id;
     const canConnect = has(perms, Permission.CONNECT);
     return (
       <li>
@@ -95,9 +140,12 @@ function ChannelRow({ accountId, state, channel, me, activeId }: { accountId: st
         >
           <Icon name={canConnect ? "speaker" : "lock"} size={16} />
           <span className="channel-name">{channel.name}</span>
+          {connected && <span className={`voice-here ${voice.status}`}>{voice.status === "connected" ? "Na sala" : "Entrando"}</span>}
           {gear}
         </div>
-        {inChannel.length > 0 && <VoiceUsers state={state} voiceStates={inChannel} accountId={accountId} canModerate={has(perms, Permission.MUTE_MEMBERS)} />}
+        {inChannel.length > 0 && (
+          <VoiceUsers state={state} voiceStates={inChannel} accountId={accountId} canModerate={has(perms, Permission.MUTE_MEMBERS)} />
+        )}
       </li>
     );
   }
@@ -134,51 +182,78 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
     };
   }, [state.channels]);
 
-  const leave = () => {
-    if (confirm(`Sair de ${state.server.name}?`)) void act(apiFor(accountId).del(`/servers/${state.server.id}/members/@me`));
+  const leave = async () => {
+    if (await confirmAction(`Sair de ${state.server.name}?`)) void act(apiFor(accountId).del(`/servers/${state.server.id}/members/@me`));
   };
 
   return (
-    <aside className="channels">
-      <header className="channels-header" onClick={() => setMenu((m) => !m)}>
-        <span className="truncate">{state.server.name}</span>
-        <Icon name={menu ? "x" : "chevron"} size={16} />
-      </header>
-      {menu && (
-        <div className="dropdown" onClick={() => setMenu(false)}>
+    <ResizablePanel panel="channels" otherVisible={state.channels.some((c) => c.id === activeId && c.type === "text")}>
+      <DropdownMenu open={menu} onOpenChange={setMenu}>
+        <DropdownMenuTrigger asChild>
+          <button className="channels-header server-menu-trigger" aria-label={`Menu de ${state.server.name}`}>
+            <span className="truncate">{state.server.name}</span>
+            <Icon name="chevron" size={16} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="server-menu" align="start">
           {has(perms, Permission.CREATE_INVITE) && (
-            <button className="accent" onClick={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}>
-              <Icon name="userPlus" size={16} /> Convidar pessoas
-            </button>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}>
+              <Icon name="userPlus" />
+              Convidar pessoas
+            </DropdownMenuItem>
           )}
           {canSettings && (
-            <button onClick={() => openModal({ kind: "serverSettings", accountId, serverId: state.server.id })}>
-              <Icon name="gear" size={16} /> Configurações do servidor
-            </button>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId, serverId: state.server.id })}>
+              <Icon name="gear" />
+              Configurações do servidor
+            </DropdownMenuItem>
           )}
           {canChannels && (
-            <button onClick={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "text" })}>
-              <Icon name="plus" size={16} /> Criar canal
-            </button>
-          )}
-          {canChannels && (
-            <button onClick={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "category" })}>
-              <Icon name="plus" size={16} /> Criar categoria
-            </button>
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "text" })}
+              >
+                <Icon name="hash" />
+                Criar canal
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "category" })
+                }
+              >
+                <Icon name="plus" />
+                Criar categoria
+              </DropdownMenuItem>
+            </>
           )}
           {isOwner && (
-            <button onClick={() => openModal({ kind: "importDiscord", accountId, serverId: state.server.id })}>
-              <Icon name="refresh" size={16} /> Importar do Discord
-            </button>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "importDiscord", accountId, serverId: state.server.id })}>
+              <Icon name="refresh" />
+              Importar do Discord
+            </DropdownMenuItem>
           )}
           {!isOwner && (
-            <button className="danger" onClick={leave}>
-              <Icon name="hangup" size={16} /> Sair do servidor
-            </button>
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem destructive onSelect={leave}>
+                <Icon name="hangup" />
+                Sair do servidor
+              </DropdownMenuItem>
+            </>
           )}
-        </div>
-      )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ul className="channel-scroll">
+        <li>
+          <button
+            className="channel server-bot-link"
+            onClick={() => navigate({ kind: "marketplace", accountId, serverId: state.server.id })}
+          >
+            <Icon name="bot" size={17} />
+            <span className="channel-name">Bots do servidor</span>
+          </button>
+        </li>
         {loose.map((c) => (
           <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} />
         ))}
@@ -196,7 +271,9 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
                   <button
                     className="icon-btn tiny"
                     title="Criar canal nesta categoria"
-                    onClick={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: cat.id, type: "text" })}
+                    onClick={() =>
+                      openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: cat.id, type: "text" })
+                    }
                   >
                     <Icon name="plus" size={14} />
                   </button>
@@ -220,13 +297,28 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </li>
         ))}
       </ul>
-    </aside>
+      <UserPanel />
+    </ResizablePanel>
   );
 }
 
 // Members ------------------------------------------------------------------
 
-function MemberCard({ accountId, state, member, me, at, onClose }: { accountId: string; state: ServerState; member: Member; me: string; at: { x: number; y: number }; onClose: () => void }) {
+function MemberCard({
+  accountId,
+  state,
+  member,
+  me,
+  at,
+  onClose,
+}: {
+  accountId: string;
+  state: ServerState;
+  member: Member;
+  me: string;
+  at: { anchor: HTMLElement };
+  onClose: () => void;
+}) {
   const relationships = useStore((s) => s.instances[accountId]?.relationships);
   const perms = state.permissions;
   const myRank = rankOf(state, me);
@@ -235,93 +327,125 @@ function MemberCard({ accountId, state, member, me, at, onClose }: { accountId: 
   const api = apiFor(accountId);
   const sid = state.server.id;
   const rel = relationships?.find((r) => r.user.id === member.user.id);
+  const activities = useStore((s) => s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
   return (
-    <div className="popover-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="popover member-card" style={{ top: Math.min(at.y, window.innerHeight - 420), left: Math.max(8, at.x - 320) }}>
-        <div className="member-card-head">
-          <Avatar user={member.user} size={64} presence={member.presence} />
-          <div>
-            <div className="member-card-name" style={{ color: memberColor(state, member) }}>
-              {displayNameOf(member)}
+    <ProfilePopover.Root open onOpenChange={(open) => !open && onClose()}>
+      <ProfilePopover.Anchor virtualRef={{ current: at.anchor }} />
+      <ProfilePopover.Portal>
+        <ProfilePopover.Content
+          role="dialog"
+          aria-label={`Perfil de ${member.user.displayName}`}
+          className="member-card member-profile"
+          side="left"
+          align="start"
+          sideOffset={12}
+          collisionPadding={12}
+        >
+          <div className="member-card-head">
+            <Avatar user={member.user} size={64} presence={member.presence} />
+            <div>
+              <div className="member-card-name" style={{ color: memberColor(state, member) }}>
+                {displayNameOf(member)}
+              </div>
+              <div className="muted">@{member.user.username}</div>
             </div>
-            <div className="muted">@{member.user.username}</div>
           </div>
-        </div>
-        <div className="member-card-section">
-          <div className="section-label">Cargos</div>
-          <div className="role-chips">
-            {state.roles
-              .filter((r) => member.roleIds.includes(r.id))
-              .map((r) => (
-                <span key={r.id} className="role-chip">
-                  <span className="role-dot" style={{ background: r.color ?? "var(--text-muted)" }} />
-                  {r.name}
-                  {has(perms, Permission.MANAGE_ROLES) && r.position < myRank && (
-                    <button className="role-chip-x" title="Remover cargo" onClick={() => void act(api.del(`/servers/${sid}/members/${member.user.id}/roles/${r.id}`))}>
-                      <Icon name="x" size={12} />
-                    </button>
-                  )}
-                </span>
+          {rel?.status === "friend" && activities.length > 0 && (
+            <div className="member-card-section">
+              <div className="section-label">Atividade · Só para amigos</div>
+              {activities.map((activity) => (
+                <ActivityCard key={activity.kind} activity={activity} />
               ))}
-            {member.roleIds.length === 0 && <span className="muted">Nenhum cargo</span>}
-          </div>
-          {has(perms, Permission.MANAGE_ROLES) && assignable.some((r) => !member.roleIds.includes(r.id)) && (
-            <select
-              className="role-add"
-              value=""
-              onChange={(e) => e.target.value && void act(api.put(`/servers/${sid}/members/${member.user.id}/roles/${e.target.value}`))}
-            >
-              <option value="">+ Adicionar cargo</option>
-              {assignable
-                .filter((r) => !member.roleIds.includes(r.id))
-                .map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-            </select>
+            </div>
           )}
-        </div>
-        {!isSelf && (
-          <div className="member-card-actions">
-            <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>
-              <Icon name="message" size={16} /> Mensagem
-            </button>
-            {!rel && (
-              <button className="btn btn-ghost" onClick={() => void act(api.post("/relationships", { username: member.user.username }), "Pedido de amizade enviado")}>
-                <Icon name="userPlus" size={16} /> Adicionar amigo
-              </button>
-            )}
-            {outranks && has(perms, Permission.KICK_MEMBERS) && (
-              <button
-                className="btn btn-danger"
-                onClick={() => confirm(`Expulsar ${displayNameOf(member)}?`) && void act(api.del(`/servers/${sid}/members/${member.user.id}`)).then(onClose)}
-              >
-                Expulsar
-              </button>
-            )}
-            {outranks && has(perms, Permission.BAN_MEMBERS) && (
-              <button
-                className="btn btn-danger"
-                onClick={() => {
-                  const reason = prompt(`Banir ${displayNameOf(member)}? Motivo (opcional):`);
-                  if (reason !== null) void act(api.put(`/servers/${sid}/bans/${member.user.id}`, { reason })).then(onClose);
-                }}
-              >
-                Banir
-              </button>
+          <div className="member-card-section">
+            <div className="section-label">Cargos</div>
+            <div className="role-chips">
+              {state.roles
+                .filter((r) => member.roleIds.includes(r.id))
+                .map((r) => (
+                  <span key={r.id} className="role-chip">
+                    <span className="role-dot" style={{ background: r.color ?? "var(--text-muted)" }} />
+                    {r.name}
+                    {r.id !== sid && has(perms, Permission.MANAGE_ROLES) && r.position < myRank && (
+                      <button
+                        className="role-chip-x"
+                        title="Remover cargo"
+                        onClick={() => void act(api.del(`/servers/${sid}/members/${member.user.id}/roles/${r.id}`))}
+                      >
+                        <Icon name="x" size={12} />
+                      </button>
+                    )}
+                  </span>
+                ))}
+              {member.roleIds.length === 0 && <span className="muted">Nenhum cargo</span>}
+            </div>
+            {has(perms, Permission.MANAGE_ROLES) && assignable.some((r) => !member.roleIds.includes(r.id)) && (
+              <EntityPicker
+                label="Adicionar cargo"
+                placeholder="Adicionar cargo"
+                value=""
+                onValueChange={(id) => void act(api.put(`/servers/${sid}/members/${member.user.id}/roles/${id}`))}
+                items={assignable
+                  .filter((r) => !member.roleIds.includes(r.id))
+                  .map((r) => ({ id: r.id, label: r.name, group: "Cargos", color: r.color }))}
+              />
             )}
           </div>
-        )}
-      </div>
-    </div>
+          {!isSelf && (
+            <div className="member-card-actions">
+              <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>
+                <Icon name="message" size={16} /> Mensagem
+              </button>
+              {!rel && (
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => void act(api.post("/relationships", { username: member.user.username }), "Pedido de amizade enviado")}
+                >
+                  <Icon name="userPlus" size={16} /> Adicionar amigo
+                </button>
+              )}
+              {outranks && has(perms, Permission.KICK_MEMBERS) && (
+                <button
+                  className="btn btn-danger"
+                  onClick={async () =>
+                    (await confirmAction(`Expulsar ${displayNameOf(member)}?`)) &&
+                    void act(api.del(`/servers/${sid}/members/${member.user.id}`)).then(onClose)
+                  }
+                >
+                  Expulsar
+                </button>
+              )}
+              {outranks && has(perms, Permission.BAN_MEMBERS) && (
+                <button
+                  className="btn btn-danger"
+                  onClick={async () => {
+                    const reason = await promptText(`Banir ${displayNameOf(member)}? Motivo (opcional):`);
+                    if (reason !== null) void act(api.put(`/servers/${sid}/bans/${member.user.id}`, { reason })).then(onClose);
+                  }}
+                >
+                  Banir
+                </button>
+              )}
+            </div>
+          )}
+        </ProfilePopover.Content>
+      </ProfilePopover.Portal>
+    </ProfilePopover.Root>
   );
 }
 
 function MemberList({ accountId, state, me }: { accountId: string; state: ServerState; me: string }) {
-  const [card, setCard] = useState<{ member: Member; x: number; y: number } | null>(null);
+  const inst = useStore((s) => s.instances[accountId]);
+  const activeFriends = state.members.filter(
+    (m) =>
+      m.user.id !== me &&
+      inst?.relationships.some((r) => r.user.id === m.user.id && r.status === "friend") &&
+      (inst.activities?.[m.user.id]?.length ?? 0) > 0,
+  );
+  const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null);
   const online = state.members.filter((m) => m.presence === "online");
   const offline = state.members.filter((m) => m.presence !== "online");
   const section = (label: string, list: Member[]) =>
@@ -331,14 +455,18 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
           {label} — {list.length}
         </div>
         {list.map((m) => (
-          <button key={m.user.id} className={`member${m.presence === "online" ? "" : " offline"}`} onClick={(e) => setCard({ member: m, x: e.clientX, y: e.clientY })}>
+          <button
+            key={m.user.id}
+            className={`member${m.presence === "online" ? "" : " offline"}`}
+            onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}
+          >
             <Avatar user={m.user} size={32} presence={m.presence} />
             <span className="truncate" style={{ color: memberColor(state, m) }}>
               {displayNameOf(m)}
             </span>
             {m.user.id === state.server.ownerId && (
               <span className="owner-crown" title="Dono do servidor">
-                ★
+                <Icon name="crown" size={13} />
               </span>
             )}
           </button>
@@ -346,11 +474,33 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       </>
     );
   return (
-    <aside className="members">
+    <ResizablePanel panel="members" otherVisible>
+      {activeFriends.length > 0 && (
+        <section className="friend-activities">
+          <h3>Atividade dos amigos — {activeFriends.length}</h3>
+          {activeFriends.map((m) => (
+            <button key={m.user.id} onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}>
+              <strong>{displayNameOf(m)}</strong>
+              {inst!.activities[m.user.id]!.map((a) => (
+                <ActivityCard key={a.kind} activity={a} compact />
+              ))}
+            </button>
+          ))}
+        </section>
+      )}
       {section("Online", online)}
       {section("Offline", offline)}
-      {card && <MemberCard accountId={accountId} state={state} member={card.member} me={me} at={card} onClose={() => setCard(null)} />}
-    </aside>
+      {card && state.members.some((m) => m.user.id === card.member.user.id) && (
+        <MemberCard
+          accountId={accountId}
+          state={state}
+          member={state.members.find((m) => m.user.id === card.member.user.id)!}
+          me={me}
+          at={card}
+          onClose={() => setCard(null)}
+        />
+      )}
+    </ResizablePanel>
   );
 }
 
@@ -360,7 +510,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
 function ServerUnavailable({ accountId }: { accountId: string }) {
   const status = useStore((s) => s.instances[accountId]?.status);
   const name = useStore((s) => s.accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor");
-  if (status === "ready" || status === undefined) return <div className="loading">Carregando servidor…</div>;
+  if (status === "ready" || status === undefined) return <ChatSkeleton />;
   return (
     <div className="empty-main offline-panel">
       <div className="offline-icon">
@@ -382,7 +532,7 @@ function ServerUnavailable({ accountId }: { accountId: string }) {
 export function ServerView({ accountId, serverId, channelId }: { accountId: string; serverId: string; channelId: string | null }) {
   const state = useStore((s) => s.instances[accountId]?.serverStates[serverId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
-  const [showMembers, setShowMembers] = useState(true);
+  const showMembers = useStore((s) => s.settings.membersOpen);
   if (!state || !me) return <ServerUnavailable accountId={accountId} />;
 
   const channel = state.channels.find((c) => c.id === channelId && c.type === "text");
@@ -410,7 +560,13 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           channelOf={(id) => state.channels.find((c) => c.id === id)?.name}
           mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: m.user.username }))}
           headerExtra={
-            <button className={`icon-btn${showMembers ? " on" : ""}`} title="Lista de membros" onClick={() => setShowMembers((v) => !v)}>
+            <button
+              className={`icon-btn${showMembers ? " on" : ""}`}
+              aria-label="Alternar painel de membros"
+              aria-pressed={showMembers}
+              title="Lista de membros"
+              onClick={() => togglePanel("members")}
+            >
               <Icon name="users" />
             </button>
           }
@@ -420,7 +576,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           <p>Escolha um canal de texto{state.channels.some((c) => c.type === "voice") ? " ou entre em um canal de voz" : ""}.</p>
         </div>
       )}
-      {channel && showMembers && <MemberList accountId={accountId} state={state} me={me} />}
+      {channel && <MemberList accountId={accountId} state={state} me={me} />}
     </div>
   );
 }

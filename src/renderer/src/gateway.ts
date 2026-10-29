@@ -9,6 +9,8 @@ type Status = "connecting" | "ready" | "offline" | "invalid";
 export class Gateway {
   private socket: WebSocket | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private connectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastAck = 0;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private backoff = 1000;
   private closed = false;
@@ -23,13 +25,22 @@ export class Gateway {
   ) {}
 
   connect(): void {
+    if (this.socket) return;
     this.closed = false;
     this.onStatus("connecting");
     const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
     this.socket = socket;
+    this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
     socket.onopen = () => this.send({ op: "identify", token: this.token });
-    socket.onmessage = (e) => this.receive(JSON.parse(String(e.data)) as GatewayEvent);
+    socket.onmessage = (e) => {
+      if (this.socket !== socket) return;
+      try { this.receive(JSON.parse(String(e.data)) as GatewayEvent); }
+      catch { socket.close(1002, "Invalid gateway event"); }
+    };
     socket.onclose = (e) => {
+      if (this.socket !== socket) return;
+      if (this.connectTimeout) clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
       this.stopHeartbeat();
       this.failPending("Conexão perdida");
       if (this.socket === socket) this.socket = null;
@@ -39,6 +50,22 @@ export class Gateway {
       this.retry = setTimeout(() => this.connect(), this.backoff);
       this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
     };
+  }
+
+  /** Do not wait for a dead TCP connection to notice an offline network. */
+  networkLost(): void {
+    if (this.closed) return;
+    const socket = this.socket;
+    this.socket = null;
+    if (this.connectTimeout) clearTimeout(this.connectTimeout);
+    this.connectTimeout = null;
+    this.stopHeartbeat();
+    this.failPending("Conexão perdida");
+    socket?.close();
+    this.onStatus("offline");
+    if (this.retry) clearTimeout(this.retry);
+    this.retry = setTimeout(() => { this.retry = null; this.connect(); }, this.backoff);
+    this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
   }
 
   /** Skips the backoff wait: used when the network comes back or the user asks to retry. */
@@ -53,7 +80,10 @@ export class Gateway {
   close(): void {
     this.closed = true;
     if (this.retry) clearTimeout(this.retry);
+    if (this.connectTimeout) clearTimeout(this.connectTimeout);
+    this.connectTimeout = null;
     this.stopHeartbeat();
+    this.failPending("Conexão encerrada");
     this.socket?.close();
     this.socket = null;
   }
@@ -73,10 +103,14 @@ export class Gateway {
 
   private receive(event: GatewayEvent): void {
     if (event.t === "READY") {
+      if (this.connectTimeout) clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+      this.lastAck = Date.now();
       this.backoff = 1000;
       this.startHeartbeat();
       this.onStatus("ready");
     }
+    if (event.t === "HEARTBEAT_ACK") this.lastAck = Date.now();
     if (event.t === "VOICE_REPLY") {
       const p = this.pending.get(event.d.id);
       this.pending.delete(event.d.id);
@@ -89,7 +123,10 @@ export class Gateway {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeat = setInterval(() => this.send({ op: "heartbeat" }), HEARTBEAT_MS);
+    this.heartbeat = setInterval(() => {
+      if (Date.now() - this.lastAck > HEARTBEAT_MS * 2) return this.networkLost();
+      this.send({ op: "heartbeat" });
+    }, HEARTBEAT_MS);
   }
 
   private stopHeartbeat(): void {

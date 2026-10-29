@@ -184,3 +184,7 @@ npm run build
 ## License
 
 [MIT](LICENSE) © Gustavo Cruz
+
+## Desktop interface development
+
+See [development](docs/development.md) for automatic Electron binary preparation, shared UI components and isolated tests. [Search and private activity](docs/search-activity.md) documents client/server integration and opt-in friend activity.

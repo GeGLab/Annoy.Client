@@ -95,3 +95,7 @@ os servidores e abre o app oficial do TeamSpeak.
 ## Licença
 
 [MIT](LICENSE) © Gustavo Cruz.
+
+## Desenvolvimento da interface
+
+Veja [desenvolvimento](docs/development.md) para a preparação automática do Electron, componentes compartilhados e testes isolados. [Busca e atividades privadas](docs/search-activity.md) descreve os módulos e a integração com o servidor.

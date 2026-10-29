@@ -1,29 +1,50 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { LazyMotion, MotionConfig } from "framer-motion";
+import { applyTheme } from "./lib/theme.ts";
+import { TooltipProvider } from "./components/ui/tooltip.tsx";
+import { ChatSkeleton } from "./components/ui/skeleton.tsx";
+import { TitleBar } from "./components/TitleBar.tsx";
+import { ConnectionOverlay, useConnectionBlocked } from "./components/ConnectionOverlay.tsx";
+import { VoiceStatusBar } from "./components/VoiceStatusBar.tsx";
+import { SettingsGuard } from "./components/settings/SettingsGuard.tsx";
+import { useDesktopActivity } from "./features/activity/use-activity.ts";
+import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
 import { connectAll, navigate, setPushToTalk, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
-import { AddAccountModal, CreateServerModal } from "./components/AccountModals.tsx";
 import { Home } from "./components/Home.tsx";
-import { ImportDiscordModal } from "./components/ImportModal.tsx";
-import { DeleteAccountModal, InstanceAdminModal } from "./components/InstanceAdmin.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { AddTabModal, ServicePlaceholder, ServiceSettingsModal, TeamSpeakView } from "./components/Services.tsx";
-import { ChannelSettingsModal, CreateChannelModal, InviteModal, ServerSettingsModal, UserSettingsModal } from "./components/Settings.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
+
+const AddAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.AddAccountModal })));
+const CreateServerModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.CreateServerModal })));
+const ImportDiscordModal = lazy(() => import("./components/ImportModal.tsx").then(m => ({ default: m.ImportDiscordModal })));
+const DeleteAccountModal = lazy(() => import("./components/InstanceAdmin.tsx").then(m => ({ default: m.DeleteAccountModal })));
+const InstanceAdminModal = lazy(() => import("./components/InstanceAdmin.tsx").then(m => ({ default: m.InstanceAdminModal })));
+const UserSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.UserSettingsModal })));
+const ServerSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.ServerSettingsModal })));
+const ChannelSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.ChannelSettingsModal })));
+const CreateChannelModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.CreateChannelModal })));
+const InviteModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.InviteModal })));
+const motionFeatures = () => import("./lib/motion-features.ts").then(m => m.default);
+const Marketplace = lazy(() => import("./features/bots/Marketplace.tsx"));
+const SearchDialog = lazy(() => import("./features/search/SearchDialog.tsx"));
 
 function Modals() {
   const modal = useStore((s) => s.modal);
   if (!modal) return null;
   switch (modal.kind) {
+    case "search": return <SearchDialog accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId}/>;
     case "addAccount":
       return <AddAccountModal />;
     case "createServer":
       return <CreateServerModal accountId={modal.accountId} />;
     case "serverSettings":
-      return <ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} />;
+      return <SettingsGuard><ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} /></SettingsGuard>;
     case "channelSettings":
-      return <ChannelSettingsModal accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId} />;
+      return <SettingsGuard><ChannelSettingsModal accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId} /></SettingsGuard>;
     case "createChannel":
       return <CreateChannelModal accountId={modal.accountId} serverId={modal.serverId} parentId={modal.parentId} type={modal.type} />;
     case "invite":
@@ -54,7 +75,23 @@ export function App() {
   const toast = useStore((s) => s.toast);
   const blocking = useStore((s) => isBlocking(s.update));
   const bannerVisible = useBannerVisible();
+  const theme = useStore(s => s.settings.theme);
+  const accentColor = useStore(s => s.settings.accentColor);
+  const surfaceColor = useStore(s => s.settings.surfaceColor);
+  const connectionBlocked = useConnectionBlocked();
+  const inVoice = useStore(s => s.voice !== null);
+  const barPosition = useStore((s) => s.settings.barPosition);
+  const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
+  useDesktopActivity();
+
+  useEffect(() => {
+    applyTheme(theme, { accentColor, surfaceColor });
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const change = () => applyTheme(theme, { accentColor, surfaceColor });
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, [theme, accentColor, surfaceColor]);
 
   useEffect(() => {
     connectAll();
@@ -75,8 +112,18 @@ export function App() {
 
   // Keep the update banner visible above service views.
   useEffect(() => {
-    window.distopic?.services.setTopInset(bannerVisible ? BANNER_HEIGHT : 0);
-  }, [bannerVisible]);
+    // The native view covers exactly the page's main area, wherever the bar and banners put it.
+    const main = mainRef.current;
+    if (!main) return;
+    const report = () => {
+      const rect = main.getBoundingClientRect();
+      window.distopic?.services.setBounds({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, [barPosition, bannerVisible, inVoice]);
 
   // Push-to-talk while the window has focus.
   useEffect(() => {
@@ -103,11 +150,15 @@ export function App() {
   }, []);
 
   return (
-    <div className="app">
+    <MotionConfig reducedMotion="user"><LazyMotion features={motionFeatures} strict><TooltipProvider delayDuration={300}>
+    <div className={`app bar-${barPosition}`}>
+      <TitleBar />
+      <div className="workspace">
       <TopBar />
       <div className="content">
       <UpdateBanner />
-      <main className="main">
+      <VoiceStatusBar />
+      <main className="main" ref={mainRef}>
         {view.kind === "service" ? (
           !service ? (
             <Home accountId={null} dmId={null} />
@@ -116,6 +167,8 @@ export function App() {
           ) : (
             <ServicePlaceholder service={service} />
           )
+        ) : view.kind === "marketplace" ? (
+          <Suspense fallback={<ChatSkeleton />}><Marketplace accountId={view.accountId} serverId={view.serverId} /></Suspense>
         ) : view.kind === "server" ? (
           <ServerView accountId={view.accountId} serverId={view.serverId} channelId={view.channelId} />
         ) : (
@@ -123,13 +176,18 @@ export function App() {
         )}
       </main>
       </div>
-      <Modals />
+      </div>
+      <Suspense fallback={<div className="overlay-loading" role="status">Abrindo…</div>}><Modals /></Suspense>
       <MandatoryUpdate />
+      <ActionDialogHost />
+      {/* An offline Annoy server must not lock the browser services, which don't depend on it. */}
+      {!blocking && <ConnectionOverlay blocked={connectionBlocked && view.kind !== "service"} />}
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}
         </div>
       )}
     </div>
+    </TooltipProvider></LazyMotion></MotionConfig>
   );
 }
