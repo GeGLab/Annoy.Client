@@ -1,24 +1,32 @@
 import { Select } from "./ui/select.tsx";
 import type { InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { authenticate, beginDiscordLogin, DEFAULT_PORT, discordLogin, findInstance } from "../api.ts";
-import { addAccount, apiFor, openServer } from "../client.ts";
-import { setState, toast, useStore } from "../store.ts";
-import { closeModal, Field, Modal } from "./ui.tsx";
+import { addAccount, apiFor, openServer, navigate } from "../client.ts";
+import { getState, setState, toast, useStore } from "../store.ts";
+import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
 
 export function AddAccountModal() {
-  const [address, setAddress] = useState("");
+  const modal = getState().modal;
+  const remembered = modal?.kind === "addAccount" ? getState().rememberedAccounts.find((account) => account.id === modal.rememberedId) : undefined;
+  const [address, setAddress] = useState(remembered?.url ?? "");
   const [info, setInfo] = useState<{ url: string; info: InstanceInfo } | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(remembered?.username ?? "");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!remembered) return;
+    let active = true;
+    void findInstance(remembered.url).then((value) => { if (active) setInfo(value); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   async function probe(e: FormEvent) {
     e.preventDefault();
@@ -76,8 +84,8 @@ export function AddAccountModal() {
   }
 
   return (
-    <Modal title={info ? info.info.name : "Conectar a um servidor Annoy"}>
-      <div className="connection-brand"><Brand size={32} wordmark /></div>
+    <Modal title={info ? mode === "register" ? "Criar sua conta" : "Bem-vindo de volta" : "Conectar a um servidor Annoy"} className="auth-modal">
+      <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? `Seu espaço em ${info.info.name}. ${mode === "register" ? "Escolha como seus amigos vão encontrar você." : "Entre para continuar suas conversas."}` : "Suas comunidades, suas conversas. Comece pelo endereço da sua instância."}</p></div>
       {!info ? (
         <form onSubmit={probe} className="form">
           <p className="muted">
@@ -99,14 +107,14 @@ export function AddAccountModal() {
       ) : (
         <form onSubmit={submit} className="form">
           <div className="tabs">
-            <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => setMode("login")}>
+            <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => { setMode("login"); if (remembered) setUsername(remembered.username); }}>
               Entrar
             </Button>
             <Button
               type="button"
               variant="ghost"
               className={mode === "register" ? "tab active" : "tab"}
-              onClick={() => setMode("register")}
+              onClick={() => { setMode("register"); if (remembered) setUsername(""); }}
               disabled={!info.info.registrationOpen}
               title={info.info.registrationOpen ? undefined : "Cadastro fechado nesta instância"}
             >
@@ -114,6 +122,7 @@ export function AddAccountModal() {
             </Button>
           </div>
           <p className="muted">{info.url}</p>
+          {remembered && mode === "login" && <div className="auth-remembered"><Avatar user={{ id: remembered.userId, username: remembered.username, displayName: remembered.displayName, avatarUrl: remembered.avatarUrl }} size={40} /><div><strong>{remembered.displayName}</strong><small>@{remembered.username} · Conta lembrada neste dispositivo</small></div></div>}
           {info.info.discordLogin && (
             <>
               {waitingDiscord ? (
@@ -173,6 +182,15 @@ export function AddAccountModal() {
       )}
     </Modal>
   );
+}
+
+export function SwitchAccountModal() {
+  const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
+  const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
+  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user; return <button key={account.id} className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{user?.displayName ?? account.instanceName}</strong><small>{account.instanceName} · Conectada</small></span><Icon name="check" /></button>; })}
+    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
+  </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;
 }
 
 /** Invite codes may be pasted bare or as part of a link. */

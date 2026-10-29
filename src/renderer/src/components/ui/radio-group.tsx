@@ -26,7 +26,7 @@ export function RadioGroup({
           <Radio.Item className="ui-radio" id={`${id}-${option.value}`} value={option.value} disabled={option.disabled}>
             <Radio.Indicator className="ui-radio-dot" />
           </Radio.Item>
-          {option.label}
+          <span className="radio-option-copy">{option.label}{cards && option.hint && <small aria-hidden>{option.hint}</small>}</span>
         </label>
       ))}
     </Radio.Root>

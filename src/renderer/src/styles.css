@@ -10,5 +10,6 @@
 @import "./styles/media-settings.css" layer(components);
 @import "./styles/discovery.css" layer(components);
 @import "./styles/services.css" layer(components);
+@import "./styles/social-experience.css" layer(components);
 @source "./";
 @custom-variant dark (&:where(.dark, .dark *));

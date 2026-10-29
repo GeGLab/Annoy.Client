@@ -1,3 +1,4 @@
+import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
 import type { GatewayEvent, MediaSource } from "@distopic/protocol";
@@ -5,7 +6,7 @@ import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Gateway } from "./gateway.ts";
 import type { Settings } from "./store.ts";
-import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, screenProfile } from "./media-profiles.ts";
+import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
 
 type TransportInfo = {
   id: string;
@@ -145,7 +146,7 @@ export class VoiceSession {
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
     if (!this.send || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
-    const profile = source === "camera" ? CAMERA_PROFILE : screenProfile(this.settings.screenQuality);
+    const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
     const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
       source === "camera"
@@ -155,7 +156,7 @@ export class VoiceSession {
     const sound = stream.getAudioTracks()[0];
     if (!track) throw new Error("Nenhuma imagem capturada");
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
-    if (source === "screen") track.contentHint = this.settings.screenQuality === "30" ? "detail" : "motion";
+    if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
       track.stop();
       return void sound?.stop();

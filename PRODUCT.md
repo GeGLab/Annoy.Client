@@ -64,5 +64,24 @@ context navigation, and opt-in Windows detection of Steam games and music from
 Spotify/Apple Music desktop sessions. Activity is ephemeral and delivered only
 to mutual friends on each Annoy instance. Sharing a server or DM grants no
 activity access; removing friendship immediately clears the visible activity.
-Separate saved controls enable game/music sharing, initially off. This expands
+One saved control enables game/music/editor sharing together, initially on, as requested
+in the latest refinement. This expands
 the companion server authorization to search and private activity delivery.
+
+Settings use searchable sidebar categories with a shared explicit save/discard
+flow. The voice strip is a compact single line and can be hidden in Barra e abas.
+Keep one settings gear in the profile controls; clicking the identity opens an
+upward profile card with current desktop activity. Attachment drafts show image,
+video and audio previews with a non-wrapping file size. Voice controls use shared
+sound feedback: disabling audio also mutes the microphone, and enabling audio
+unmutes it.
+
+The brand destination opens Annoy news; store entry points remain commented at
+user request. Preference cards explain effects. Server/channel mute preferences
+suppress message sounds. Screen capture offers resolution/FPS and publishes the
+selected quality. Automatic away defaults to ten minutes of system inactivity.
+
+Social profiles include a 1,000-character biography and mutually visible friend
+nicknames. Direct audio/video calls use authenticated friendship-scoped signaling
+and WebRTC media. Account switching remembers signed-out account metadata only.
+The companion server is authorized for these social and presence additions.

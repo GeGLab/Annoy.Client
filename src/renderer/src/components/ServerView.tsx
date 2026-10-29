@@ -2,6 +2,7 @@ import { confirmAction, promptText } from "./ui/action-dialog.tsx";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "./ui/dropdown-menu.tsx";
 import { Select } from "./ui/select.tsx";
 import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { ProviderIcon } from "../features/activity/ProviderIcon.tsx";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
@@ -12,12 +13,19 @@ import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
 import { VoiceStage } from "./VoiceStage.tsx";
-import { act, Avatar, Icon, openModal } from "./ui.tsx";
+import { act, Avatar, Icon, openModal, type IconName } from "./ui.tsx";
+import { Tooltip } from "./ui/tooltip.tsx";
+import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
+import { screenQualityLabel } from "../lib/screen-profile.ts";
 import { UserPanel } from "./TopBar.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { ResizablePanel, togglePanel } from "./layout/ResizablePanel.tsx";
 
 // Channel list -------------------------------------------------------------
+
+function VoiceFlag({ icon, label, server = false }: { icon: IconName; label: string; server?: boolean }) {
+  return <Tooltip content={label}><span className={`voice-flag${server ? " server" : ""}`} role="img" aria-label={label}><Icon name={icon} size={14} /></span></Tooltip>;
+}
 
 function VoiceUsers({
   state,
@@ -30,61 +38,51 @@ function VoiceUsers({
   accountId: string;
   canModerate: boolean;
 }) {
+  const instance = useStore((s) => s.instances[accountId]);
+  const localActivity = useStore((s) => s.desktopActivity);
+  const shareActivity = useStore((s) => s.settings.shareActivity);
+  const me = instance?.user?.id;
   return (
     <ul className="voice-users">
       {voiceStates.map((v) => {
         const member = state.members.find((m) => m.user.id === v.userId);
         if (!member) return null;
+        const isSelf = v.userId === me;
+        const activities = isSelf
+          ? (shareActivity ? localActivity?.activities : undefined)
+          : instance?.relationships.some((r) => r.user.id === v.userId && r.status === "friend") ? instance.activities[v.userId] : undefined;
+        const music = activities?.find((activity) => activity.kind === "music");
         return (
-          <li key={v.userId} className="voice-user">
+          <li key={v.userId} className="voice-user" data-user-id={v.userId} tabIndex={canModerate && !isSelf ? 0 : undefined}>
             <Avatar user={member.user} size={22} speaking={v.speaking && !v.selfMute && !v.serverMute} />
-            <span className="voice-user-name">{displayNameOf(member)}</span>
+            <span className="voice-user-name" title={displayNameOf(member)}>{displayNameOf(member)}</span>
+            <span className="voice-user-status">
             {(v.serverMute || v.selfMute) && (
-              <span
-                className={v.serverMute ? "voice-flag server" : "voice-flag"}
-                title={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"}
-              >
-                <Icon name="micOff" size={14} />
-              </span>
+              <VoiceFlag icon="micOff" server={v.serverMute} label={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"} />
             )}
-            {v.video && (
-              <span className="voice-flag" title="Câmera ligada">
-                <Icon name="camera" size={14} />
-              </span>
-            )}
-            {v.screen && (
-              <span className="live small" title="Compartilhando a tela">
-                AO VIVO
-              </span>
-            )}
-            {v.selfDeaf && (
-              <span className="voice-flag" title="Ensurdecido">
-                <Icon name="headphonesOff" size={14} />
-              </span>
-            )}
-            {canModerate && (
-              <span className="voice-mod">
-                <button
-                  className="icon-btn tiny"
-                  title={v.serverMute ? "Remover silêncio do servidor" : "Silenciar no servidor"}
-                  onClick={() =>
-                    void act(
-                      apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { serverMute: !v.serverMute }),
-                    )
-                  }
-                >
-                  <Icon name={v.serverMute ? "mic" : "micOff"} size={14} />
-                </button>
-                <button
-                  className="icon-btn tiny"
-                  title="Desconectar da voz"
-                  onClick={() =>
-                    void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { disconnect: true }))
-                  }
-                >
-                  <Icon name="hangup" size={14} />
-                </button>
-              </span>
+            {v.video && <VoiceFlag icon="camera" label="Câmera ligada" />}
+            {v.screen && <VoiceFlag icon="monitor" label="Compartilhando a tela" />}
+            {v.screen && v.screenQuality && <span className="stream-quality" title="Qualidade selecionada por quem transmite">{screenQualityLabel(v.screenQuality)}</span>}
+            {v.selfDeaf && <VoiceFlag icon="headphonesOff" label="Áudio desativado" />}
+            {music && <Tooltip content={`Ouvindo ${music.name}${music.artist ? ` · ${music.artist}` : ""}`}><span className="voice-flag" role="img" aria-label={`Ouvindo ${music.name}`}><ProviderIcon provider={music.provider} size={12} /></span></Tooltip>}
+            </span>
+            {canModerate && !isSelf && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="icon-btn tiny voice-mod" aria-label={`Ações de voz de ${displayNameOf(member)}`}><Icon name="more" size={14} /></button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {(v.serverMute || !v.selfMute) && (
+                    <DropdownMenuItem onSelect={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { serverMute: !v.serverMute }))}>
+                      <Icon name={v.serverMute ? "mic" : "micOff"} size={16} />
+                      {v.serverMute ? "Remover silêncio do servidor" : "Silenciar no servidor"}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem destructive onSelect={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { disconnect: true }))}>
+                    <Icon name="hangup" size={16} />Desconectar da voz
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </li>
         );
@@ -108,6 +106,7 @@ function ChannelRow({
 }) {
   const unread = useStore((s) => s.instances[accountId]?.unread[channel.id]);
   const voice = useStore((s) => s.voice);
+  const muted = useStore((s) => s.settings.mutedChannels.includes(notificationKey(accountId, channel.id)));
   const perms = channelPerms(state, me, channel);
   const canManage = has(perms, Permission.MANAGE_CHANNELS);
   const gear = canManage && (
@@ -130,7 +129,7 @@ function ChannelRow({
     return (
       <li>
         <div
-          className={`channel voice${connected ? " active" : ""}${canConnect ? "" : " locked"}`}
+          className={`channel voice${canManage ? " has-gear" : ""}${connected ? " active" : ""}${canConnect ? "" : " locked"}`}
           onClick={() => {
             if (!canConnect) return toast("Sem permissão para conectar");
             if (!connected) void joinVoice(accountId, state.server.id, channel.id);
@@ -141,7 +140,7 @@ function ChannelRow({
           <Icon name={canConnect ? "speaker" : "lock"} size={16} />
           <span className="channel-name">{channel.name}</span>
           {connected && <span className={`voice-here ${voice.status}`}>{voice.status === "connected" ? "Na sala" : "Entrando"}</span>}
-          {gear}
+          {canManage && <span className="channel-voice-actions">{gear}</span>}
         </div>
         {inChannel.length > 0 && (
           <VoiceUsers state={state} voiceStates={inChannel} accountId={accountId} canModerate={has(perms, Permission.MUTE_MEMBERS)} />
@@ -158,8 +157,15 @@ function ChannelRow({
       >
         <Icon name="hash" size={16} />
         <span className="channel-name">{channel.name}</span>
+        {muted && <Icon name="bellOff" size={14} />}
         {unread?.mention && <span className="badge">{unread.count}</span>}
-        {gear}
+        <span className="channel-text-actions" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><button className="icon-btn tiny" aria-label={`Notificações de ${channel.name}`}><Icon name="more" size={14} /></button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => toggleMessageMute("channel", accountId, channel.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? "Ativar notificações do canal" : "Silenciar canal"}</DropdownMenuItem></DropdownMenuContent>
+          </DropdownMenu>
+          {gear}
+        </span>
       </div>
     </li>
   );
@@ -172,6 +178,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
   const isOwner = state.server.ownerId === me;
   const canSettings = isOwner || [Permission.MANAGE_SERVER, Permission.MANAGE_ROLES, Permission.BAN_MEMBERS].some((p) => has(perms, p));
   const canChannels = has(perms, Permission.MANAGE_CHANNELS);
+  const muted = useStore((s) => s.settings.mutedServers.includes(notificationKey(accountId, state.server.id)));
 
   const { loose, categories } = useMemo(() => {
     const sorted = [...state.channels].sort((a, b) => a.position - b.position);
@@ -196,6 +203,8 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="server-menu" align="start">
+          <DropdownMenuItem onSelect={() => toggleMessageMute("server", accountId, state.server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? "Ativar notificações do servidor" : "Silenciar servidor"}</DropdownMenuItem>
+          <DropdownMenuSeparator />
           {has(perms, Permission.CREATE_INVITE) && (
             <DropdownMenuItem onSelect={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}>
               <Icon name="userPlus" />
@@ -245,6 +254,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
         </DropdownMenuContent>
       </DropdownMenu>
       <ul className="channel-scroll">
+        {/* Loja de bots temporariamente oculta.
         <li>
           <button
             className="channel server-bot-link"
@@ -254,6 +264,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
             <span className="channel-name">Bots do servidor</span>
           </button>
         </li>
+        */}
         {loose.map((c) => (
           <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} />
         ))}
@@ -352,6 +363,7 @@ function MemberCard({
               <div className="muted">@{member.user.username}</div>
             </div>
           </div>
+          {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
           {rel?.status === "friend" && activities.length > 0 && (
             <div className="member-card-section">
               <div className="section-label">Atividade · Só para amigos</div>
@@ -446,8 +458,8 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       (inst.activities?.[m.user.id]?.length ?? 0) > 0,
   );
   const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null);
-  const online = state.members.filter((m) => m.presence === "online");
-  const offline = state.members.filter((m) => m.presence !== "online");
+  const online = state.members.filter((m) => m.presence !== "offline");
+  const offline = state.members.filter((m) => m.presence === "offline");
   const section = (label: string, list: Member[]) =>
     list.length > 0 && (
       <>
@@ -457,7 +469,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
         {list.map((m) => (
           <button
             key={m.user.id}
-            className={`member${m.presence === "online" ? "" : " offline"}`}
+            className={`member${m.presence !== "offline" ? "" : " offline"}`}
             onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}
           >
             <Avatar user={m.user} size={32} presence={m.presence} />

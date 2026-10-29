@@ -1,6 +1,6 @@
 import { existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, desktopCapturer, powerMonitor, ipcMain, session, shell, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -217,6 +217,7 @@ ipcMain.on("window:control", (event, action: unknown) => {
   else if (action === "maximize") win.isMaximized() ? win.unmaximize() : win.maximize();
   else if (action === "close") win.close();
 });
+ipcMain.handle("system:idle", (event) => event.sender === win?.webContents ? powerMonitor.getSystemIdleTime() : 0);
 ipcMain.handle("window:maximized", (event) => event.sender === win?.webContents && win.isMaximized());
 
 ipcMain.on("service:show", (_e, raw: unknown) => {

@@ -1,5 +1,6 @@
 import type {
   DmChannel,
+  GatewayEvent,
   ImportJob,
   Message,
   Presence,
@@ -9,7 +10,6 @@ import type {
   User,
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
-import type { ScreenQuality } from "./media-profiles.ts";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
@@ -23,6 +23,7 @@ export interface Account {
   userId: string;
   instanceName: string;
 }
+export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
 
 export interface ChannelMessages {
   items: Message[];
@@ -45,10 +46,11 @@ export interface InstanceState {
   unread: Record<string, { count: number; mention: boolean }>;
   imports: Record<string, ImportJob>;
   /** This account's role on the instance, from READY. */
-  instance: { isAdmin: boolean; registration: "open" | "invite" | "closed"; voiceBackend: "builtin" | "cloudflare" } | null;
+  instance: Extract<GatewayEvent, { t: "READY" }>["d"]["instance"] | null;
 }
 
 export type View =
+  | { kind: "news" }
   /** A browser service (Discord, WhatsApp…) or a TeamSpeak launcher. */
   | { kind: "service"; serviceId: string }
   | { kind: "marketplace"; accountId: string | null; serverId: string | null }
@@ -56,7 +58,8 @@ export type View =
   | { kind: "server"; accountId: string; serverId: string; channelId: string | null };
 
 export type Modal =
-  | { kind: "addAccount" }
+  | { kind: "addAccount"; rememberedId?: string }
+  | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId: string }
   | { kind: "serverSettings"; accountId: string; serverId: string }
@@ -64,7 +67,7 @@ export type Modal =
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: "text" | "voice" | "category" }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings" }
+  | { kind: "userSettings"; section?: "voice" }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }
@@ -98,21 +101,28 @@ export interface Settings {
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
+  messageSounds: boolean;
+  mutedServers: string[];
+  mutedChannels: string[];
   noiseFilter: NoiseFilter;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
-  /** Frame rate (and bitrate cap) for screen sharing. */
-  screenQuality: ScreenQuality;
-  /** Share the computer's sound with the screen, where the platform can capture it. */
+  shareActivity: boolean;
+  showVoiceBar: boolean;
+  voiceBarMode: "external" | "always";
+  awayMinutes: number;
+  screenHeight: number;
+  screenFps: number;
   screenAudio: boolean;
-  shareGames: boolean;
-  shareMusic: boolean;
 }
 
 export interface AppState {
+  directCall: { accountId: string; call: import("@distopic/protocol").DirectCall } | null;
+  rememberedAccounts: RememberedAccount[];
+  recentMessages: Record<string, { own: boolean; at: number }>;
   accounts: Account[];
   instances: Record<string, InstanceState>;
   view: View;
@@ -156,20 +166,32 @@ const DEFAULT_SETTINGS: Settings = {
   selfMute: false,
   selfDeaf: false,
   notifications: true,
+  messageSounds: true,
+  mutedServers: [],
+  mutedChannels: [],
   noiseFilter: "gtcrn",
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
-  screenQuality: "60",
+  shareActivity: true,
+  showVoiceBar: true,
+  voiceBarMode: "external",
+  awayMinutes: 10,
+  screenHeight: 1080,
+  screenFps: 30,
   screenAudio: true,
-  shareGames: false,
-  shareMusic: false,
 };
 
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? ({ ...fallback, ...JSON.parse(raw) } as T) : fallback;
+    if (!raw) return fallback;
+    const saved = JSON.parse(raw);
+    if (key === "distopic.settings" && saved.screenFps === undefined && saved.screenQuality) {
+      saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
+      if (saved.screenQuality === "max") saved.screenHeight = 0;
+    }
+    return { ...fallback, ...saved } as T;
   } catch {
     return fallback;
   }
@@ -214,10 +236,14 @@ function initialServices(): Service[] {
 
 function initialView(): View {
   const view = load<View | { kind: "discord" }>(VIEW_KEY, { kind: "home", accountId: null, dmId: null });
+  if (view.kind === "marketplace") return { kind: "news" };
   return view.kind === "discord" ? { kind: "service", serviceId: "discord" } : view;
 }
 
 let state: AppState = {
+  directCall: null,
+  rememberedAccounts: loadArray<RememberedAccount>("distopic.rememberedAccounts"),
+  recentMessages: {},
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
   view: initialView(),
@@ -243,6 +269,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   state = produce(state, recipe);
   if (state === prev) return;
   if (state.accounts !== prev.accounts) localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(state.accounts));
+  if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
   if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
   if (state.services !== prev.services) localStorage.setItem(SERVICES_KEY, JSON.stringify(state.services));

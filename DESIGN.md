@@ -383,7 +383,7 @@ Tailwind v4 provides semantic utilities through the official Vite plugin; shadcn
 - **Do** use the single SVG brand source and regenerate packaged icons with npm run brand:icons.
 - **Do** keep motion brief, honor reduced motion and load optional interfaces on demand.
 - **Do** preserve explicit settings saves, guarded exits and visible request failures.
-- **Do** keep activity opt-in, ephemeral and limited to self and mutual friends.
+- **Do** keep activity sharing configurable, ephemeral and limited to self and mutual friends. The single games/music control defaults on per the latest user request.
 
 ### Don't:
 

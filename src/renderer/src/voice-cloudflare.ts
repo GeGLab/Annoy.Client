@@ -1,3 +1,4 @@
+import { screenProfile } from "./lib/screen-profile.ts";
 // Voice session for instances using Cloudflare's Realtime SFU. One
 // RTCPeerConnection carries everything; the Annoy server relays every
 // negotiation to Cloudflare and decides what we may publish or receive.
@@ -6,7 +7,7 @@ import type { Gateway } from "./gateway.ts";
 import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Settings } from "./store.ts";
-import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, screenProfile, tuneOpus } from "./media-profiles.ts";
+import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
 
 interface Remote {
   source: MediaSource;
@@ -177,7 +178,7 @@ export class CloudflareVoiceSession {
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
     if (!this.pc || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
-    const profile = source === "camera" ? CAMERA_PROFILE : screenProfile(this.settings.screenQuality);
+    const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
     const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
       source === "camera"
@@ -187,7 +188,7 @@ export class CloudflareVoiceSession {
     const sound = stream.getAudioTracks()[0];
     if (!track) throw new Error("Nenhuma imagem capturada");
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
-    if (source === "screen") track.contentHint = this.settings.screenQuality === "30" ? "detail" : "motion";
+    if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
       track.stop();
       return void sound?.stop();

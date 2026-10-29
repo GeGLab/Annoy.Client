@@ -1,10 +1,12 @@
 import type { Channel, ServerState, VoiceState } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, updateVoiceSettings } from "../client.ts";
+import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting } from "../client.ts";
 import { useVideoTiles, type VideoTile } from "../media.ts";
 import { displayNameOf } from "../perms.ts";
 import { setState, useStore } from "../store.ts";
-import { Avatar, closeModal, Icon, Modal } from "./ui.tsx";
+import { Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
+import { Select } from "./ui/select.tsx";
+import { SCREEN_RESOLUTIONS, screenQualityLabel } from "../lib/screen-profile.ts";
 
 function Video({ tile }: { tile: VideoTile }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -27,7 +29,7 @@ function VideoCard({ tile, person, focused, onFocus }: { tile: VideoTile; person
     <div ref={card} className={`stage-card video ${tile.source}${focused ? " focused" : ""}${person?.state.speaking ? " speaking" : ""}`} onClick={onFocus}>
       <Video tile={tile} />
       <div className="stage-label">
-        {tile.source === "screen" && <span className="live">AO VIVO</span>}
+        {tile.source === "screen" && <span className="live">{screenQualityLabel(person?.state.screenQuality)}</span>}
         <span className="truncate">
           {person?.name ?? "…"}
           {tile.local ? " (você)" : ""}
@@ -85,13 +87,6 @@ export function VoiceStage({ accountId, state, channel }: { accountId: string; s
   const audioOnly = [...people.values()].filter((p) => !withVideo.has(p.state.userId));
   const focusedTile = ordered.find((t) => t.key === focus) ?? null;
 
-  const toggle = (key: "selfMute" | "selfDeaf") => {
-    setState((s) => {
-      s.settings[key] = !s.settings[key];
-      if (key === "selfDeaf" && !s.settings.selfDeaf) s.settings.selfMute = false;
-    });
-    updateVoiceSettings();
-  };
 
   return (
     <section className="chat stage">
@@ -133,10 +128,10 @@ export function VoiceStage({ accountId, state, channel }: { accountId: string; s
             </div>
           </div>
           <div className="stage-controls">
-            <button className={`round-btn${settings.selfMute ? " off" : ""}`} onClick={() => toggle("selfMute")} title={settings.selfMute ? "Ativar microfone" : "Silenciar"}>
+            <button className={`round-btn${settings.selfMute ? " off" : ""}`} onClick={() => toggleVoiceSetting("selfMute")} title={settings.selfMute ? "Ativar microfone" : "Silenciar"}>
               <Icon name={settings.selfMute ? "micOff" : "mic"} size={20} />
             </button>
-            <button className={`round-btn${settings.selfDeaf ? " off" : ""}`} onClick={() => toggle("selfDeaf")} title={settings.selfDeaf ? "Ativar áudio" : "Ensurdecer"}>
+            <button className={`round-btn${settings.selfDeaf ? " off" : ""}`} onClick={() => toggleVoiceSetting("selfDeaf")} title={settings.selfDeaf ? "Ativar áudio" : "Ensurdecer"}>
               <Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} size={20} />
             </button>
             <button
@@ -174,14 +169,25 @@ interface Source {
 
 /** Choose a screen or window to share (Windows, macOS and X11; Wayland uses the system portal). */
 export function ScreenPickerModal() {
+  const settings = useStore((s) => s.settings);
+  const [system, setSystem] = useState(false);
   const [sources, setSources] = useState<Source[] | null>(null);
   const [tab, setTab] = useState<"screen" | "window">("screen");
   useEffect(() => {
-    void window.distopic?.screen.sources().then(setSources);
+    void window.distopic?.screen.mode().then(async (mode) => {
+      if (mode === "system") { setSystem(true); setSources([]); }
+      else setSources(await window.distopic!.screen.sources());
+    }).catch(() => setSources([]));
   }, []);
   const list = sources?.filter((s) => s.kind === tab) ?? [];
   return (
     <Modal title="Compartilhar tela" wide>
+      <p className="muted small">Escolha a qualidade antes de transmitir. Resoluções e FPS maiores usam mais rede e processamento; o dispositivo pode limitar a captura.</p>
+      <div className="grid-2 screen-quality-options">
+        <Field label="Resolução"><Select aria-label="Resolução da transmissão" value={String(settings.screenHeight)} onChange={(event) => setState((s) => { s.settings.screenHeight = Number(event.target.value); })}>{SCREEN_RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field>
+        <Field label="Quadros por segundo"><Select aria-label="FPS da transmissão" value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? `${fps} FPS` : "Sem limite"}</option>)}</Select></Field>
+      </div>
+      {system ? <button className="btn" onClick={() => { closeModal(); void startScreenShare(null); }}><Icon name="monitor" />Escolher tela ou janela</button> : <>
       <div className="tabs">
         <button className={tab === "screen" ? "tab active" : "tab"} onClick={() => setTab("screen")}>
           Telas
@@ -211,6 +217,7 @@ export function ScreenPickerModal() {
           ))}
         </div>
       )}
+      </>}
     </Modal>
   );
 }

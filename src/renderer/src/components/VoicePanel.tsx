@@ -66,7 +66,7 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
         <DropdownMenuItem
           onSelect={() =>
             setState((s) => {
-              s.modal = { kind: "userSettings" };
+              s.modal = { kind: "userSettings", section: "voice" };
             })
           }
         >
