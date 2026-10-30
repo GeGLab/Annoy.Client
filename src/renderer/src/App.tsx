@@ -84,7 +84,7 @@ export function App() {
   const theme = useStore(s => s.settings.theme);
   const accentColor = useStore(s => s.settings.accentColor);
   const surfaceColor = useStore(s => s.settings.surfaceColor);
-  const blockedAccountId = useConnectionBlocked();
+  const { accountId: blockedAccountId, continueOffline } = useConnectionBlocked();
   const inVoice = useStore(s => s.voice !== null);
   const barPosition = useStore((s) => s.settings.barPosition);
   const mainRef = useRef<HTMLElement>(null);
@@ -185,7 +185,7 @@ export function App() {
           <Home accountId={view.accountId} dmId={view.dmId} />
         )}
         </div>
-        {!blocking && blockedAccountId && <ConnectionOverlay key={blockedAccountId} accountId={blockedAccountId} />}
+        {!blocking && blockedAccountId && <ConnectionOverlay key={blockedAccountId} accountId={blockedAccountId} onContinue={continueOffline} />}
       </main>
       </div>
       </div>

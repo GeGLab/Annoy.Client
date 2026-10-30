@@ -161,6 +161,19 @@ não foi executada; lint continua sem script configurado. Nenhum teste falhou.
 
 ## Dependências e riscos em acompanhamento
 
+Integração para PR em 30/10/2026: a branch incorpora `upstream/main` em
+`2e1d177` (0.8.0), incluindo encerramento de mídia na perda da conexão e bloqueio
+de ações remotas no conteúdo em cache. Os conflitos em cliente/gateway/recuperação
+foram resolvidos preservando essas correções e o isolamento de M1.1. A ação
+“Ver conteúdo salvo” mantém acesso explícito ao cache, com aviso e ações
+indisponíveis desabilitadas. O foco também se recupera quando o controle anterior
+foi desabilitado pela queda. A primeira validação encontrou esse caso de foco e
+a ausência do Chromium exigido pelos testes novos da main; o caso foi corrigido
+e o navegador de teste instalado. Após isso, 9 cenários de desconexão/workspace
+passaram; outros 9 cenários de Electron/interface já haviam passado na integração.
+Typecheck e build aprovados. As alterações locais foram commitadas por etapa
+(interface anterior, M0, M1.1), com a integração em commit separado.
+
 - Backend Global não localizado: observar contratos atuais; nenhuma mudança
   central necessária para começar M1.
 - Instâncias publicadas não foram modificadas nem validadas contra essas novas

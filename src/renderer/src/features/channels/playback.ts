@@ -1,7 +1,7 @@
 import { playbackPosition, type PlaybackAction, type PlaybackItem, type PlaybackState } from "@distopic/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
-import { toast } from "../../store.ts";
+import { toast, useStore } from "../../store.ts";
 import { onRoomEvent } from "./events.ts";
 
 // One theater or song room's shared playback, and the loop that keeps this device on it.
@@ -14,6 +14,7 @@ export interface Playback {
 }
 
 export function usePlayback(accountId: string, channelId: string): Playback {
+  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [state, setState] = useState<PlaybackState | null>(null);
   const [offset, setOffset] = useState(0);
   const apply = useCallback((next: PlaybackState) => {
@@ -22,6 +23,7 @@ export function usePlayback(accountId: string, channelId: string): Playback {
   }, []);
 
   useEffect(() => {
+    if (!connected) { setState(null); return; }
     let live = true;
     void apiFor(accountId)
       .get<PlaybackState>(`/channels/${channelId}/playback`)
@@ -32,7 +34,7 @@ export function usePlayback(accountId: string, channelId: string): Playback {
       live = false;
       off();
     };
-  }, [accountId, channelId, apply]);
+  }, [accountId, channelId, apply, connected]);
 
   const send = useCallback(
     async (action: PlaybackAction) => {
@@ -45,7 +47,7 @@ export function usePlayback(accountId: string, channelId: string): Playback {
     [accountId, channelId, apply],
   );
 
-  return { state, offset, send };
+  return { state: connected ? state : null, offset, send };
 }
 
 export const currentItem = (state: PlaybackState | null): PlaybackItem | null =>
@@ -132,7 +134,7 @@ export function elementDriver(el: HTMLMediaElement, events: () => UserEvents): {
       if (action === "pause" && !el.paused) el.pause();
     },
   };
-  return { driver, dispose: () => handlers.forEach(([name, fn]) => el.removeEventListener(name, fn)) };
+  return { driver, dispose: () => { handlers.forEach(([name, fn]) => el.removeEventListener(name, fn)); el.pause(); } };
 }
 
 type Slot = "theater" | "music";

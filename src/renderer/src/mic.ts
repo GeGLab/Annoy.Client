@@ -13,6 +13,7 @@ export class MicGate {
   private lastVoiceAt = 0;
   private pttDown = false;
   private open = false;
+  private stopped = false;
   /** Track to hand to the transport. */
   track: MediaStreamTrack | null = null;
 
@@ -23,7 +24,12 @@ export class MicGate {
   ) {}
 
   async start(): Promise<MediaStreamTrack> {
-    this.mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter);
+    const mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter);
+    if (this.stopped) {
+      mic.stop();
+      throw new Error("Sessão de voz encerrada");
+    }
+    this.mic = mic;
     this.track = this.mic.track;
     const analyser = this.mic.ctx.createAnalyser();
     analyser.fftSize = 512;
@@ -63,6 +69,7 @@ export class MicGate {
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.mic?.stop();
     this.mic = null;

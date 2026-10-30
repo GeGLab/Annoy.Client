@@ -49,6 +49,9 @@ test("desktop navigation, themes, window controls and image attachments", async 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await page.screenshot({ path: join(screenshots, "desktop-light.png") });
 
+    // Tiling window managers can open or resize this test window maximized.
+    if (await page.getByRole("button", { name: "Restaurar janela", exact: true }).isVisible())
+      await page.getByRole("button", { name: "Restaurar janela", exact: true }).click();
     await page.getByRole("button", { name: "Maximizar", exact: true }).click();
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized())).toBe(true);
     await page.getByRole("button", { name: "Restaurar janela", exact: true }).click();

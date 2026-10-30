@@ -61,8 +61,9 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   [measurements](docs/noise-suppression.md).
 - **Instance admin.** If you host the instance: sign-up mode, sign-up invites,
   accounts and servers, all from Settings.
-- **Survives outages.** Server tabs stay visible while offline, reconnect with
-  one click (or automatically), and you rejoin the call you were in.
+- **Explicit disconnects.** Server tabs and loaded history stay visible offline.
+  Losing the instance ends voice, video, screen shares and private calls. Text
+  and presence reconnect automatically; rejoining media requires your action.
 - **Moderation.** Role editor, per-channel permission overwrites
   (allow/inherit/deny), invites, kick, ban and ban list.
 - **Friends and DMs.** Friend requests, presence, direct messages.

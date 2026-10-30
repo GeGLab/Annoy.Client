@@ -83,3 +83,6 @@
 .connection-account small { color: var(--text-muted); font-size: 11px; }
 @keyframes reconnect-wave { 0% { transform: scale(.65); opacity: 0; } 20% { opacity: .8; } 100% { transform: scale(1.05); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .reconnect-symbol > .reconnect-wave, .voice-status-bar.connecting .voice-connection-icon { animation: none; } }
+
+.connection-notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg-raised, #282229); color: var(--text-muted, #bdb6c5); font-size: 13px; flex-shrink: 0; }
+.connection-notice svg { flex-shrink: 0; }

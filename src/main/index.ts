@@ -254,6 +254,7 @@ function createWindow(): void {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   win.webContents.setWindowOpenHandler(({ url }) => {

@@ -27,6 +27,14 @@
 atualizar. A única exceção é uma correção de segurança crítica, que é
 obrigatória. Veja o [SECURITY.md](SECURITY.md).
 
+## Conexão com a instância
+
+Desde a 0.8, perder a conexão com uma instância encerra suas chamadas e
+transmissões, inclusive durante reinícios e atualizações. O app reconecta para
+texto e presença, mas a voz exige entrar de novo. Conversas já carregadas ficam
+disponíveis para leitura, com um aviso e o envio bloqueado até a reconexão.
+Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
+
 ## Funcionalidades
 
 - **Um hub, vários serviços:** adicione Discord, WhatsApp, Telegram, Element,

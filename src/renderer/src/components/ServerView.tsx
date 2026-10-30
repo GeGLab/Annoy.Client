@@ -592,6 +592,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   const state = useStore((s) => s.instances[accountId]?.serverStates[serverId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   const showMembers = useStore((s) => s.settings.membersOpen);
+  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   if (!state || !me) return <ServerUnavailable accountId={accountId} />;
 
   const opened = state.channels.find((c) => c.id === channelId);
@@ -603,7 +604,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   return (
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
-      {opened?.type === "files" ? (
+      {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} /> : opened?.type === "files" ? (
         <FilesView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "code" ? (
         <CodeView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />

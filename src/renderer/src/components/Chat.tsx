@@ -23,6 +23,7 @@ import { formatClock, formatDay, formatSize, formatTime, renderContent, type Nam
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
+import { ConnectionNotice } from "./ConnectionOverlay.tsx";
 import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
@@ -381,6 +382,7 @@ function Composer({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const [query, setQuery] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
@@ -428,12 +430,13 @@ function Composer({
     requestAnimationFrame(() => { element?.focus(); element?.setSelectionRange(start + value.length, start + value.length); });
   };
   const addFiles = (list: FileList | File[]) => {
-    if (!canAttach) return;
+    if (!canAttach || !connected) return;
     setFiles((f) => [...f, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage));
   };
   dropRef.current = addFiles;
 
   const send = async () => {
+    if (!connected) return;
     // Longest names first so "@Ana Maria" wins over "@Ana".
     let content = text;
     for (const m of [...picked].sort((a, b) => b.name.length - a.name.length)) content = content.split(`@${m.name}`).join(`<@${m.id}>`);
@@ -513,7 +516,7 @@ function Composer({
       <div className="composer">
         {canAttach && (
           <>
-            <button className="icon-btn" title="Anexar arquivo" onClick={() => fileInput.current?.click()}>
+            <button className="icon-btn" disabled={!connected} title="Anexar arquivo" onClick={() => fileInput.current?.click()}>
               <Icon name="plus" size={20} />
             </button>
             <input
@@ -534,7 +537,8 @@ function Composer({
           rows={1}
           value={text}
           maxLength={LIMITS.messageMax}
-          placeholder={placeholder}
+          placeholder={connected ? placeholder : "Sem conexão com o servidor"}
+          disabled={!connected}
           onChange={(e) => {
             setText(e.target.value);
             updateQuery(e.target.value, e.target.selectionStart);
@@ -544,13 +548,13 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
-        <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
+        <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
         <Button
           variant="ghost"
           size="icon"
           className="composer-send"
           loading={sending}
-          disabled={sending || (!text.trim() && files.length === 0)}
+          disabled={!connected || sending || (!text.trim() && files.length === 0)}
           onClick={() => void send()}
           aria-label="Enviar mensagem"
         >
@@ -667,6 +671,7 @@ export function Chat(props: ChatProps) {
         <span className="spacer" />
         {props.headerExtra}
       </header>
+      <ConnectionNotice accountId={accountId} />
       <div className="messages" ref={scroller} onScroll={onScroll}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
