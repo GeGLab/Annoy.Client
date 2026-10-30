@@ -780,7 +780,7 @@ test("message sounds, channel/server mute, DM shortcuts, hover layout and settin
     await page.getByRole("combobox", { name: "Tempo para ficar ausente", exact: true }).click();
     await page.getByRole("option", { name: "5 minutos", exact: true }).click();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
-    const count = await tones(); send("silent-5"); await expect(page.getByText("Mensagem silent-5", { exact: true })).toBeAttached(); expect(await tones()).toBe(count);
+    const count = await tones(); send("silent-5"); await expect.poll(()=>page.evaluate(async()=>{const {getState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);return getState().instances.test?.messages.general?.items.some((item:any)=>item.id==="silent-5");})).toBe(true); expect(await tones()).toBe(count);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
     await page.getByRole("button", { name: "Aparência", exact: true }).click();
     await page.getByRole("button", { name: "Claro", exact: true }).click();

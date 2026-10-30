@@ -200,6 +200,7 @@ function MessageRow({
   canModerate,
   canPin = canModerate,
   canReact,
+  highlighted=false,
   onReply,
 }: {
   accountId: string;
@@ -212,6 +213,7 @@ function MessageRow({
   canModerate: boolean;
   canPin?: boolean;
   canReact: boolean;
+  highlighted?: boolean;
   onReply: (m: Message) => void;
 }) {
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
@@ -256,7 +258,7 @@ function MessageRow({
   };
 
   return (
-    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
+    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${highlighted?" search-highlight":""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -641,12 +643,16 @@ export function Chat(props: ChatProps) {
   const [replyValidationAttempt, setReplyValidationAttempt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const virtualWindow=useRef<HTMLDivElement>(null);
   const [pinsOpen, setPinsOpen] = useState(false);
+  const pinsButton=useRef<HTMLButtonElement>(null);
   const pinsSupported=useStore(s=>s.instances[accountId]?.instance?.messagePins===true);
   const readingIntent=useRef(false);
   const pendingAnchor=useRef<{id:string;offset:number}|null>(null);
+  const restoringAnchor=useRef<{id:string;offset:number|null}|null>(null);
+  const readingAnchor=useRef<{id:string;offset:number}|null>(null);
   const focusVisit=useRef<string|null>(null);
-  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, scrollMargin:virtualWindow.current?.offsetTop??0, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
   const pinned = useRef(true);
   const prevHeight = useRef<number | null>(null);
   const restoredVisit = useRef<string | null>(null);
@@ -670,6 +676,20 @@ export function Chat(props: ChatProps) {
   const replyTo = localReply ?? (replyResolution?.id === draft.replyToId && replyResolution.status === "valid" ? replyResolution.message : null);
   const replyValid = !draft.replyToId || !!localReply || (replyResolution?.id === draft.replyToId && replyResolution.status === "valid");
   const replyStatus = draft.replyToId && replyResolution?.id === draft.replyToId ? replyResolution.status : draft.replyToId ? "checking" : null;
+  const positionMessage=(id:string,offset:number|null)=>{
+    const target={id,offset};restoringAnchor.current=target;
+    const index=items.findIndex(message=>message.id===id);if(index<0){restoringAnchor.current=null;return;}
+    virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
+    let attempts=0;
+    const settle=()=>{
+      const el=scroller.current;if(!el?.isConnected||restoringAnchor.current!==target)return;
+      const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+      if(row){const desired=offset??Math.max(0,(el.clientHeight-row.getBoundingClientRect().height)/2);el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-desired;lastTop.current=el.scrollTop;readingAnchor.current={id,offset:desired};}
+      else virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
+      if(++attempts<8)requestAnimationFrame(settle);else restoringAnchor.current=null;
+    };
+    requestAnimationFrame(settle);
+  };
 
   useEffect(() => {
     const replyId = draft.replyToId;
@@ -706,7 +726,7 @@ export function Chat(props: ChatProps) {
 
   useEffect(() => () => flushChatState(), []);
   useLayoutEffect(()=>{
-    restoredVisit.current=null; focusVisit.current=null; readingIntent.current=false;
+    restoredVisit.current=null; focusVisit.current=null; readingIntent.current=false;restoringAnchor.current=null;readingAnchor.current=null;
     pinned.current=!focus; prevHeight.current=null;
   },[accountId,channelId,navigation]);
 
@@ -715,12 +735,7 @@ export function Chat(props: ChatProps) {
     const visit=JSON.stringify([navigation,focus.messageId]);if(focusVisit.current===visit)return;
     const index=items.findIndex(message=>message.id===focus.messageId);if(index<0)return;
     focusVisit.current=visit;pinned.current=false;
-    virtualizer.scrollToIndex(index,{align:"center"});
-    const frame=requestAnimationFrame(()=>{
-      const row=scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focus.messageId)}"]`);
-      row?.scrollIntoView({block:"center"});row?.classList.add("search-highlight");
-    });
-    return ()=>cancelAnimationFrame(frame);
+    positionMessage(focus.messageId,null);
   },[focus,items,entry?.loading,navigation]);
 
   useLayoutEffect(()=>{
@@ -731,12 +746,7 @@ export function Chat(props: ChatProps) {
     const target=saved?.messageId??entry.initialPosition;
     const index=target?items.findIndex(message=>message.id===target):-1;
     if(index>=0){
-      pinned.current=false;virtualizer.scrollToIndex(index,{align:"start"});
-      const frame=requestAnimationFrame(()=>{
-        const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(target!)}"]`);
-        if(row)el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-(saved?.offset??0);
-        lastTop.current=el.scrollTop;
-      });return()=>cancelAnimationFrame(frame);
+      pinned.current=false;positionMessage(target!,saved?.offset??0);return;
     }
     if(saved)clearChatAnchor(accountId,channelId);
     pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
@@ -751,6 +761,9 @@ export function Chat(props: ChatProps) {
       if (el && pinned.current && prevHeight.current === null) {
         el.scrollTop = el.scrollHeight;
         lastTop.current = el.scrollTop;
+      } else if(el&&!restoringAnchor.current&&readingAnchor.current){
+        const anchor=readingAnchor.current,row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`);
+        if(row){el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-anchor.offset;lastTop.current=el.scrollTop;}
       }
     });
     observer.observe(messageLog.current);
@@ -771,36 +784,48 @@ export function Chat(props: ChatProps) {
     if(anchor){
       pendingAnchor.current=null;prevHeight.current=null;
       const index=items.findIndex(message=>message.id===anchor.id);
-      if(index>=0){virtualizer.scrollToIndex(index,{align:"start"});requestAnimationFrame(()=>{
-        const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`);
-        if(row)el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-anchor.offset;
-      });}
+      if(index>=0)positionMessage(anchor.id,anchor.offset);
     } else if(pinned.current) el.scrollTop=el.scrollHeight;
   }, [items, firstId]);
 
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     const el = scroller.current;
     if (!el) return;
+    if(restoringAnchor.current){lastTop.current=el.scrollTop;return;}
     if (el.scrollTop < lastTop.current - 1) pinned.current = false;
-    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) pinned.current = true;
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80 && !entry?.hasMoreAfter) pinned.current = true;
     lastTop.current = el.scrollTop;
     const viewportTop = el.getBoundingClientRect().top;
     const firstVisible = [...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])]
       .find((row) => row.getBoundingClientRect().bottom > viewportTop);
     if (firstVisible?.dataset.messageId) {
+      readingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
       writeChatAnchor(accountId, channelId, { messageId: firstVisible.dataset.messageId, offset: firstVisible.getBoundingClientRect().top - viewportTop });
     }
-    if (el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
+    if (readingIntent.current && el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
       if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
     }
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160 && entry?.hasMoreAfter && !entry.loading && !entry.error) void loadMessages(accountId,channelId,"newer");
-    if (readingIntent.current && event.nativeEvent.isTrusted && document.hasFocus() && firstVisible?.dataset.messageId) {
-      const visible=[...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]")??[])].filter(row=>{const rect=row.getBoundingClientRect();return rect.bottom>el.getBoundingClientRect().top && rect.top<el.getBoundingClientRect().bottom;});
-      const last=visible.at(-1)?.dataset.messageId; if(last) void markChannelRead(accountId,channelId,last);
+    if (readingIntent.current && el.scrollHeight - el.scrollTop - el.clientHeight < 160 && entry?.hasMoreAfter && !entry.loading && !entry.error) {
+      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
+      void loadMessages(accountId,channelId,"newer");
     }
+    if(event.nativeEvent.isTrusted)markVisibleRead();
   };
+
+  const markVisibleRead=()=>{
+    const el=scroller.current;if(!el||!readingIntent.current||!document.hasFocus()||document.querySelector(".dialog-overlay"))return;
+    const viewport=el.getBoundingClientRect();
+    const rows=[...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]")??[])].filter(row=>{const rect=row.getBoundingClientRect();return rect.bottom>viewport.top&&rect.top<viewport.bottom;});
+    const id=rows.at(-1)?.dataset.messageId;if(id)void markChannelRead(accountId,channelId,id);
+  };
+  const startReading=()=>{restoringAnchor.current=null;readingIntent.current=true;requestAnimationFrame(markVisibleRead);};
+  useEffect(()=>{
+    const frame=requestAnimationFrame(markVisibleRead);
+    window.addEventListener("focus",markVisibleRead);
+    return()=>{cancelAnimationFrame(frame);window.removeEventListener("focus",markVisibleRead);};
+  },[items,connected]);
 
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
 
@@ -814,6 +839,7 @@ export function Chat(props: ChatProps) {
   return (
     <section
       className="chat"
+      onKeyDown={event=>{if(pinsOpen&&event.key==="Escape"){event.preventDefault();setPinsOpen(false);pinsButton.current?.focus();}}}
       onDragOver={(e) => {
         if (props.canAttach && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
@@ -828,15 +854,16 @@ export function Chat(props: ChatProps) {
         <h1 className="truncate">{props.title}</h1>
         {props.topic && <span className="chat-topic truncate">{props.topic}</span>}
         <span className="spacer" />
-        <button className={`icon-btn${pinsOpen ? " on" : ""}`} aria-label="Mensagens fixadas" aria-expanded={pinsOpen} title="Mensagens fixadas" onClick={() => {if(!pinsSupported){toast("Atualize o Annoy.Server e reconecte para usar mensagens fixadas.");return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} /></button>
+        <button ref={pinsButton} className={`icon-btn${pinsOpen ? " on" : ""}`} aria-label="Mensagens fixadas" aria-expanded={pinsOpen} title="Mensagens fixadas" onClick={() => {if(!pinsSupported){toast("Atualize o Annoy.Server e reconecte para usar mensagens fixadas.");return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} /></button>
         {props.headerExtra}
       </header>
       {pinsOpen && <div className="pins-panel" role="region" aria-label="Mensagens fixadas">
         <div className="pins-panel-title"><strong>Mensagens fixadas</strong><button className="icon-btn tiny" aria-label="Fechar mensagens fixadas" onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
-        {entry?.pinsLoading && <p role="status">Carregando fixadas?</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>Tentar novamente</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">Nenhuma mensagem fixada.</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null);}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString()}</small></span><span className="pinned-message-content">{pin.message.content || "Anexo"}</span></button>)}
+        {entry?.pinsLoading && <p role="status">Carregando fixadas…</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>Tentar novamente</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">Nenhuma mensagem fixada.</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString()}</small></span><span className="pinned-message-content">{pin.message.content || "Anexo"}</span></button>)}
+        {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>Mais fixadas</button>}
       </div>}
       <ConnectionNotice accountId={accountId} />
-      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={()=>{readingIntent.current=true;}} onPointerDown={()=>{readingIntent.current=true;}} onKeyDown={()=>{readingIntent.current=true;}}>
+      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
             <div className="channel-start">
@@ -856,7 +883,7 @@ export function Chat(props: ChatProps) {
             <p>{entry.error}</p>
             <button className="btn btn-ghost" onClick={() => void loadMessages(accountId, channelId, items.length > 0)}>Tentar carregar mensagens novamente</button>
           </div>}
-          <div className="message-window" style={{ height: virtualizer.getTotalSize() }}>
+          <div ref={virtualWindow} className="message-window" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const i=virtualRow.index;
             const m=items[i]!;
@@ -869,7 +896,7 @@ export function Chat(props: ChatProps) {
               prev.author.id === m.author.id &&
               Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
-              <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start}px)` }}>
+              <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start-virtualizer.options.scrollMargin}px)` }}>
                 {entry?.unreadBoundary && m.id > entry.unreadBoundary && (i===0 || items[i-1]!.id <= entry.unreadBoundary) && <div className="unread-divider" role="separator"><span>Não lidas</span></div>}
                 {newDay && (
                   <div className="day-divider" role="separator">
@@ -887,6 +914,7 @@ export function Chat(props: ChatProps) {
                   canModerate={props.canModerate}
                   canPin={pinsSupported && (props.canPin??props.canModerate)}
                   canReact={props.canSend}
+                  highlighted={focus?.messageId===m.id}
                   onReply={(message) => { changeDraft({ replyToId: message.id }); setReplyResolution({ id: message.id, status: "valid", message }); }}
                 />
               </div>
@@ -897,7 +925,7 @@ export function Chat(props: ChatProps) {
       </div>
       {(focus || entry?.hasMoreAfter || unread.count>0) && (
         <button className="return-latest" onClick={() => returnToLatest(accountId, channelId)}>
-          {focus ? "Você está vendo uma mensagem da busca · " : `${unread.count} nova${unread.count===1?"":"s"} · `}Mais recentes
+          {focus ? "Você está vendo uma mensagem da busca · Voltar às mais recentes" : unread.count?`${unread.count} nova${unread.count===1?"":"s"} · Mais recentes`:"Mais recentes"}
         </button>
       )}
       <Composer

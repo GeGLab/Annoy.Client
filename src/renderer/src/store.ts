@@ -31,6 +31,7 @@ export interface Account {
 export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
 
 export interface ChannelMessages {
+  lastAccessed?: number;
   items: Message[];
   hasMore: boolean;
   hasMoreAfter?: boolean;
@@ -41,6 +42,7 @@ export interface ChannelMessages {
   initialPosition?: string | null;
   pins?: PinnedMessage[];
   pinsLoading?: boolean;
+  pinsNextCursor?: string | null;
   pinsError?: string | null;
 }
 

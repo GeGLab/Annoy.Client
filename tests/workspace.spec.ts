@@ -91,6 +91,7 @@ test("M3 variable-height history keeps the DOM bounded and restores unloaded sea
       const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s:any)=>{const entry=s.instances.workspace.messages.general,base=entry.items[0];entry.items=Array.from({length:500},(_,index)=>({...base,id:`bounded-${String(index).padStart(5,"0")}`,content:`Linha ${index}\n${"Conteúdo de altura variável. ".repeat(index%6+1)}`}));});
     });
+    await page.locator(".channel-name",{hasText:/^geral$/}).click();
     await expect.poll(()=>page.locator(".messages [data-message-id]").count()).toBeLessThan(100);
     await expect(page.locator('[data-message-id="bounded-00499"]')).toBeVisible();
     await page.locator(".messages").evaluate(el=>{el.scrollTop=0;});
@@ -100,7 +101,7 @@ test("M3 variable-height history keeps the DOM bounded and restores unloaded sea
       setState((s:any)=>{s.messageFocus={accountId:"workspace",channelId:"general",messageId:"bounded-00250"};});
     });
     await expect(page.locator('[data-message-id="bounded-00250"]')).toBeVisible();
-    await expect(page.getByRole("button",{name:/Mais recentes/})).toBeVisible();
+    await expect(page.getByRole("button",{name:/mais recentes/i})).toBeVisible();
   }finally{await cleanup();}
 });
 
@@ -122,6 +123,12 @@ test("M4 profile drafts validate and retain edits after failed save, then publis
     await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByText("Falha de gravação simulada")).toBeVisible();await expect(github).toHaveValue("https://github.com/octocat");expect(saved.fields).toEqual([]);
     fail=false;await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByRole("button",{name:"Salvar alterações",exact:true})).toHaveCount(0);
     expect(saved.fields.find((field:any)=>field.kind==="email")).toMatchObject({value:"Contact@example.com",audience:"friends"});expect(saved.history.enabled).toBe(false);
+    await page.locator(".settings-content").evaluate(el=>{el.scrollTop=0;});
+    await page.screenshot({path:join(screenshots,"m4-profile-editor-dark.png")});
+    await page.setViewportSize({width:940,height:620});
+    await expect.poll(()=>page.locator(".profile-editor").evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    await page.getByRole("checkbox",{name:"Guardar sessões de atividades nesta instância"}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(screenshots,"m4-profile-editor-minimum.png")});
   }finally{await cleanup();}
 });
 
@@ -131,11 +138,46 @@ test("M4 full profile clears authorized details on revocation and returns keyboa
     await seed(page);
     await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:{user:{id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null},fields:privateView?[]:[{kind:"github",value:"https://github.com/octocat",audience:"friends"}],hasPrivateFields:privateView,history:{enabled:true,visibility:privateView?"private":"visible",entries:[]}}}));
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.instance={profileDetails:true};});});
-    await page.locator(".message-author").last().click();await page.getByRole("button",{name:"Ver perfil completo",exact:true}).click();
+    await page.locator(".messages").evaluate(el=>{el.scrollTop=0;});
+    await page.locator(".message-author").first().click();await page.getByRole("button",{name:"Ver perfil completo",exact:true}).click();
     const modal=page.locator(".full-profile");await expect(modal.getByRole("link",{name:/github.com/})).toBeVisible();
+    await page.screenshot({path:join(screenshots,"m4-full-profile-dark.png")});
+    await page.setViewportSize({width:940,height:620});
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
+    await expect.poll(()=>modal.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    await page.screenshot({path:join(screenshots,"m4-full-profile-light-minimum.png")});
     privateView=true;await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.profileRevision=1;});});
     await expect(modal.getByText("Os contatos deste perfil são privados para você.")).toBeVisible();await expect(modal.getByRole("link")).toHaveCount(0);
     await page.keyboard.press("Escape");await expect(modal).toHaveCount(0);await expect(page.getByRole("button",{name:"Ver perfil completo",exact:true})).toBeFocused();
+  }finally{await cleanup();}
+});
+
+test("M3 opens at persisted unread, advances only visible reading and loads pinned context outside the cache",async()=>{
+  const {page,cleanup}=await launch();const reads:string[]=[];
+  const me={id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null};
+  const messages=Array.from({length:1000},(_,index)=>({id:String(index+1).padStart(12,"0"),channelId:"general",author:me,content:`Histórico ${index+1}`,createdAt:new Date(Date.UTC(2026,9,30,0,index)).toISOString(),editedAt:null,replyToId:null,attachments:[],mentionIds:[],mentionsEveryone:false}));
+  try{
+    await seed(page);
+    await page.route(`${origin}/api/channels/general/read-state`,async route=>{
+      const id=route.request().method()==="PUT"?route.request().postDataJSON().messageId:"000000000500";
+      if(route.request().method()==="PUT")reads.push(id);
+      return route.fulfill({json:{channelId:"general",messageId:id,updatedAt:new Date().toISOString(),unread:{count:1000-Number(id),mention:true}}});
+    });
+    await page.route(`${origin}/api/channels/general/messages/window?*`,route=>{
+      const query=new URL(route.request().url()).searchParams;let page=messages.slice(-50);
+      if(query.has("after"))page=messages.filter(item=>item.id>query.get("after")!).slice(0,50);
+      if(query.has("before"))page=messages.filter(item=>item.id<query.get("before")!).slice(-50);
+      if(query.has("around")){const index=messages.findIndex(item=>item.id===query.get("around"));page=messages.slice(Math.max(0,index-24),index+26);}
+      return route.fulfill({json:{items:page,hasMoreBefore:page[0]?.id!==messages[0]!.id,hasMoreAfter:page.at(-1)?.id!==messages.at(-1)!.id}});
+    });
+    await page.route(`${origin}/api/channels/general/pins?*`,route=>route.fulfill({json:{items:[{message:messages[99],pinnedBy:me,pinnedAt:new Date().toISOString()}],nextCursor:null}}));
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);const {clearChatAnchor}=await import(/* @vite-ignore */ `${location.origin}/src/chat-state.ts`);clearChatAnchor("workspace","general");setState((s:any)=>{s.instances.workspace.instance={historyWindow:true,messagePins:true};delete s.instances.workspace.messages.general;s.view={kind:"home",accountId:"workspace",dmId:null};});});
+    await expect(page.locator(".messages")).toHaveCount(0);
+    await page.evaluate(async()=>{const {navigate}=await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);navigate({kind:"server",accountId:"workspace",serverId:"server",channelId:"general"});});
+    await expect(page.locator('[data-message-id="000000000501"]')).toBeInViewport();await expect(page.locator(".unread-divider")).toBeVisible();expect(reads).toEqual([]);
+    await page.locator(".messages").click({position:{x:200,y:80}});await expect.poll(()=>reads.length).toBeGreaterThan(0);expect(Number(reads.at(-1))).toBeLessThan(1000);await expect(page.locator(".unread-divider")).toBeVisible();
+    await page.getByRole("button",{name:"Mensagens fixadas",exact:true}).click();await page.locator(".pinned-message").click();await expect(page.locator('[data-message-id="000000000100"]')).toBeInViewport();
+    await page.screenshot({path:join(screenshots,"m3-pinned-context.png")});
   }finally{await cleanup();}
 });
 
@@ -601,11 +643,10 @@ test("chat draft, in-session attachment and message anchor survive directory nav
     await page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true }).click();
     await expect(composer).toHaveValue("Rascunho que deve voltar");
     await expect(page.getByText("anexo-da-sessao.txt", { exact: true })).toBeVisible();
-    const after = await page.locator(`.messages [data-message-id="${before.id}"]`).evaluate((element: HTMLElement) => {
-      const viewport = element.closest(".messages")!.getBoundingClientRect();
-      return element.getBoundingClientRect().top - viewport.top;
-    });
-    expect(Math.abs(after - before.offset)).toBeLessThan(5);
+    await expect.poll(async()=>{
+      const after=await page.locator(`.messages [data-message-id="${before.id}"]`).evaluate((element:HTMLElement)=>element.getBoundingClientRect().top-element.closest(".messages")!.getBoundingClientRect().top);
+      return Math.abs(after-before.offset);
+    }).toBeLessThan(5);
   } finally {
     await cleanup();
   }

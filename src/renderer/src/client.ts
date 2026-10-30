@@ -1,4 +1,4 @@
-import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, ServerState, ServerSummary, User } from "@distopic/protocol";
+import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api } from "./api.ts";
 import { previewText } from "./format.tsx";
@@ -18,7 +18,7 @@ import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, o
 import { cancelled, isCancellation, RequestError } from "../../shared/requests.ts";
 import { clearAccountChatState, clearChatAnchor, clearRecoveryReturn, flushChatState, readChatAnchor, readRecoveryReturn, type RecoveryReturn } from "./chat-state.ts";
 
-import { mergeMessageWindow, TOTAL_MESSAGE_LIMIT } from "../../shared/message-window.ts";
+import { mergeMessageWindow, reconcileMessageWindow, boundMessageCaches, type MessageMutation } from "../../shared/message-window.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -33,12 +33,21 @@ type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
 const messageReads = new Map<string, AbortController>();
+let messageEventSequence=0;
+const messageMutations=new Map<string,MessageMutation & {accountId:string;channelId:string}>();
+function recordMessageMutation(accountId:string,channelId:string,messageId:string,kind:MessageMutation["kind"],message:Message|null):void {
+  const key=JSON.stringify([accountId,channelId,messageId]);messageMutations.delete(key);
+  messageMutations.set(key,{sequence:++messageEventSequence,accountId,channelId,messageId,kind,message});
+  if(messageMutations.size>2000)messageMutations.delete(messageMutations.keys().next().value!);
+}
+const pendingMutations=(accountId:string,channelId:string)=>[...messageMutations.values()].filter(change=>change.accountId===accountId&&change.channelId===channelId);
 let navigationGeneration = 0;
 let navigationAbort = new AbortController();
 let observedView = getState().view;
 const messageKey = (accountId: string, channelId: string) => JSON.stringify([accountId, channelId]);
 
 function clearAccountWork(accountId: string): void {
+  for(const [key,change]of messageMutations)if(change.accountId===accountId)messageMutations.delete(key);
   for (const [key, pending] of refreshTimers) if (pending.accountId === accountId) {
     clearTimeout(pending.timer);
     refreshTimers.delete(key);
@@ -506,24 +515,25 @@ function scheduleRefresh(accountId: string, serverId: string): void {
 async function fetchMessageWindow(accountId:string,channelId:string,query:string,signal?:AbortSignal):Promise<MessageWindow> {
   const path=`/channels/${encodeURIComponent(channelId)}/messages`;
   if(getState().instances[accountId]?.instance?.historyWindow) return apiFor(accountId).get<MessageWindow>(`${path}/window?limit=${PAGE}${query?`&${query}`:""}`,signal);
-  const items=await apiFor(accountId).get<Message[]>(`${path}?limit=${PAGE}${query?`&${query}`:""}`,signal);
+  const items=await apiFor(accountId).get<Message[]>(query.startsWith("around=")?`${path}?${query}`:`${path}?limit=${PAGE}${query?`&${query}`:""}`,signal);
   return {items,hasMoreBefore:items.length>=PAGE,hasMoreAfter:query.startsWith("around=")};
 }
-function boundMessages(inst:InstanceState,channelId:string):void {
-  let overflow=Object.values(inst.messages).reduce((sum,entry)=>sum+entry.items.length,0)-TOTAL_MESSAGE_LIMIT;
-  for(const [id,entry] of Object.entries(inst.messages)) {
-    if(overflow<=0) break;
-    if(id===channelId) continue;
-    overflow-=entry.items.length;
-    delete inst.messages[id];
-  }
+function boundMessages(inst:InstanceState,channelId:string,accountId:string):void {
+  const view=getState().view;
+  const active="accountId"in view&&view.accountId===accountId?(view.kind==="server"?view.channelId:view.kind==="home"?view.dmId:null):null;
+  boundMessageCaches(inst.messages,active?[channelId,active]:[channelId]);
 }
+
 export async function loadMessages(accountId:string,channelId:string,direction:boolean|"newer"|"latest"=false):Promise<void> {
   const inst=getState().instances[accountId]; if(inst?.status!=="ready") return;
   const current=inst.messages[channelId];
+  if(current&&!direction)patchInstance(accountId,i=>{i.messages[channelId]!.lastAccessed=Date.now();});
+  if(!direction&&getState().messageFocus?.accountId===accountId&&getState().messageFocus?.channelId===channelId)return;
+  if(direction==="newer"&&!inst.instance?.historyWindow){returnToLatest(accountId,channelId);return;}
   const paging=direction===true||direction==="newer";
   const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
-  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!anchor) return;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&(!anchor||current.items.some(message=>message.id===anchor.messageId))) return;
+  const sequence=messageEventSequence;
   const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
   messageReads.get(key)?.abort(); messageReads.set(key,controller);
   const viewSignal=navigationSignal(accountId,channelId),signal=viewSignal?AbortSignal.any([viewSignal,controller.signal]):controller.signal;
@@ -538,12 +548,12 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
     if(!active()) return;
     patchInstance(accountId,i=>{
       const entry=i.messages[channelId]!;
-      const merged=mergeMessageWindow(paging?entry.items:[],page.items,direction===true?"before":direction==="newer"?"after":"replace");
-      i.messages[channelId]={...entry,items:merged.items,hasMore:(direction==="newer"?entry.hasMore:page.hasMoreBefore)||merged.evictedBefore,hasMoreAfter:(direction===true?entry.hasMoreAfter:page.hasMoreAfter)||merged.evictedAfter,loading:false,error:null,readState:read??null,
+      const merged=mergeMessageWindow(paging?entry.items:[],reconcileMessageWindow(page.items,pendingMutations(accountId,channelId),sequence,!page.hasMoreAfter),direction===true?"before":direction==="newer"?"after":"replace");
+      i.messages[channelId]={...entry,lastAccessed:Date.now(),items:merged.items,hasMore:(direction==="newer"?entry.hasMore:page.hasMoreBefore)||merged.evictedBefore,hasMoreAfter:(direction===true?entry.hasMoreAfter:page.hasMoreAfter)||merged.evictedAfter,loading:false,error:null,readState:read??null,
         unreadBoundary:paging?entry.unreadBoundary:read?.unread?.count?read.messageId:null,
         initialPosition:paging?entry.initialPosition:query.startsWith("after=")?page.items[0]?.id:null};
       if(read?.unread) i.unread[channelId]=read.unread;
-      boundMessages(i,channelId);
+      boundMessages(i,channelId,accountId);
     });
     void loadPinnedMessages(accountId,channelId);
   } catch(error) {
@@ -553,14 +563,17 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
 }
 
 export async function jumpToMessage(accountId:string,channelId:string,messageId:string,serverId:string|null, signal?: AbortSignal) {
+  const sequence=messageEventSequence;
   const navigation = navigationGeneration, api = apiFor(accountId), generation = api.generation;
   const active = signal ? AbortSignal.any([navigationAbort.signal, signal]) : navigationAbort.signal;
   const window=await fetchMessageWindow(accountId,channelId,`around=${encodeURIComponent(messageId)}`,active);
   if (active.aborted || navigation !== navigationGeneration || !currentApi(accountId, api, generation)) throw cancelled();
+  window.items=reconcileMessageWindow(window.items,pendingMutations(accountId,channelId),sequence,!window.hasMoreAfter);
+  if(!window.items.some(message=>message.id===messageId))throw new RequestError(404,"A mensagem foi removida.","http");
   messageReads.get(messageKey(accountId, channelId))?.abort();
   messageReads.delete(messageKey(accountId, channelId));
   navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
-  setState(s=>{s.instances[accountId]!.messages[channelId]={items:window.items,hasMore:window.hasMoreBefore,hasMoreAfter:window.hasMoreAfter,loading:false};s.messageFocus={accountId,channelId,messageId};s.modal=null;});
+  setState(s=>{s.instances[accountId]!.messages[channelId]={lastAccessed:Date.now(),items:window.items,hasMore:window.hasMoreBefore,hasMoreAfter:window.hasMoreAfter,loading:false};boundMessages(s.instances[accountId]!,channelId,accountId);s.messageFocus={accountId,channelId,messageId};s.modal=null;});
 }
 
 export async function loadReadStates(accountId:string):Promise<void> {
@@ -574,13 +587,13 @@ export async function markChannelRead(accountId:string,channelId:string,messageI
     patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; if(state.unread) i.unread[channelId]=state.unread; });
   } catch { /* Read cursor sync retries when the channel becomes visible again. */ }
 }
-export async function loadPinnedMessages(accountId:string,channelId:string):Promise<void> {
+export async function loadPinnedMessages(accountId:string,channelId:string,more=false):Promise<void> {
   const inst=getState().instances[accountId];if(!inst?.instance?.messagePins || inst.messages[channelId]?.pinsLoading)return;
   const api=apiFor(accountId),generation=api.generation;
   patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=true;entry.pinsError=null;}});
-  try {const pins=await api.get<PinnedMessage[]>(`/channels/${encodeURIComponent(channelId)}/pins`);
-    if(currentApi(accountId,api,generation))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pins=pins;entry.pinsLoading=false;}});
-  } catch(error){if(!isCancellation(error))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=false;entry.pinsError=(error as Error).message;}});}
+  try {const page=await api.get<PinnedMessagePage>(`/channels/${encodeURIComponent(channelId)}/pins?limit=50${more&&inst.messages[channelId]?.pinsNextCursor?`&before=${encodeURIComponent(inst.messages[channelId]!.pinsNextCursor!)}`:""}`);
+    if(currentApi(accountId,api,generation))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pins=more?[...new Map([...(entry.pins??[]),...page.items].map(pin=>[pin.message.id,pin])).values()].slice(0,100):page.items;entry.pinsNextCursor=page.nextCursor;entry.pinsLoading=false;}});
+  } catch(error){if(!isCancellation(error))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=false;entry.pinsError=(error as Error).message;if(error instanceof RequestError&&[403,404].includes(error.status))entry.pins=[];}});}
 }
 
 export function returnToLatest(accountId:string,channelId:string) {
@@ -862,6 +875,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       const receipt = notificationKey(accountId, msg.id);
       if (receivedMessages.has(receipt)) return;
       receivedMessages.add(receipt);
+      recordMessageMutation(accountId,msg.channelId,msg.id,"create",msg);
       if (receivedMessages.size > 2000) receivedMessages.delete(receivedMessages.values().next().value!);
       const serverId = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === msg.channelId))?.server.id;
       if (msg.author.id !== inst.user?.id && s.settings.manualPresence !== "dnd" && s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
@@ -873,7 +887,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       patchInstance(accountId, (i) => {
         const list = i.messages[msg.channelId];
         if (list && !list.items.some(m=>m.id===msg.id) && (!list.hasMoreAfter || msg.id >= (list.items[0]?.id??"") && msg.id <= (list.items.at(-1)?.id??""))) {
-          const merged=mergeMessageWindow(list.items,[msg],"after"); list.items=merged.items; list.hasMore ||= merged.evictedBefore; boundMessages(i,msg.channelId);
+          const merged=mergeMessageWindow(list.items,[msg],"after"); list.items=merged.items; list.hasMore ||= merged.evictedBefore; boundMessages(i,msg.channelId,accountId);
         }
         const typing = i.typing[msg.channelId];
         if (typing) delete typing[msg.author.id];
@@ -882,7 +896,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
           dm.lastMessageId = msg.id;
           i.dms.sort((a, b) => (b.lastMessageId ?? "").localeCompare(a.lastMessageId ?? ""));
         }
-        if ((!viewing || !document.hasFocus() || list?.hasMoreAfter === true) && msg.author.id !== me) {
+        if (msg.author.id !== me && (i.instance?.historyWindow || !viewing || !document.hasFocus())) {
           const u = (i.unread[msg.channelId] ??= { count: 0, mention: false });
           u.count++;
           if (isDm || msg.mentionsEveryone || (me && msg.mentionIds.includes(me))) u.mention = true;
@@ -896,6 +910,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return;
     }
     case "MESSAGE_UPDATE":
+      recordMessageMutation(accountId,event.d.channelId,event.d.id,"update",event.d);
       emitRoomEvent(accountId, event);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
@@ -904,6 +919,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         const pinned=list?.pins?.find(pin=>pin.message.id===event.d.id);if(pinned)pinned.message=event.d;
       });
     case "MESSAGE_DELETE":
+      recordMessageMutation(accountId,event.d.channelId,event.d.messageId,"delete",null);
       emitRoomEvent(accountId, event);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
@@ -921,7 +937,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         const entry=inst.messages[event.d.channelId]; if(!entry) return;
         entry.pins ??=[];
         entry.pins=entry.pins.filter(pin=>pin.message.id!==event.d.messageId);
-        if(event.d.message) entry.pins.unshift(event.d.message);
+        if(event.d.message) entry.pins.unshift(event.d.message);entry.pins=entry.pins.slice(0,100);
       });
     case "TYPING_START":
       return patchInstance(accountId, (inst) => {

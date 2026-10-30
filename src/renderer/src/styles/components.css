@@ -122,7 +122,8 @@ a { text-underline-offset: 3px; }
 .chat { background: var(--bg-main); }
 .chat-header h1 { font-size: 14px; font-weight: 650; }
 .chat-topic { color: var(--text-muted); font-size: 12px; }
-.messages { padding: 10px 0 14px; }
+.messages { padding: 10px 0 14px; overflow-anchor:none; }
+.message-log { position:relative; }
 .message-window { position: relative; width: 100%; }
 .virtual-message { display: flow-root; position: absolute; inset: 0 0 auto; width: 100%; }
 .unread-divider { display: flex; align-items: center; gap: 12px; margin: 18px 24px 0; color: var(--danger); font-size: 11px; font-weight: 650; }
@@ -148,7 +149,9 @@ a { text-underline-offset: 3px; }
 .profile-contact-preview small { color:var(--text-muted); }
 .profile-contact-list a { display:flex; align-items:center; gap:7px; color:var(--accent-strong); }
 .profile-contact-list small { display:block; margin-top:4px; }
-.full-profile { width:min(620px,calc(100vw - 40px)); max-height:calc(100vh - 64px); overflow:auto; }
+.dialog-overlay.full-profile-overlay { z-index:95; }
+.modal.full-profile { display:block; z-index:96; width:min(620px,calc(100vw - 40px)); max-height:calc(100vh - 84px); overflow:auto; padding:24px; }
+.full-profile-title { padding-right:32px; margin:0 0 6px; font-size:19px; }
 .full-profile-identity { display:flex; align-items:center; gap:16px; margin:16px 0 24px; }
 .full-profile-identity h2 { font-size:20px; margin:0 0 3px; }
 .full-profile-identity p { margin:3px 0 8px; }

@@ -21,10 +21,10 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | Marco | Estado | Resultado |
 | --- | --- | --- |
 | M0 — análise/documentação | concluído | Três documentos criados e validados, com R01–R20, decisões, arquitetura, testes e próxima tarefa. |
-| M1 — conectividade | concluído | M1.1–M1.5 implementados e validados. R01, R02 e R04 passaram; auditoria inicial de R03 registrada, com revisão restante nos marcos de domínio. Próximo: M2. |
-| M2 — navegação/canais | concluído | R05–R06 implementados; cliente e Annoy.Server validados abaixo. Próximo: M3. |
-| M3 — mensagens/leitura/pins | pendente | Requer contratos e migrações aditivas no servidor. |
-| M4 — social/perfis | pendente | Requer autorização por audiência antes da exposição de dados. |
+| M1 — conectividade | concluído | M1.1–M1.5 implementados e validados. R01, R02 e R04 passaram; auditoria de R03 continua nos marcos de domínio. |
+| M2 — navegação/canais | concluído | R05–R06 implementados; cliente e Annoy.Server validados abaixo. |
+| M3 — mensagens/leitura/pins | concluído | Histórico indexado/virtualizado, cursor privado persistido e pins autorizados; validação com um milhão de mensagens e duas sessões. |
+| M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. Próximo: M5. |
 | M5 — idiomas/acessibilidade | pendente | Completa migração de textos e adaptação das superfícies anteriores. |
 | M6 — desktop/updates | pendente | Requer validação de pacotes Windows/Linux. |
 | M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
@@ -40,18 +40,18 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | R05 | Seis layouts de canal | concluído em M2 | Estados de loading/erro/vazio/permissão, recuperação, pesquisa paginada de membros/arquivos e detalhes de comunidades sob demanda; testes integrados aprovados. | M2 |
 | R06 | Nova Aba | concluído em M2 | Comunidades e conexão priorizadas, serviços em seção própria, descoberta progressiva e escolha explícita da instância com várias contas; testes integrados aprovados. | M2 |
 | R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
-| R08 | Histórico escalável | pendente | Backend já tem `before`/`around` e índice; cliente acumula itens sem limite. | M3 |
-| R09 | Última leitura | pendente | Contadores em memória; não há marcador persistido/sincronizado. | M3 |
-| R10 | Amigos e atividades | pendente | Presença/atividades existem; resumo e categorias ampliadas pendentes. | M4 |
-| R11 | Redes sociais | pendente | Não há campos estruturados e validação por plataforma. | M4 |
-| R12 | Perfil completo | pendente | Popover/painel existentes; modal e histórico consentido pendentes. | M4 |
-| R13 | Contatos e privacidade | pendente | Editor atual de nome/bio/avatar; contatos/audiência pendentes. | M4 |
+| R08 | Histórico escalável | concluído em M3 | Janela bidirecional indexada, limites 500/5.000, virtualização variável, âncora e reconciliação de respostas/eventos; testes de escala e UI aprovados. | M3 |
+| R09 | Última leitura | concluído em M3 | Cursor monotônico privado, duas sessões, fronteira estável, avanço visível e recomposição de contadores/menções. | M3 |
+| R10 | Amigos e atividades | concluído em M4 | Resumo principal +N acionável, presença e capacidade ampliada com filtros legados e fontes reais. | M4 |
+| R11 | Redes sociais | concluído em M4 | Sete plataformas/site, validação compartilhada HTTPS/host, editor com prévia/save/discard e audiência por campo. | M4 |
+| R12 | Perfil completo | concluído em M4 | Modal com estados distintos e retorno de foco; histórico consentido, três sessões/30 dias, duração incompleta, exclusão e revogação. | M4 |
+| R13 | Contatos e privacidade | concluído em M4 | E-mail/telefone/site privados inicialmente, audiências verificadas no servidor, sem alteração de credenciais e sem dados privados em User/eventos. | M4 |
 | R14 | Idioma/região/hora | pendente | Formatação fixa em pt-BR; preferências e desfazer pendentes. | M5 |
 | R15 | Sete línguas | pendente | Sem camada central de catálogos. | M5 |
 | R16 | Fonte/links/prévia | pendente | Base 14px e medidas fixas; escala/acessibilidade pendentes. | M5 |
 | R17 | Aceleração | pendente | Sem controle persistido antes de ready. | M6 |
 | R18 | Inicialização/bandeja | pendente | Fechar oculta na bandeja Windows; faltam opções e matriz de suporte. | M6 |
-| R19 | Fixações | pendente | Sem persistência, operações e eventos de pins. | M3 |
+| R19 | Fixações | concluído em M3 | Pins idempotentes/persistidos, paginação, contexto fora do cache, autorização e convergência por eventos. | M3 |
 | R20 | Atualizações | pendente | Checagem inicial/6h e fluxo existente; completar recuperação/notificação/validação. | M6 |
 
 ## Decisões registradas
@@ -382,56 +382,92 @@ Typecheck e build aprovados. As alterações locais foram commitadas por etapa
 - Validação Linux, pacotes, GPU, bandeja e atualização continua pendente de M6.
 - Assinatura de editor não está configurada nos instaladores atuais; não
   confundir checksum de download com assinatura do mantenedor.
-- R08/R09 exigem testes reais de paginação e scroll; R12/R13 exigem matriz
-  de privacidade no servidor antes de exposição de novos dados.
+- Novas capacidades M3/M4 exigem atualizar o Annoy.Server e reconectar os
+  clientes. Servidores antigos mantêm o histórico legado e explicam a ausência
+  dos recursos novos. Vídeo usa compartilhamento real de tela; o contrato
+  genérico aceita fontes compatíveis sem inventar detectores de SO.
+
+## Implementação M3 — histórico, leitura e fixações (30/10/2026)
+
+Estado: **concluído e validado localmente**.
+
+- Nova rota de janela por cursor, com páginas padrão de 50 e navegação anterior,
+  posterior e de contexto. A rota legada `Message[]` continua disponível.
+- Janela limitada a 500 mensagens por canal e 5.000 no conjunto, deduplicada e
+  virtualizada com medição de altura variável. Âncora por ID/deslocamento,
+  imagens tardias, contexto da busca e retorno às recentes são preservados.
+  Eventos durante requisições não ressuscitam exclusões nem desfazem edições;
+  mensagens fora da janela não criam lacunas invisíveis.
+- Cursor privado de leitura persistido por usuário/canal, monotônico entre
+  dispositivos e preservado após exclusão da mensagem. Contas sem marcador
+  começam na página recente. O divisor inicial fica estável na visita e a
+  leitura exige foco, interação e mensagens visíveis; abrir o canal não zera
+  o restante do histórico não lido. Reconexão recompõe contadores e menções.
+- Pins persistidos com consulta paginada, estados de carregamento/erro/vazio,
+  salto para contexto, eventos, exclusão em cascata e limpeza de acesso revogado.
+  Ambos os participantes podem operar na DM; comunidades exigem MANAGE_MESSAGES.
+  A instância limita 100 pins por canal, com feedback ao atingir esse limite.
+- Testes passaram contra um milhão de mensagens em banco temporário, consulta
+  indexada, duas sessões simultâneas, monotonicidade, privacidade do cursor,
+  permissões/idempotência de pins e páginas. Playwright novo cobre não lidas,
+  avanço visível, pin fora do cache, DOM limitado e contexto descarregado.
+
+## Implementação M4 — amigos, perfil e privacidade (30/10/2026)
+
+Estado: **concluído e validado localmente**.
+
+- Amigos mostram nome/apelido, presença e atividade principal +N, com detalhes
+  por clique/foco. Capacidade `extendedActivity` negocia vídeo/genérica e filtra
+  payloads para clientes legados. A tela compartilhada do Annoy fornece uma
+  fonte real de vídeo; compartilhamento desligado e invisibilidade são respeitados.
+- Redes e contatos ficam em tabelas separadas de `User`, privados inicialmente,
+  com audiência por campo: somente eu, amigos, amigos/comunidades em comum.
+  Backend exige amizade mútua ou membership atual; uma DM ou pedido de amizade
+  não concede acesso. Consultas privadas usam `Cache-Control: no-store`.
+- Editor oferece LinkedIn, Instagram, Facebook, X/Twitter, GitHub, YouTube,
+  site, e-mail e telefone, com ícones, prefixos, normalização compartilhada e
+  validação adicional de e-mail no backend. HTTPS, host correto e ausência de
+  credenciais são exigidos nos links; telefone segue E.164. Prévia, remoção e
+  save/discard preservam rascunhos isolados por conta após falhas.
+- “Ver perfil completo” abre modal com identidade, bio, presença, atividades e
+  detalhes autorizados; distingue carregando, indisponível, erro, vazio e privado.
+  Invalidar o perfil ou revogar a relação remove detalhes em cache antes de nova
+  consulta. Eventos genéricos transportam apenas a invalidação, sem contatos.
+- Histórico tem consentimento separado, desligado inicialmente, com coleta
+  somente após consentir e até três sessões encerradas por até 30 dias.
+  Detalhes de arquivo/projeto/caminhos não são persistidos. Encerramento observado
+  permite duração; desconexão/TTL/reinício mantém duração desconhecida. Excluir
+  remove registros e caches; desativar também interrompe coleta e apaga registros.
+- Cinco testes de privacidade/histórico/capacidade passaram, cobrindo dono,
+  amigo, comunidade, DM isolada, pedido pendente, revogação, URLs e retenção.
+  Testes de interface passaram para falha de gravação, prévia, normalização,
+  audiência, revogação e retorno de foco. Revisão visual confirmou temas claro e
+  escuro, largura mínima de 940 px e ausência de overflow no editor/modal.
+
+## Validação conjunta M3/M4
+
+- Cliente: typecheck, build e 59 testes unitários aprovados. Os 70 cenários
+  Playwright passaram considerando uma repetição isolada: a execução integral
+  terminou com 69/70, e um teste de mídia falhou no timeout de 5 s da tela inicial
+  do Electron, antes de executar seu cenário. A repetição desse teste passou sem
+  mudança funcional. Correções de âncora/contexto foram confirmadas na execução
+  integral; uma asserção de chat oculto consulta o cache em vez do DOM virtualizado.
+  O limite global também tem teste de descarte por uso recente que protege a
+  conversa visível quando chegam eventos em canais em segundo plano.
+- Annoy.Server: typecheck aprovado; 52 testes aprovados, 1 falha preexistente
+  (`EPERM` ao criar symlink no Windows em `test:channels`) e 5 testes Global
+  ignorados por ausência do checkout Annoy-api-global. Todos os testes M3/M4
+  passaram. O teste de um milhão inclui inserção e consultas em banco temporário.
+- Avisos existentes: chunks acima de 500 kB no build e avisos ResizeObserver em
+  alguns cenários de interface. Linux, instaladores e instâncias publicadas
+  continuam fora desta validação local.
+- Protocolo sincronizado (SHA-256 igual), `git diff --check` nos dois repositórios
+  e detector visual aprovados. Typechecks repetidos após formatação dos módulos
+  novos. PRs: [Client #7](https://github.com/GeGLab/Annoy.Client/pull/7) e
+  [Server #6](https://github.com/GeGLab/Annoy.Server/pull/6). Commits separados para
+  M3, M4 e correções encontradas na validação conjunta.
 
 ## Próxima tarefa recomendada
 
-Iniciar **M3 — histórico, leitura e fixações** (R08, R09, R19): paginação
-bidirecional/virtualização do histórico, marcador de leitura persistido e pins
-com autorização e sincronização no servidor. Seguir as dependências e etapas do
-plano; não começar requisitos posteriores automaticamente.
-
-Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.
-
-
-## Implementa??o M3 ? hist?rico, leitura e fixa??es (30/10/2026)
-
-Estado: **implementado; valida??o conjunta agendada ap?s M4, conforme pedido**.
-
-- Contrato adicional de janela por cursor com p?ginas de 50, navega??o anterior,
-  posterior e contexto, mantendo a rota legada `Message[]`.
-- Janela com deduplica??o, descarte e virtualiza??o de alturas vari?veis; limite
-  de 500 mensagens por canal e 5.000 no conjunto. Busca mant?m salto de contexto
-  e retorno ?s recentes. Inst?ncias antigas continuam usando a rota legada.
-- Cursor privado persistido por usu?rio/canal, monot?nico entre dispositivos e
-  preservado quando a mensagem ? exclu?da. A visita mant?m a fronteira inicial
-  de novidades; leitura exige foco e intera??o com mensagens vis?veis.
-- Pins persistidos, eventos de sincroniza??o, painel e salto ao contexto.
-  DMs aceitam ambos os participantes; comunidades exigem MANAGE_MESSAGES.
-- Testes novos preparados para um milh?o de mensagens em banco tempor?rio,
-  duas sess?es simult?neas, autoriza??o, idempot?ncia e limites de mem?ria.
-  N?o executados ainda; conclus?o depende da valida??o final de M3/M4.
-
-
-## Implementa??o M4 ? amigos, perfil e privacidade (30/10/2026)
-
-Estado: **implementado; valida??o conjunta em andamento**.
-
-- Amigos t?m resumo da atividade principal +N com expans?o por a??o/foco.
-  V?deo/atividade gen?rica t?m contrato negociado e filtro para clientes antigos;
-  o compartilhamento real de tela do Annoy fornece atividade de v?deo.
-- Detalhes do perfil s?o carregados sob demanda. Redes e contatos ficam em
-  tabelas pr?prias, privados inicialmente, com audi?ncia por campo. Apenas
-  amizade m?tua ou comunidade em comum autoriza as respectivas audi?ncias;
-  uma DM e pedidos de amizade n?o concedem esse acesso.
-- Editor oferece as sete redes/site, e-mail e telefone, normaliza??o comum ao
-  cliente/servidor, pr?via, remo??o e save/discard. Falha conserva o rascunho
-  isolado por conta. O modal completo distingue carregamento, erro, aus?ncia,
-  vazio e privacidade; eventos invalidam os detalhes sem transportar contatos.
-- Hist?rico de atividades separado do compartilhamento, desligado inicialmente.
-  Guarda sess?es observadas ap?s consentimento, limita tr?s encerradas por 30
-  dias e exclui os registros ao desativar. Interrup??es t?m dura??o desconhecida;
-  nomes de arquivos, projetos e caminhos locais n?o entram na persist?ncia.
-- Typecheck e build iniciais aprovados. A bateria completa e os cen?rios novos
-  de interface est?o em andamento; o resultado final ser? registrado abaixo.
+Iniciar **M5 — localização e acessibilidade** (R14–R16), na ordem do plano.
+Não iniciar M5 nesta execução autorizada para M3/M4.

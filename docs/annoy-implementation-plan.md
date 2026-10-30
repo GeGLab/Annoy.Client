@@ -212,10 +212,10 @@ tem licença verificada. Integração emoji.gg não é dependência.
 
 ### Histórico e leitura
 
-- Adicionar `GET /channels/:id/history` com `limit` (padrão 50, máximo 100)
+- Adicionar `GET /channels/:id/messages/window` com `limit` (padrão 50, máximo 100)
   e um seletor exclusivo `before`, `after` ou `around`. Retornar `items`,
-  `beforeCursor`, `afterCursor`, `hasOlder` e `hasNewer`; cursores delimitam
-  os itens retornados. Conservar `GET .../messages` para consumidores antigos.
+  `hasMoreBefore` e `hasMoreAfter`; IDs do primeiro/último item são os cursores
+  estáveis dos limites retornados. Conservar `GET .../messages` para consumidores antigos.
 - Usar ordenação lexical por ID já adotada no backend e índice `(channel_id,id)`.
   Validar canal/acesso em toda consulta; alvos ausentes/de outro canal não expõem dados.
 - Cache máximo: 500 mensagens/canal e 5.000 globais; descartar páginas mais
@@ -227,7 +227,7 @@ tem licença verificada. Integração emoji.gg não é dependência.
   indicador de novidades, sem anexar registros separados por intervalo não carregado.
 - Adicionar tabela `channel_read_states` com chave `(user_id,channel_id)`,
   cursor monotônico e instante de atualização. Expor consulta/gravação do
-  próprio usuário, de forma idempotente, e evento `READ_STATE_UPDATE` só às suas sessões.
+  próprio usuário, de forma idempotente, e evento `CHANNEL_READ_STATE` só às suas sessões.
 - Validar cursor pertencente ao canal; comparar avanço no servidor. Exclusão
   do alvo não apaga a fronteira ordenável; buscar próxima mensagem acessível.
 - Consultar contadores/menções no servidor com índice e limites apropriados;
@@ -240,9 +240,9 @@ tem licença verificada. Integração emoji.gg não é dependência.
 
 ### Fixações e perfis
 
-- Tabela `message_pins`, com unicidade por canal/mensagem, autor e data;
+- Tabela `pinned_messages`, com unicidade por canal/mensagem, autor e data;
   operações idempotentes de PUT/DELETE em `/channels/:id/pins/:messageId`,
-  consulta paginada de fixações e evento `PIN_UPDATE` para assinantes autorizados.
+  consulta paginada de fixações e evento `CHANNEL_PIN_UPDATE` para assinantes autorizados.
   Exclusão de mensagem remove pin por FK/transação. Em DM permitir participantes;
   em comunidade exigir leitura e `MANAGE_MESSAGES`.
 - Manter identidade básica de `User`; criar tipos `ProfileDetails`,
@@ -411,6 +411,24 @@ produção, Linux, leitor de tela e instâncias publicadas.
 
 ## 9. Próxima tarefa executável
 
-M2 — Nova Aba e canais (R05–R06) foi concluído. Iniciar **M3 — histórico,
-leitura e fixações** (R08, R09, R19), seguindo a ordem e as dependências desta
-seção; não iniciar os subitens de M3 automaticamente nesta execução concluída.
+M3 (R08, R09, R19) e M4 (R10–R13) foram implementados e validados localmente.
+Iniciar **M5 — localização e acessibilidade** (R14–R16), seguindo sua ordem e
+dependências. Não iniciar M5 automaticamente nesta execução de M3/M4.
+
+## 10. Entrega M3/M4 (30/10/2026)
+
+- Server oferece `/channels/:id/messages/window` com `before`/`after`/`around`,
+  mantendo `/messages` legado, além de read-state, pins paginados e eventos
+  `CHANNEL_READ_STATE` (somente dono) e `CHANNEL_PIN_UPDATE` (acesso atual).
+- Client usa TanStack Virtual, janela limitada e âncora medida; concilia edições,
+  exclusões e novas mensagens recebidas enquanto uma página está em trânsito.
+- Perfis e histórico usam tabelas separadas de `User`; detalhes são filtrados
+  no servidor por audiência e invalidam cache sem transportar valores privados.
+  Consentimento do histórico é separado do compartilhamento efêmero.
+- Capacidades `historyWindow`, `messagePins`, `profileDetails` e
+  `extendedActivity` são aditivas. Instâncias antigas mantêm histórico legado;
+  dados novos exigem atualizar o Server e reconectar o Client.
+- Validação: um milhão de mensagens e duas sessões; 59 unitários do cliente;
+  70 cenários Playwright aprovados incluindo repetição de um timeout inicial;
+  52 testes do servidor aprovados. Falha preexistente de symlink Windows e cinco
+  testes Global ignorados estão detalhados em `annoy-progress.md`.
