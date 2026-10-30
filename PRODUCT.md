@@ -76,8 +76,12 @@ video and audio previews with a non-wrapping file size. Voice controls use share
 sound feedback: disabling audio also mutes the microphone, and enabling audio
 unmutes it.
 
-The brand destination opens Annoy news; store entry points remain commented at
-user request. Preference cards explain effects. Server/channel mute preferences
+The earlier brand destination to Annoy news is superseded: the first rail action
+opens direct messages. News remains a separate footer action beside the add
+entry point. Keep the rail compact, with unread DM shortcuts and server/service
+tiles; omit duplicate Home labels and idle recent-DM clutter. The user requested
+a white rounded logo background while preserving the Annoy silhouette and
+amber/indigo artwork. Store entry points remain commented at user request. Preference cards explain effects. Server/channel mute preferences
 suppress message sounds. Screen capture offers resolution/FPS and publishes the
 selected quality. Automatic away defaults to ten minutes of system inactivity.
 
@@ -85,3 +89,38 @@ Social profiles include a 1,000-character biography and mutually visible friend
 nicknames. Direct audio/video calls use authenticated friendship-scoped signaling
 and WebRTC media. Account switching remembers signed-out account metadata only.
 The companion server is authorized for these social and presence additions.
+
+## Latest Confirmed Social and Media Scope
+
+The latest user request supersedes the friend-only activity and disabled-store
+scope above: opt-in activity is shared with friends and members of the same
+server on an updated Annoy instance. A DM alone grants no access. Keep activity
+ephemeral and clear it when the last qualifying relationship is lost. The bot
+marketplace remains disabled; the new store manages local media packages.
+
+Server search belongs in the right member-panel header, aligned with the
+conversation header, with Ctrl+K retained. Starting a stream plays a distinct
+room cue for everyone in that room, including the sender. Message-receive audio
+plays only for recipients and respects mute preferences. Use recognizable
+official service logos within the existing Annoy visual identity.
+
+Profiles accept looping animated GIFs. Refreshed edit dialogs preserve explicit
+save behavior; server editing includes image selection, preview and removal.
+Messages support server-persisted emoji reactions. The composer offers emojis,
+GIFs, stickers and a manageable local package store with install/remove,
+image and JSON import, export, and visible attribution. Selecting local media
+prepares a draft attachment; sending remains explicit. Package storage is local
+to the device and does not imply account or server synchronization.
+
+Online GIF search uses the official GIPHY API with visible attribution and a
+configured public client key; it inserts GIF links rather than importing the
+provider catalog. Local media remains usable without that key. This extends
+the existing amber/indigo and warm-ivory world, shared controls and typography;
+no replacement palette or type system was approved. See `docs/social-media.md`
+for validation limits, provider configuration and the companion-server update
+boundary. Local implementation and visual review do not establish deployment.
+
+Message reactions are shared per message: show one emoji chip with a participant
+count, let other users join the same emoji, and let each user toggle their own
+participation. Preserve server-backed persistence and live updates. Quick emoji
+actions and the picker complement chips displayed below message attachments.

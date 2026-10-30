@@ -62,12 +62,20 @@ export function ActivityStack({ activities, compact = false }: { activities: rea
   const [heights, setHeights] = useState<number[]>([]);
   const cards = useRef<HTMLDivElement>(null);
   const open = intent ?? (hovered || focused);
+  const signature = activities.map((activity) => `${activity.kind}:${activity.provider}:${activity.appId ?? activity.name}`).join("|");
   useEffect(() => {
     const elements = Array.from(cards.current?.children ?? []) as HTMLElement[];
-    const observer = new ResizeObserver(() => setHeights(elements.map((element) => element.getBoundingClientRect().height)));
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = elements.map((element) => element.offsetHeight);
+        setHeights((previous) => previous.length === next.length && previous.every((height, index) => height === next[index]) ? previous : next);
+      });
+    });
     elements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, [activities.length, compact]);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [signature, compact]);
   if (!activities.length) return null;
   return <div className={`activity-stack${activities.length > 1 ? " multiple" : ""}${open ? " expanded" : ""}`} onMouseEnter={() => { setHovered(true); setIntent(null); }} onMouseLeave={() => setHovered(false)} onFocusCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIntent(null); setFocused(true); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     {activities.length > 1 && <button className="activity-stack-toggle" aria-expanded={open} onClick={() => setIntent(!open)}>{activities.length} atividades <span>{open ? "Recolher" : "Expandir"}</span></button>}

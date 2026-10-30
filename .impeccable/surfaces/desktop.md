@@ -4,7 +4,7 @@ Mode: Operate. Code-first implementation, explicitly chosen by the user.
 
 Pinned direction: the supplied Discord-like desktop references take precedence over the direction seed. Navigation and interactions remain familiar; no borrowed Discord mark or blurple palette.
 
-The user requested retaining the collaborator's upstream Annoy 0.3.1 rename and identity while integrating these features. Preserve its supplied logo and amber on indigo graphite palette; the light counterpart remains warm ivory with a readable amber accent. Keep the calm compact navigation, generous conversational space and short reduced-motion-aware reveal when opening an image. The earlier speech/D mark and tangerine palette are superseded by the upstream identity, not proposed as a competing brand.
+The user requested retaining the collaborator's upstream Annoy 0.3.1 rename and identity while integrating these features. Preserve its supplied logo silhouette with the user-confirmed white rounded background and amber on indigo graphite palette; the light counterpart remains warm ivory with a readable amber accent. Keep the calm compact navigation, generous conversational space and short reduced-motion-aware reveal when opening an image. The earlier speech/D mark and tangerine palette are superseded by the upstream identity, not proposed as a competing brand.
 
 The split-flap challenger donates stable alignment, the record-catalog challenger donates disciplined whitespace, the map challenger donates a single color for selection, and the boarding-pass challenger donates clear state hierarchy. Their literal forms would obscure community conversation, so they are declined under the user's familiar-desktop constraint. No competing topology is introduced.
 
@@ -12,7 +12,13 @@ First viewport: a draggable application titlebar; persistent server rail; channe
 
 Quality bar: visible focus, 4.5:1 body contrast, consistent 36px action targets, 8px control radius, 160–200ms state transitions, reduced motion, dark/light tokens, keyboard-dismissable focus-trapped dialogs, and no overflow at the 940px minimum desktop width.
 
-Refinement: label rail shortcuts separately from servers; channels stay open,
+Refinement: the first rail action opens direct messages. Keep the compact side
+rail free of duplicate Home labels and idle recent-DM shortcuts; tooltips and
+accessible names identify unread DMs and server/service tiles. Add and news
+remain separate footer actions. This supersedes labeled shortcut/server groups.
+Shared emoji/count reaction chips sit below message attachments; clicking joins
+or leaves the same emoji, while quick actions and the picker add reactions.
+Channels stay open,
 members toggle from one header action, and both widths remain adjustable. Voice
 shows connection, channel/server, participants, camera/sharing and device menus.
 Shared portal menus animate both entering and leaving. Image wheel zoom and
