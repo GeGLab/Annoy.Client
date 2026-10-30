@@ -349,7 +349,7 @@ test("voice names show local and online game activity, respecting sharing and fr
   } finally { await close(); }
 });
 
-test("old server connections have a context menu and require only Confirm or Cancel to remove", async () => {
+test("old server connections have a context menu and require a single named confirmation to remove", async () => {
   const { page, close } = await launch();
   const destructiveRequests: string[] = [];
   try {
@@ -377,8 +377,8 @@ test("old server connections have a context menu and require only Confirm or Can
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await menu.getByRole("menuitem", { name: "Remover da barra…", exact: true }).click();
     const confirmation = page.getByRole("alertdialog");
-    await expect(confirmation.getByRole("heading")).toHaveText("Remover servidor?");
-    await expect(confirmation.locator(".action-dialog-description")).toHaveText("Servidor antigo");
+    await expect(confirmation.getByRole("heading")).toHaveText('Remover "Servidor antigo"');
+    await expect(confirmation.locator(".action-dialog-description")).toHaveText("Deseja mesmo remover Servidor antigo da barra lateral? Você poderá adicioná-lo novamente quando quiser.");
     await expect(confirmation).not.toContainText("https://");
     await expect(confirmation.getByRole("textbox")).toHaveCount(0);
     await expect(confirmation.getByRole("button")).toHaveCount(2);
@@ -388,7 +388,7 @@ test("old server connections have a context menu and require only Confirm or Can
     await oldTab.focus();
     await oldTab.press("Shift+F10");
     await menu.getByRole("menuitem", { name: "Remover da barra…", exact: true }).click();
-    await confirmation.getByRole("button", { name: "Confirmar", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Remover da barra", exact: true }).click();
     await expect(oldTab).toHaveCount(0);
     await expect(confirmation).toHaveCount(0);
     await expect(currentTab).toBeVisible();

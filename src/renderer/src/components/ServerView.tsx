@@ -207,7 +207,10 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
   }, [state.channels]);
 
   const leave = async () => {
-    if (await confirmAction(`Sair de ${state.server.name}?`)) void act(apiFor(accountId).del(`/servers/${state.server.id}/members/@me`));
+    if (await confirmAction(
+      `Deseja mesmo sair de ${state.server.name}? Você precisará de um novo convite para entrar novamente.`,
+      { title: `Sair de "${state.server.name}"`, confirmLabel: "Sair do servidor" },
+    )) void act(apiFor(accountId).del(`/servers/${state.server.id}/members/@me`));
   };
 
   return (

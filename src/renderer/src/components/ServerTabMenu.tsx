@@ -21,13 +21,16 @@ export function ServerTabMenu({ account, server, inst, children }: {
     catch { toast("Não foi possível copiar para a área de transferência."); }
   };
   const leave = async () => {
-    if (await confirmAction(`Sair de ${server.name}? Você precisará de um novo convite para voltar.`, { confirmLabel: "Confirmar" }))
+    if (await confirmAction(
+      `Deseja mesmo sair de ${server.name}? Você precisará de um novo convite para entrar novamente.`,
+      { title: `Sair de "${server.name}"`, confirmLabel: "Sair do servidor" },
+    ))
       await act(apiFor(account.id).del(`/servers/${server.id}/members/@me`));
   };
   const remove = async () => {
     if (await confirmAction(
-      server.name,
-      { title: "Remover servidor?", confirmLabel: "Confirmar" },
+      `Deseja mesmo remover ${server.name} da barra lateral? Você poderá adicioná-lo novamente quando quiser.`,
+      { title: `Remover "${server.name}"`, confirmLabel: "Remover da barra" },
     )) removeAccount(account.id);
   };
   return <ContextMenu>

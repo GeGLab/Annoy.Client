@@ -109,8 +109,9 @@ reativar notificações, copiar o ID/endereço, reconectar e remover a conexão.
 Convites, configurações e criação de canais aparecem conforme suas permissões.
 Participantes também podem sair do servidor, com confirmação.
 
-**Remover da barra…** abre uma confirmação compacta com apenas o nome do servidor
-e os botões **Cancelar** e **Confirmar**. Não exige digitar nada. Cancelar mantém
+**Remover da barra…** abre uma confirmação compacta com o nome do servidor,
+uma explicação curta e os botões **Cancelar** e **Remover da barra**. Não mostra
+endereço nem exige digitar nada. Cancelar mantém
 a conexão. A remoção desconecta a conta deste cliente e retira todas as abas
 daquela conexão. Não exclui o servidor, a conta no servidor ou as mensagens.
 É possível adicionar a conexão novamente depois.
