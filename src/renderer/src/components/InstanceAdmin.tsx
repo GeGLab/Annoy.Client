@@ -2,7 +2,8 @@ import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
 import { promptText, confirmAction } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
-import type { AdminOverview, AdminServer, AdminUser, InstanceSettings, RegistrationMode, SignupInvite, VoiceUsage } from "@distopic/protocol";
+import { Switch } from "./ui/switch.tsx";
+import type { AdminOverview, AdminServer, AdminUser, InstanceSettings, RegistrationMode, SignupInvite, UpdateStatus, VoiceUsage } from "@distopic/protocol";
 
 import { useEffect, useState } from "react";
 import { apiFor, removeAccount } from "../client.ts";
@@ -10,7 +11,7 @@ import { formatSize, formatTime } from "../format.tsx";
 import { getState, toast, useStore } from "../store.ts";
 import { act, Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
 
-type Tab = "settings" | "invites" | "users" | "servers";
+type Tab = "settings" | "updates" | "invites" | "users" | "servers";
 
 const MODE_TEXT: Record<RegistrationMode, string> = {
   open: "Qualquer pessoa com o endereço cria uma conta.",
@@ -94,6 +95,92 @@ function SettingsTab({ accountId }: { accountId: string }) {
           Salvar
         </button>
       </div>
+    </div>
+  );
+}
+
+/** "0.7.10" > "0.7.9". */
+function newer(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
+  return false;
+}
+
+function UpdatesTab({ accountId }: { accountId: string }) {
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  /** Version that was running when the admin asked for the update. */
+  const [waitingFrom, setWaitingFrom] = useState<string | null>(null);
+  const api = apiFor(accountId);
+  useEffect(() => {
+    void api.get<UpdateStatus>("/admin/updates").then(setStatus, (e: Error) => toast(e.message));
+  }, [accountId]);
+  // While updating, the server restarts: keep asking until the new version answers.
+  useEffect(() => {
+    if (!waitingFrom) return;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      void api.get<UpdateStatus>("/admin/updates").then((s) => {
+        setStatus(s);
+        if (s.current !== waitingFrom) {
+          setWaitingFrom(null);
+          toast(`Servidor atualizado para a versão ${s.current}`);
+        } else if (!s.updating && Date.now() - started > 15_000) {
+          setWaitingFrom(null);
+          if (s.lastError) toast(s.lastError);
+          else toast("O servidor já está na versão mais nova da imagem que ele segue");
+        }
+      }, () => undefined);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [waitingFrom, accountId]);
+  if (!status) return <p className="muted">Carregando…</p>;
+  const outdated = status.latest !== null && newer(status.latest, status.current);
+  const setAuto = (auto: boolean) => void api.patch<UpdateStatus>("/admin/updates", { auto }).then(setStatus, (e: Error) => toast(e.message));
+  const apply = () =>
+    void api.post<UpdateStatus>("/admin/updates/apply", {}).then((s) => {
+      setStatus(s);
+      setWaitingFrom(s.current);
+    }, (e: Error) => toast(e.message));
+  return (
+    <div className="form">
+      <div className="stat-row">
+        <div><strong>{status.current}</strong><span>versão instalada</span></div>
+        <div><strong>{status.latest ?? "?"}</strong><span>versão mais nova</span></div>
+      </div>
+      <p className="muted small">
+        {status.latest === null
+          ? "Não deu para consultar a versão mais nova agora."
+          : outdated
+            ? `Há uma versão nova: ${status.latest}.`
+            : "O servidor está na versão mais nova."}
+      </p>
+      {status.available ? (
+        <>
+          <div className="form-actions">
+            <button className="btn" disabled={waitingFrom !== null || status.updating} onClick={apply}>
+              {waitingFrom !== null || status.updating ? "Atualizando… o servidor reinicia sozinho" : "Atualizar agora"}
+            </button>
+          </div>
+          <label className="check">
+            <Switch checked={status.auto} onCheckedChange={setAuto} />
+            Atualizar automaticamente
+          </label>
+          <p className="muted small">
+            {status.auto
+              ? `O servidor procura versão nova a cada ${status.intervalHours ?? 6} h e reinicia sozinho; quem estiver em chamada volta em segundos.`
+              : "Desligado: o servidor só atualiza quando você pedir aqui."}
+            {status.channel && status.channel !== "latest" && ` Segue só a versão ${status.channel} (ANNOY_VERSION).`}
+          </p>
+          {status.lastCheck && <p className="muted small">Última verificação: {formatTime(status.lastCheck)}</p>}
+          {status.lastError && <p className="warning">{status.lastError}</p>}
+        </>
+      ) : (
+        <p className="warning">
+          O atualizador não está rodando neste servidor, então a atualização tem que ser feita nele. Na pasta do annoy-server, rode{" "}
+          <code>git pull && docker compose up -d</code>. Depois disso, você atualiza e liga a atualização automática por aqui.
+        </p>
+      )}
     </div>
   );
 }
@@ -285,6 +372,7 @@ export function InstanceAdminModal({ accountId }: { accountId: string }) {
         {(
           [
             ["settings", "Visão geral"],
+            ["updates", "Atualizações"],
             ["invites", "Convites de cadastro"],
             ["users", "Contas"],
             ["servers", "Servidores"],
@@ -296,6 +384,7 @@ export function InstanceAdminModal({ accountId }: { accountId: string }) {
         ))}
       </div>
       {tab === "settings" && <SettingsTab accountId={accountId} />}
+      {tab === "updates" && <UpdatesTab accountId={accountId} />}
       {tab === "invites" && <InvitesTab accountId={accountId} />}
       {tab === "users" && <UsersTab accountId={accountId} />}
       {tab === "servers" && <ServersTab accountId={accountId} />}
