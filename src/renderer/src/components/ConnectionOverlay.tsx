@@ -12,6 +12,7 @@ const BLOCK_AFTER_MS = 2000;
 export function useConnectionBlocked() {
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
+  const accountId = useStore((s) => "accountId" in s.view ? s.view.accountId : null);
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -23,8 +24,8 @@ export function useConnectionBlocked() {
     };
   }, []);
   // An expired session is not a connection that will come back; its tab offers to sign in again instead.
-  const reconnecting = accounts.filter((a) => instances[a.id]?.status !== "ready" && instances[a.id]?.status !== "invalid");
-  const down = reconnecting.length > 0 || (!online && accounts.length > 0);
+  const reconnecting = accounts.filter((a) => a.id === accountId && instances[a.id]?.status !== "ready" && instances[a.id]?.status !== "invalid");
+  const down = reconnecting.length > 0 || (!online && !!accountId);
   // A server update reconnects in milliseconds; only block if it takes longer.
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
@@ -33,6 +34,16 @@ export function useConnectionBlocked() {
     return () => clearTimeout(timer);
   }, [down]);
   return down && blocked;
+}
+
+export function ConnectionNotice({ accountId }: { accountId: string }) {
+  const status = useStore((s) => s.instances[accountId]?.status);
+  const name = useStore((s) => s.accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor");
+  if (status === "ready") return null;
+  return <div className="connection-notice" role="status">
+    <Icon name="wifiOff" size={18} />
+    <span>{status === "invalid" ? "Sessão expirada" : `Sem conexão com ${name}`}. Mensagens e chamadas estão indisponíveis. O status dos amigos será atualizado após a reconexão.</span>
+  </div>;
 }
 
 /** An application-level focus trap also blocks open portals and native Discord. */
@@ -66,7 +77,7 @@ export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
           <Brand size={48} />
         </div>
         <DialogTitle>Reconectando ao seu espaço</DialogTitle>
-        <p id="connection-description">Suas conversas continuam aqui. Vamos liberar o aplicativo assim que a conexão voltar.</p>
+        <p id="connection-description">A conexão com o servidor foi perdida. Chamadas e transmissões foram encerradas. Você pode consultar as conversas já carregadas enquanto aguarda.</p>
         <div className="connection-accounts">
           {failed.map((a) => (
             <div className="connection-account" key={a.id}>

@@ -111,9 +111,15 @@ export class Api {
   constructor(
     readonly baseUrl: string,
     private readonly token: string,
+    private readonly canWrite: () => boolean = () => true,
   ) {}
 
+  private requireConnection(): void {
+    if (!this.canWrite()) throw new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar.");
+  }
+
   async request<T = unknown>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    if (method !== "GET" && method !== "HEAD") this.requireConnection();
     const res = await fetch(`${this.baseUrl}/api${path}`, {
       signal,
       method,
@@ -133,16 +139,19 @@ export class Api {
   del = <T>(path: string) => this.request<T>("DELETE", path);
 
   async uploadServerIcon<T>(serverId: string, photo: Blob): Promise<T> {
+    this.requireConnection();
     const body = new FormData(); body.append("icon", photo, "icon");
     return parse<T>(await fetch(`${this.baseUrl}/api/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
   }
 
   async uploadAvatar<T>(photo: Blob): Promise<T> {
+    this.requireConnection();
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");
     return parse<T>(await fetch(`${this.baseUrl}/api/users/@me/avatar`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
   }
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null): Promise<T> {
+    this.requireConnection();
     if (files.length === 0) return this.post<T>(`/channels/${channelId}/messages`, { content, replyToId });
     const form = new FormData();
     form.append("content", content);
@@ -158,6 +167,7 @@ export class Api {
 
   /** Like sendMessage with files, reporting upload progress from 0 to 1. */
   uploadMessage<T>(channelId: string, content: string, files: File[], onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
+    if (!this.canWrite()) return Promise.reject(new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar."));
     const form = new FormData();
     form.append("content", content);
     for (const f of files) form.append("files", f, f.name);

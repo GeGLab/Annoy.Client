@@ -32,13 +32,10 @@ export class CloudflareVoiceSession {
   private opus = new Map<string, Record<string, number>>();
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
-  /** Lets this session survive a reconnect or a server restart (servers 0.4.3+). */
-  private resumeKey: { sessionId: string; resumeToken: string } | null = null;
-  /** What we publish, by track name, reported when resuming. */
-  private published = new Map<string, { mid: string; kind: "audio" | "video"; source: MediaSource; maxBitrate?: number }>();
   private remote = new Map<string, Remote>();
   private mixer = new RemoteAudioMixer();
   private closed = false;
+  private capturedTracks = new Set<MediaStreamTrack>();
   canSpeak = false;
   canStream = false;
 
@@ -64,8 +61,6 @@ export class CloudflareVoiceSession {
       canSpeak: boolean;
       canStream: boolean;
       screenAudio?: boolean;
-      sessionId?: string;
-      resumeToken?: string;
     }>("join", {
       channelId: this.channelId,
       selfMute: this.settings.selfMute,
@@ -74,7 +69,7 @@ export class CloudflareVoiceSession {
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
-    if (joined.sessionId && joined.resumeToken) this.resumeKey = { sessionId: joined.sessionId, resumeToken: joined.resumeToken };
+    if (this.closed) return;
     const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle" });
     this.pc = pc;
     pc.addEventListener("connectionstatechange", () => {
@@ -91,8 +86,10 @@ export class CloudflareVoiceSession {
   }
 
   private publish(track: MediaStreamTrack, kind: "audio" | "video", source: MediaSource, maxBitrate?: number, opus?: Record<string, number>) {
+    this.capturedTracks.add(track);
     return this.serial(async () => {
-      const pc = this.pc!;
+      if (this.closed || !this.pc) throw new Error("Sessão de voz encerrada");
+      const pc = this.pc;
       const transceiver = pc.addTransceiver(track, { direction: "sendonly", ...(maxBitrate && { sendEncodings: [{ maxBitrate }] }) });
       await pc.setLocalDescription(await pc.createOffer());
       if (opus && transceiver.mid) this.opus.set(transceiver.mid, opus);
@@ -103,10 +100,10 @@ export class CloudflareVoiceSession {
         source,
         ...(maxBitrate && { maxBitrate }),
       });
+      if (this.closed) throw new Error("Sessão de voz encerrada");
       await this.setRemote(pc, "answer", res.sdp);
-      if (transceiver.mid) this.published.set(res.producerId, { mid: transceiver.mid, kind, source, maxBitrate });
       return { trackName: res.producerId, transceiver };
-    });
+    }).catch((error) => { track.stop(); this.capturedTracks.delete(track); throw error; });
   }
 
   private setRemote(pc: RTCPeerConnection, type: "offer" | "answer", sdp: string): Promise<void> {
@@ -199,21 +196,27 @@ export class CloudflareVoiceSession {
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })
         : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
+    for (const captured of stream.getTracks()) this.capturedTracks.add(captured);
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
     if (withAudio && !sound) toast("O Windows não forneceu áudio para a transmissão. Confira a saída de som e tente compartilhar novamente.", 10000);
-    if (!track) throw new Error("Nenhuma imagem capturada");
+    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error("Nenhuma imagem capturada"); }
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
       track.stop();
       return void sound?.stop();
     }
-    const { trackName, transceiver } = await this.publish(track, "video", source, profile.maxBitrate);
+    let publishedVideo;
+    try { publishedVideo = await this.publish(track, "video", source, profile.maxBitrate); }
+    catch (error) { stream.getTracks().forEach((captured) => captured.stop()); throw error; }
+    if (this.closed) { stream.getTracks().forEach((captured) => captured.stop()); return; }
+    const { trackName, transceiver } = publishedVideo;
     this.video.set(source, { trackName, transceiver, track });
     if (sound) {
       try {
         const published = await this.publish(sound, "audio", "screen_audio", undefined, OPUS_SCREEN);
+        if (this.closed) { sound.stop(); return; }
         this.screenAudio = { ...published, track: sound };
       } catch (err) {
         sound.stop();
@@ -244,40 +247,12 @@ export class CloudflareVoiceSession {
 
   private unpublish(entry: { trackName: string; transceiver: RTCRtpTransceiver }): Promise<void> {
     const pc = this.pc!;
-    this.published.delete(entry.trackName);
     return this.serial(async () => {
       entry.transceiver.direction = "inactive";
       await pc.setLocalDescription(await pc.createOffer());
       const res = await this.gw.voice<{ sdp?: string }>("closeProducer", { producerId: entry.trackName, sdp: pc.localDescription!.sdp });
       if (res.sdp) await this.setRemote(pc, "answer", res.sdp);
     }).catch((err: unknown) => console.warn("close track failed", err));
-  }
-
-  /**
-   * After the gateway comes back (a network blip or a server restart), takes
-   * the same Cloudflare session back: media never stopped, so nobody hears a
-   * gap. False means the caller must rejoin from scratch.
-   */
-  async resume(): Promise<boolean> {
-    const pc = this.pc;
-    if (this.closed || !pc || !this.resumeKey || pc.connectionState === "failed" || pc.connectionState === "closed") return false;
-    try {
-      const res = await this.gw.voice<{ canSpeak: boolean; canStream: boolean; producers: { producerId: string; userId: string; source: MediaSource }[] }>("resume", {
-        channelId: this.channelId,
-        ...this.resumeKey,
-        selfMute: this.settings.selfMute,
-        selfDeaf: this.settings.selfDeaf,
-        published: [...this.published].map(([trackName, t]) => ({ trackName, ...t })),
-        pulled: [...this.remote].map(([trackName, r]) => ({ trackName, mid: r.mid })),
-      });
-      this.canSpeak = res.canSpeak;
-      this.canStream = res.canStream;
-      for (const p of res.producers) if (!this.remote.has(p.producerId)) void this.subscribeSoon(p.producerId, p.userId, p.source);
-      return true;
-    } catch (err) {
-      console.warn("voice resume failed", err);
-      return false;
-    }
   }
 
   updateSettings(settings: Settings): void {
@@ -307,6 +282,8 @@ export class CloudflareVoiceSession {
   close(notifyServer = true): void {
     if (this.closed) return;
     this.closed = true;
+    for (const track of this.capturedTracks) track.stop();
+    this.capturedTracks.clear();
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.remote.keys()]) this.dropRemote(id);
     this.mixer.close();

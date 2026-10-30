@@ -473,10 +473,11 @@ function SongPlayer({ session }: { session: Listening }) {
 export function SongDock() {
   const session = useListening();
   const accounts = useStore((s) => s.accounts);
+  const connected = useStore((s) => !!session && s.instances[session.accountId]?.status === "ready");
   // Signing out of the account stops the music too.
   useEffect(() => {
-    if (session && !accounts.some((a) => a.id === session.accountId)) listenTo(null);
-  }, [session, accounts]);
-  if (!session) return null;
+    if (session && (!connected || !accounts.some((a) => a.id === session.accountId))) listenTo(null);
+  }, [session, accounts, connected]);
+  if (!session || !connected) return null;
   return <SongPlayer key={`${session.accountId}:${session.channelId}`} session={session} />;
 }

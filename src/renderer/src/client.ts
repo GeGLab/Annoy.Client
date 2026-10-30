@@ -73,9 +73,6 @@ function writeCache(accountId: string): void {
   }
 }
 
-/** Voice channel to rejoin once the gateway is back, after an unplanned drop. */
-let rejoin: { accountId: string; serverId: string; channelId: string } | null = null;
-
 export function reconnect(accountId?: string): void {
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
 }
@@ -96,16 +93,31 @@ subscribe(() => {
 
 export function connectAccount(account: Account): void {
   if (live.has(account.id)) return;
-  const api = new Api(account.url, account.token);
+  const api = new Api(account.url, account.token, () => getState().instances[account.id]?.status === "ready");
   const gateway = new Gateway(
     account.url,
     account.token,
     (event) => onEvent(account.id, event),
     (status) => {
-      if (status === "offline" || status === "invalid") disconnectDirectCall(account.id);
+      if (status !== "ready") {
+        disconnectDirectCall(account.id);
+        if (voice?.accountId === account.id || getState().voice?.accountId === account.id) leaveVoice(false);
+      }
       setState((s) => {
         const inst = s.instances[account.id];
-        if (inst) inst.status = status;
+        if (inst) {
+          inst.status = status;
+          if (status !== "ready") {
+            inst.presences = {};
+            inst.activities = {};
+            inst.typing = {};
+            for (const server of Object.values(inst.serverStates)) {
+              server.voiceStates = [];
+              for (const member of server.members) member.presence = "offline";
+            }
+          }
+        }
+        if (status !== "ready" && s.modal && "accountId" in s.modal && s.modal.accountId === account.id) s.modal = null;
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
       });
@@ -274,6 +286,8 @@ export function openChannel(accountId: string, serverId: string, channelId: stri
 }
 
 export async function openDm(accountId: string, userId: string): Promise<void> {
+  const existing = getState().instances[accountId]?.dms.find((dm) => dm.recipients.some((user) => user.id === userId));
+  if (existing) return navigate({ kind: "home", accountId, dmId: existing.id });
   try {
     const dm = await apiFor(accountId).post<DmChannel>("/dms", { userId });
     patchInstance(accountId, (inst) => {
@@ -329,6 +343,7 @@ function scheduleRefresh(accountId: string, serverId: string): void {
 
 export async function loadMessages(accountId: string, channelId: string, older = false): Promise<void> {
   const inst = getState().instances[accountId];
+  if (inst?.status !== "ready") return;
   const current = inst?.messages[channelId];
   if (current?.loading || (older && !current?.hasMore) || (!older && current)) return;
   patchInstance(accountId, (i) => {
@@ -382,6 +397,7 @@ export function sendTyping(accountId: string, channelId: string): void {
 // Voice --------------------------------------------------------------------
 
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
+  if (getState().instances[accountId]?.status !== "ready") return void toast("Sem conexão com o servidor. Conecte novamente para entrar na voz.");
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
@@ -425,18 +441,13 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   }
 }
 
-function rejoinVoice(target: { accountId: string; serverId: string; channelId: string }): void {
-  void ensureServer(target.accountId, target.serverId).then((st) => {
-    if (st?.channels.some((c) => c.id === target.channelId)) void joinVoice(target.accountId, target.serverId, target.channelId);
-  });
-}
-
 export function leaveVoice(notifyServer = true): void {
   const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
   voice = null;
   setState((s) => {
     s.voice = null;
+    if (s.modal?.kind === "screenPicker") s.modal = null;
   });
   if (connected) playCallFeedback("leave");
 }
@@ -572,27 +583,6 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.messages = {};
         inst.serverStates = {};
       });
-      if (voice?.accountId === accountId) {
-        // A Cloudflare call keeps flowing without the gateway: take the same session
-        // back. Otherwise (or if that fails) the old session is gone; rejoin the room.
-        const current = voice;
-        void current.session.resume().then((resumed) => {
-          if (voice !== current) return;
-          if (resumed) {
-            setState((s) => {
-              if (s.voice) s.voice.canStream = current.session.canStream;
-            });
-            return;
-          }
-          const target = { accountId, serverId: current.serverId, channelId: current.session.channelId };
-          leaveVoice(false);
-          rejoinVoice(target);
-        });
-      } else if (rejoin?.accountId === accountId && event.d.servers.some((sv) => sv.id === rejoin?.serverId)) {
-        const target = rejoin;
-        rejoin = null;
-        rejoinVoice(target);
-      }
       // Instances are small (TeamSpeak scale): load every server so unread
       // badges and voice rosters work without opening each one.
       for (const server of event.d.servers) void ensureServer(accountId, server.id);
@@ -725,7 +715,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       });
     }
     case "VOICE_KICKED":
-      leaveVoice(false);
+      if (getState().voice?.accountId === accountId) leaveVoice(false);
       toast(event.d.reason);
       return;
     case "DM_CREATE":

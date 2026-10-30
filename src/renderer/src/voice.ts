@@ -44,6 +44,7 @@ export class VoiceSession {
   private mixer = new RemoteAudioMixer();
   private micGate: MicGate | null = null;
   private closed = false;
+  private capturedTracks = new Set<MediaStreamTrack>();
   canSpeak = true;
   canStream = false;
 
@@ -72,12 +73,17 @@ export class VoiceSession {
     if (this.closed) return;
     this.device = await Device.factory();
     await this.device.load({ routerRtpCapabilities: joined.rtpCapabilities });
+    if (this.closed) return;
 
-    this.recv = this.device.createRecvTransport(await this.gw.voice<TransportInfo>("createTransport"));
+    const receiveInfo = await this.gw.voice<TransportInfo>("createTransport");
+    if (this.closed) return;
+    this.recv = this.device.createRecvTransport(receiveInfo);
     this.wireConnect(this.recv);
 
     if (this.canSpeak || this.canStream) {
-      this.send = this.device.createSendTransport(await this.gw.voice<TransportInfo>("createTransport"));
+      const sendInfo = await this.gw.voice<TransportInfo>("createTransport");
+      if (this.closed) return;
+      this.send = this.device.createSendTransport(sendInfo);
       this.wireConnect(this.send);
       this.send.on("produce", ({ kind, rtpParameters, appData }, callback, errback) => {
         this.gw
@@ -103,12 +109,15 @@ export class VoiceSession {
   private async startMic(): Promise<void> {
     this.micGate = new MicGate(this.settings);
     const track = await this.micGate.start();
-    this.producer = await this.send!.produce({
+    if (this.closed) { track.stop(); return; }
+    const producer = await this.send!.produce({
       track,
       codecOptions: { opusDtx: true, opusFec: true, opusMaxAverageBitrate: OPUS_VOICE.maxaveragebitrate },
       stopTracks: false,
       appData: { source: "mic" },
     });
+    if (this.closed) { producer.close(); track.stop(); return; }
+    this.producer = producer;
   }
 
   updateSettings(settings: Settings): void {
@@ -121,11 +130,6 @@ export class VoiceSession {
       audio.muted = settings.selfDeaf;
       if (deviceChanged) void this.applySink(audio);
     }
-  }
-
-  /** Media runs through the server, so a reconnect always means rejoining. */
-  resume(): Promise<boolean> {
-    return Promise.resolve(false);
   }
 
   setPushToTalk(down: boolean): void {
@@ -162,10 +166,11 @@ export class VoiceSession {
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })
         : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
+    for (const captured of stream.getTracks()) this.capturedTracks.add(captured);
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
     if (withAudio && !sound) toast("O Windows não forneceu áudio para a transmissão. Confira a saída de som e tente compartilhar novamente.", 10000);
-    if (!track) throw new Error("Nenhuma imagem capturada");
+    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error("Nenhuma imagem capturada"); }
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
@@ -178,6 +183,7 @@ export class VoiceSession {
       codecOptions: { videoGoogleStartBitrate: 1000 },
       appData: { source },
     });
+    if (this.closed) { producer.close(); stream.getTracks().forEach((captured) => captured.stop()); return; }
     this.video.set(source, { producer, track });
     if (sound) {
       try {
@@ -186,6 +192,7 @@ export class VoiceSession {
           codecOptions: { opusStereo: true, opusDtx: false, opusFec: true, opusMaxAverageBitrate: OPUS_SCREEN.maxaveragebitrate },
           appData: { source: "screen_audio" },
         });
+        if (this.closed) { audio.close(); sound.stop(); return; }
         this.screenAudio = { producer: audio, track: sound };
       } catch (err) {
         sound.stop();
@@ -269,6 +276,8 @@ export class VoiceSession {
   close(notifyServer = true): void {
     if (this.closed) return;
     this.closed = true;
+    for (const track of this.capturedTracks) track.stop();
+    this.capturedTracks.clear();
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.consumers.keys()]) this.dropConsumer(id);
     this.mixer.close();

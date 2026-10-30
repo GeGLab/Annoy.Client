@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
@@ -25,7 +25,8 @@
     "electron:install": "node scripts/ensure-electron.mjs",
     "postinstall": "node scripts/ensure-electron.mjs",
     "predev": "node scripts/ensure-electron.mjs",
-    "prestart": "node scripts/ensure-electron.mjs"
+    "prestart": "node scripts/ensure-electron.mjs",
+    "test:disconnect": "playwright test tests/disconnect.spec.ts"
   },
   "engines": {
     "node": ">=22.13"

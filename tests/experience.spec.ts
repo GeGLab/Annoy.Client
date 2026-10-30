@@ -313,7 +313,7 @@ test("call membership sounds, stable participants, status icons and channel swit
     await page.locator(".channel.voice").filter({ hasText: "Sala de conversa" }).click();
     await expect.poll(tones).toBe(3); // Local join, without a second cue for our gateway echo.
     update("friend", state("friend", "voice", { selfMute: true, selfDeaf: true, video: true, screen: true }));
-    await expect.poll(tones).toBe(6);
+    await expect.poll(tones).toBe(10); // Join plus the four-note screen-sharing cue.
     const friend = users.filter({ hasText: "Amiga na chamada" });
     await expect(friend.getByRole("img")).toHaveCount(5);
     await friend.hover();
@@ -322,12 +322,12 @@ test("call membership sounds, stable participants, status icons and channel swit
     await expect(page.getByRole("menuitem", { name: "Desconectar da voz", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     update("visitor", state("visitor", "voice"));
-    await expect.poll(tones).toBe(9);
+    await expect.poll(tones).toBe(13);
     await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
     update("person", state("person", "voice", { speaking: true }));
     update("friend", state("friend", "voice", { speaking: true }));
     await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
-    await expect.poll(tones).toBe(9); // Speaking, mute and media updates never announce membership.
+    await expect.poll(tones).toBe(13); // Speaking, mute and media updates never announce membership.
     await page.locator('.channel-name').filter({ hasText: /^geral$/ }).click();
     const avatar = (await friend.locator(".avatar").boundingBox())!;
     const channel = (await page.locator(".channel.voice").first().boundingBox())!;
@@ -345,16 +345,16 @@ test("call membership sounds, stable participants, status icons and channel swit
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(page.locator(".voice-status-bar")).toHaveCSS("animation-name", "none");
     update("visitor", state("visitor", "other-voice"));
-    await expect.poll(tones).toBe(12); // Leaving our room for another channel.
+    await expect.poll(tones).toBe(20); // Leaving our room for another channel.
     update("visitor", state("visitor", "other-voice", { speaking: true }));
-    await expect.poll(tones).toBe(12);
+    await expect.poll(tones).toBe(20);
     update("friend", null);
-    await expect.poll(tones).toBe(15);
+    await expect.poll(tones).toBe(23);
     await page.locator(".channel.voice").filter({ hasText: "Outra chamada" }).click();
-    await expect.poll(tones).toBe(21); // Local leave + local join on channel switch.
+    await expect.poll(tones).toBe(29); // Local leave + local join on channel switch.
     expect(methods).toEqual(["join", "leave", "join"]);
     await page.getByRole("button", { name: "Sair da chamada de voz", exact: true }).click();
-    await expect.poll(tones).toBe(24);
+    await expect.poll(tones).toBe(32);
     expect(methods).toEqual(["join", "leave", "join", "leave"]);
     await expect(page.locator(".voice-status-bar")).toHaveCount(0);
   } finally { await close(); }
@@ -562,7 +562,8 @@ test("old server connections have a context menu and require a single named conf
         s.instances.old = old;
       });
     });
-    await page.getByRole("button", { name: "Continuar mesmo assim", exact: true }).click();
+    // An unrelated offline instance must not block the connected community.
+    await expect(page.locator(".connection-dialog")).toHaveCount(0);
     const oldTab = page.getByRole("button", { name: "Servidor antigo · Conexão antiga", exact: true });
     const currentTab = page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true });
     await oldTab.click({ button: "right" });
@@ -988,11 +989,16 @@ test("Steam connection publishes online fallback, prefers local games and clears
 });
 
 test("Spotify activity publishes on ready, clears when disabled and resumes after reconnect", async () => {
-  const { page, close } = await launch();
+  const { app, page, close } = await launch();
   const sent: any[] = [];
   let socket: any;
   const ready = { t: "READY", d: { user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {}, instance: { name: "Teste", activityArtwork: false } } };
   try {
+    // This test supplies synthetic activity; native polling must not overwrite it.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("activity:configure");
+      ipcMain.handle("activity:configure", () => ({ supported: true, error: null, activities: [] }));
+    });
     await page.route("http://sharing.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
     await page.routeWebSocket("ws://sharing.test/gateway", (ws) => {
       socket = ws;
@@ -1351,7 +1357,7 @@ test("animated menus, custom selects, color history and unsaved settings", async
     await expect(page.getByRole("button", { name: "Cor recente #d25cbb" })).toBeVisible();
     const colorRect = (await page.locator(".color-popover").boundingBox())!;
     expect(colorRect.y).toBeGreaterThanOrEqual(0);
-    expect(colorRect.y + colorRect.height).toBeLessThanOrEqual(840);
+    expect(colorRect.y + colorRect.height).toBeLessThanOrEqual(await page.evaluate(() => window.innerHeight));
     await page.screenshot({ path: join(capture, "color-picker.png") });
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
@@ -1633,21 +1639,21 @@ test("both voice backends send screen audio separately and explain incompatible 
         try {
           session.serverScreenAudio = true;
           await session.startVideo("screen");
-          const audioTrack = session.screenAudio.track;
+          const audioTrack = session.screenAudio?.track;
           await session.stopVideo("screen");
-          const stopped = audioTrack.readyState;
+          const stopped = audioTrack?.readyState;
           session.serverScreenAudio = false;
           setState((s: any) => { s.toast = null; });
           await session.startVideo("screen");
           const explanation = getState().toast?.text;
           await session.stopVideo("screen");
-          return { requested, published, stopped, explanation };
+          return { requested, published, stopped, explanation, supportsAudio: window.distopic?.platform === "win32" };
         } finally { navigator.mediaDevices.getDisplayMedia = original; await ctx.close(); }
       }, backend);
-      expect(result.requested).toEqual([true, false]);
-      expect(result.published).toEqual(["screen", "screen_audio", "screen"]);
-      expect(result.stopped).toBe("ended");
-      expect(result.explanation).toContain("screen_audio");
+      expect(result.requested).toEqual([result.supportsAudio, false]);
+      expect(result.published).toEqual(result.supportsAudio ? ["screen", "screen_audio", "screen"] : ["screen", "screen"]);
+      if (result.supportsAudio) expect(result.stopped).toBe("ended");
+      expect(result.explanation).toContain(result.supportsAudio ? "screen_audio" : "Windows");
     }
   } finally { await close(); }
 });

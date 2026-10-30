@@ -32,6 +32,7 @@ export function callAction(action: "accept" | "reject" | "end") {
   if (action !== "accept") { cleanup(); setState((s) => { s.directCall = null; }); }
 }
 export async function startDirectCall(accountId: string, userId: string, video: boolean) {
+  if (getState().instances[accountId]?.status !== "ready") return toast("Sem conexão com o servidor para iniciar a chamada.");
   if (!getState().instances[accountId]?.instance?.directCalls) return toast("Esta instância precisa ser atualizada para chamadas privadas.");
   if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
   try { leaveVoice(); await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId }); }
@@ -80,6 +81,7 @@ export function updateDirectCallMute() {
 }
 export async function handleDirectCallEvent(accountId: string, event: Extract<GatewayEvent, { t: "CALL_UPDATE" | "CALL_SIGNAL" }>) {
   try {
+    if (getState().instances[accountId]?.status !== "ready") return;
     if (event.t === "CALL_UPDATE") {
       const call = event.d, me = getState().instances[accountId]?.user?.id;
       if (me !== call.callerId && me !== call.calleeId) return;
@@ -109,7 +111,10 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
         if (connection.remoteDescription) await connection.addIceCandidate(signal.candidate); else candidates.push(signal.candidate);
       }
     }
-  } catch (error) { if (getState().directCall?.accountId === accountId) { toast((error as Error).message); callAction("end"); } }
+  } catch (error) {
+    const callId = event.t === "CALL_UPDATE" ? event.d.id : event.d.callId;
+    if (getState().directCall?.accountId === accountId && getState().directCall?.call.id === callId) { toast((error as Error).message); callAction("end"); }
+  }
 }
 export function disconnectDirectCall(accountId: string) { if (getState().directCall?.accountId === accountId) { cleanup(); setState((s) => { s.directCall = null; }); } }
 const incomingNotificationNeeded = (call: DirectCall, userId: string | undefined, previousId?: string) => call.status === "ringing" && call.calleeId === userId && previousId !== call.id;

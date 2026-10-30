@@ -2,7 +2,8 @@ import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";
 
-const HEARTBEAT_MS = 30_000;
+const HEARTBEAT_MS = 5_000;
+const ACK_TIMEOUT_MS = 10_000;
 const MAX_BACKOFF_MS = 30_000;
 /** After the server says it's restarting, retry every second for this long instead of backing off. */
 const RESTART_WINDOW_MS = 3 * 60_000;
@@ -19,6 +20,7 @@ export class Gateway {
   private backoff = 1000;
   private restartUntil = 0;
   private closed = false;
+  private ready = false;
   private voiceSeq = 0;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
@@ -33,11 +35,13 @@ export class Gateway {
   connect(): void {
     if (this.socket) return;
     this.closed = false;
+    this.ready = false;
     this.onStatus("connecting");
     const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
     this.socket = socket;
     this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.onReachable?.();
       this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
     };
@@ -51,6 +55,7 @@ export class Gateway {
       if (this.connectTimeout) clearTimeout(this.connectTimeout);
       this.connectTimeout = null;
       this.stopHeartbeat();
+      this.ready = false;
       this.failPending("Conexão perdida");
       if (this.socket === socket) this.socket = null;
       if (this.closed) return;
@@ -59,7 +64,7 @@ export class Gateway {
         // During an update the new version is already answering: reconnect at
         // once, spread over a moment so every client doesn't land together.
         this.restartUntil = Date.now() + RESTART_WINDOW_MS;
-        this.onStatus("connecting");
+        this.onStatus("offline");
         this.retry = setTimeout(() => this.connect(), Math.random() * 300);
         return;
       }
@@ -73,6 +78,7 @@ export class Gateway {
     if (this.closed) return;
     const socket = this.socket;
     this.socket = null;
+    this.ready = false;
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = null;
     this.stopHeartbeat();
@@ -93,7 +99,8 @@ export class Gateway {
 
   /** Skips the backoff wait: used when the network comes back or the user asks to retry. */
   reconnectNow(): void {
-    if (this.closed || this.socket) return;
+    if (this.closed || (this.socket && this.ready)) return;
+    if (this.socket) this.networkLost();
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
     this.backoff = 1000;
@@ -102,6 +109,7 @@ export class Gateway {
 
   close(): void {
     this.closed = true;
+    this.ready = false;
     if (this.retry) clearTimeout(this.retry);
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = null;
@@ -126,6 +134,7 @@ export class Gateway {
 
   private receive(event: GatewayEvent): void {
     if (event.t === "READY") {
+      this.ready = true;
       if (this.connectTimeout) clearTimeout(this.connectTimeout);
       this.connectTimeout = null;
       this.lastAck = Date.now();
@@ -148,7 +157,7 @@ export class Gateway {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeat = setInterval(() => {
-      if (Date.now() - this.lastAck > HEARTBEAT_MS * 2) return this.networkLost();
+      if (Date.now() - this.lastAck >= ACK_TIMEOUT_MS) return this.networkLost();
       this.send({ op: "heartbeat" });
     }, HEARTBEAT_MS);
   }
