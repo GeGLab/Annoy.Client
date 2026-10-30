@@ -331,7 +331,7 @@ Opening or reselecting a conversation moves to its latest messages. New messages
 
 ### Connection Recovery
 
-When an account is not ready or the browser reports offline, application-level recovery blocks content, traps focus and hides the native Discord view. The dialog caps at (540px) with side clearance (24px), a scrolling height limit and explicit retry, reauthentication for expired sessions, and account-disconnection recovery. Outside clicks and Escape cannot bypass the blocked state. Paired accent rings pulse around the mark (2.4s, offset 1.2s); connecting voice rotates (1.5s). Reduced motion removes these animations while retaining status text and recovery controls.
+When the selected account is not ready or the OS reports offline, recovery covers only that account's main area after a (2s) grace period. The underlying content stays mounted and inert; focus moves to recovery if it was inside that content. The rail remains reachable for other communities, services and news. The recovery region caps at (540px) with side clearance (24px) and scrolls within the main area. Retry targets only that account; expired sessions offer reauthentication without automatic credential retries. Authentication and account-disconnection confirmation keep their shared dialogs. Paired accent rings pulse around the mark (2.4s, offset 1.2s); connecting voice rotates (1.5s). Reduced motion removes these animations while retaining status text and recovery controls. Global service failures remain independent of authenticated instance connections.
 
 ### Bot Marketplace
 

@@ -66,10 +66,13 @@
 .voice-status-bar .ui-button { height: 28px; min-height: 28px; }
 .voice-here { font-size: 9px; color: var(--ok); white-space: nowrap; font-weight: 650; padding: 3px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ok) 10%, transparent); }
 .voice-here.connecting { color: var(--warn); }
-.connection-dialog { z-index: 121; width: min(540px, calc(100vw - 48px)); max-height: calc(100dvh - 92px); overflow-y: auto; display: flex; align-items: center; flex-direction: column; gap: 18px; padding: 36px 30px 28px; border-radius: 16px; background: var(--bg-main); box-shadow: var(--shadow-overlay); text-align: center; }
+.main { position: relative; }
+.connection-content { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.connection-recovery { position: absolute; inset: 0; z-index: 10; display: flex; align-items: safe center; justify-content: center; overflow-y: auto; padding: 24px; background: var(--bg-main); }
+.connection-dialog { width: min(540px, 100%); display: flex; align-items: center; flex-direction: column; gap: 18px; padding: 28px 24px; text-align: center; }
 .connection-dialog h2 { font-size: 22px; letter-spacing: -.025em; }
 .connection-dialog > p { color: var(--text-muted); max-width: 380px; margin: 0; font-size: 13px; line-height: 1.7; }
-.connection-dialog + [data-radix-focus-guard] { z-index: 122; }
+.connection-account strong { overflow-wrap: anywhere; }
 .reconnect-symbol { position: relative; display: grid; place-items: center; width: 110px; height: 110px; margin-bottom: 2px; }
 .reconnect-symbol > .reconnect-wave { position: absolute; inset: 0; border: 1px solid var(--accent-line); border-radius: 50%; animation: reconnect-wave 2.4s var(--ease) infinite; }
 .reconnect-symbol > .reconnect-wave:nth-child(2) { animation-delay: 1.2s; }

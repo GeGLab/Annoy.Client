@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron, type Page } from "@playwright/test";
+import { test, expect, _electron as electron, type Page, type WebSocketRoute } from "@playwright/test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join, dirname, basename } from "node:path";
@@ -83,7 +83,7 @@ async function seed(page: Page) {
   await expect(page.locator(".chat-header h1")).toHaveText("geral");
 }
 
-test("latest messages, personal colors, saved panels, voice and blocking reconnect", async () => {
+test("latest messages, personal colors, saved panels, voice and scoped reconnect", async () => {
   const { app, page, cleanup } = await launch();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -186,11 +186,20 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
     await page.route(`${origin}/api/servers/server`, (route) =>
       route.fulfill({ contentType: "application/json", body: JSON.stringify(ready.state) }),
     );
+    await page.getByRole("textbox", { name: "Conversar em #geral", exact: true }).fill("Rascunho durante a indisponibilidade");
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Reconectando ao seu espaço" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Tentar agora", exact: true })).toBeFocused();
+    await expect(page.locator(".connection-content textarea")).toHaveValue("Rascunho durante a indisponibilidade");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Configurações", exact: true }).click({ trial: true, timeout: 300 })).rejects.toThrow();
+    await page.getByRole("button", { name: "Nova aba", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await page.screenshot({ path: join(screenshots, "workspace-reconnecting.png") });
     await page.routeWebSocket("ws://workspace.test/gateway", (ws) =>
       ws.onMessage((raw) => {
@@ -213,9 +222,192 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
       }),
     );
     await page.getByRole("button", { name: "Tentar agora", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(page.locator(".connection-dialog")).toHaveCount(0);
     await expect(page.locator(".chat-header h1")).toHaveText("geral");
     expect(errors).toEqual([]);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("connectivity isolates two live gateways, scopes retry and keeps navigation usable", async () => {
+  const { app, page, cleanup } = await launch();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  let available = true;
+  let active: WebSocketRoute | undefined;
+  let aConnections = 0, bConnections = 0;
+  const sent: string[] = [];
+  try {
+    await seed(page);
+    const fixture = await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const inst = getState().instances.workspace;
+      return { user: inst.user, state: inst.serverStates.server, servers: inst.servers };
+    });
+    const healthyServer = { ...fixture.servers[0], name: "Comunidade saudável" };
+    const ready = (servers = fixture.servers) => JSON.stringify({ t: "READY", d: {
+      user: fixture.user, servers, dms: [], relationships: [], presences: { me: "online" },
+      instance: { isAdmin: false, registration: "open", voiceBackend: "builtin" },
+    } });
+    await page.routeWebSocket("ws://workspace.test/gateway", (ws) => {
+      active = ws;
+      aConnections++;
+      ws.onMessage((raw) => {
+        const message = JSON.parse(String(raw));
+        if (message.op === "identify" && available) ws.send(ready());
+        if (message.op === "heartbeat") ws.send(JSON.stringify({ t: "HEARTBEAT_ACK", d: null }));
+      });
+    });
+    await page.routeWebSocket("ws://healthy.test/gateway", (ws) => {
+      bConnections++;
+      ws.onMessage((raw) => {
+        const message = JSON.parse(String(raw));
+        if (message.op === "identify") ws.send(ready([healthyServer]));
+        if (message.op === "heartbeat") ws.send(JSON.stringify({ t: "HEARTBEAT_ACK", d: null }));
+      });
+    });
+    await page.route(`${origin}/api/servers/server`, (route) => route.fulfill({ json: fixture.state }));
+    await page.route("http://healthy.test/api/**", async (route) => {
+      if (route.request().method() === "POST" && route.request().url().endsWith("/messages")) {
+        expect(route.request().headers().authorization).toBe("Bearer healthy-token");
+        sent.push(route.request().postDataJSON().content);
+      }
+      await route.fulfill({ json: route.request().url().endsWith("/servers/server") ? { ...fixture.state, server: healthyServer } : [] });
+    });
+    await page.evaluate(async () => {
+      const { addAccount, reconnect } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      reconnect("workspace");
+      addAccount({ id: "healthy", url: "http://healthy.test", token: "healthy-token", userId: "me", instanceName: "Instância saudável" });
+    });
+    await expect.poll(() => bConnections).toBe(1);
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return [getState().instances.workspace.connection.authentication, getState().instances.healthy.connection.authentication];
+    })).toEqual(["valid", "valid"]);
+    await page.getByRole("button", { name: "Comunidade saudável · Instância saudável", exact: true }).click();
+    const composer = page.getByRole("textbox", { name: "Conversar em #geral", exact: true });
+    await composer.fill("B continua utilizável");
+    available = false;
+    active!.close({ code: 1011, reason: "Synthetic instance outage" });
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().instances.workspace.connection.availability;
+    })).toBe("unavailable");
+    await page.waitForTimeout(2200); // Longer than the recovery grace period.
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
+    await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
+    await expect.poll(() => sent).toEqual(["B continua utilizável"]);
+    await expect(composer).toHaveValue("");
+
+    await page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Reconectando ao seu espaço" })).toBeVisible();
+    await expect(page.locator(".connection-account")).toContainText("Instância de teste");
+    await expect(page.locator(".connection-account")).not.toContainText("Instância saudável");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const beforeRetry = aConnections;
+    await page.getByRole("button", { name: "Tentar agora", exact: true }).click();
+    await expect.poll(() => aConnections).toBeGreaterThan(beforeRetry);
+    expect(bConnections).toBe(1);
+    await page.screenshot({ path: join(screenshots, "connectivity-scoped-dark.png") });
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(940, 620));
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.theme = "light"; });
+    });
+    await page.screenshot({ path: join(screenshots, "connectivity-scoped-light-minimum.png") });
+    await page.getByRole("button", { name: "Comunidade saudável · Instância saudável", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
+    await expect(composer).toBeEditable();
+
+    await page.getByRole("button", { name: "Nova aba", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
+    await page.evaluate(async () => {
+      const { addService } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      addService({ id: "independent", kind: "website", name: "Serviço independente", url: "https://independent.test" });
+    });
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().view.kind;
+    })).toBe("service");
+    expect(errors).toEqual([]);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("connectivity observes Global failures independently and preserves expired-session recovery", async () => {
+  const { page, cleanup } = await launch();
+  let gateway: WebSocketRoute | undefined;
+  let connections = 0;
+  try {
+    await seed(page);
+    const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).GLOBAL_URL);
+    let status = 503;
+    await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => status === 0 ? route.abort() : route.fulfill({ status, json: { message: "Falha sintética" } }));
+    for (const [response, cause, availability, authentication] of [
+      [503, "service", "unavailable", "unknown"], [401, "unauthorized", "available", "invalid"],
+      [403, "forbidden", "available", "forbidden"], [0, "network", "unavailable", "forbidden"],
+    ] as const) {
+      status = response;
+      const state = await page.evaluate(async () => {
+        const { signInGlobal } = await import(/* @vite-ignore */ `${location.origin}/src/global.ts`);
+        const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        await signInGlobal("synthetic@example.test", "synthetic").catch(() => undefined);
+        return { connectivity: getState().connectivity, instance: getState().instances.workspace.status };
+      });
+      expect(state.connectivity.global).toMatchObject({ cause, availability, authentication });
+      expect(state.connectivity.network.status).toBe("unknown");
+      expect(state.instance).toBe("ready");
+      await expect(page.locator(".connection-recovery")).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "Conversar em #geral", exact: true })).toBeEditable();
+    }
+    // A real successful login response clears previous auth/network observations.
+    const login = await page.evaluate(async () => {
+      const kdf = await import(/* @vite-ignore */ `${location.origin}/src/global-crypto.ts`);
+      const salt = kdf.newSalt();
+      const { wrapKey } = await kdf.derivePasswordKeys("synthetic", salt, 1);
+      return { salt, wrappedKeys: await kdf.wrapKeys(wrapKey, kdf.newAccountKeys()) };
+    });
+    await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: login.salt, iterations: 1 } }));
+    await page.route(`${globalUrl}/v1/auth/login`, (route) => route.fulfill({ json: {
+      token: "synthetic-global-session", wrappedKeys: login.wrappedKeys,
+      user: { id: "global-test", name: "Conta sintética", email: "synthetic@example.test" },
+    } }));
+    await page.route(`${globalUrl}/v1/vault`, (route) => route.fulfill({ json: { version: 0, data: null } }));
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).signInGlobal("synthetic@example.test", "synthetic"));
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().connectivity.global;
+    })).toMatchObject({ availability: "available", authentication: "valid", cause: null });
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
+    await page.routeWebSocket("ws://workspace.test/gateway", (ws) => { gateway = ws; connections++; });
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).reconnect("workspace"));
+    await expect.poll(() => connections).toBe(1);
+    gateway!.close({ code: 4004, reason: "Synthetic expired session" });
+    await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tentar agora", exact: true })).toHaveCount(0);
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("offline"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
+    expect(connections).toBe(1);
+    await page.getByRole("button", { name: "Entrar novamente", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts")!));
+    expect(saved[0]).not.toHaveProperty("connection");
+    expect(saved[0]).not.toHaveProperty("connectivity");
+    await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
+    await expect(page.locator(".connection-recovery")).toHaveCount(0);
   } finally {
     await cleanup();
   }

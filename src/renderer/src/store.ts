@@ -14,6 +14,7 @@ import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../..
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
 import { useSyncExternalStore } from "react";
+import { observeNetwork, unknownEndpoint, type EndpointObservation, type NetworkObservation, type TransportStatus } from "../../shared/connectivity.ts";
 
 export interface Account {
   /** Local id: one account per (instance URL, user). */
@@ -34,7 +35,8 @@ export interface ChannelMessages {
 }
 
 export interface InstanceState {
-  status: "connecting" | "ready" | "offline" | "invalid";
+  status: TransportStatus;
+  connection: EndpointObservation;
   user: User | null;
   servers: ServerSummary[];
   serverStates: Record<string, ServerState>;
@@ -135,6 +137,8 @@ export interface AppState {
   recentMessages: Record<string, { own: boolean; at: number }>;
   accounts: Account[];
   instances: Record<string, InstanceState>;
+  /** Live observations, deliberately excluded from local persistence. */
+  connectivity: { network: NetworkObservation; global: EndpointObservation };
   view: View;
   modal: Modal | null;
   voice: VoiceUi | null;
@@ -231,6 +235,7 @@ function loadArray<T>(key: string): T[] {
 
 export const emptyInstance = (): InstanceState => ({
   status: "connecting",
+  connection: unknownEndpoint(),
   user: null,
   servers: [],
   serverStates: {},
@@ -268,6 +273,7 @@ let state: AppState = {
   recentMessages: {},
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
+  connectivity: { network: navigator.onLine ? { status: "unknown", observedAt: null } : observeNetwork(false, Date.now()), global: unknownEndpoint() },
   view: initialView(),
   modal: null,
   voice: null,

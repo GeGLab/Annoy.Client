@@ -84,7 +84,7 @@ export function App() {
   const theme = useStore(s => s.settings.theme);
   const accentColor = useStore(s => s.settings.accentColor);
   const surfaceColor = useStore(s => s.settings.surfaceColor);
-  const connectionBlocked = useConnectionBlocked();
+  const blockedAccountId = useConnectionBlocked();
   const inVoice = useStore(s => s.voice !== null);
   const barPosition = useStore((s) => s.settings.barPosition);
   const mainRef = useRef<HTMLElement>(null);
@@ -168,6 +168,7 @@ export function App() {
       <VoiceStatusBar />
       <SongDock />
       <main className="main" ref={mainRef}>
+        <div className="connection-content" inert={!!blockedAccountId}>
         {view.kind === "news" ? <News /> : view.kind === "service" ? (
           !service ? (
             <Home accountId={null} dmId={null} />
@@ -183,6 +184,8 @@ export function App() {
         ) : (
           <Home accountId={view.accountId} dmId={view.dmId} />
         )}
+        </div>
+        {!blocking && blockedAccountId && <ConnectionOverlay key={blockedAccountId} accountId={blockedAccountId} />}
       </main>
       </div>
       </div>
@@ -190,8 +193,6 @@ export function App() {
       <MandatoryUpdate />
       <ActionDialogHost />
       <DirectCallPanel />
-      {/* An offline Annoy server must not lock the browser services, which don't depend on it. */}
-      {!blocking && <ConnectionOverlay blocked={connectionBlocked && view.kind !== "service"} />}
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}

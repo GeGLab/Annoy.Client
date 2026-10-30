@@ -6,6 +6,7 @@ import type { AuthResponse, GlobalLogin, InstanceInfo } from "@distopic/protocol
 import * as kdf from "./global-crypto.ts";
 import { fetchInfo } from "./api.ts";
 import { getState, setState, type Account, type GlobalAccount } from "./store.ts";
+import { observeHttp, observeRequestFailure } from "../../shared/connectivity.ts";
 
 /** Development and tests can point elsewhere with localStorage "distopic.globalUrl". */
 export const GLOBAL_URL = (() => {
@@ -31,6 +32,7 @@ export class GlobalError extends Error {
 }
 
 async function request<T>(base: string, path: string, init: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
+  const observesGlobal = base === GLOBAL_URL && path.startsWith("/v1/");
   let res: Response;
   try {
     res = await fetch(base + path, {
@@ -39,9 +41,15 @@ async function request<T>(base: string, path: string, init: { method?: string; b
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       signal: AbortSignal.timeout(20_000),
     });
-  } catch {
+  } catch (error) {
+    if (observesGlobal) setState((s) => {
+      s.connectivity.global = observeRequestFailure(s.connectivity.global, error, Date.now(), s.connectivity.network);
+    });
     throw new GlobalError(0, "network", "Sem conexão. Tente de novo.");
   }
+  if (observesGlobal) setState((s) => {
+    s.connectivity.global = observeHttp(s.connectivity.global, res.status, Date.now(), !!init.token || path === "/v1/auth/login");
+  });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) throw new GlobalError(res.status, String(data.error ?? "error"), String(data.message ?? `HTTP ${res.status}`));
   return data as T;

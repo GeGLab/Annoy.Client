@@ -1,13 +1,12 @@
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";
+import type { TransportStatus } from "../../shared/connectivity.ts";
 
 const HEARTBEAT_MS = 30_000;
 const MAX_BACKOFF_MS = 30_000;
 /** After the server says it's restarting, retry every second for this long instead of backing off. */
 const RESTART_WINDOW_MS = 3 * 60_000;
-
-type Status = "connecting" | "ready" | "offline" | "invalid";
 
 /** One reconnecting gateway connection per account. */
 export class Gateway {
@@ -19,6 +18,7 @@ export class Gateway {
   private backoff = 1000;
   private restartUntil = 0;
   private closed = false;
+  private invalid = false;
   private voiceSeq = 0;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
@@ -26,12 +26,12 @@ export class Gateway {
     private readonly url: string,
     private readonly token: string,
     private readonly onEvent: (event: GatewayEvent) => void,
-    private readonly onStatus: (status: Status) => void,
+    private readonly onStatus: (status: TransportStatus) => void,
     private readonly onReachable?: () => void,
   ) {}
 
   connect(): void {
-    if (this.socket) return;
+    if (this.socket || this.invalid) return;
     this.closed = false;
     this.onStatus("connecting");
     const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
@@ -54,7 +54,10 @@ export class Gateway {
       this.failPending("Conexão perdida");
       if (this.socket === socket) this.socket = null;
       if (this.closed) return;
-      if (e.code === 4004) return this.onStatus("invalid");
+      if (e.code === 4004) {
+        this.invalid = true;
+        return this.onStatus("invalid");
+      }
       if (e.code === 4010) {
         // During an update the new version is already answering: reconnect at
         // once, spread over a moment so every client doesn't land together.
@@ -70,7 +73,7 @@ export class Gateway {
 
   /** Do not wait for a dead TCP connection to notice an offline network. */
   networkLost(): void {
-    if (this.closed) return;
+    if (this.closed || this.invalid) return;
     const socket = this.socket;
     this.socket = null;
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
@@ -93,7 +96,7 @@ export class Gateway {
 
   /** Skips the backoff wait: used when the network comes back or the user asks to retry. */
   reconnectNow(): void {
-    if (this.closed) return;
+    if (this.closed || this.invalid) return;
     if (this.socket) {
       // A socket without READY can be stuck in its handshake. An explicit retry
       // starts a fresh attempt; a confirmed live connection stays untouched.

@@ -14,6 +14,7 @@ import { screenProfile } from "./lib/screen-profile.ts";
 import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
 import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
+import { observeNetwork, observeReachable, observeTransport } from "../../shared/connectivity.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -80,8 +81,14 @@ export function reconnect(accountId?: string): void {
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
 }
 
-window.addEventListener("online", () => reconnect());
-window.addEventListener("offline", () => { for (const entry of live.values()) entry.gateway.networkLost(); });
+window.addEventListener("online", () => {
+  setState((s) => { s.connectivity.network = observeNetwork(true, Date.now()); });
+  reconnect();
+});
+window.addEventListener("offline", () => {
+  setState((s) => { s.connectivity.network = observeNetwork(false, Date.now()); });
+  for (const entry of live.values()) entry.gateway.networkLost();
+});
 
 // Keep the cache in step with the server list, whatever changed it.
 const lastServers = new Map<string, unknown>();
@@ -105,13 +112,18 @@ export function connectAccount(account: Account): void {
       if (status === "offline" || status === "invalid") disconnectDirectCall(account.id);
       setState((s) => {
         const inst = s.instances[account.id];
-        if (inst) inst.status = status;
+        if (inst) {
+          inst.status = status;
+          inst.connection = observeTransport(inst.connection, status, Date.now(), s.connectivity.network);
+        }
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
       });
     },
     () => {
       setState((s) => {
+        const inst = s.instances[account.id];
+        if (inst) inst.connection = observeReachable(inst.connection, Date.now());
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) delete saved.offlineSince;
       });

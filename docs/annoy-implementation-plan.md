@@ -73,7 +73,7 @@ Não modificar código funcional neste marco.
 
 ### M1 — conectividade e servidores (R01–R04)
 
-1. **M1.1 — estado e isolamento:** extrair tipos/transições testáveis de
+1. **M1.1 — estado e isolamento (concluído):** extrair tipos/transições testáveis de
    conectividade; adicionar dimensões rede/Global/instâncias ao store. Substituir
    a decisão de bloqueio baseada em qualquer conta desconectada por decisão
    restrita à área afetada. Primeiro teste: A cai, B continua disponível.
@@ -394,10 +394,11 @@ marcos futuros; não impedem implementação local/documentação.
 
 ## 8. Próxima tarefa executável
 
-**M1.1 — isolar falhas por instância.** Ler `store.ts`, `client.ts`, `gateway.ts`,
-`App.tsx`, `ConnectionOverlay.tsx` e testes de reconexão existentes, incluindo
-seus diffs locais. Criar estado/transições de conectividade com teste em que
-conta A fica offline e conta B continua utilizável. Adaptar o bloqueio à área
-afetada, preservar autenticação de recuperação e manter serviços independentes.
-Executar typecheck e testes direcionados; registrar resultados no progresso
-antes de iniciar timeouts e a nova listagem.
+**M1.2 — requests e ciclo de vida.** M1.1 foi concluído e validado no cliente;
+consultar as evidências no progresso. Ler `api.ts`, os coordenadores de requests
+em `client.ts`/`global.ts` e os fluxos necessários à tarefa, incluindo seus diffs.
+Adicionar timeout/cancelamento e classificação nas APIs de instância, deduplicar
+consultas e impedir que respostas obsoletas alterem outra conta/canal. Liberar
+timers, listeners e operações; não repetir mutações automaticamente. Manter os
+testes de isolamento por conta, executar typecheck e testes direcionados, e
+registrar resultados antes de iniciar o scheduler de M1.3 ou a listagem de M1.4.

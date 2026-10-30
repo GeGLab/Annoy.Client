@@ -21,7 +21,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | Marco | Estado | Resultado |
 | --- | --- | --- |
 | M0 — análise/documentação | concluído | Três documentos criados e validados, com R01–R20, decisões, arquitetura, testes e próxima tarefa. |
-| M1 — conectividade | pendente | Próxima implementação funcional, começando pelo isolamento de instâncias. |
+| M1 — conectividade | em andamento | M1.1 concluído: estado observado por camada e recuperação restrita à instância selecionada. Próximo: M1.2. |
 | M2 — navegação/canais | pendente | Depende dos estados e recuperação de M1. |
 | M3 — mensagens/leitura/pins | pendente | Requer contratos e migrações aditivas no servidor. |
 | M4 — social/perfis | pendente | Requer autorização por audiência antes da exposição de dados. |
@@ -34,9 +34,9 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | ID | Requisito | Estado | Evidência atual / lacuna principal | Marco |
 | --- | --- | --- | --- | --- |
 | R01 | Listagem e disponibilidade | pendente | Navegação/cache existentes; falta listagem completa com diagnóstico. | M1 |
-| R02 | Reconexão e retorno | pendente | Gateway/retry/voz existem; falta recuperação isolada com prazo e preservação. | M1 |
-| R03 | Feedback assíncrono | pendente | `act`, toast e loading parcial; revisar timeouts, erros silenciados e cancelamento. | M1–M7 |
-| R04 | Conectividade global | pendente | Estado por conta e eventos online/offline; falta separação rede/Global/instâncias. | M1 |
+| R02 | Reconexão e retorno | em andamento | M1.1 isola a recuperação e mantém autenticação acessível; prazo, retorno à listagem e preservação completa pendentes em M1.3–M1.5. | M1 |
+| R03 | Feedback assíncrono | em andamento | Inventário inicial de gateway/Global registrado em M1.1; timeout, cancelamento e demais fluxos ainda pendentes. | M1–M7 |
+| R04 | Conectividade global | em andamento | Dimensões rede/Global/instâncias, diagnóstico observado e isolamento testados; scheduler, backoff com jitter e diagnóstico completo pendentes. | M1 |
 | R05 | Seis layouts de canal | pendente | Seis modalidades existentes; padronizar estados e validar escala/permissões. | M2 |
 | R06 | Nova Aba | pendente | Funcionalidades existentes; reorganizar hierarquia e destino por conta. | M2 |
 | R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
@@ -98,6 +98,67 @@ Validação documental de M0, executada em 30/10/2026:
 - Entrega limitada aos três documentos; código funcional, dependências,
   configuração de produção e repositório servidor não foram alterados por M0.
 
+## Entrega M1.1 — estado e isolamento (30/10/2026)
+
+Estado: **concluído**. M1 permanece **em andamento**; esta execução entrega
+somente o subitem recomendado pelos documentos, sem iniciar M1.2–M1.5.
+
+- `src/shared/connectivity.ts`: tipos e transições puros para observação de rede,
+  disponibilidade, autenticação, causa e instante. `connecting/ready/offline/invalid`
+  permanecem compatíveis; conectar novamente preserva a última evidência até um
+  resultado. `nextRetryAt` fica nulo até a implementação do scheduler em M1.3.
+- Store: rede e serviço Global independentes; cada instância tem seu diagnóstico.
+  `navigator.onLine=true` e o evento online conservam rede desconhecida: não
+  comprovam internet. Offline informado pelo SO fica explícito. O cache não
+  comprova disponibilidade e falhas em hosts não mudam o diagnóstico da rede.
+- Gateway/cliente: abertura do socket observa alcance; READY confirma autenticação;
+  4004 exige autenticação e não retoma tentativas em eventos offline/online ou
+  retry genérico. Adicionar credenciais recria o gateway pelo fluxo existente.
+- Global: somente chamadas existentes `/v1/` ao destino configurado alimentam
+  seu estado. Rede, timeout, 401, 403 e 5xx são distinguíveis; login bem-sucedido
+  limpa falhas anteriores. Nenhum probe ou endpoint novo foi criado.
+- UI: recuperação dentro da área da conta selecionada, sem modal global. Barra
+  de navegação, Nova Aba, notícias, outras comunidades e serviços continuam
+  acessíveis. Retry atua só naquela conta. Sessão expirada tem ação de entrada;
+  autenticação e confirmação de desconexão usam dialogs compartilhados.
+- A área indisponível permanece montada e fica `inert`; foco sai dela para a
+  recuperação quando necessário. A transição de volta não captura foco de outra
+  área. A tolerância de dois segundos evita flashes e reinicia ao trocar de conta.
+- Persistência/backend: não há novo dado durável neste subitem. Diagnósticos
+  são observações da sessão e não são serializados. Contas, preferências, vista
+  e cache mantêm as chaves existentes. Servidor/protocolo não exigiram mudanças.
+  Rascunhos após desmontagem/READY ou reinício continuam no escopo de M1.5.
+
+### Inventário assíncrono inicial de R03
+
+| Operação | Estado/feedback nesta entrega | Próxima revisão |
+| --- | --- | --- |
+| Conexão/READY/queda por conta | Transporte e diagnóstico independentes; recuperação local após tolerância; navegação disponível. | M1.2/M1.3: ciclo de vida, prazo, causa detalhada, tentativa e próximo retry. |
+| Sessão recusada pelo gateway | Sessão expirada com entrada explícita; sem retry automático de credenciais inválidas. | M1.2/M1.5: respostas obsoletas e revisão completa dos formulários. |
+| Requests já existentes da Conta Global | Resultado observado, distinção de rede/timeout/HTTP; mantém conexões das instâncias. | M1.2: cancelamento, concorrência e deduplicação; não altera o contrato central. |
+| Retry e desconexão manual | Retry restrito à conta; desconexão mantém confirmação existente. | M1.3/M1.5: scheduler e preservação completa do trabalho. |
+| Uploads, mensagens, configurações e demais canais | Comportamento anterior preservado; nenhuma conclusão de auditoria integral. | M1.5 e marcos dos respectivos domínios. |
+
+### Validações de M1.1
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Aprovado, cliente e protocolo. |
+| `npm run build` | Aprovado; aviso de bundles acima de 500 kB, sem falha. |
+| `npm run test:connectivity` | 8 testes aprovados: transições, classificação, desconhecido e seleção por área. |
+| `npm run test:servers` | 5 testes aprovados. |
+| `npm run test:voice` | 6 testes aprovados. |
+| `npm run test:activity` | 18 testes aprovados; suíte específica Linux não exercitada neste Windows. |
+| `npx playwright test tests/desktop.spec.ts tests/workspace.spec.ts` | 5 cenários aprovados em Electron/Windows: navegação/temas, voz/painéis/recuperação, dois gateways, Global/autenticação e plataforma de bots. |
+| Cenário Global após complemento de recuperação bem-sucedida | Reexecutado e aprovado; cobre falha seguida de login real no cliente com resposta de teste e criptografia local. |
+| Verificação visual | Tema escuro 1320×840 e claro 940×620: recuperação legível, controles contidos e navegação acessível. Capturas `.impeccable/review/connectivity-scoped-*.png`. |
+| `git diff --check` | Aprovado; sem erros de whitespace. |
+
+Os cenários usam sockets/fetch controlados e perfis temporários; não comprovam
+disponibilidade de instâncias publicadas. Não houve teste Linux, produção,
+pacotes distribuídos ou leitor de tela. A suíte completa `experience.spec.ts`
+não foi executada; lint continua sem script configurado. Nenhum teste falhou.
+
 ## Dependências e riscos em acompanhamento
 
 - Backend Global não localizado: observar contratos atuais; nenhuma mudança
@@ -112,9 +173,9 @@ Validação documental de M0, executada em 30/10/2026:
 
 ## Próxima tarefa recomendada
 
-M0 concluído. Executar **M1.1 — estado de conectividade e isolamento de
-falhas por instância**, conforme o plano. Primeiro cenário de aceitação:
-conexão A indisponível, conexão B saudável e utilizável; nenhuma modal global
-bloqueia B. Preservar recuperação de autenticação e acesso aos serviços independentes.
+M1.1 concluído. Executar **M1.2 — requests e ciclo de vida**, conforme o plano:
+timeouts e cancelamento por operação, classificação nas APIs de instância,
+deduplicação de consultas e proteção contra respostas de outra conta/canal ou
+geração obsoleta. Manter isolamento de M1.1 e liberar recursos corretamente.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.
