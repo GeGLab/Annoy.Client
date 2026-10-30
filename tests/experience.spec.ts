@@ -361,13 +361,14 @@ test("old server connections have a context menu and require a single named conf
     await page.evaluate(async () => {
       const { setState, getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       const old = structuredClone(getState().instances.test);
-      old.status = "invalid";
+      old.status = "offline";
       old.servers[0].name = "Servidor antigo";
       setState((s: any) => {
-        s.accounts.push({ ...s.accounts[0], id: "old", url: "https://old-server.test", instanceName: "Conexão antiga" });
+        s.accounts.push({ ...s.accounts[0], id: "old", url: "https://old-server.test", instanceName: "Conexão antiga", offlineSince: Date.now() - 7 * 24 * 60 * 60_000 });
         s.instances.old = old;
       });
     });
+    await page.getByRole("button", { name: "Continuar mesmo assim", exact: true }).click();
     const oldTab = page.getByRole("button", { name: "Servidor antigo · Conexão antiga", exact: true });
     const currentTab = page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true });
     await oldTab.click({ button: "right" });
@@ -430,12 +431,61 @@ test("server context menu scopes unread and notifications and respects administr
     await expect(tab).toBeFocused();
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s: any) => { s.instances.test.user.id = "other-user"; s.instances.test.serverStates.server.permissions = 0; });
+      setState((s: any) => { s.instances.test.user.id = "other-user"; s.accounts.find((a: any) => a.id === "test").userId = "other-user"; s.instances.test.serverStates.server.permissions = 0; });
     });
     await tab.click({ button: "right" });
     for (const name of ["Convidar pessoas", "Configurações do servidor", "Criar canal", "Criar categoria"])
       await expect(menu.getByRole("menuitem", { name, exact: true })).toHaveCount(0);
     await expect(menu.getByRole("menuitem", { name: "Sair do servidor…", exact: true })).toBeVisible();
+  } finally { await close(); }
+});
+
+test("owners with other members must transfer ownership before leaving or removing a server", async () => {
+  const { page, close } = await launch();
+  let transfers = 0;
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test, state = inst.serverStates.server;
+        inst.instance = { ...inst.instance, serverOwnership: true };
+        state.members.push({ ...state.members[0], user: { id: "next-owner", username: "next-owner", displayName: "Outro membro", avatarUrl: null }, presence: "offline" });
+      });
+    });
+    const data = await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return structuredClone(getState().instances.test.serverStates.server);
+    });
+    await page.route("http://experience.test/api/servers/server", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }));
+    await page.route("http://experience.test/api/servers/server/ownership", async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ userId: "next-owner" });
+      transfers++;
+      data.server.ownerId = "next-owner";
+      data.permissions = 0;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify(data.server) });
+    });
+    const tab = page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true });
+    const menu = page.getByRole("menu", { name: "Opções de Comunidade de teste" });
+    await tab.click({ button: "right" });
+    await expect(menu.getByRole("menuitem", { name: "Remover da barra…", exact: true })).toBeDisabled();
+    await expect(menu.getByRole("menuitem", { name: "Sair do servidor…", exact: true })).toHaveCount(0);
+    await menu.getByRole("menuitem", { name: "Transferir propriedade…", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Comunidade de teste · Configurações", exact: true });
+    await expect(settings.getByRole("button", { name: "Excluir servidor", exact: true })).toBeDisabled();
+    await settings.getByRole("combobox", { name: "Novo dono do servidor" }).click();
+    await page.getByRole("option", { name: "Outro membro", exact: true }).click();
+    await settings.getByRole("button", { name: "Transferir propriedade", exact: true }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cancelar", exact: true }).click();
+    expect(transfers).toBe(0);
+    await settings.getByRole("button", { name: "Transferir propriedade", exact: true }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Transferir propriedade", exact: true }).click();
+    await expect(settings).toHaveCount(0);
+    expect(transfers).toBe(1);
+    await tab.click({ button: "right" });
+    await expect(menu.getByRole("menuitem", { name: "Sair do servidor…", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Remover da barra…", exact: true })).toBeEnabled();
+    await expect(menu.getByRole("menuitem", { name: "Transferir propriedade…", exact: true })).toHaveCount(0);
   } finally { await close(); }
 });
 

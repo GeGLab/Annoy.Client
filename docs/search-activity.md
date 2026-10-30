@@ -116,6 +116,22 @@ a conexão. A remoção desconecta a conta deste cliente e retira todas as abas
 daquela conexão. Não exclui o servidor, a conta no servidor ou as mensagens.
 É possível adicionar a conexão novamente depois.
 
+O dono não pode remover uma conexão com servidores que ainda tenham outros
+membros. Pode remover quando for o único membro, depois de transferir a propriedade,
+ou após pelo menos sete dias consecutivos sem conseguir conectar à instância.
+Membros offline também contam. O início da falha é guardado no cliente e não
+reinicia a cada tentativa ou abertura do app; uma resposta do servidor limpa
+essa contagem. Sessão expirada e ausência de internet local não iniciam uma
+contagem de servidor offline. Sem histórico anterior, a contagem começa na
+primeira falha observada. A regra verifica todos os servidores da conexão.
+
+**Configurações do servidor → Visão geral** permite transferir a propriedade a
+outro membro com conta ativa. O cliente pede uma única confirmação. Depois da
+transferência, o antigo dono pode sair normalmente. A instância precisa estar
+atualizada para oferecer a transferência. Excluir os dados de um servidor exige
+que o dono esteja sozinho, validado também pela API. A exceção de sete dias vale
+apenas para esquecer a conexão local; não apaga dados em um servidor inacessível.
+
 ## Ativação e verificação
 
 Atualize as dependências e reinicie **cliente e servidor**. A primeira inicialização

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { has, Permission, type ServerSummary } from "@distopic/protocol";
-import { apiFor, markServerRead, reconnect, removeAccount } from "../client.ts";
+import { apiFor, canRemoveServerConnection, markServerRead, reconnect, removeServerConnection } from "../client.ts";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 import { toast, useStore, type Account, type InstanceState } from "../store.ts";
 import { act, Icon, openModal } from "./ui.tsx";
@@ -13,7 +13,8 @@ export function ServerTabMenu({ account, server, inst, children }: {
   const muted = useStore((s) => s.settings.mutedServers.includes(notificationKey(account.id, server.id)));
   const state = inst?.serverStates[server.id];
   const ready = inst?.status === "ready";
-  const owner = server.ownerId === inst?.user?.id;
+  const owner = server.ownerId === account.userId;
+  const removable = canRemoveServerConnection(account.id);
   const perms = state?.permissions ?? 0;
   const settings = ready && (owner || [Permission.MANAGE_SERVER, Permission.MANAGE_ROLES, Permission.BAN_MEMBERS].some((p) => has(perms, p)));
   const copy = async (value: string, message: string) => {
@@ -31,7 +32,7 @@ export function ServerTabMenu({ account, server, inst, children }: {
     if (await confirmAction(
       `Deseja mesmo remover ${server.name} da barra lateral? Você poderá adicioná-lo novamente quando quiser.`,
       { title: `Remover "${server.name}"`, confirmLabel: "Remover da barra" },
-    )) removeAccount(account.id);
+    )) removeServerConnection(account.id);
   };
   return <ContextMenu>
     <ContextMenuTrigger>{children}</ContextMenuTrigger>
@@ -42,6 +43,7 @@ export function ServerTabMenu({ account, server, inst, children }: {
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => toggleMessageMute("server", account.id, server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? "Ativar notificações do servidor" : "Silenciar servidor"}</ContextMenuItem>
       {settings && <ContextMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id })}><Icon name="gear" />Configurações do servidor</ContextMenuItem>}
+      {ready && owner && <ContextMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id })}><Icon name="crown" />Transferir propriedade…</ContextMenuItem>}
       {ready && has(perms, Permission.MANAGE_CHANNELS) && <>
         <ContextMenuItem onSelect={() => openModal({ kind: "createChannel", accountId: account.id, serverId: server.id, parentId: null, type: "text" })}><Icon name="hash" />Criar canal</ContextMenuItem>
         <ContextMenuItem onSelect={() => openModal({ kind: "createChannel", accountId: account.id, serverId: server.id, parentId: null, type: "category" })}><Icon name="plus" />Criar categoria</ContextMenuItem>
@@ -52,7 +54,8 @@ export function ServerTabMenu({ account, server, inst, children }: {
       {!ready && <ContextMenuItem onSelect={() => inst?.status === "invalid" ? openModal({ kind: "addAccount", rememberedId: account.id }) : reconnect(account.id)}><Icon name="refresh" />{inst?.status === "invalid" ? "Entrar novamente" : "Tentar reconectar"}</ContextMenuItem>}
       <ContextMenuSeparator />
       {ready && !owner && <ContextMenuItem destructive onSelect={() => void leave()}><Icon name="logout" />Sair do servidor…</ContextMenuItem>}
-      <ContextMenuItem destructive onSelect={() => void remove()}><Icon name="trash" />Remover da barra…</ContextMenuItem>
+      <ContextMenuItem destructive disabled={!removable} onSelect={() => void remove()}><Icon name="trash" />Remover da barra…</ContextMenuItem>
+      {!removable && <ContextMenuLabel>Transfira a propriedade ou esteja sozinho. Offline: aguarde 7 dias.</ContextMenuLabel>}
     </ContextMenuContent>
   </ContextMenu>;
 }

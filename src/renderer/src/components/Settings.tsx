@@ -22,7 +22,7 @@ import {
 } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
-import { apiFor, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
+import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
 import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
@@ -188,6 +188,9 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
   const [baselineName, setBaselineName] = useState(state?.server.name ?? "");
+  const [nextOwner, setNextOwner] = useState("");
+  const [transferring, setTransferring] = useState(false);
+  const ownershipSupported = useStore((s) => s.instances[accountId]?.instance?.serverOwnership === true);
   const saveName = async () => {
     if (!state || !name.trim()) return false;
     const ok = await act(apiFor(accountId).patch(`/servers/${serverId}`, { name }), "Servidor renomeado");
@@ -205,6 +208,24 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const canServer = has(state.permissions, Permission.MANAGE_SERVER);
   const api = apiFor(accountId);
   const role = state.roles.find((r) => r.id === roleId) ?? null;
+  const alone = state.members.length === 1 && state.members[0]?.user.id === me;
+  const eligibleOwners = state.members.filter((m) => m.user.id !== me && !/^(dc|deleted)\./i.test(m.user.username));
+  const transfer = async () => {
+    const target = eligibleOwners.find((m) => m.user.id === nextOwner);
+    if (!target || !ownershipSupported || transferring) return;
+    if (!await confirmAction(
+      `Transferir ${state.server.name} para ${displayNameOf(target)}? Você deixará de ser o dono do servidor.`,
+      { title: `Transferir "${state.server.name}"`, confirmLabel: "Transferir propriedade" },
+    )) return;
+    setTransferring(true);
+    try {
+      await api.post(`/servers/${serverId}/ownership`, { userId: target.user.id });
+      await ensureServer(accountId, serverId, true);
+      toast("Propriedade transferida.");
+      closeModal();
+    } catch (error) { toast((error as Error).message); }
+    finally { setTransferring(false); }
+  };
 
   return (
     <Modal title={`${state.server.name} · Configurações`} wide>
@@ -247,17 +268,34 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
           {isOwner && (
             <div className="danger-zone">
               <strong>Zona de perigo</strong>
+              {state.members.length > 1 && <>
+                <Field label="Novo dono do servidor">
+                  <Select aria-label="Novo dono do servidor" value={nextOwner} disabled={!ownershipSupported || transferring} onChange={(event) => setNextOwner(event.target.value)}>
+                    <option value="">Escolha um membro</option>
+                    {eligibleOwners.map((m) => <option key={m.user.id} value={m.user.id}>{displayNameOf(m)}</option>)}
+                  </Select>
+                </Field>
+                <button className="btn btn-ghost" disabled={!ownershipSupported || !nextOwner || transferring} onClick={() => void transfer()}>
+                  {transferring ? "Transferindo…" : "Transferir propriedade"}
+                </button>
+                <p className="muted small">{ownershipSupported ? "Para sair ou remover este servidor, transfira a propriedade para outro membro." : "Atualize a instância para disponibilizar a transferência de propriedade."}</p>
+              </>}
               <p className="muted small">Excluir o servidor apaga canais, mensagens e anexos para todos.</p>
               <button
                 className="btn btn-danger"
+                disabled={!alone || transferring}
                 onClick={async () => {
-                  if ((await promptText(`Digite o nome do servidor para confirmar: ${state.server.name}`)) === state.server.name) {
+                  if (alone && await confirmAction(
+                    `Deseja mesmo excluir ${state.server.name}? Os canais, as mensagens e os anexos serão apagados.`,
+                    { title: `Excluir "${state.server.name}"`, confirmLabel: "Excluir servidor" },
+                  )) {
                     void act(api.del(`/servers/${serverId}`)).then((ok) => ok && closeModal());
                   }
                 }}
               >
                 Excluir servidor
               </button>
+              {!alone && <p className="muted small">O dono só pode excluir o servidor quando for o único membro.</p>}
             </div>
           )}
         </div>

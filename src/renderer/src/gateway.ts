@@ -26,6 +26,7 @@ export class Gateway {
     private readonly token: string,
     private readonly onEvent: (event: GatewayEvent) => void,
     private readonly onStatus: (status: Status) => void,
+    private readonly onReachable?: () => void,
   ) {}
 
   connect(): void {
@@ -35,7 +36,10 @@ export class Gateway {
     const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
     this.socket = socket;
     this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
-    socket.onopen = () => this.send({ op: "identify", token: this.token, deviceId, features: ["developmentActivity", "idlePresence", "directCalls"] });
+    socket.onopen = () => {
+      this.onReachable?.();
+      this.send({ op: "identify", token: this.token, deviceId, features: ["developmentActivity", "idlePresence", "directCalls"] });
+    };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
       try { this.receive(JSON.parse(String(e.data)) as GatewayEvent); }

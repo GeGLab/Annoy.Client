@@ -11,6 +11,7 @@ import { playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/
 import { isMessageMuted, notificationKey } from "./lib/notification-preferences.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
+import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -100,8 +101,17 @@ export function connectAccount(account: Account): void {
     (event) => onEvent(account.id, event),
     (status) => {
       if (status === "offline" || status === "invalid") disconnectDirectCall(account.id);
-      patchInstance(account.id, (inst) => {
-        inst.status = status;
+      setState((s) => {
+        const inst = s.instances[account.id];
+        if (inst) inst.status = status;
+        const saved = s.accounts.find((a) => a.id === account.id);
+        if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
+      });
+    },
+    () => {
+      setState((s) => {
+        const saved = s.accounts.find((a) => a.id === account.id);
+        if (saved) delete saved.offlineSince;
       });
     },
   );
@@ -156,6 +166,24 @@ export function removeAccount(accountId: string): void {
     delete s.instances[accountId];
     if ("accountId" in s.view && s.view.accountId === accountId) s.view = { kind: "home", accountId: null, dmId: null };
   });
+}
+
+/** Removing a saved connection affects every tab on it, so check every owned community. */
+export function canRemoveServerConnection(accountId: string): boolean {
+  const s = getState(), account = s.accounts.find((a) => a.id === accountId), inst = s.instances[accountId];
+  if (!account || !inst) return false;
+  return inst.servers.every((server) => canRemoveServer({
+    ownerId: server.ownerId, userId: account.userId, status: inst.status,
+    memberIds: inst.serverStates[server.id]?.members.map((m) => m.user.id), offlineSince: account.offlineSince,
+  }));
+}
+
+export function removeServerConnection(accountId: string): void {
+  if (!canRemoveServerConnection(accountId)) {
+    toast("Transfira a propriedade ou esteja sozinho para remover. Se o servidor estiver offline, aguarde 7 dias.");
+    return;
+  }
+  removeAccount(accountId);
 }
 
 export function connectAll(): void {

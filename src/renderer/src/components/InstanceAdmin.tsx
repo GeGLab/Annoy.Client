@@ -241,6 +241,7 @@ function UsersTab({ accountId }: { accountId: string }) {
 
 function ServersTab({ accountId }: { accountId: string }) {
   const [servers, setServers] = useState<AdminServer[] | null>(null);
+  const me = useStore((s) => s.accounts.find((a) => a.id === accountId)?.userId);
   const api = apiFor(accountId);
   const load = () => void api.get<AdminServer[]>("/admin/servers").then(setServers, (e: Error) => toast(e.message));
   useEffect(load, [accountId]);
@@ -258,9 +259,13 @@ function ServersTab({ accountId }: { accountId: string }) {
           </span>
           <button
             className="icon-btn danger"
-            title="Excluir servidor"
+            title={s.server.ownerId === me && s.memberCount > 1 ? "Transfira a propriedade antes de excluir um servidor com outros membros." : "Excluir servidor"}
+            disabled={s.server.ownerId === me && s.memberCount > 1}
             onClick={async () => {
-              if (await promptText(`Digite o nome do servidor para excluir: ${s.server.name}`) === s.server.name) void act(api.del(`/admin/servers/${s.server.id}`), "Servidor excluído").then(load);
+              if (await confirmAction(
+                `Deseja mesmo excluir ${s.server.name}? Os canais, as mensagens e os anexos serão apagados.`,
+                { title: `Excluir "${s.server.name}"`, confirmLabel: "Excluir servidor" },
+              )) void act(api.del(`/admin/servers/${s.server.id}`), "Servidor excluído").then(load);
             }}
           >
             <Icon name="trash" size={16} />

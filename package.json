@@ -18,6 +18,7 @@
     "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
     "test:activity": "node --experimental-strip-types --test scripts/tests/*-activity.test.mjs",
+    "test:servers": "node --experimental-strip-types --test scripts/tests/server-removal.test.mjs",
     "test:desktop": "npm run build && playwright test",
     "brand:icons": "node scripts/generate-icons.mjs",
     "electron:install": "node scripts/ensure-electron.mjs",

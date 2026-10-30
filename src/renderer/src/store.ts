@@ -22,6 +22,8 @@ export interface Account {
   token: string;
   userId: string;
   instanceName: string;
+  /** First observed connection failure; cleared as soon as the server responds. */
+  offlineSince?: number;
 }
 export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
 
