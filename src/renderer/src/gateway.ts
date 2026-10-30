@@ -55,7 +55,14 @@ export class Gateway {
       if (this.socket === socket) this.socket = null;
       if (this.closed) return;
       if (e.code === 4004) return this.onStatus("invalid");
-      if (e.code === 4010) this.restartUntil = Date.now() + RESTART_WINDOW_MS;
+      if (e.code === 4010) {
+        // During an update the new version is already answering: reconnect at
+        // once, spread over a moment so every client doesn't land together.
+        this.restartUntil = Date.now() + RESTART_WINDOW_MS;
+        this.onStatus("connecting");
+        this.retry = setTimeout(() => this.connect(), Math.random() * 300);
+        return;
+      }
       this.onStatus("offline");
       this.retry = setTimeout(() => this.connect(), this.nextDelay());
     };

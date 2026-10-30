@@ -159,7 +159,7 @@ function UpdatesTab({ accountId }: { accountId: string }) {
         <>
           <div className="form-actions">
             <button className="btn" disabled={waitingFrom !== null || status.updating} onClick={apply}>
-              {waitingFrom !== null || status.updating ? "Atualizando… o servidor reinicia sozinho" : "Atualizar agora"}
+              {waitingFrom !== null || status.updating ? "Atualizando… ninguém é desconectado" : "Atualizar agora"}
             </button>
           </div>
           <label className="check">
@@ -168,7 +168,7 @@ function UpdatesTab({ accountId }: { accountId: string }) {
           </label>
           <p className="muted small">
             {status.auto
-              ? `O servidor procura versão nova a cada ${status.intervalHours ?? 6} h e reinicia sozinho; quem estiver em chamada volta em segundos.`
+              ? `O servidor procura versão nova a cada ${status.intervalHours ?? 6} h e atualiza sem derrubar ninguém.`
               : "Desligado: o servidor só atualiza quando você pedir aqui."}
             {status.channel && status.channel !== "latest" && ` Segue só a versão ${status.channel} (ANNOY_VERSION).`}
           </p>

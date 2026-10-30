@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
 import { Button } from "./ui/button.tsx";
 import { Icon } from "./ui.tsx";
 
+const BLOCK_AFTER_MS = 2000;
+
 export function useConnectionBlocked() {
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
@@ -22,7 +24,15 @@ export function useConnectionBlocked() {
   }, []);
   // An expired session is not a connection that will come back; its tab offers to sign in again instead.
   const reconnecting = accounts.filter((a) => instances[a.id]?.status !== "ready" && instances[a.id]?.status !== "invalid");
-  return reconnecting.length > 0 || (!online && accounts.length > 0);
+  const down = reconnecting.length > 0 || (!online && accounts.length > 0);
+  // A server update reconnects in milliseconds; only block if it takes longer.
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => {
+    if (!down) return setBlocked(false);
+    const timer = setTimeout(() => setBlocked(true), BLOCK_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [down]);
+  return down && blocked;
 }
 
 /** An application-level focus trap also blocks open portals and native Discord. */
