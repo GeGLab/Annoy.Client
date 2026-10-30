@@ -32,6 +32,7 @@ export interface ChannelMessages {
   items: Message[];
   hasMore: boolean;
   loading: boolean;
+  error?: string | null;
 }
 
 export interface InstanceState {

@@ -73,6 +73,8 @@
 .connection-dialog h2 { font-size: 22px; letter-spacing: -.025em; }
 .connection-dialog > p { color: var(--text-muted); max-width: 380px; margin: 0; font-size: 13px; line-height: 1.7; }
 .connection-account strong { overflow-wrap: anywhere; }
+.history-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 24px; color: var(--text-soft); }
+.history-error p { margin: 0; }
 .reconnect-symbol { position: relative; display: grid; place-items: center; width: 110px; height: 110px; margin-bottom: 2px; }
 .reconnect-symbol > .reconnect-wave { position: absolute; inset: 0; border: 1px solid var(--accent-line); border-radius: 50%; animation: reconnect-wave 2.4s var(--ease) infinite; }
 .reconnect-symbol > .reconnect-wave:nth-child(2) { animation-delay: 1.2s; }

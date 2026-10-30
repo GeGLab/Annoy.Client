@@ -28,6 +28,8 @@ import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
+import { useRequestOwner } from "../lib/use-request-owner.ts";
+import { isCancellation } from "../../../shared/requests.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -382,6 +384,7 @@ function Composer({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const requests = useRequestOwner(JSON.stringify([accountId, channelId]));
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const [query, setQuery] = useState<string | null>(null);
@@ -443,14 +446,16 @@ function Composer({
     content = content.trim();
     if ((!content && files.length === 0) || sending) return;
     setSending(true);
+    const signal = requests.signal;
     try {
-      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null);
+      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null, signal);
+      signal.throwIfAborted();
       setText("");
       setFiles([]);
       setPicked([]);
       clearReply();
     } catch (err) {
-      toast((err as Error).message);
+      if (!isCancellation(err)) toast((err as Error).message);
     } finally {
       setSending(false);
     }
@@ -637,7 +642,7 @@ export function Chat(props: ChatProps) {
     if (el.scrollTop < lastTop.current - 1) pinned.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) pinned.current = true;
     lastTop.current = el.scrollTop;
-    if (el.scrollTop < 200 && entry?.hasMore && !entry.loading) {
+    if (el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
     }
@@ -688,6 +693,10 @@ export function Chat(props: ChatProps) {
                 Carregando mensagens anteriores…
               </div>
             ))}
+          {entry?.error && <div className="history-error" role="alert">
+            <p>{entry.error}</p>
+            <button className="btn btn-ghost" onClick={() => void loadMessages(accountId, channelId, items.length > 0)}>Tentar carregar mensagens novamente</button>
+          </div>}
           {items.map((m, i) => {
             const prev = items[i - 1];
             const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();

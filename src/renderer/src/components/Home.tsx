@@ -274,7 +274,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
       </ResizablePanel>
       {dm && other && me ? (
         <div className="dm-conversation"><Chat
-          key={dm.id}
+          key={JSON.stringify([accountId, dm.id])}
           accountId={accountId}
           channelId={dm.id}
           title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}

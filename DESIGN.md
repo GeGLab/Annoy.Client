@@ -361,6 +361,8 @@ Renderer confirmations and short text requests use the queued asynchronous `Acti
 
 Use Radix tooltips for explanatory labels. Toasts report request outcomes. Loading states reuse the geometry of the replaced content: shared chat skeletons have avatar/name/line placeholders and an accessible loading status. Do not display fabricated messages while loading or before connection.
 
+Message-history failures appear inline with an explicit retry and keep existing messages visible. A failed read must not look like an empty conversation or restart automatically on scroll. Pending writes retain the draft after a failure; timeout feedback asks the user to verify the result before retrying. Closing an authentication/search surface or changing account/channel cancels its owned work and suppresses stale navigation and cancellation toasts.
+
 ### In-app Image Viewer
 
 Open attachment images in the lazy-loaded Radix dialog. The viewer presents the filename and file details above a deep-toned canvas, with count, previous/next controls, zoom and original link below it. Initially fit the source inside the viewport with (24px) clearance per edge, capped at natural size. Zoom runs from (1× to 4×) in (.5×) button/keyboard increments relative to that fit; pointer-wheel zoom changes smoothly around the pointer, prevents page scrolling and respects the same bounds; oversized media scrolls inside the canvas. Image changes reset zoom and loading state. Loading has a status indicator; failure has an alert and retry action.

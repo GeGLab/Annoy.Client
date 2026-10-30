@@ -77,7 +77,7 @@ Não modificar código funcional neste marco.
    conectividade; adicionar dimensões rede/Global/instâncias ao store. Substituir
    a decisão de bloqueio baseada em qualquer conta desconectada por decisão
    restrita à área afetada. Primeiro teste: A cai, B continua disponível.
-2. **M1.2 — requests e ciclo de vida:** timeout, cancelamento, classificação
+2. **M1.2 — requests e ciclo de vida (concluído):** timeout, cancelamento, classificação
    de erros e deduplicação de consultas. Proteger respostas contra troca de
    conta/canal; liberar timers, listeners e operações em andamento.
 3. **M1.3 — recuperação:** enriquecer eventos do gateway com causa, instante,
@@ -331,7 +331,8 @@ inteiro. Ler apenas a tarefa atual e suas dependências; conferir o diff local.
 - Documentar suporte por capacidade, sem usar apenas versão como prova de que
   recurso está disponível. Não marcar tarefa concluída por mock de UI.
 - Entregar uma tarefa revisável por vez, corrigir regressões antes de seguir,
-  atualizar progresso após cada marco. Não criar commits automaticamente.
+  atualizar progresso após cada marco. Conforme autorização de 30/10/2026,
+  organizar commits por etapa e atualizar a PR; não avançar a outro marco sem pedido.
 - Rollback de aplicação conserva tabelas/dados aditivos; catálogo e preferências
   exigem leitura tolerante a campos desconhecidos. Não fazer downgrade destrutivo
   de banco/IndexedDB para acompanhar rollback de código.
@@ -394,11 +395,12 @@ marcos futuros; não impedem implementação local/documentação.
 
 ## 8. Próxima tarefa executável
 
-**M1.2 — requests e ciclo de vida.** M1.1 foi concluído e validado no cliente;
-consultar as evidências no progresso. Ler `api.ts`, os coordenadores de requests
-em `client.ts`/`global.ts` e os fluxos necessários à tarefa, incluindo seus diffs.
-Adicionar timeout/cancelamento e classificação nas APIs de instância, deduplicar
-consultas e impedir que respostas obsoletas alterem outra conta/canal. Liberar
-timers, listeners e operações; não repetir mutações automaticamente. Manter os
-testes de isolamento por conta, executar typecheck e testes direcionados, e
-registrar resultados antes de iniciar o scheduler de M1.3 ou a listagem de M1.4.
+**M1.3 — recuperação.** M1.1 e M1.2 estão concluídos; consultar as evidências no
+progresso. Ler `gateway.ts`, as transições de conectividade e sua coordenação no
+cliente. Acrescentar causa, instante, tentativa e próximo retry aos eventos;
+implementar jitter, pausa offline/retomada e prazo de recuperação em primeiro
+plano, mantendo a janela de reinício anunciado. Preservar autenticação inválida,
+cancelamento por geração e isolamento entre contas, sem interromper tentativas
+de fundo nem redirecionar quem já saiu da área afetada. A listagem é M1.4:
+coordenar esse limite sem implementar a listagem inteira nesta tarefa. Executar
+typecheck e testes de relógio/socket/isolamento; atualizar o progresso ao concluir.

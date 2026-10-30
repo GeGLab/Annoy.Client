@@ -26,6 +26,8 @@ import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
 import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta global login unificar" },
@@ -110,6 +112,7 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
 }
 
 function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
+  const requests = useRequestOwner(accountId);
   const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
   const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
@@ -121,24 +124,31 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   const [linking, setLinking] = useState(false);
   useEffect(() => {
     if (!account) return;
-    void fetchInfo(account.url).then(
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, requests.signal]);
+    void fetchInfo(account.url, signal).then(
       async (info) => {
+        signal.throwIfAborted();
         setDiscord(info.discordLogin);
         if (!info.globalServerId) return setLinkable(null);
-        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me");
+        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me", signal);
+        signal.throwIfAborted();
         setLinkable(me.global ? null : info.globalServerId);
       },
-      () => undefined,
-    );
+    ).catch((error) => { if (!isCancellation(error)) { setDiscord(false); setLinkable(null); } });
+    return () => controller.abort();
   }, [account?.url, signedInGlobal]);
   const link = async () => {
     if (!account || !linkable) return;
+    const signal = requests.signal;
     setLinking(true);
     try {
-      await linkAccount(account, linkable);
+      await linkAccount(account, linkable, signal);
+      signal.throwIfAborted();
       setLinkable(null);
       toast(`Agora você também entra em ${account.instanceName} com a conta global`);
     } catch (error) {
+      if (isCancellation(error)) return;
       if (error instanceof GlobalError && error.code === "global_in_use") await offerMerge(error.message);
       else toast((error as Error).message);
     } finally {
@@ -148,36 +158,40 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   /** Item 1.9: two users of the same person on this server become this one. */
   const offerMerge = async (reason: string) => {
     if (!account || !linkable) return;
+    const signal = requests.signal;
     const ok = await confirmAction(
       `${reason}. Unificar com @${self?.username ?? "esta conta"}? Servidores, mensagens, cargos e amigos do outro usuário passam para esta conta, e você entra nela com a conta global ou com a senha. O outro usuário deixa de existir.`,
       { confirmLabel: "Unificar" },
     );
-    if (!ok) return;
+    if (!ok || signal.aborted) return;
     const password = await promptText(`Para confirmar, digite a senha de @${self?.username ?? "esta conta"} em ${account.instanceName}.`, "", { confirmLabel: "Unificar", secret: true });
-    if (password === null) return;
+    if (password === null || signal.aborted) return;
     try {
-      const removed = await mergeAccount(account, linkable, password);
+      const removed = await mergeAccount(account, linkable, password, signal);
+      signal.throwIfAborted();
       setLinkable(null);
       // The other user is gone: drop it if this app also had it signed in.
       const stale = getState().accounts.find((a) => a.url === account.url && a.userId === removed);
       if (stale) removeAccount(stale.id);
       toast(`Contas unificadas em ${account.instanceName}`);
     } catch (error) {
-      toast((error as Error).message);
+      if (!isCancellation(error)) toast((error as Error).message);
     }
   };
   const sync = async () => {
-    if (!account) return;
+    if (!account || syncing) return;
+    const signal = requests.signal;
     setSyncing(true);
     try {
       await discordLogin(
         account.url,
-        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }),
-        new AbortController().signal,
+        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }, signal),
+        signal,
       );
+      signal.throwIfAborted();
       toast("Perfil do Discord sincronizado");
     } catch (error) {
-      toast((error as Error).message);
+      if (!isCancellation(error)) toast((error as Error).message);
     } finally {
       setSyncing(false);
     }
@@ -224,6 +238,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
  * away (not on "save"), since it's a login rather than a preference.
  */
 function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
+  const requests = useRequestOwner();
   const account = useStore((s) => s.global);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -231,13 +246,16 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
   const [error, setError] = useState<string | null>(null);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    const signal = requests.signal;
     setBusy(true);
     setError(null);
     try {
-      await signInGlobal(email, password);
+      await signInGlobal(email, password, signal);
+      signal.throwIfAborted();
       setPassword("");
     } catch (err) {
-      setError((err as Error).message);
+      if (!isCancellation(err)) setError((err as Error).message);
     } finally {
       setBusy(false);
     }

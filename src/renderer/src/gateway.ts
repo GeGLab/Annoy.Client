@@ -122,6 +122,13 @@ export class Gateway {
     this.socket = null;
   }
 
+  /** HTTP can discover an expired session before the gateway does. */
+  invalidateSession(): void {
+    this.close();
+    this.invalid = true;
+    this.onStatus("invalid");
+  }
+
   send(op: ClientOp): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(op));
   }

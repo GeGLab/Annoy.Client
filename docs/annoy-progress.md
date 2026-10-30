@@ -21,7 +21,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | Marco | Estado | Resultado |
 | --- | --- | --- |
 | M0 — análise/documentação | concluído | Três documentos criados e validados, com R01–R20, decisões, arquitetura, testes e próxima tarefa. |
-| M1 — conectividade | em andamento | M1.1 concluído: estado observado por camada e recuperação restrita à instância selecionada. Próximo: M1.2. |
+| M1 — conectividade | em andamento | M1.1 e M1.2 concluídos: isolamento, requests limitados/canceláveis e proteção de respostas por conta/navegação. Próximo: M1.3. |
 | M2 — navegação/canais | pendente | Depende dos estados e recuperação de M1. |
 | M3 — mensagens/leitura/pins | pendente | Requer contratos e migrações aditivas no servidor. |
 | M4 — social/perfis | pendente | Requer autorização por audiência antes da exposição de dados. |
@@ -67,6 +67,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | 30/10/2026 | Catálogo próprio/licenciado; sem scraping emoji.gg. | OpenMoji já disponível é base viável; verificar licença/créditos por ativo. |
 | 30/10/2026 | Protocolo pertence ao servidor; cópias atuais iguais. | Atualizar origem e sincronizar cliente; negociar capacidades novas. |
 | 30/10/2026 | Preservar alterações locais anteriores. | Sem reset/limpeza automática, refatoração lateral ou commits automáticos. |
+| 30/10/2026 | Pedido posterior autoriza commitar tudo por etapa, criar PR e prosseguir a M1.2. | Refinamentos anteriores, M0, M1.1 e integração da main em commits próprios; M1.2 em commit separado na PR #7. |
 
 ## Análise e verificações executadas
 
@@ -100,8 +101,8 @@ Validação documental de M0, executada em 30/10/2026:
 
 ## Entrega M1.1 — estado e isolamento (30/10/2026)
 
-Estado: **concluído**. M1 permanece **em andamento**; esta execução entrega
-somente o subitem recomendado pelos documentos, sem iniciar M1.2–M1.5.
+Estado: **concluído**. M1 permanece **em andamento**. A entrega original se
+limitou a M1.1; M1.2 foi autorizado posteriormente e está registrado abaixo.
 
 - `src/shared/connectivity.ts`: tipos e transições puros para observação de rede,
   disponibilidade, autenticação, causa e instante. `connecting/ready/offline/invalid`
@@ -159,6 +160,78 @@ disponibilidade de instâncias publicadas. Não houve teste Linux, produção,
 pacotes distribuídos ou leitor de tela. A suíte completa `experience.spec.ts`
 não foi executada; lint continua sem script configurado. Nenhum teste falhou.
 
+## Entrega M1.2 — requests e ciclo de vida (30/10/2026)
+
+Estado: **concluído**. PR [#7](https://github.com/GeGLab/Annoy.Client/pull/7),
+branch `feat/connectivity-modernization-20261030`. M1.3 não foi iniciado.
+
+- `src/shared/requests.ts`: dono de requests por conta/sessão, prazo cobrindo
+  headers e corpo, classificação de rede/timeout/401/403/5xx/resposta inválida e
+  cancelamento separado de falha. Leituras têm 15s; operações comuns, 20s;
+  mensagens com arquivo e uploads com progresso, 120s. Avatares/ícones mantêm
+  o limite próprio de 20s. Mutação com timeout comunica resultado não confirmado.
+- GETs idênticos compartilham a chamada somente no mesmo escopo de credenciais,
+  método, caminho e parâmetros. Cada consumidor cancela sua espera; o último
+  cancela a origem. Remoção/substituição/queda/novo READY invalidam a geração;
+  timers, listeners de abort, handlers XHR e consultas pendentes são liberados.
+  Nenhuma mensagem, upload ou mutação é repetida automaticamente.
+- Cliente: respostas de servidor, histórico, busca/contexto e abertura de DM
+  verificam conta e geração; navegação verifica também a visita atual. IDs de
+  comunidade/canal iguais entre instâncias não cruzam respostas. Timers de refresh
+  pertencem à conta e são cancelados quando ela sai. HTTP 401 encerra o gateway
+  daquela sessão e oferece autenticação; 403 permanece falha de permissão.
+- UI: erro de histórico é visível na conversa, com retry e conteúdo anterior
+  preservado, sem simular vazio nem repetir carregamento em loop ao rolar.
+  Envios falhos preservam o rascunho e impedem duplicação durante o envio.
+  Composer e conversa usam conta/canal como identidade, cancelando a operação
+  quando desmontados. Isso não implementa persistência de rascunhos de M1.5.
+- Autenticação, descoberta, criação/convite, busca e ações de conta usam
+  cancelamento ao fechar/trocar a superfície. Polling Discord libera a espera e
+  o request; uma resposta tardia não adiciona uma conta nem fecha outra tela.
+  O dono de requests suporta o replay de efeitos do React StrictMode.
+- Global: requests e sessão têm geração; logout/login novo cancelam a geração
+  antiga. Restauração, login, vault e provas de identidade verificam a geração
+  após awaits; não restauram sessão nem executam ações com provas obsoletas.
+  Escritas de sessão no armazenamento de segredos existente são serializadas.
+  Códigos de erro de domínio, inclusive `global_new_account`, são preservados.
+- Backend/persistência: sem endpoints ou migrações novos. Permanecem os contratos
+  e chaves existentes, incluindo o armazenamento de segredos; diagnósticos não
+  são persistidos. Cancelar/expirar uma gravação não prova que o servidor a desfez.
+
+### Auditoria de R03 após M1.2
+
+| Operação | Evidência/estado | Pendência de escopo |
+| --- | --- | --- |
+| API de instância e Global | Prazo, classificação, cancelamento, GET compartilhado e geração; sem repetição de mutações. | Scheduler/próximo retry em M1.3. |
+| Abertura de comunidade/DM e contexto de busca | Proteção contra troca de conta/canal/visita e IDs iguais; buscas anteriores são canceladas. | Consultas incrementais de comunidades em M2; cache/scroll escalável em M3. |
+| Histórico e envio de mensagem | Erro com retry; falha de envio mantém texto; cancelamento ao sair e invalidação de conta. | Preservação durável de rascunhos/âncoras em M1.5; leitura/pins em M3. |
+| Autenticação local/Global/Discord e criação/convite | Cancelamento ao desmontar; sem sucesso/navegação tardia; campos permanecem após erro. | Auditoria integral de formulários/configurações/uploads em M1.5. |
+| Upload com progresso | Prazo próprio, abort da origem e liberação de handlers/listeners. | Estados de todas as modalidades de canal em M2. |
+
+### Validações de M1.2
+
+- Aprovados: `npm run typecheck`, `npm run build`, `npm run test:requests`
+  (12 testes) e `npm run test:connectivity` (8 testes).
+- Os 12 testes usam relógio/fetch/XHR controlados: prazos diferentes, corpo
+  travado, cancelamento de consumidor/origem, isolamento de conta/cursores,
+  invalidação/descarte, erros HTTP inclusive HTML, não repetição de mutação e
+  liberação de timers/listeners/progresso. O runner usa `--experimental-transform-types`
+  para os parameter properties TypeScript já usados pelo projeto; sem dependência nova.
+- 27 cenários distintos de Playwright aprovados em lotes (Electron/Chromium):
+  desktop, busca/contexto, perfil/upload, navegação/mídia/reações, 6 cenários novos
+  de requests, 4 de workspace e os 8 de desconexão vindos da main.
+- Uma rodada intermediária teve 5 falhas por recarga do Vite após alteração de
+  fonte durante a execução. Repetição com servidor novo/código estável aprovou
+  os 17 cenários de desconexão/requests/isolamento. Após o último ajuste de
+  observação por geração, os 8 cenários de requests/isolamento foram novamente
+  aprovados. Nenhuma falha permanece na validação final.
+- Revisão visual: erro de histórico/retry nos temas escuro (1280×720) e claro
+  (940×620), sem cortes ou sobreposição; capturas
+  `.impeccable/review/requests-history-*.png`.
+- `git diff --check` aprovado. Build mantém aviso de bundle acima de 500 kB;
+  o runner Node emite aviso de transformação experimental. Sem teste Linux,
+  produção, leitor de tela ou suíte completa de experiência. Lint não configurado.
+
 ## Dependências e riscos em acompanhamento
 
 Integração para PR em 30/10/2026: a branch incorpora `upstream/main` em
@@ -186,9 +259,9 @@ Typecheck e build aprovados. As alterações locais foram commitadas por etapa
 
 ## Próxima tarefa recomendada
 
-M1.1 concluído. Executar **M1.2 — requests e ciclo de vida**, conforme o plano:
-timeouts e cancelamento por operação, classificação nas APIs de instância,
-deduplicação de consultas e proteção contra respostas de outra conta/canal ou
-geração obsoleta. Manter isolamento de M1.1 e liberar recursos corretamente.
+M1.1 e M1.2 concluídos. Executar **M1.3 — recuperação**, conforme o plano:
+eventos detalhados do gateway, jitter, pausa offline/retomada e prazo de
+recuperação em primeiro plano, preservando isolamento e cancelamento. Listagem
+e preservação completa de rascunhos permanecem em M1.4 e M1.5.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.

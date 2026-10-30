@@ -43,7 +43,7 @@ export function observeHttp(previous: EndpointObservation, status: number, at: n
 }
 
 export function observeRequestFailure(previous: EndpointObservation, error: unknown, at: number, network: NetworkObservation): EndpointObservation {
-  const timeout = error instanceof Error && error.name === "TimeoutError";
+  const timeout = error instanceof Error && (error.name === "TimeoutError" || ("kind" in error && error.kind === "timeout"));
   return { ...previous, availability: "unavailable", cause: network.status === "offline" ? "system-offline" : timeout ? "timeout" : "network", observedAt: at, nextRetryAt: null };
 }
 

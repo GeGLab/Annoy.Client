@@ -20,6 +20,7 @@
     "test:activity": "node --experimental-strip-types --test scripts/tests/*-activity.test.mjs",
     "test:servers": "node --experimental-strip-types --test scripts/tests/server-removal.test.mjs",
     "test:connectivity": "node --experimental-strip-types --test scripts/tests/connectivity.test.mjs",
+    "test:requests": "node --experimental-transform-types --test scripts/tests/requests.test.mjs",
     "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs",
     "test:desktop": "npm run build && playwright test",
     "brand:icons": "node scripts/generate-icons.mjs",

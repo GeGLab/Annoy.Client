@@ -14,7 +14,8 @@ import { screenProfile } from "./lib/screen-profile.ts";
 import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
 import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
-import { observeNetwork, observeReachable, observeTransport } from "../../shared/connectivity.ts";
+import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport } from "../../shared/connectivity.ts";
+import { cancelled, isCancellation, RequestError } from "../../shared/requests.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -27,7 +28,26 @@ interface Live {
 const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
-const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
+const messageReads = new Map<string, AbortController>();
+let navigationGeneration = 0;
+let navigationAbort = new AbortController();
+let observedView = getState().view;
+const messageKey = (accountId: string, channelId: string) => JSON.stringify([accountId, channelId]);
+
+function clearAccountWork(accountId: string): void {
+  for (const [key, pending] of refreshTimers) if (pending.accountId === accountId) {
+    clearTimeout(pending.timer);
+    refreshTimers.delete(key);
+  }
+}
+
+const currentApi = (accountId: string, api: Api, generation: number) => live.get(accountId)?.api === api && api.generation === generation;
+const navigationSignal = (accountId: string, channelId: string) => {
+  const view = getState().view;
+  return "accountId" in view && view.accountId === accountId &&
+    (view.kind === "server" ? view.channelId === channelId : view.kind === "home" && view.dmId === channelId) ? navigationAbort.signal : undefined;
+};
 
 export function apiFor(accountId: string): Api {
   const entry = live.get(accountId);
@@ -90,6 +110,13 @@ window.addEventListener("offline", () => {
 // Keep the cache in step with the server list, whatever changed it.
 const lastServers = new Map<string, unknown>();
 subscribe(() => {
+  const view = getState().view;
+  if (view !== observedView) {
+    observedView = view;
+    navigationGeneration++;
+    navigationAbort.abort();
+    navigationAbort = new AbortController();
+  }
   for (const [id, inst] of Object.entries(getState().instances)) {
     if (inst.status === "ready" && lastServers.get(id) !== inst.servers) {
       lastServers.set(id, inst.servers);
@@ -100,12 +127,23 @@ subscribe(() => {
 
 export function connectAccount(account: Account): void {
   if (live.has(account.id)) return;
-  const api = new Api(account.url, account.token, () => getState().instances[account.id]?.status === "ready");
+  const api: Api = new Api(account.url, account.token, () => live.get(account.id)?.api === api && getState().instances[account.id]?.status === "ready", (result) => {
+    if (live.get(account.id)?.api !== api) return;
+    setState((s) => {
+      const inst = s.instances[account.id];
+      if (inst) inst.connection = typeof result === "number" || result.status > 0
+        ? observeHttp(inst.connection, typeof result === "number" ? result : result.status, Date.now(), true)
+        : observeRequestFailure(inst.connection, result, Date.now(), s.connectivity.network);
+    });
+    if (result instanceof RequestError && result.status === 401) gateway.invalidateSession();
+  });
   const gateway = new Gateway(
     account.url,
     account.token,
     (event) => onEvent(account.id, event),
     (status) => {
+      api.cancelPending();
+      if (status !== "ready") clearAccountWork(account.id);
       if (status !== "ready") {
         disconnectDirectCall(account.id);
         if (voice?.accountId === account.id || getState().voice?.accountId === account.id) leaveVoice(false);
@@ -115,6 +153,10 @@ export function connectAccount(account: Account): void {
         if (inst) {
           inst.status = status;
           inst.connection = observeTransport(inst.connection, status, Date.now(), s.connectivity.network);
+          for (const [id, entry] of Object.entries(inst.messages)) if (entry.loading) {
+            if (!entry.items.length) delete inst.messages[id];
+            else entry.loading = false;
+          }
           if (status !== "ready") {
             const view = s.view;
             if (view.kind === "server" && view.accountId === account.id && view.channelId &&
@@ -161,7 +203,9 @@ export function addAccount(account: Account): void {
     s.modal = null;
     s.view = { kind: "home", accountId: account.id, dmId: null };
   });
+  live.get(account.id)?.api.dispose();
   live.get(account.id)?.gateway.close();
+  clearAccountWork(account.id);
   live.delete(account.id);
   connectAccount(account);
 }
@@ -187,8 +231,11 @@ export function removeAccount(accountId: string): void {
   if (account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
+  entry?.api.dispose();
   entry?.gateway.close();
-  void entry?.api.post("/auth/logout").catch(() => undefined);
+  if (account) void new Api(account.url, account.token).post("/auth/logout").catch(() => undefined);
+  clearAccountWork(accountId);
+  lastServers.delete(accountId);
   live.delete(accountId);
   setState((s) => {
     s.accounts = s.accounts.filter((a) => a.id !== accountId);
@@ -286,9 +333,10 @@ export function updateService(id: string, recipe: (service: Service) => void): v
 /** Opens a server at its last-viewed (or first readable) text channel. */
 export async function openServer(accountId: string, serverId: string): Promise<void> {
   navigate({ kind: "server", accountId, serverId, channelId: null });
-  const state = await ensureServer(accountId, serverId);
+  const navigation = navigationGeneration;
+  const state = await ensureServer(accountId, serverId, false, navigationAbort.signal);
   const current = getState().view;
-  if (!state || current.kind !== "server" || current.serverId !== serverId || current.channelId) return;
+  if (!state || navigation !== navigationGeneration || current.kind !== "server" || current.accountId !== accountId || current.serverId !== serverId || current.channelId) return;
   const remembered = localStorage.getItem(`distopic.lastChannel.${serverId}`);
   const text = state.channels.filter((c) => c.type === "text");
   const target = text.find((c) => c.id === remembered) ?? text[0];
@@ -303,24 +351,29 @@ export function openChannel(accountId: string, serverId: string, channelId: stri
 export async function openDm(accountId: string, userId: string): Promise<void> {
   const existing = getState().instances[accountId]?.dms.find((dm) => dm.recipients.some((user) => user.id === userId));
   if (existing) return navigate({ kind: "home", accountId, dmId: existing.id });
+  const navigation = navigationGeneration;
   try {
-    const dm = await apiFor(accountId).post<DmChannel>("/dms", { userId });
+    const api = apiFor(accountId), generation = api.generation;
+    const dm = await api.post<DmChannel>("/dms", { userId }, navigationAbort.signal);
+    if (navigation !== navigationGeneration || !currentApi(accountId, api, generation)) return;
     patchInstance(accountId, (inst) => {
       if (!inst.dms.some((d) => d.id === dm.id)) inst.dms.unshift(dm);
     });
     navigate({ kind: "home", accountId, dmId: dm.id });
   } catch (err) {
-    toast((err as Error).message);
+    if (!isCancellation(err)) toast((err as Error).message);
   }
 }
 
 // Server state -----------------------------------------------------------------
 
-export async function ensureServer(accountId: string, serverId: string, force = false): Promise<ServerState | undefined> {
+export async function ensureServer(accountId: string, serverId: string, force = false, signal?: AbortSignal): Promise<ServerState | undefined> {
   const existing = getState().instances[accountId]?.serverStates[serverId];
   if (existing && !force) return existing;
   try {
-    const fresh = await apiFor(accountId).get<ServerState>(`/servers/${serverId}`);
+    const api = apiFor(accountId), generation = api.generation;
+    const fresh = await api.get<ServerState>(`/servers/${serverId}`, signal);
+    if (signal?.aborted || !currentApi(accountId, api, generation)) return;
     patchInstance(accountId, (inst) => {
       inst.serverStates[serverId] = fresh;
       // The summary in the rail comes from READY; keep it in sync with renames.
@@ -330,7 +383,7 @@ export async function ensureServer(accountId: string, serverId: string, force = 
     });
     return fresh;
   } catch (err) {
-    toast((err as Error).message);
+    if (!isCancellation(err)) toast((err as Error).message);
     return undefined;
   }
 }
@@ -338,19 +391,19 @@ export async function ensureServer(accountId: string, serverId: string, force = 
 function scheduleRefresh(accountId: string, serverId: string): void {
   if (!getState().instances[accountId]?.serverStates[serverId]) return;
   const key = `${accountId}:${serverId}`;
-  clearTimeout(refreshTimers.get(key));
+  clearTimeout(refreshTimers.get(key)?.timer);
   refreshTimers.set(
     key,
-    setTimeout(() => {
+    { accountId, timer: setTimeout(() => {
       refreshTimers.delete(key);
       void ensureServer(accountId, serverId, true).then((state) => {
         // Leave a channel that just became invisible.
         const view = getState().view;
-        if (state && view.kind === "server" && view.serverId === serverId && view.channelId && !state.channels.some((c) => c.id === view.channelId)) {
+        if (state && view.kind === "server" && view.accountId === accountId && view.serverId === serverId && view.channelId && !state.channels.some((c) => c.id === view.channelId)) {
           navigate({ kind: "server", accountId, serverId, channelId: null });
         }
       });
-    }, 150),
+    }, 150) },
   );
 }
 
@@ -360,33 +413,56 @@ export async function loadMessages(accountId: string, channelId: string, older =
   const inst = getState().instances[accountId];
   if (inst?.status !== "ready") return;
   const current = inst?.messages[channelId];
-  if (current?.loading || (older && !current?.hasMore) || (!older && current)) return;
+  if (current?.loading || (older && !current?.hasMore) || (!older && current && !current.error)) return;
+  const api = apiFor(accountId), generation = api.generation;
+  const key = messageKey(accountId, channelId), controller = new AbortController();
+  messageReads.get(key)?.abort();
+  messageReads.set(key, controller);
+  const viewSignal = navigationSignal(accountId, channelId);
+  const signal = viewSignal ? AbortSignal.any([viewSignal, controller.signal]) : controller.signal;
+  const active = () => currentApi(accountId, api, generation) && messageReads.get(key) === controller;
   patchInstance(accountId, (i) => {
     i.messages[channelId] = { items: current?.items ?? [], hasMore: current?.hasMore ?? true, loading: true };
   });
   const before = older ? current?.items[0]?.id : undefined;
   try {
-    const page = await apiFor(accountId).get<Message[]>(`/channels/${channelId}/messages?limit=${PAGE}${before ? `&before=${before}` : ""}`);
+    const page = await api.get<Message[]>(`/channels/${channelId}/messages?limit=${PAGE}${before ? `&before=${before}` : ""}`, signal);
+    if (!active() || signal.aborted) return;
     patchInstance(accountId, (i) => {
       const prev = i.messages[channelId]?.items ?? [];
       const known = new Set(prev.map((m) => m.id));
       i.messages[channelId] = { items: [...page.filter((m) => !known.has(m.id)), ...prev], hasMore: page.length === PAGE, loading: false };
     });
   } catch (err) {
+    if (!active()) return;
     patchInstance(accountId, (i) => {
       const entry = i.messages[channelId];
-      if (entry) entry.loading = false;
+      if (!entry) return;
+      if (isCancellation(err)) {
+        if (!entry.items.length) delete i.messages[channelId];
+        else entry.loading = false;
+      } else {
+        entry.loading = false;
+        entry.error = (err as Error).message;
+      }
     });
-    toast((err as Error).message);
+  } finally {
+    if (messageReads.get(key) === controller) messageReads.delete(key);
   }
 }
 
-export async function jumpToMessage(accountId:string,channelId:string,messageId:string,serverId:string|null) {
-  const items=await apiFor(accountId).get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(messageId)}`);
+export async function jumpToMessage(accountId:string,channelId:string,messageId:string,serverId:string|null, signal?: AbortSignal) {
+  const navigation = navigationGeneration, api = apiFor(accountId), generation = api.generation;
+  const active = signal ? AbortSignal.any([navigationAbort.signal, signal]) : navigationAbort.signal;
+  const items=await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(messageId)}`, active);
+  if (active.aborted || navigation !== navigationGeneration || !currentApi(accountId, api, generation)) throw cancelled();
+  messageReads.get(messageKey(accountId, channelId))?.abort();
+  messageReads.delete(messageKey(accountId, channelId));
   navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
   setState(s=>{s.instances[accountId]!.messages[channelId]={items,hasMore:items.length>=26,loading:false};s.messageFocus={accountId,channelId,messageId};s.modal=null;});
 }
 export function returnToLatest(accountId:string,channelId:string) {
+  messageReads.get(messageKey(accountId, channelId))?.abort();
   setState(s=>{delete s.instances[accountId]?.messages[channelId];s.messageFocus=null;s.chatNavigation++;});
   void loadMessages(accountId,channelId);
 }

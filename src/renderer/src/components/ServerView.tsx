@@ -616,7 +616,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
         <VoiceStage accountId={accountId} state={state} channel={voiceChannel} />
       ) : channel ? (
         <Chat
-          key={channel.id}
+          key={JSON.stringify([accountId, channel.id])}
           accountId={accountId}
           channelId={channel.id}
           title={channel.name}
