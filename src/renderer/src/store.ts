@@ -71,7 +71,7 @@ export type Modal =
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings"; section?: "voice" }
+  | { kind: "userSettings"; section?: "voice" | "expressions" }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }

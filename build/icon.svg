@@ -1,20 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e6e4f5"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="#ffffff"/>
-  <path d="M18.5 15H40.7L51.7 26V41.3L44.8 48H21.5L12.4 54.5L13.3 45.6L7.5 40V26Z" fill="url(#shell)" stroke="#201b3b" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M35.6 16.8H39.7L47.2 24.6H42.9Z" fill="#ffa514"/>
-  <path d="M15.4 26.1H44.2L47.2 29.1V39.1L44.2 42.1H15.4L12.4 39.1V29.1Z" fill="#0d0830"/>
-  <rect x="16.5" y="34.2" width="10.2" height="3" rx="1.5" fill="#ffb020"/>
-  <rect x="32.2" y="32.2" width="10.5" height="3" rx="1.5" fill="#ffb020"/>
-  <g fill="#ffc21a" stroke="#ffc21a" stroke-linecap="round">
-    <path d="M50.6 8.2L48.4 15.6" stroke-width="3.6"/>
+  <path fill="#ffb020" fill-rule="evenodd" d="M18.5 15H40.7L51.7 26V41.3L44.8 48H21.5L12.4 54.5L13.3 45.6L7.5 40V26ZM19 31a3 3 0 0 0 0 6h7a3 3 0 0 0 0-6Zm16-2a3 3 0 0 0 0 6h7a3 3 0 0 0 0-6Z"/>
+  <g fill="#ffb020" stroke="#ffb020" stroke-linecap="round">
+    <path d="M50.6 8.2L48.4 15.6M57.4 12.6L53.8 18.4" stroke-width="3.6"/>
     <circle cx="47.6" cy="18.9" r="1.6" stroke="none"/>
-    <path d="M57.4 12.6L53.8 18.4" stroke-width="3.6"/>
     <circle cx="51.9" cy="21.7" r="1.6" stroke="none"/>
   </g>
 </svg>

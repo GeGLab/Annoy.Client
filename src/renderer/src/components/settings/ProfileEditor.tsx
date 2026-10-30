@@ -65,14 +65,6 @@ export function ProfileEditor({
   };
   return (
     <div className="profile-editor">
-      <div className="profile-preview">
-        <Avatar user={{ ...user, avatarUrl: preview, displayName: draft.displayName }} size={84} />
-        <span>Prévia do perfil</span>
-        <div className="profile-mini-preview">
-          <Avatar user={{ ...user, avatarUrl: preview, displayName: draft.displayName }} size={28} />
-          <span>{draft.displayName || user.displayName}</span>
-        </div>
-      </div>
       <div className="profile-fields">
         <strong>{account.instanceName}</strong>
         <span className="muted small">
@@ -125,6 +117,14 @@ export function ProfileEditor({
           </p>
         )}
       </div>
+      <aside className="profile-live-preview" aria-label="Prévia do perfil">
+        <h4>Como as pessoas veem você</h4>
+        <div className="member-card member-profile profile-preview-card">
+          <div className="member-card-head"><Avatar user={{ ...user, avatarUrl: preview, displayName: draft.displayName }} size={56} /><div><strong>{draft.displayName.trim() || user.displayName}</strong><div className="muted">@{user.username}</div></div></div>
+          {(draft.bio ?? user.bio) && <p className="profile-bio" title={draft.bio ?? user.bio ?? ""}>{draft.bio ?? user.bio}</p>}
+        </div>
+        <p className="muted small">A prévia acompanha suas alterações. As outras pessoas só as veem depois de salvar.</p>
+      </aside>
       {file && (
         <Suspense fallback={<span role="status">Abrindo editor…</span>}>
           <AvatarCropper file={file} onClose={() => setFile(null)} onApply={(avatar) => onChange({ ...draft, avatar })} />

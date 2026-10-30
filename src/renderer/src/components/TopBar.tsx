@@ -188,9 +188,9 @@ export function TopBar() {
         })}
         {after.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {after.map((service) => <ServiceTab key={service.id} service={service} />)}
+        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" aria-label="Nova aba" onClick={() => openModal({ kind: "addTab" })}><span className="tab-tile"><Icon name="plus" size={18} /></span><span className="rail-label">Nova aba</span></button></Tooltip>
       </nav>
       <div className="rail-footer">
-        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" aria-label="Nova aba" onClick={() => openModal({ kind: "addTab" })}><Icon name="plus" size={21} /></button></Tooltip>
         <Tooltip content="Novidades do Annoy"><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label="Novidades do Annoy" aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
       </div>
     </header>

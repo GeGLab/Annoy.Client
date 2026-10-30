@@ -19,6 +19,7 @@ import { RadioGroup } from "../ui/radio-group.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { UpdateSettings } from "../Updates.tsx";
+import { MediaLibrarySettings } from "../../features/expression/MediaLibrarySettings.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
@@ -28,6 +29,8 @@ import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signO
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta global login unificar" },
+  { id: "global", label: "Conta global", icon: "shield", search: "conta global login email senha criar cadastro unificar" },
+  { id: "expressions", label: "Emojis e mídia", icon: "smile", search: "reações GIFs figurinhas emojis pacotes biblioteca loja GIPHY importar exportar" },
   { id: "voice", label: "Voz e vídeo", icon: "mic", search: "microfone áudio câmera ruído sensibilidade teste som" },
   { id: "appearance", label: "Aparência", icon: "palette", search: "tema cores escuro claro" },
   { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
@@ -240,7 +243,7 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
     }
   };
   return (
-    <PreferenceCard icon="shield" title="Conta global" description="Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.">
+    <section className="settings-section global-account-panel"><h3><Icon name="shield" size={24} />Conta global</h3><p className="muted">Um login para seus servidores Annoy. Entre com uma conta existente ou crie sua conta no portal.</p>
       {account ? (
         <>
           <p>
@@ -251,7 +254,7 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
             Usar como conta padrão
           </label>
           <p className="muted small">Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.</p>
-          <div className="row">
+          <div className="global-account-actions">
             <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
               Gerenciar conta
             </a>
@@ -261,27 +264,28 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
           </div>
         </>
       ) : (
-        <form className="form" onSubmit={(event) => void submit(event)}>
-          <div className="grid-2">
+        <form className="global-signin-form" onSubmit={(event) => void submit(event)}>
+          <div className="global-signin-fields">
             <Field label="E-mail">
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" disabled={busy} required />
             </Field>
             <Field label="Senha">
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" disabled={busy} required />
             </Field>
           </div>
-          {error && <p className="error small">{error}</p>}
-          <div className="row">
+          {error && <p className="error small" role="alert">{error}</p>}
+          <div className="global-account-actions">
             <Button type="submit" size="sm" loading={busy}>
               {busy ? "Protegendo sua senha…" : "Entrar"}
             </Button>
-            <a href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
-              Criar conta global
+            <a className="ui-button ui-button-outline ui-button-sm" href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
+              Criar conta global<Icon name="external" size={14} />
             </a>
           </div>
+          <p className="muted small">O cadastro abre no navegador. Depois de criar sua conta, volte aqui para entrar.</p>
         </form>
       )}
-    </PreferenceCard>
+    </section>
   );
 }
 
@@ -511,12 +515,14 @@ export function UserSettingsModal() {
                 <AppearanceSettings settings={draft} update={update} />
               </section>
             )}
+            {page === "expressions" && <MediaLibrarySettings />}
+            {page === "global" && <GlobalAccountCard draft={draft} update={update} />}
             {page === "profile" && (
               <section className="settings-section">
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
-                <GlobalAccountCard draft={draft} update={update} />
+
                 {accounts.map((account) => {
                   const user = instances[account.id]?.user;
                   return (

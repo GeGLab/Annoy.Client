@@ -307,6 +307,7 @@ function MessageRow({
             <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />
             <span className="message-action-divider" aria-hidden="true" />
           </>}
+          {!reactionsEnabled && canReact && <button className="icon-btn tiny" aria-label="Adicionar reação" title="Atualize o Annoy Server para habilitar reações compartilhadas" onClick={() => toast("Esta instância ainda não oferece reações. Atualize o Annoy Server e reconecte o Client para reagir às mensagens.")}><Icon name="smile" size={16} /></button>}
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>

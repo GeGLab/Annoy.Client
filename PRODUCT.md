@@ -77,11 +77,11 @@ sound feedback: disabling audio also mutes the microphone, and enabling audio
 unmutes it.
 
 The earlier brand destination to Annoy news is superseded: the first rail action
-opens direct messages. News remains a separate footer action beside the add
-entry point. Keep the rail compact, with unread DM shortcuts and server/service
-tiles; omit duplicate Home labels and idle recent-DM clutter. The user requested
-a white rounded logo background while preserving the Annoy silhouette and
-amber/indigo artwork. Store entry points remain commented at user request. Preference cards explain effects. Server/channel mute preferences
+opens direct messages. News remains the sole footer action. The dashed plus and visible Nova aba
+caption sit immediately after the final server/service tile in navigation. Keep the rail compact, with unread DM shortcuts and server/service
+tiles; omit duplicate Home labels and idle recent-DM clutter. The latest brand refinement supersedes the earlier white logo tile: use one
+filled speech/robot symbol with transparent negative-space eyes and alert marks.
+The renderer follows the semantic theme accent; packaged icons use amber. Store entry points remain commented at user request. Preference cards explain effects. Server/channel mute preferences
 suppress message sounds. Screen capture offers resolution/FPS and publishes the
 selected quality. Automatic away defaults to ten minutes of system inactivity.
 
@@ -106,7 +106,8 @@ official service logos within the existing Annoy visual identity.
 
 Profiles accept looping animated GIFs. Refreshed edit dialogs preserve explicit
 save behavior; server editing includes image selection, preview and removal.
-Messages support server-persisted emoji reactions. The composer offers emojis,
+Messages support server-persisted emoji reactions when the connected instance
+advertises the reactions feature. The composer offers emojis,
 GIFs, stickers and a manageable local package store with install/remove,
 image and JSON import, export, and visible attribution. Selecting local media
 prepares a draft attachment; sending remains explicit. Package storage is local
@@ -122,5 +123,25 @@ boundary. Local implementation and visual review do not establish deployment.
 
 Message reactions are shared per message: show one emoji chip with a participant
 count, let other users join the same emoji, and let each user toggle their own
-participation. Preserve server-backed persistence and live updates. Quick emoji
+participation. Preserve server-backed persistence and live updates. A Client-only
+update does not enable shared reactions on an older Server: keep the Add reaction
+action visible and explain that the Server must be updated and the Client reconnected. Quick emoji
 actions and the picker complement chips displayed below message attachments.
+
+Global authentication has its own Conta global settings category, with stacked
+email/password fields and distinct sign-in and registration actions. Registration
+opens the existing configured global portal in the browser; no in-app registration
+is implied. Profile editing shows a live public-card preview of unsaved display
+name, staged photo (including animated GIFs) and biography. Other users receive
+changes only after explicit Save. Installed media packs offer Usar, which opens
+the matching local emoji, GIF or sticker tab; media selection prepares a composer
+attachment and still requires Send.
+
+The latest media refinement keeps only Emoji, GIF and Sticker selection in the
+conversation picker. Package installation, image/package import, export, removal
+and GIPHY configuration live in the Emojis e mídia settings category, reachable
+through Gerenciar. Using a saved pack returns to the active conversation without
+discarding the message draft or bypassing unsaved-settings guards. Management
+remains available without a conversation; Use requires an active composer.
+Message reactions initially show 16 common emojis, with full-catalog search and
+an explicit expand/collapse action.

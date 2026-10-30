@@ -1410,11 +1410,11 @@ test("profile crop, deferred upload, save and removal failure retain draft", asy
     await page.screenshot({ path: join(capture, "avatar-crop.png") });
     await page.getByRole("button", { name: "Usar este recorte", exact: true }).click();
     expect(uploads).toBe(0);
-    await expect(page.locator(".profile-preview img").first()).toHaveAttribute("src", /^blob:/);
+    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", /^blob:/);
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await expect(page.locator(".settings-savebar")).toHaveCount(0);
     expect(uploads).toBe(1);
-    await expect(page.locator(".profile-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
+    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
     expect(
       await page
         .locator(".modal-body")
@@ -1430,7 +1430,7 @@ test("profile crop, deferred upload, save and removal failure retain draft", asy
     await page.screenshot({ path: join(capture, "profile-save-error.png") });
     await expect(page.locator(".settings-savebar")).toBeVisible();
     await page.getByRole("button", { name: "Redefinir", exact: true }).click();
-    await expect(page.locator(".profile-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
+    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
     await page.keyboard.press("Escape");
   } finally {
     await close();
@@ -1713,13 +1713,13 @@ test("emoji reactions toggle and the media library installs, imports and restore
     const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});
     await picker.getByRole("button",{name:"sorriso feliz",exact:true}).click();
     await expect(page.locator(".composer textarea")).toHaveValue("😀");
-    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Loja",exact:true}).click();
-    await picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Baixar",exact:true}).click();
-    await expect(picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Instalado",exact:true})).toBeDisabled();
-    await picker.getByLabel("Importar imagens da biblioteca",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
-    await expect(picker.locator(".expression-installed")).toContainText("Minha coleção");
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();
+    await page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Baixar",exact:true}).click();
+    await expect(page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Usar",exact:true})).toBeEnabled();
+    await page.getByLabel("Importar imagens da biblioteca",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
+    await expect(page.locator(".media-library-settings .expression-installed")).toContainText("Minha coleção");
     await page.screenshot({path:join(capture,"media-store-dark.png")});
-    await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);
+    await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);
     await page.screenshot({path:join(capture,"sticker-library-dark.png")});
     await picker.getByRole("button",{name:"Gato",exact:true}).click();await expect(page.locator(".pending-file")).toContainText("Gato.png");
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"GIFs",exact:true}).click();
@@ -1729,7 +1729,7 @@ test("emoji reactions toggle and the media library installs, imports and restore
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();
     await fullyInside(page,".expression-picker",0);await page.screenshot({path:join(capture,"sticker-library-light-minimum.png")});
-    await picker.getByRole("tab",{name:"Loja",exact:true}).click();await page.screenshot({path:join(capture,"media-store-light-minimum.png")});
+    await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();await page.screenshot({path:join(capture,"media-store-light-minimum.png")});
     await page.reload();
     const saved=await page.evaluate(async()=>{const {readPacks}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);return(await readPacks()).map((pack)=>({name:pack.name,count:pack.items.length,blob:pack.items[0]?.blob?.size}));});
     expect(saved.some((pack)=>pack.name==="Bichos do OpenMoji"&&pack.count===6&&pack.blob!>0)).toBe(true);
@@ -1763,7 +1763,7 @@ test("profile editor stages an animated GIF without flattening it through croppi
   await page.getByRole("button",{name:"Configurações",exact:true}).click();
   await page.getByLabel("Selecionar foto de tester",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
   await expect(page.getByRole("dialog",{name:/recorte/i})).toHaveCount(0);expect(bytes).toBeUndefined();
-  await expect(page.locator(".profile-preview img").first()).toHaveAttribute("src",/^blob:/);
+  await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src",/^blob:/);
   await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
   await expect(page.locator(".settings-savebar")).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>(window as any).stagedAvatarHeader)).toBe("GIF89a");expect(await page.evaluate(()=>(window as any).stagedAvatarType)).toBe("image/gif");
  }finally{await close();}
@@ -1817,7 +1817,7 @@ test("packaged renderer installs bundled stickers without a development server U
   await page.route("http://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(route.request().url().endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
   await page.routeWebSocket("ws://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
   await page.evaluate(({user,server,channel})=>{localStorage.setItem("distopic.accounts",JSON.stringify([{id:"packaged",url:"http://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
-  await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"Loja",exact:true}).click();const pack=picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Instalado",exact:true})).toBeDisabled();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
+  await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();const pack=page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Usar",exact:true})).toBeEnabled();await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
  }finally{await close();}
 });
 
@@ -1898,5 +1898,189 @@ test("clean navigation starts with direct messages and keeps secondary destinati
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(rail.getByRole("button", { name: "Mensagens diretas", exact: true })).toBeVisible();
     await page.screenshot({ path: join(capture, "clean-rail-top-light-minimum.png") });
+  } finally { await close(); }
+});
+
+test("installed media packs open their collection and send a real attachment", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await expect(page.locator(".brand-symbol").first()).not.toHaveCSS("mask-image", "none");
+    let uploaded = false;
+    await page.route("http://experience.test/api/channels/general/messages", async (route) => {
+      if (route.request().method() !== "POST") return route.fulfill({ contentType: "application/json", body: "[]" });
+      expect(route.request().headers()["content-type"]).toContain("multipart/form-data");
+      expect(route.request().postDataBuffer()!.includes(Buffer.from('filename="Gato.png"'))).toBe(true);
+      uploaded = true;
+      await route.fulfill({ contentType: "application/json", body: "{}" });
+    });
+    await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
+    const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
+    await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
+    const pack = page.locator(".media-library-settings .expression-pack").filter({ hasText: "Bichos do OpenMoji" });
+    await pack.getByRole("button", { name: "Baixar", exact: true }).click();
+    await pack.getByRole("button", { name: "Usar", exact: true }).click();
+    await expect(picker.getByRole("tab", { name: "Figurinhas", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => picker.getByRole("button", { name: "Gato", exact: true }).locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await page.screenshot({ path: join(capture, "usable-stickers-dark.png") });
+    await picker.getByRole("button", { name: "Gato", exact: true }).click();
+    await expect(page.locator(".pending-file")).toContainText("Gato.png");
+    await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
+    await expect.poll(() => uploaded).toBe(true);
+    await expect(page.locator(".pending-file")).toHaveCount(0);
+    const add = page.getByRole("button", { name: "Nova aba", exact: true });
+    await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
+    expect(await add.evaluate((element) => !!element.closest(".tabs-strip"))).toBe(true);
+    await expect(add.locator(".rail-label")).toBeVisible();
+  } finally { await close(); }
+});
+
+test("profile preview follows unsaved drafts and global account has its own page", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await expect(page.locator(".global-signin-form")).toHaveCount(0);
+    const preview = page.getByRole("complementary", { name: "Prévia do perfil" });
+    await page.getByLabel("Nome de exibição de tester", { exact: true }).fill("Meu nome em prévia");
+    await page.getByLabel("Biografia de tester", { exact: true }).fill("Uma biografia que muda enquanto eu edito.\nAinda não foi salva.");
+    await page.getByLabel("Selecionar foto de tester", { exact: true }).setInputFiles("tests/fixtures/profile-animation.gif");
+    await expect(preview.locator("strong")).toHaveText("Meu nome em prévia");
+    await expect(preview.locator(".profile-bio")).toContainText("Ainda não foi salva.");
+    await expect(preview.locator("img")).toHaveAttribute("src", /^blob:/);
+    expect(await preview.locator(".profile-preview-card").evaluate((element) => element.getBoundingClientRect().right <= element.closest(".settings-content")!.getBoundingClientRect().right)).toBe(true);
+    expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.user.displayName)).toBe("Pessoa de teste");
+    await page.screenshot({ path: join(capture, "profile-live-preview-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await preview.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(capture, "profile-live-preview-light-minimum.png") });
+    await page.getByRole("button", { name: "Conta global", exact: true }).click();
+    await expect(page.locator(".profile-editor")).toHaveCount(0);
+    await expect(page.locator(".global-signin-form")).toBeVisible();
+    const register = page.getByRole("link", { name: "Criar conta global" });
+    await expect(register).toHaveAttribute("href", /\/cadastro$/);
+    await expect(register).toHaveAttribute("target", "_blank");
+    await expect(page.getByLabel("E-mail", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
+    await expect(page.locator(".settings-savebar")).toBeVisible();
+    await page.screenshot({ path: join(capture, "global-account-light-minimum.png") });
+    await page.setViewportSize({ width: 1320, height: 840 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "dark"; }); });
+    await page.screenshot({ path: join(capture, "global-account-dark.png") });
+  } finally { await close(); }
+});
+
+test("friend message reactions explain an old server and work when support is advertised", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const i = s.instances.test, friend = { id: "friend", username: "bruna", displayName: "Bruna", avatarUrl: null };
+        i.relationships = [{ user: friend, status: "friend" }];
+        i.dms = [{ id: "dm-friend", recipients: [friend] }];
+        i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [] }], hasMore: false, loading: false };
+        s.view = { kind: "home", accountId: "test", dmId: "dm-friend" };
+      });
+    });
+    const message = page.locator('[data-message-id="message"]');
+    await message.hover();
+    await message.getByRole("button", { name: "Adicionar reação", exact: true }).click();
+    await expect(page.getByText("Esta instância ainda não oferece reações.", { exact: false })).toBeVisible();
+    await page.screenshot({ path: join(capture, "reaction-server-requirement-dark.png") });
+    await page.route("http://experience.test/api/channels/dm-friend/messages/message/reactions/**", async (route) => {
+      const current = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.messages["dm-friend"].items[0]);
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...current, reactions: route.request().method() === "PUT" ? [{ emoji: "👍", userIds: ["friend", "person"] }] : [{ emoji: "👍", userIds: ["friend"] }] }) });
+    });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
+    await message.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
+    const reaction = message.getByRole("button", { name: "👍: 2 reações", exact: true });
+    await expect(reaction).toHaveAttribute("aria-pressed", "true");
+    await reaction.click();
+    await expect(message.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
+  } finally { await close(); }
+});
+
+test("compact reactions expand and search while library management lives in settings", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
+    const row = page.locator('[data-message-id="message"]');
+    await row.hover();
+    await row.getByRole("button", { name: "Adicionar reação", exact: true }).click();
+    const reactions = page.getByRole("dialog", { name: "Escolher reação" });
+    await expect(reactions.locator(".emoji-grid button")).toHaveCount(16);
+    await page.screenshot({ path: join(capture, "compact-reactions-dark.png") });
+    await reactions.getByRole("button", { name: "Ver todos os emojis", exact: true }).click();
+    expect(await reactions.locator(".emoji-grid button").count()).toBeGreaterThan(16);
+    await reactions.getByRole("button", { name: "Mostrar menos", exact: true }).click();
+    await expect(reactions.locator(".emoji-grid button")).toHaveCount(16);
+    await reactions.getByLabel("Buscar emoji para reação", { exact: true }).fill("unicornio");
+    await expect(reactions.getByRole("button", { name: "unicórnio", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.locator(".composer textarea").fill("Meu rascunho continua aqui");
+    await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
+    const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
+    await expect(picker.getByRole("tab")).toHaveCount(3);
+    await expect(picker.getByRole("tab", { name: "Loja", exact: true })).toHaveCount(0);
+    await expect(picker.getByLabel("Chave de cliente GIPHY")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "simple-media-picker-dark.png") });
+    await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
+    const library = page.locator(".media-library-settings");
+    await expect(library).toBeVisible();
+    await expect(page.getByRole("button", { name: "Emojis e mídia", exact: true })).toHaveAttribute("aria-current", "page");
+    await library.locator(".expression-pack").filter({ hasText: "Bichos do OpenMoji" }).getByRole("button", { name: "Baixar", exact: true }).click();
+    await expect(library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true })).toBeEnabled();
+    await page.screenshot({ path: join(capture, "media-settings-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    expect(await page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({ path: join(capture, "media-settings-light-minimum.png") });
+    await library.locator("summary").click();
+    await library.getByLabel("Chave de cliente GIPHY", { exact: true }).fill("synthetic-client-key");
+    await library.getByRole("button", { name: "Salvar chave", exact: true }).click();
+    expect(await page.evaluate(() => localStorage.getItem("annoy.giphy-client-key"))).toBe("synthetic-client-key");
+    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    await page.getByRole("dialog", { name: "Salvar suas alterações?" }).getByRole("button", { name: "Descartar alterações", exact: true }).click();
+    await expect(picker.getByRole("tab", { name: "Figurinhas", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".composer textarea")).toHaveValue("Meu rascunho continua aqui");
+    await fullyInside(page, ".expression-picker", 0);
+    await page.screenshot({ path: join(capture, "simple-media-picker-light-minimum.png") });
+    await page.keyboard.press("Escape");
+    await row.scrollIntoViewIfNeeded(); await row.hover();
+    await row.getByRole("button", { name: "Adicionar reação", exact: true }).click();
+    await fullyInside(page, ".reaction-picker", 0);
+    await expect(reactions.locator(".emoji-grid button")).toHaveCount(16);
+    await page.screenshot({ path: join(capture, "compact-reactions-light-minimum.png") });
+  } finally { await close(); }
+});
+
+test("using media from settings respects unsaved profile changes and works without an active chat", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByLabel("Nome de exibição de tester", { exact: true }).fill("Nome ainda não salvo");
+    await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
+    const library = page.locator(".media-library-settings");
+    await library.locator(".expression-pack").filter({ hasText: "Bichos do OpenMoji" }).getByRole("button", { name: "Baixar", exact: true }).click();
+    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    const guard = page.getByRole("dialog", { name: "Salvar suas alterações?" });
+    await expect(guard).toBeVisible();
+    await guard.getByRole("button", { name: "Continuar editando", exact: true }).click();
+    await expect(library).toBeVisible();
+    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    await guard.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+    const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
+    await expect(picker).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.view = { kind: "home", accountId: "test", dmId: null }; }); });
+    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
+    await expect(library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true })).toBeDisabled();
+    await expect(library).toContainText("Abra uma conversa para usar seus pacotes.");
   } finally { await close(); }
 });
