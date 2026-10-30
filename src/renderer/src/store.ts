@@ -105,6 +105,8 @@ export interface Settings {
   mutedServers: string[];
   mutedChannels: string[];
   noiseFilter: NoiseFilter;
+  userVolumes: Record<string, number>;
+  dmProfileOpen: boolean;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
@@ -180,7 +182,9 @@ const DEFAULT_SETTINGS: Settings = {
   messageSounds: true,
   mutedServers: [],
   mutedChannels: [],
-  noiseFilter: "gtcrn",
+  noiseFilter: "rnnoise",
+  userVolumes: {},
+  dmProfileOpen: true,
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",

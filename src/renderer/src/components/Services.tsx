@@ -1,3 +1,4 @@
+import { ServiceLogo } from "./ServiceLogo.tsx";
 import { useState, type FormEvent } from "react";
 import { CATALOG, catalogEntry, teamspeakLink, type CatalogEntry, type Service, type TabDisplay, type TabPlacement, type TeamSpeakServer } from "../../../shared/services.ts";
 import { addService, navigate, removeService, setServiceHidden, updateService } from "../client.ts";
@@ -42,7 +43,7 @@ export function ServiceTab({ service }: { service: Service }) {
       aria-current={active ? "page" : undefined}
     >
       <span className="tab-tile" style={tile.color ? { background: tile.color, color: "#fff" } : undefined}>
-        {tile.text}
+        {service.kind === "web" ? tile.text : <ServiceLogo kind={service.kind} />}
       </span>
       {!iconOnly && <span className="rail-label">{service.name}</span>}
       {badge && <span className="tab-badge">{badge}</span>}
@@ -62,7 +63,7 @@ export function HiddenServices() {
         return (
           <li key={service.id}>
             <span className="tab-tile" style={tile.color ? { background: tile.color, color: "#fff" } : undefined}>
-              {tile.text}
+              {service.kind === "web" ? tile.text : <ServiceLogo kind={service.kind} />}
             </span>
             <span className="truncate">{service.name}</span>
             <button className="btn btn-ghost btn-small" onClick={() => setServiceHidden(service.id, false)}>
@@ -81,7 +82,7 @@ function ServiceCard({ entry }: { entry: CatalogEntry }) {
   return (
     <button className="service-card" onClick={add}>
       <span className="service-tile" style={{ background: entry.color }}>
-        {entry.tile}
+        <ServiceLogo kind={entry.kind} />
       </span>
       <span className="service-text">
         <strong>{entry.name}</strong>

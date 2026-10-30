@@ -186,6 +186,7 @@ export interface Message {
   attachments: Attachment[];
   mentionIds: string[];
   mentionsEveryone: boolean;
+  reactions?: { emoji: string; userIds: string[] }[];
 }
 
 export interface Invite {
@@ -514,7 +515,7 @@ export type GatewayEvent =
         relationships: Relationship[];
         presences: Record<string, Presence>;
         activities?: Record<string, UserActivity[]>;
-        instance: { isAdmin: boolean; registration: RegistrationMode; voiceBackend: VoiceBackend; activityArtwork?: boolean; developmentActivity?: boolean; directCalls?: boolean; socialProfiles?: boolean; presenceStatus?: boolean; manualPresence?: boolean };
+        instance: { isAdmin: boolean; registration: RegistrationMode; voiceBackend: VoiceBackend; activityArtwork?: boolean; developmentActivity?: boolean; directCalls?: boolean; socialProfiles?: boolean; groupActivity?: boolean; reactions?: boolean; serverIcons?: boolean; gifSearch?: boolean; presenceStatus?: boolean; manualPresence?: boolean };
       };
     }
   | { t: "HEARTBEAT_ACK"; d: null }

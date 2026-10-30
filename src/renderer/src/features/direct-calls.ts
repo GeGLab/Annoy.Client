@@ -1,3 +1,4 @@
+import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
 import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
@@ -10,6 +11,7 @@ let media = { local: null as MediaStream | null, remote: null as MediaStream | n
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
 let peer: RTCPeerConnection | null = null, sessionId: string | null = null;
+let callMic: Mic | null = null;
 let preparing: Promise<RTCPeerConnection> | null = null;
 let candidates: RTCIceCandidateInit[] = [];
 export const useDirectCallMedia = () => useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => media);
@@ -17,6 +19,7 @@ export const useDirectCallMedia = () => useSyncExternalStore((listener) => { lis
 function cleanup() {
   sessionId = null; preparing = null; candidates = [];
   const connection = peer; peer = null; connection?.close();
+  callMic?.stop(); callMic = null;
   media.local?.getTracks().forEach((track) => track.stop());
   media.remote?.getTracks().forEach((track) => track.stop());
   media = { local: null, remote: null, connected: false }; emit();
@@ -56,7 +59,15 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
   };
   preparing = (async () => {
     const settings = getState().settings;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, ...(settings.inputDeviceId !== "default" && { deviceId: { exact: settings.inputDeviceId } }) }, video: call.video ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } : false });
+    const mic = await openMic(settings.inputDeviceId, settings.noiseFilter);
+    if (sessionId !== call.id) { mic.stop(); throw new Error("Chamada encerrada"); }
+    callMic = mic;
+    const stream = new MediaStream([mic.track]);
+    if (call.video) {
+      const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } });
+      if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error("Chamada encerrada"); }
+      camera.getVideoTracks().forEach((track) => stream.addTrack(track));
+    }
     if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error("Chamada encerrada"); }
     for (const track of stream.getTracks()) { if (track.kind === "audio") track.enabled = !settings.selfMute && !settings.selfDeaf; connection.addTrack(track, stream); }
     media = { ...media, local: stream }; updateDirectCallMute(); emit(); return connection;
