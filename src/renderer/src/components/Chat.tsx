@@ -29,7 +29,8 @@ import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
-import { isCancellation } from "../../../shared/requests.ts";
+import { isCancellation, RequestError } from "../../../shared/requests.ts";
+import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -367,7 +368,15 @@ function Composer({
   canAttach,
   mentionables,
   replyTo,
-  clearReply,
+  replyToId,
+  replyValid,
+  replyStatus,
+  draft,
+  onDraftChange,
+  onDiscard,
+  onClearReply,
+  onRetryReply,
+  draftPersistenceFailed,
   nameOf,
 }: {
   dropRef: RefObject<((files: FileList) => void) | null>;
@@ -378,11 +387,19 @@ function Composer({
   canAttach: boolean;
   mentionables: Mentionable[];
   replyTo: Message | null;
-  clearReply: () => void;
+  replyToId: string | null;
+  replyValid: boolean;
+  replyStatus: "checking" | "valid" | "unavailable" | null;
+  draft: ChatDraft;
+  onDraftChange: (patch: Partial<Omit<ChatDraft, "updatedAt">>) => void;
+  onDiscard: () => void;
+  onClearReply: () => void;
+  onRetryReply: () => void;
+  draftPersistenceFailed: boolean;
   nameOf: NameOf;
 }) {
-  const [text, setText] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const text = draft.text;
+  const [files, setFiles] = useState<File[]>(() => readPendingFiles(accountId, channelId));
   const [sending, setSending] = useState(false);
   const requests = useRequestOwner(JSON.stringify([accountId, channelId]));
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
@@ -419,7 +436,7 @@ function Composer({
     const el = input.current;
     const caret = el?.selectionStart ?? text.length;
     const before = text.slice(0, caret).replace(/@([^\s@]{0,32})$/, `@${m.name} `);
-    setText(before + text.slice(caret));
+    onDraftChange({ text: before + text.slice(caret) });
     setPicked((p) => (p.some((x) => x.id === m.id) ? p : [...p, m]));
     setQuery(null);
     requestAnimationFrame(() => el?.setSelectionRange(before.length, before.length));
@@ -429,12 +446,15 @@ function Composer({
     const element = input.current, start = element?.selectionStart ?? text.length, end = element?.selectionEnd ?? text.length;
     const next = text.slice(0, start) + value + text.slice(end);
     if (next.length > LIMITS.messageMax) return toast("A mensagem atingiu o limite de caracteres.");
-    setText(next);
+    onDraftChange({ text: next });
     requestAnimationFrame(() => { element?.focus(); element?.setSelectionRange(start + value.length, start + value.length); });
   };
   const addFiles = (list: FileList | File[]) => {
     if (!canAttach || !connected) return;
-    setFiles((f) => [...f, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage));
+    const next = [...files, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage);
+    setFiles(next);
+    writePendingFiles(accountId, channelId, next);
+    onDraftChange({ attachmentCount: next.length });
   };
   dropRef.current = addFiles;
 
@@ -444,16 +464,16 @@ function Composer({
     let content = text;
     for (const m of [...picked].sort((a, b) => b.name.length - a.name.length)) content = content.split(`@${m.name}`).join(`<@${m.id}>`);
     content = content.trim();
-    if ((!content && files.length === 0) || sending) return;
+    if ((!content && files.length === 0) || sending || (replyToId !== null && !replyValid) || draft.attachmentCount > files.length) return;
     setSending(true);
     const signal = requests.signal;
     try {
-      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null, signal);
+      await apiFor(accountId).sendMessage(channelId, content, files, replyToId, signal);
       signal.throwIfAborted();
-      setText("");
+      onDraftChange({ text: "", replyToId: null, attachmentCount: 0 });
       setFiles([]);
+      writePendingFiles(accountId, channelId, []);
       setPicked([]);
-      clearReply();
     } catch (err) {
       if (!isCancellation(err)) toast((err as Error).message);
     } finally {
@@ -475,7 +495,7 @@ function Composer({
       }
       if (e.key === "Escape") return setQuery(null);
     }
-    if (e.key === "Escape" && replyTo) return clearReply();
+    if (e.key === "Escape" && replyToId) return onClearReply();
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void send();
@@ -506,15 +526,31 @@ function Composer({
       {replyTo && (
         <div className="reply-bar">
           Respondendo a <strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
-          <button className="icon-btn tiny" onClick={clearReply} title="Cancelar resposta">
+          <button className="icon-btn tiny" onClick={onClearReply} title="Cancelar resposta">
             <Icon name="x" size={14} />
           </button>
         </div>
       )}
+      {replyToId && !replyTo && <div className="reply-bar" role="status">
+        <span>{replyValid ? "Mensagem original validada" : replyStatus === "checking" ? "Validando mensagem original…" : "Não foi possível validar a mensagem original. Reconecte ou remova a resposta."}</span>
+        <button className="btn btn-ghost" disabled={replyValid || replyStatus === "checking"} onClick={onRetryReply}>Tentar validar</button>
+        <button className="icon-btn tiny" onClick={onClearReply} title="Remover resposta"><Icon name="x" size={14} /></button>
+      </div>}
+      {draft.attachmentCount > files.length && <div className="draft-attachment-notice" role="status">
+        <span>Os anexos não são guardados ao fechar o aplicativo. Selecione novamente os {draft.attachmentCount - files.length} arquivo(s) que faltam.</span>
+        <button className="btn btn-ghost" type="button" onClick={() => fileInput.current?.click()}>Selecionar novamente</button>
+        <button className="btn btn-ghost" type="button" onClick={() => { writePendingFiles(accountId, channelId, files); onDraftChange({ attachmentCount: files.length }); }}>Remover ausentes</button>
+      </div>}
+      {draftPersistenceFailed && <p className="draft-save-warning" role="alert">Não foi possível salvar este rascunho no dispositivo. Mantenha esta conversa aberta para não perder o texto.</p>}
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={sending} onRemove={() => setFiles((list) => list.filter((_, j) => j !== i))} />
+            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={sending} onRemove={() => {
+              const next = files.filter((_, j) => j !== i);
+              setFiles(next);
+              writePendingFiles(accountId, channelId, next);
+              onDraftChange({ attachmentCount: next.length });
+            }} />
           ))}
         </div>
       )}
@@ -545,7 +581,7 @@ function Composer({
           placeholder={connected ? placeholder : "Sem conexão com o servidor"}
           disabled={!connected}
           onChange={(e) => {
-            setText(e.target.value);
+            onDraftChange({ text: e.target.value });
             updateQuery(e.target.value, e.target.selectionStart);
             if (e.target.value) sendTyping(accountId, channelId);
           }}
@@ -559,12 +595,20 @@ function Composer({
           size="icon"
           className="composer-send"
           loading={sending}
-          disabled={!connected || sending || (!text.trim() && files.length === 0)}
+          disabled={!connected || sending || (!text.trim() && files.length === 0) || (replyToId !== null && !replyValid) || draft.attachmentCount > files.length}
           onClick={() => void send()}
           aria-label="Enviar mensagem"
         >
           <Icon name="send" size={19} />
         </Button>
+        {(text.length > 0 || replyToId !== null || files.length > 0 || draft.attachmentCount > files.length) && <button className="icon-btn" type="button" disabled={sending} onClick={async () => {
+          if (await confirmAction("Descartar o texto, a resposta e os anexos deste rascunho?", { title: "Descartar rascunho", confirmLabel: "Descartar" })) {
+            onDiscard();
+            setFiles([]);
+            writePendingFiles(accountId, channelId, []);
+            setPicked([]);
+          }
+        }} title="Descartar rascunho" aria-label="Descartar rascunho"><Icon name="trash" size={16} /></button>}
       </div>
     </div>
   );
@@ -574,12 +618,22 @@ export function Chat(props: ChatProps) {
   const { accountId, channelId, nameOf } = props;
   const entry = useStore((s) => s.instances[accountId]?.messages[channelId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
+  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const items = entry?.items ?? EMPTY;
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [draft, setDraft] = useState<ChatDraft>(() => readChatDraft(accountId, channelId));
+  const [draftPersistenceFailed, setDraftPersistenceFailed] = useState(false);
+  const [replyResolution, setReplyResolution] = useState<{ id: string; status: "checking" | "valid" | "unavailable"; message: Message | null } | null>(
+    () => draft.replyToId ? { id: draft.replyToId, status: "checking", message: null } : null,
+  );
+  const [replyValidationAttempt, setReplyValidationAttempt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const prevHeight = useRef<number | null>(null);
+  const restoredVisit = useRef<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const chatRequests = useRequestOwner(JSON.stringify([accountId, channelId]));
   const firstId = items[0]?.id;
   const navigation = useStore((s) => s.chatNavigation);
   const focus = useStore((s) =>
@@ -587,6 +641,51 @@ export function Chat(props: ChatProps) {
   );
   const messageLog = useRef<HTMLDivElement>(null);
   const lastTop = useRef(0);
+  const changeDraft = (patch: Partial<Omit<ChatDraft, "updatedAt">>) => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraft(next);
+    setDraftPersistenceFailed(!writeChatDraft(accountId, channelId, next));
+  };
+  const localReply = draft.replyToId ? items.find((message) => message.id === draft.replyToId) ?? null : null;
+  const replyTo = localReply ?? (replyResolution?.id === draft.replyToId && replyResolution.status === "valid" ? replyResolution.message : null);
+  const replyValid = !draft.replyToId || !!localReply || (replyResolution?.id === draft.replyToId && replyResolution.status === "valid");
+  const replyStatus = draft.replyToId && replyResolution?.id === draft.replyToId ? replyResolution.status : draft.replyToId ? "checking" : null;
+
+  useEffect(() => {
+    const replyId = draft.replyToId;
+    if (!replyId) { setReplyResolution(null); return; }
+    const cached = items.find((message) => message.id === replyId);
+    if (cached) { setReplyResolution({ id: replyId, status: "valid", message: cached }); return; }
+    if (!entry || entry.loading) return;
+    if (!connected) { setReplyResolution({ id: replyId, status: "unavailable", message: null }); return; }
+    const controller = new AbortController();
+    const signal = AbortSignal.any([chatRequests.signal, controller.signal]);
+    setReplyResolution({ id: replyId, status: "checking", message: null });
+    void (async () => {
+      try {
+        const page = await apiFor(accountId).get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(replyId)}`, signal);
+        if (signal.aborted || draft.replyToId !== replyId) return;
+        const original = page.find((message) => message.id === replyId && message.channelId === channelId);
+        if (original) setReplyResolution({ id: replyId, status: "valid", message: original });
+        else {
+          setReplyResolution(null);
+          changeDraft({ replyToId: null });
+          toast("A mensagem original não está mais disponível; a referência de resposta foi removida.");
+        }
+      } catch (error) {
+        if (signal.aborted || isCancellation(error) || draft.replyToId !== replyId) return;
+        if (error instanceof RequestError && error.status === 404) {
+          setReplyResolution(null);
+          changeDraft({ replyToId: null });
+          toast("A mensagem original não está mais disponível; a referência de resposta foi removida.");
+        } else setReplyResolution({ id: replyId, status: "unavailable", message: null });
+      }
+    })();
+    return () => controller.abort();
+  }, [accountId, channelId, draft.replyToId, entry, connected, items, replyValidationAttempt, chatRequests]);
+
+  useEffect(() => () => flushChatState(), []);
   useLayoutEffect(() => {
     if (!focus) return;
     pinned.current = false;
@@ -597,14 +696,41 @@ export function Chat(props: ChatProps) {
   }, [focus, items]);
 
   useLayoutEffect(() => {
+    restoredVisit.current = null;
     pinned.current = !focus;
     prevHeight.current = null;
-    const el = scroller.current;
-    if (el && !focus) {
-      el.scrollTop = el.scrollHeight;
-      lastTop.current = el.scrollTop;
-    }
   }, [accountId, channelId, navigation]);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || focus) return;
+    const visit = JSON.stringify([draftKey(accountId, channelId), navigation]);
+    if (restoredVisit.current === visit) return;
+    const anchor = readChatAnchor(accountId, channelId);
+    if (!anchor) {
+      pinned.current = true;
+      if (!entry?.loading && !entry?.error) {
+        el.scrollTop = el.scrollHeight;
+        lastTop.current = el.scrollTop;
+        restoredVisit.current = visit;
+      }
+      return;
+    }
+    const row = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.messageId)}"]`);
+    if (row) {
+      const rowOffset = row.getBoundingClientRect().top - el.getBoundingClientRect().top;
+      el.scrollTop += rowOffset - anchor.offset;
+      pinned.current = false;
+      lastTop.current = el.scrollTop;
+      restoredVisit.current = visit;
+    } else if (entry && !entry.loading && !entry.error && items.length) {
+      clearChatAnchor(accountId, channelId);
+      el.scrollTop = el.scrollHeight;
+      pinned.current = true;
+      lastTop.current = el.scrollTop;
+      restoredVisit.current = visit;
+    }
+  }, [accountId, channelId, navigation, items, entry?.loading, entry?.error, focus]);
 
   // Images can grow after the message list mounts. Follow that growth only
   // while the reader remains at the latest message, never while reading back.
@@ -642,6 +768,12 @@ export function Chat(props: ChatProps) {
     if (el.scrollTop < lastTop.current - 1) pinned.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) pinned.current = true;
     lastTop.current = el.scrollTop;
+    const viewportTop = el.getBoundingClientRect().top;
+    const firstVisible = [...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])]
+      .find((row) => row.getBoundingClientRect().bottom > viewportTop);
+    if (firstVisible?.dataset.messageId) {
+      writeChatAnchor(accountId, channelId, { messageId: firstVisible.dataset.messageId, offset: firstVisible.getBoundingClientRect().top - viewportTop });
+    }
     if (el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
@@ -723,7 +855,7 @@ export function Chat(props: ChatProps) {
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
                   canReact={props.canSend}
-                  onReply={setReplyTo}
+                  onReply={(message) => { changeDraft({ replyToId: message.id }); setReplyResolution({ id: message.id, status: "valid", message }); }}
                 />
               </Fragment>
             );
@@ -743,8 +875,19 @@ export function Chat(props: ChatProps) {
         canSend={props.canSend}
         canAttach={props.canAttach}
         mentionables={props.mentionables}
+        draft={draft}
+        onDraftChange={changeDraft}
         replyTo={replyTo}
-        clearReply={() => setReplyTo(null)}
+        replyToId={draft.replyToId}
+        replyValid={replyValid}
+        replyStatus={replyStatus}
+        onClearReply={() => { changeDraft({ replyToId: null }); setReplyResolution(null); }}
+        onRetryReply={() => setReplyValidationAttempt((attempt) => attempt + 1)}
+        draftPersistenceFailed={draftPersistenceFailed}
+        onDiscard={() => {
+          changeDraft({ text: "", replyToId: null, attachmentCount: 0 });
+          setReplyResolution(null);
+        }}
         nameOf={nameOf}
       />
       <TypingLine accountId={accountId} channelId={channelId} me={me} nameOf={nameOf} />

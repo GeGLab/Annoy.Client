@@ -16,6 +16,7 @@ import { canRemoveServer, connectionOfflineSince } from "../../shared/server-rem
 import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
 import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport } from "../../shared/connectivity.ts";
 import { cancelled, isCancellation, RequestError } from "../../shared/requests.ts";
+import { clearAccountChatState, clearChatAnchor, clearRecoveryReturn, flushChatState, readChatAnchor, readRecoveryReturn, type RecoveryReturn } from "./chat-state.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -239,6 +240,7 @@ export function addAccountQuietly(account: Account): void {
 }
 
 export function removeAccount(accountId: string): void {
+  clearAccountChatState(accountId);
   const account = getState().accounts.find((item) => item.id === accountId);
   const user = getState().instances[accountId]?.user;
   disconnectDirectCall(accountId);
@@ -297,15 +299,49 @@ export function markServerRead(accountId: string, serverId: string): void {
 }
 
 export function navigate(view: View): void {
+  flushChatState();
+  const destinationAccountId = view.kind === "server" || view.kind === "home" || view.kind === "marketplace" ? view.accountId : null;
+  if (destinationAccountId) clearRecoveryReturn(destinationAccountId);
+  const destinationChannelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
+  const currentView = getState().view;
+  const currentChannelId = currentView.kind === "server" ? currentView.channelId : currentView.kind === "home" ? currentView.dmId : null;
+  if (destinationChannelId && destinationAccountId && currentChannelId === destinationChannelId && "accountId" in currentView && currentView.accountId === destinationAccountId) {
+    clearChatAnchor(destinationAccountId, destinationChannelId);
+  }
   showServiceView(view);
   setState((s) => {
     s.view = view;
     if(s.messageFocus) { delete s.instances[s.messageFocus.accountId]?.messages[s.messageFocus.channelId]; s.messageFocus=null; }
     if (view.kind === "server" || (view.kind === "home" && view.dmId)) s.chatNavigation++;
     const channelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
-    if (channelId && "accountId" in view && view.accountId) delete s.instances[view.accountId]?.unread[channelId];
+    if (channelId && destinationAccountId) delete s.instances[destinationAccountId]?.unread[channelId];
   });
   if (view.kind === "server") void ensureServer(view.accountId, view.serverId);
+}
+
+/** Reopen the account-local destination saved when recovery moved to the server directory. */
+export async function resumeRecoveredView(accountId: string): Promise<void> {
+  const destination: RecoveryReturn | null = readRecoveryReturn(accountId);
+  if (!destination || getState().instances[accountId]?.status !== "ready") return;
+  if (destination.kind === "home") {
+    const dmId = destination.dmId && getState().instances[accountId]?.dms.some((dm) => dm.id === destination.dmId) ? destination.dmId : null;
+    navigate({ kind: "home", accountId, dmId });
+    return;
+  }
+  if (destination.kind === "marketplace") {
+    navigate({ kind: "marketplace", accountId, serverId: destination.serverId });
+    return;
+  }
+  const visit = navigationGeneration;
+  const server = await ensureServer(accountId, destination.serverId);
+  if (!server || visit !== navigationGeneration || getState().view.kind !== "servers") {
+    if (!server && getState().view.kind === "servers") toast("Não foi possível reabrir a comunidade. Tente novamente pela lista.");
+    return;
+  }
+  const channel = destination.channelId && server.channels.some((item) => item.id === destination.channelId)
+    ? destination.channelId
+    : server.channels.find((item) => item.type === "text")?.id ?? null;
+  navigate({ kind: "server", accountId, serverId: destination.serverId, channelId: channel });
 }
 
 /** Shows the native view of a browser service, or hides it for anything else. */
@@ -443,7 +479,8 @@ export async function loadMessages(accountId: string, channelId: string, older =
   const inst = getState().instances[accountId];
   if (inst?.status !== "ready") return;
   const current = inst?.messages[channelId];
-  if (current?.loading || (older && !current?.hasMore) || (!older && current && !current.error)) return;
+  const anchor = older ? null : readChatAnchor(accountId, channelId);
+  if (current?.loading || (older && !current?.hasMore) || (!older && current && !current.error && !anchor)) return;
   const api = apiFor(accountId), generation = api.generation;
   const key = messageKey(accountId, channelId), controller = new AbortController();
   messageReads.get(key)?.abort();
@@ -455,13 +492,31 @@ export async function loadMessages(accountId: string, channelId: string, older =
     i.messages[channelId] = { items: current?.items ?? [], hasMore: current?.hasMore ?? true, loading: true };
   });
   const before = older ? current?.items[0]?.id : undefined;
+  let loadedAround = anchor !== null;
   try {
-    const page = await api.get<Message[]>(`/channels/${channelId}/messages?limit=${PAGE}${before ? `&before=${before}` : ""}`, signal);
+    let page: Message[];
+    if (anchor) {
+      try {
+        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(anchor.messageId)}`, signal);
+      } catch (error) {
+        if (!(error instanceof RequestError) || error.status !== 404) throw error;
+        clearChatAnchor(accountId, channelId);
+        loadedAround = false;
+        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}`, signal);
+      }
+      if (anchor && !page.some((message) => message.id === anchor.messageId)) {
+        clearChatAnchor(accountId, channelId);
+        loadedAround = false;
+        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}`, signal);
+      }
+    } else {
+      page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}${before ? `&before=${encodeURIComponent(before)}` : ""}`, signal);
+    }
     if (!active() || signal.aborted) return;
     patchInstance(accountId, (i) => {
       const prev = i.messages[channelId]?.items ?? [];
       const known = new Set(prev.map((m) => m.id));
-      i.messages[channelId] = { items: [...page.filter((m) => !known.has(m.id)), ...prev], hasMore: page.length === PAGE, loading: false };
+      i.messages[channelId] = { items: loadedAround ? page : [...page.filter((m) => !known.has(m.id)), ...prev], hasMore: loadedAround ? page.length > 0 : page.length === PAGE, loading: false };
     });
   } catch (err) {
     if (!active()) return;
@@ -493,6 +548,7 @@ export async function jumpToMessage(accountId:string,channelId:string,messageId:
 }
 export function returnToLatest(accountId:string,channelId:string) {
   messageReads.get(messageKey(accountId, channelId))?.abort();
+  clearChatAnchor(accountId, channelId);
   setState(s=>{delete s.instances[accountId]?.messages[channelId];s.messageFocus=null;s.chatNavigation++;});
   void loadMessages(accountId,channelId);
 }

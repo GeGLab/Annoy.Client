@@ -6,6 +6,7 @@ import { Brand } from "./Brand.tsx";
 import { Button } from "./ui/button.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { Icon } from "./ui.tsx";
+import { saveRecoveryReturn } from "../chat-state.ts";
 
 const BLOCK_AFTER_MS = 2000;
 
@@ -30,7 +31,10 @@ export function useConnectionBlocked() {
     const delay = Math.max(0, deadline - Date.now());
     const timer = setTimeout(() => {
       const current = getState().view;
-      if ("accountId" in current && current.accountId === accountId && (current.kind === "server" || current.kind === "home")) {
+      if ("accountId" in current && current.accountId === accountId && (current.kind === "server" || current.kind === "home" || current.kind === "marketplace")) {
+        if (current.kind === "server") saveRecoveryReturn(accountId, { kind: "server", serverId: current.serverId, channelId: current.channelId });
+        else if (current.kind === "home") saveRecoveryReturn(accountId, { kind: "home", dmId: current.dmId });
+        else saveRecoveryReturn(accountId, { kind: "marketplace", serverId: current.serverId });
         navigate({ kind: "servers" });
       }
     }, delay);

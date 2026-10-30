@@ -7,6 +7,7 @@ import { toast, useStore } from "../../store.ts";
 import { act, Icon, type IconName } from "../../components/ui.tsx";
 import { confirmAction } from "../../components/ui/action-dialog.tsx";
 import { Select } from "../../components/ui/select.tsx";
+import { readChatDraft, writeChatDraft } from "../../chat-state.ts";
 
 const ImageViewer = lazy(() => import("../../components/ImageViewer.tsx"));
 const MediaViewer = lazy(() => import("../../components/MediaViewer.tsx"));
@@ -44,14 +45,25 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
   const [sort, setSort] = useState<Sort>("recent");
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(() => readChatDraft(accountId, channel.id).text);
   const [image, setImage] = useState<number | null>(null);
   const [media, setMedia] = useState<{ url: string; filename: string; contentType: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
+  const uploadControllers = useRef(new Set<AbortController>());
   const api = apiFor(accountId);
   const canUpload = has(perms, Permission.SEND_MESSAGES) && has(perms, Permission.ATTACH_FILES);
   const canModerate = has(perms, Permission.MANAGE_MESSAGES);
   const names = useMemo(() => new Map(state.members.map((m) => [m.user.id, displayNameOf(m)])), [state.members]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      for (const controller of uploadControllers.current) controller.abort();
+      uploadControllers.current.clear();
+    };
+  }, [accountId, channel.id]);
 
   useEffect(() => {
     void loadMessages(accountId, channel.id);
@@ -81,20 +93,29 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
   const upload = async (list: File[]) => {
     if (!canUpload) return toast("Sem permissão para enviar arquivos aqui");
     const description = note.trim();
-    setNote("");
+    let allSucceeded = true;
     // The server takes a limited number of files per message.
     for (let i = 0; i < list.length; i += LIMITS.attachmentsPerMessage) {
+      if (!mounted.current) break;
       const batch = list.slice(i, i + LIMITS.attachmentsPerMessage);
       const job: Upload = { id: ++uploadSeq, names: batch.map((f) => f.name).join(", "), progress: 0, error: null, abort: new AbortController() };
+      uploadControllers.current.add(job.abort);
       setUploads((u) => [...u, job]);
-      const update = (patch: Partial<Upload>) => setUploads((u) => u.map((x) => (x.id === job.id ? { ...x, ...patch } : x)));
+      const update = (patch: Partial<Upload>) => { if (mounted.current) setUploads((u) => u.map((x) => (x.id === job.id ? { ...x, ...patch } : x))); };
       try {
         await api.uploadMessage(channel.id, i === 0 ? description : "", batch, (progress) => update({ progress }), job.abort.signal);
-        setUploads((u) => u.filter((x) => x.id !== job.id));
+        if (mounted.current) setUploads((u) => u.filter((x) => x.id !== job.id));
       } catch (err) {
-        if ((err as Error).name === "AbortError") setUploads((u) => u.filter((x) => x.id !== job.id));
+        allSucceeded = false;
+        if ((err as Error).name === "AbortError") { if (mounted.current) setUploads((u) => u.filter((x) => x.id !== job.id)); }
         else update({ error: (err as Error).message });
+      } finally {
+        uploadControllers.current.delete(job.abort);
       }
+    }
+    if (allSucceeded && mounted.current) {
+      setNote("");
+      writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: "", replyToId: null, attachmentCount: 0 });
     }
   };
 
@@ -152,7 +173,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         </Select>
         {canUpload && (
           <>
-            <input className="files-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Descrição (opcional)" maxLength={LIMITS.messageMax} />
+            <input className="files-note" value={note} onChange={(e) => { setNote(e.target.value); writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: e.target.value, replyToId: null, attachmentCount: 0 }); }} placeholder="Descrição (opcional)" maxLength={LIMITS.messageMax} />
             <button className="btn" onClick={() => input.current?.click()}>
               <Icon name="upload" size={16} />
               Enviar arquivos

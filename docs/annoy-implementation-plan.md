@@ -80,15 +80,16 @@ Não modificar código funcional neste marco.
 2. **M1.2 — requests e ciclo de vida (concluído):** timeout, cancelamento, classificação
    de erros e deduplicação de consultas. Proteger respostas contra troca de
    conta/canal; liberar timers, listeners e operações em andamento.
-3. **M1.3 — recuperação (implementado; validação adiada até M1.5):** enriquecer eventos do gateway com causa, instante,
+3. **M1.3 — recuperação (implementado e validado):** enriquecer eventos do gateway com causa, instante,
    tentativa e próxima tentativa; jitter, pausa offline e retomada. Implementar
    prazo de recuperação em primeiro plano sem desligar tentativas de fundo.
-4. **M1.4 — listagem (implementado; validação adiada até M1.5):** adicionar destino de servidores ao `View`, renderer e
+4. **M1.4 — listagem (implementado e validado):** adicionar destino de servidores ao `View`, renderer e
    navegação; busca, agrupamento, estados, retry e seleção de conta. Distinguir
    dados conhecidos em cache de disponibilidade confirmada.
-5. **M1.5 — preservação e auditoria:** retirar rascunhos/âncoras do ciclo de vida
-   de componentes desmontáveis; revisar autenticação, abertura de comunidade/DM,
-   configurações e uploads. Registrar operações ainda a revisar em seus marcos.
+5. **M1.5 — preservação e auditoria (concluído):** persistir rascunhos e âncoras
+   fora do ciclo de vida de componentes; manter anexos apenas em memória; revisar
+   autenticação, abertura de comunidade/DM, configurações e uploads. Registrar
+   operações ainda a revisar em seus marcos.
 
 Saída: R01, R02 e R04 aprovados e auditoria inicial de R03 registrada; sessão
 inválida leva a autenticação; queda de uma instância não bloqueia outra, nem
@@ -393,12 +394,22 @@ Não há decisão de produto pendente para M0/M1. Credenciais de assinatura,
 publicação e ambientes empacotados de teste são dependências operacionais de
 marcos futuros; não impedem implementação local/documentação.
 
-## 8. Próxima tarefa executável
+## 8. M1.3–M1.5 implementados e validados (30/10/2026)
 
-**M1.5 — preservação e auditoria.** M1.3 e M1.4 estão implementados, com casos
-de teste preparados e execução deliberadamente adiada a pedido do usuário até
-concluir M1.5. Persistir rascunhos/âncoras fora do ciclo de vida de componentes,
-preservar anexos em memória ao redirecionar e auditar autenticação, comunidade/DM,
-configurações e uploads. Em seguida executar typecheck, testes unitários e de
-interface de M1.3–M1.5 em conjunto, corrigir regressões e registrar evidências.
-Não iniciar M2 nesta execução.
+M1.5 adiciona persistência local versionada de texto/resposta/âncora por conta e
+canal; anexos `File` permanecem em memória e a interface pede seleção novamente
+depois que a sessão termina. A recuperação permite retorno explícito à área de
+origem. A auditoria protege formulários, configurações, perfil e uploads contra
+resultados tardios, e registra áreas que continuam em revisão nos próprios
+marcos. Ver evidências e limitações em `annoy-progress.md`.
+
+Validação final aprovada: `npm run typecheck`, `npm run build`, os seis grupos
+unitários disponíveis e a suíte Playwright completa (64/64). Uma falha inicial
+no teste de reabrir o canal foi corrigida sem remover a restauração de âncora;
+a repetição integral passou. Permanecem fora desta rodada teste de pacote de
+produção, Linux, leitor de tela e instâncias publicadas.
+
+## 9. Próxima tarefa executável
+
+Iniciar **M2 — Nova Aba e canais**, seguindo a ordem e dependências desta seção.
+Não iniciar os subitens de M2 automaticamente nesta execução concluída.

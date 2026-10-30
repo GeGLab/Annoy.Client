@@ -7,6 +7,7 @@ import { Icon } from "./ui/icon.tsx";
 export { Icon, type IconName } from "./ui/icon.tsx";
 import { colorFor, initials } from "../format.tsx";
 import { setState, toast, type Modal as ModalState } from "../store.ts";
+import { isCancellation } from "../../../shared/requests.ts";
 
 export function Avatar({ user, size = 32, presence, speaking }: { user: User; size?: number; presence?: Presence; speaking?: boolean }) {
   return (
@@ -38,7 +39,7 @@ export async function act(promise: Promise<unknown>, ok?: string): Promise<boole
     if (ok) toast(ok);
     return true;
   } catch (err) {
-    toast((err as Error).message);
+    if (!isCancellation(err)) toast((err as Error).message);
     return false;
   }
 }

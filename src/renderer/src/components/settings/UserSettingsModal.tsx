@@ -308,6 +308,7 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
 }
 
 export function UserSettingsModal() {
+  const requests = useRequestOwner("user-settings");
   const [page, setPage] = useState(() => {
     const modal = getState().modal;
     return modal?.kind === "userSettings" ? modal.section ?? "profile" : "profile";
@@ -402,6 +403,7 @@ export function UserSettingsModal() {
     if (saving) return false;
     setSaving(true);
     setError(null);
+    const signal = requests.signal;
     try {
       for (const account of dirtyProfiles) {
         const change = profiles[account.id]!,
@@ -413,12 +415,14 @@ export function UserSettingsModal() {
         const bioChanged = change.bio !== undefined && change.bio !== (user.bio ?? "");
         if (bioChanged && !getState().instances[account.id]?.instance?.socialProfiles) throw new Error("Atualize esta instância para salvar biografias.");
         if (name !== user.displayName || bioChanged) {
-          const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) });
+          const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) }, signal);
+          signal.throwIfAborted();
           applyUserUpdate(account.id, updated);
         }
         if (change.avatar !== undefined) {
           const updated =
-            change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }) : await api.uploadAvatar<User>(change.avatar);
+            change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }, signal) : await api.uploadAvatar<User>(change.avatar, signal);
+          signal.throwIfAborted();
           // Old servers may ignore an unknown avatar field. Never claim success.
           if (change.avatar === null && updated.avatarUrl !== null)
             throw new Error("Esta instância precisa ser atualizada para remover fotos.");
@@ -434,7 +438,7 @@ export function UserSettingsModal() {
       toast("Alterações salvas");
       return true;
     } catch (error) {
-      setError((error as Error).message || "Não foi possível salvar. Suas alterações continuam aqui.");
+      if (!isCancellation(error)) setError((error as Error).message || "Não foi possível salvar. Suas alterações continuam aqui.");
       return false;
     } finally {
       setSaving(false);

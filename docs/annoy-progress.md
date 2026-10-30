@@ -21,7 +21,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | Marco | Estado | Resultado |
 | --- | --- | --- |
 | M0 — análise/documentação | concluído | Três documentos criados e validados, com R01–R20, decisões, arquitetura, testes e próxima tarefa. |
-| M1 — conectividade | em andamento | M1.1 e M1.2 concluídos: isolamento, requests limitados/canceláveis e proteção de respostas por conta/navegação. Próximo: M1.3. |
+| M1 — conectividade | concluído | M1.1–M1.5 implementados e validados. R01, R02 e R04 passaram; auditoria inicial de R03 registrada, com revisão restante nos marcos de domínio. Próximo: M2. |
 | M2 — navegação/canais | pendente | Depende dos estados e recuperação de M1. |
 | M3 — mensagens/leitura/pins | pendente | Requer contratos e migrações aditivas no servidor. |
 | M4 — social/perfis | pendente | Requer autorização por audiência antes da exposição de dados. |
@@ -33,10 +33,10 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 
 | ID | Requisito | Estado | Evidência atual / lacuna principal | Marco |
 | --- | --- | --- | --- | --- |
-| R01 | Listagem e disponibilidade | implementação pronta; validação adiada | M1.4 adiciona destino agrupado, busca, filtro por conta, cache com instante observado e erros de abertura recuperáveis; testes aguardam M1.5. | M1 |
-| R02 | Reconexão e retorno | implementação parcial; validação adiada | M1.3 agenda backoff com jitter, pausa offline e redireciona após o prazo se a pessoa ainda está na área; preservação de rascunho/âncora em M1.5. | M1 |
-| R03 | Feedback assíncrono | em andamento | M1.2–M1.4 cobrem requests, gateway, histórico, listagem e erros de abertura; auditoria restante e validação conjunta em M1.5. | M1–M7 |
-| R04 | Conectividade global | implementação pronta; validação adiada | M1.1–M1.3 observam camadas e adicionam scheduler com causa, tentativa, próximo retry, jitter e pausa offline; testes aguardam M1.5. | M1 |
+| R01 | Listagem e disponibilidade | concluído em M1 | M1.4 validado: destino agrupado, busca, filtro por conta, cache com instante observado, erros recuperáveis; Playwright cobre agrupamento, busca, filtro e abertura pela conta correta. | M1 |
+| R02 | Reconexão e retorno | concluído em M1 | M1.3/M1.5 validados: backoff com jitter, pausa offline, prazo de primeiro plano condicionado à área atual, retorno explícito e preservação da conversa. | M1 |
+| R03 | Feedback assíncrono | auditoria inicial concluída; contínuo | M1 revisa autenticação, abertura de comunidade/DM, configurações e uploads; M1.5 cancela trabalhos obsoletos e preserva edições. Cada novo fluxo segue os critérios do seu marco. | M1–M7 |
+| R04 | Conectividade global | concluído em M1 | M1.1–M1.3 validados: observações por camada, scheduler com causa/tentativa/próximo retry, jitter e pausa offline; isolamento confirmado em testes unitários e Playwright. | M1 |
 | R05 | Seis layouts de canal | pendente | Seis modalidades existentes; padronizar estados e validar escala/permissões. | M2 |
 | R06 | Nova Aba | pendente | Funcionalidades existentes; reorganizar hierarquia e destino por conta. | M2 |
 | R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
@@ -235,8 +235,7 @@ M1.3 ainda não havia sido iniciado; sua implementação está descrita abaixo.
 
 ## Implementação M1.3 — recuperação (30/10/2026)
 
-Estado: **implementado; validação adiada até M1.5 conforme pedido do usuário**.
-Nenhum teste, typecheck, build ou validação automatizada foi executado nesta etapa.
+Estado: **implementado; validação integrada aprovada após M1.5**.
 
 - `gateway.ts`: reconexão exponencial de 1/2/4/8/16/30 segundos com jitter
   simétrico de 25%; a indicação de reinício anunciado mantém tentativas de um
@@ -256,8 +255,7 @@ Nenhum teste, typecheck, build ou validação automatizada foi executado nesta e
 
 ## Implementação M1.4 — listagem de servidores (30/10/2026)
 
-Estado: **implementado; validação adiada até M1.5 conforme pedido do usuário**.
-Nenhum teste, typecheck, build ou validação automatizada foi executado nesta etapa.
+Estado: **implementado; validação integrada aprovada após M1.5**.
 
 - `View` e barra de navegação têm o destino **Servidores**. A nova tela agrupa
   comunidades por instância/conta, pesquisa nomes de comunidade e instância,
@@ -274,15 +272,51 @@ Nenhum teste, typecheck, build ou validação automatizada foi executado nesta e
   403 é explicado e a pessoa pode tentar de novo ou voltar à lista. Não foi
   necessário alterar Annoy.Server: a lista autorizada já é entregue no READY.
 - Testes adicionados para jitter/prazos/transições e para busca, filtro,
-  agrupamento e abertura por conta. Não foram executados; serão parte da rodada
-  integrada após M1.5, como solicitado.
+  agrupamento e abertura por conta; a rodada integrada M1.3–M1.5 aprovou todos.
 
-## Validação conjunta pendente após M1.5
+## Validação conjunta M1.3–M1.5 (30/10/2026)
 
-Executar nessa rodada `npm run typecheck`, build, `npm run test:connectivity`,
-testes de requests e as suítes Playwright de conectividade/workspace. Corrigir
-falhas introduzidas e só então concluir o status integral de R01/R02/R04 e a
-auditoria correspondente de R03. Sem afirmação de aprovação antecipada.
+- Aprovados: `npm run typecheck`, `npm run build` e os grupos `test:activity`,
+  `test:servers`, `test:connectivity` (10), `test:chat-state` (4),
+  `test:requests` (12) e `test:voice` (6).
+- Aprovados: `npx playwright test`, 64/64 cenários, incluindo desktop,
+  experiência, requests, diretório, recuperação, preservação de rascunho/
+  âncora, desconexão e limpeza de recursos.
+- A primeira rodada integrada passou 63/64: o teste de canal esperava pular
+  ao fim ao reabrir explicitamente o canal ativo. A navegação explícita agora
+  limpa aquela âncora; a restauração após desmontagem/retorno continua usando
+  a âncora. A repetição completa passou 64/64.
+- `git diff --check` aprovado. Build mantém o aviso conhecido de chunks acima
+  de 500 kB. O Node avisa que `--experimental-transform-types` é experimental;
+  o Vite reportou um aviso `ResizeObserver` durante a suíte, sem falha de teste.
+- Limites: validação feita em Windows/Electron, sem teste de pacote de produção,
+  Linux, leitor de tela ou serviços de instância publicados.
+
+## Implementação M1.5 — preservação e auditoria (30/10/2026)
+
+Estado: **concluído e validado em conjunto com M1.3/M1.4**.
+
+- Novo documento local versionado guarda texto do rascunho e ID da resposta
+  por conta/canal. Objetos `File` permanecem apenas em memória durante a sessão;
+  ao retornar, o cliente informa quantos anexos precisam ser selecionados de
+  novo, permite removê-los e bloqueia envio incompleto. Envio bem-sucedido,
+  descarte explícito e remoção de conta limpam os dados pertinentes.
+- Resposta guardada é validada no cache ou junto ao servidor; referência ausente
+  é removida sem perder o texto. Falha temporária mantém o texto e permite
+  revalidar/remover a resposta. Falha de armazenamento local aparece na UI.
+- Âncora do histórico guarda ID visível e deslocamento em pixels fora do ciclo
+  do componente; restaura ao retornar à conversa e cai para o fim se a mensagem
+  não existir. O usuário pode voltar ao fim e descartar o rascunho com confirmação.
+- Destino que originou o redirecionamento por recuperação é guardado por conta;
+  após READY, a lista de servidores oferece retorno explícito à conversa/espaço.
+  Remover a conta remove o destino salvo.
+- Auditoria adiciona cancelamento/guarda contra respostas tardias em configurações,
+  avatar e uploads de arquivo. Geração de convite passou a ser explícita ao clicar,
+  evitando criar novos convites ao abrir novamente o modal. Cancelamento não gera
+  toast de erro e edições permanecem após falha de rede.
+- Testes unitários verificam isolamento/versionamento, anexos apenas em memória,
+  âncoras, recuperação e limpeza por conta. Playwright valida rascunho, anexo
+  da sessão e âncora ao navegar para a lista e retornar.
 
 ## Dependências e riscos em acompanhamento
 
@@ -311,10 +345,8 @@ Typecheck e build aprovados. As alterações locais foram commitadas por etapa
 
 ## Próxima tarefa recomendada
 
-M1.3 e M1.4 estão implementados, mas a validação foi deliberadamente adiada.
-Executar **M1.5 — preservação e auditoria**, sem iniciar outro marco. Depois de
-concluir M1.5, executar em conjunto a validação de M1.3–M1.5, corrigir falhas e
-atualizar os estados R01–R04. Persistência de rascunhos/âncoras e revisão completa
-dos fluxos permanecem pendentes em M1.5.
+Iniciar **M2 — Nova Aba e canais**: reorganizar os destinos e avançar a
+padronização dos estados de canal, com trabalho por modalidade e contratos
+existentes. A revisão de feedback assíncrono continua dentro de cada novo fluxo.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.

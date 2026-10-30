@@ -53,7 +53,7 @@ export function observeHttp(previous: EndpointObservation, status: number, at: n
   const authentication = status === 401 ? "invalid" : status === 403 ? "forbidden"
     : status < 400 && authenticated ? "valid" : previous.authentication;
   const cause = status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status >= 500 ? "service" : null;
-  return { availability: status >= 500 ? "unavailable" : "available", authentication, cause, observedAt: at, nextRetryAt: null };
+  return { ...previous, availability: status >= 500 ? "unavailable" : "available", authentication, cause, observedAt: at, nextRetryAt: null };
 }
 
 export function observeRequestFailure(previous: EndpointObservation, error: unknown, at: number, network: NetworkObservation): EndpointObservation {

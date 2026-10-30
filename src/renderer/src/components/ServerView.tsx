@@ -614,7 +614,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
       {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} serverId={serverId} /> : opened?.type === "files" ? (
-        <FilesView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+        <FilesView key={JSON.stringify([accountId, opened.id])} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "code" ? (
         <CodeView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "theater" ? (

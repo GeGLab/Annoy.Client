@@ -439,6 +439,56 @@ test("recovery deadline opens server list only if the user remains in the affect
       return getState().view.kind;
     })).toBe("servers");
     await expect(page.getByRole("heading", { name: "Servidores", exact: true })).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.workspace.status = "ready";
+        s.instances.workspace.connection.availability = "available";
+        s.instances.workspace.connection.authentication = "valid";
+      });
+    });
+    await page.getByRole("button", { name: "Voltar a Comunidade de teste", exact: true }).click();
+    await expect(page.locator(".chat-header h1")).toHaveText("geral");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("chat draft, in-session attachment and message anchor survive directory navigation", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    const messages = await page.evaluate(async () => {
+      const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.workspace.status = "ready"; });
+      return getState().instances.workspace.messages.general.items;
+    });
+    await page.route(`${origin}/api/channels/general/messages?*`, (route) => {
+      const url = new URL(route.request().url());
+      const around = url.searchParams.get("around");
+      if (!around) return route.fulfill({ json: messages.slice(-50) });
+      const index = messages.findIndex((message: any) => message.id === around);
+      return route.fulfill({ json: index < 0 ? [] : messages.slice(Math.max(0, index - 25), Math.min(messages.length, index + 25)) });
+    });
+    const composer = page.getByRole("textbox", { name: "Conversar em #geral", exact: true });
+    await composer.fill("Rascunho que deve voltar");
+    await page.locator("input[type=file]").setInputFiles({ name: "anexo-da-sessao.txt", mimeType: "text/plain", buffer: Buffer.from("conteúdo temporário") });
+    await expect(page.getByText("anexo-da-sessao.txt", { exact: true })).toBeVisible();
+    await page.locator(".messages").evaluate((element: HTMLElement) => { element.scrollTop = 720; element.dispatchEvent(new Event("scroll")); });
+    const before = await page.locator(".messages").evaluate((element: HTMLElement) => {
+      const viewport = element.getBoundingClientRect();
+      const row = [...element.querySelectorAll<HTMLElement>("[data-message-id]")].find((item) => item.getBoundingClientRect().bottom > viewport.top)!;
+      return { id: row.dataset.messageId, offset: row.getBoundingClientRect().top - viewport.top };
+    });
+    await page.getByRole("button", { name: "Servidores", exact: true }).click();
+    await page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true }).click();
+    await expect(composer).toHaveValue("Rascunho que deve voltar");
+    await expect(page.getByText("anexo-da-sessao.txt", { exact: true })).toBeVisible();
+    const after = await page.locator(`.messages [data-message-id="${before.id}"]`).evaluate((element: HTMLElement) => {
+      const viewport = element.closest(".messages")!.getBoundingClientRect();
+      return element.getBoundingClientRect().top - viewport.top;
+    });
+    expect(Math.abs(after - before.offset)).toBeLessThan(5);
   } finally {
     await cleanup();
   }
