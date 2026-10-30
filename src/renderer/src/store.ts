@@ -57,6 +57,7 @@ export interface InstanceState {
   relationships: Relationship[];
   presences: Record<string, Presence>;
   activities: Record<string, import("@distopic/protocol").UserActivity[]>;
+  profileRevision?: number;
   messages: Record<string, ChannelMessages>;
   /** channelId -> userId -> expiry timestamp */
   typing: Record<string, Record<string, number>>;

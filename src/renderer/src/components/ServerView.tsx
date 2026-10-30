@@ -1,3 +1,4 @@
+import {FullProfileButton} from "./FullProfile.tsx";
 import { SearchButton } from "../features/search/SearchButton.tsx";
 import { canViewActivity } from "../features/activity/access.ts";
 import { UserProfile } from "./UserProfile.tsx";
@@ -413,6 +414,7 @@ function MemberCard({
             </div>
           </div>
           {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
+          <FullProfileButton accountId={accountId} user={member.user}/>
           {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
               <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? "Atividade" : "Atividade"}</div>

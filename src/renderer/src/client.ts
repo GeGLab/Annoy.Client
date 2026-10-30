@@ -839,6 +839,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       const s = getState();
       if (s.voice?.accountId === accountId && s.voice.serverId === serverId) leaveVoice(false);
       patchInstance(accountId, (inst) => {
+        inst.profileRevision=(inst.profileRevision??0)+1;
         inst.servers = inst.servers.filter((sv) => sv.id !== serverId);
         for(const channel of inst.serverStates[serverId]?.channels??[]){delete inst.messages[channel.id];delete inst.unread[channel.id];}
         delete inst.serverStates[serverId];
@@ -850,6 +851,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return;
     }
     case "SERVER_REFRESH":
+      patchInstance(accountId,inst=>{inst.profileRevision=(inst.profileRevision??0)+1;});
       return scheduleRefresh(accountId, event.d.serverId);
     case "MESSAGE_CREATE": {
       const msg = event.d;
@@ -939,8 +941,10 @@ function onEvent(accountId: string, event: GatewayEvent): void {
           if (m) m.presence = event.d.presence;
         }
       });
+    case "PROFILE_INVALIDATE":
+      return patchInstance(accountId,inst=>{inst.profileRevision=(inst.profileRevision??0)+1;});
     case "USER_UPDATE":
-      return patchInstance(accountId, (inst) => replaceUser(inst, event.d));
+      return patchInstance(accountId,inst=>{replaceUser(inst,event.d);inst.profileRevision=(inst.profileRevision??0)+1;});
     case "VOICE_STATE_UPDATE": {
       const current = getState();
       const instance = current.instances[accountId];
@@ -973,10 +977,12 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       });
     case "RELATIONSHIP_UPDATE":
       return patchInstance(accountId, (inst) => {
+        inst.profileRevision=(inst.profileRevision??0)+1;
         inst.relationships = [...inst.relationships.filter((r) => r.user.id !== event.d.user.id), event.d];
       });
     case "RELATIONSHIP_REMOVE":
       return patchInstance(accountId, (inst) => {
+        inst.profileRevision=(inst.profileRevision??0)+1;
         inst.relationships = inst.relationships.filter((r) => r.user.id !== event.d.userId);
         if (!Object.values(inst.serverStates).some((state) => state.members.some((member) => member.user.id === event.d.userId))) delete inst.activities[event.d.userId];
       });

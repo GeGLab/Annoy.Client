@@ -61,7 +61,7 @@ export class Gateway {
     socket.onopen = () => {
       if (this.socket !== socket) return;
       this.onReachable?.();
-      this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
+      this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls", "extendedActivity"] });
     };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;

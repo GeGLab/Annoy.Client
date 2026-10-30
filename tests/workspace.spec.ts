@@ -83,6 +83,62 @@ async function seed(page: Page) {
   await expect(page.locator(".chat-header h1")).toHaveText("geral");
 }
 
+test("M3 variable-height history keeps the DOM bounded and restores unloaded search context",async()=>{
+  const {page,cleanup}=await launch();
+  try{
+    await seed(page);
+    await page.evaluate(async()=>{
+      const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s:any)=>{const entry=s.instances.workspace.messages.general,base=entry.items[0];entry.items=Array.from({length:500},(_,index)=>({...base,id:`bounded-${String(index).padStart(5,"0")}`,content:`Linha ${index}\n${"Conteúdo de altura variável. ".repeat(index%6+1)}`}));});
+    });
+    await expect.poll(()=>page.locator(".messages [data-message-id]").count()).toBeLessThan(100);
+    await expect(page.locator('[data-message-id="bounded-00499"]')).toBeVisible();
+    await page.locator(".messages").evaluate(el=>{el.scrollTop=0;});
+    await expect(page.locator('[data-message-id="bounded-00000"]')).toBeVisible();
+    await page.evaluate(async()=>{
+      const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s:any)=>{s.messageFocus={accountId:"workspace",channelId:"general",messageId:"bounded-00250"};});
+    });
+    await expect(page.locator('[data-message-id="bounded-00250"]')).toBeVisible();
+    await expect(page.getByRole("button",{name:/Mais recentes/})).toBeVisible();
+  }finally{await cleanup();}
+});
+
+test("M4 profile drafts validate and retain edits after failed save, then publish normalized contacts explicitly",async()=>{
+  const {page,cleanup}=await launch();
+  let saved:any={user:{id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null},fields:[],hasPrivateFields:false,history:{enabled:false,visibility:"disabled",entries:[]}};
+  let fail=true,writeCount=0;
+  try{
+    await seed(page);
+    await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:saved}));
+    await page.route(`${origin}/api/users/@me/profile`,async route=>{writeCount++;if(fail)return route.fulfill({status:500,json:{message:"Falha de gravação simulada"}});const body=route.request().postDataJSON();saved={...saved,fields:body.fields,history:{...saved.history,enabled:body.historyEnabled}};return route.fulfill({json:saved});});
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.instance={profileDetails:true};});});
+    await page.getByRole("button",{name:"Configurações",exact:true}).click();
+    const github=page.getByRole("textbox",{name:"GitHub",exact:true});await expect(github).toBeVisible();
+    await expect(page.getByRole("combobox",{name:"Quem pode ver GitHub",exact:true})).toHaveText("Somente eu");
+    await github.fill("https://evil.test/me");await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByText("O link não pertence à plataforma escolhida.").first()).toBeVisible();expect(writeCount).toBe(0);
+    await github.fill("octocat");await page.getByRole("textbox",{name:"E-mail de contato",exact:true}).fill("Contact@EXAMPLE.COM");
+    await page.getByRole("combobox",{name:"Quem pode ver E-mail de contato",exact:true}).click();await page.getByRole("option",{name:"Amigos",exact:true}).click();
+    await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByText("Falha de gravação simulada")).toBeVisible();await expect(github).toHaveValue("https://github.com/octocat");expect(saved.fields).toEqual([]);
+    fail=false;await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByRole("button",{name:"Salvar alterações",exact:true})).toHaveCount(0);
+    expect(saved.fields.find((field:any)=>field.kind==="email")).toMatchObject({value:"Contact@example.com",audience:"friends"});expect(saved.history.enabled).toBe(false);
+  }finally{await cleanup();}
+});
+
+test("M4 full profile clears authorized details on revocation and returns keyboard focus",async()=>{
+  const {page,cleanup}=await launch();let privateView=false;
+  try{
+    await seed(page);
+    await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:{user:{id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null},fields:privateView?[]:[{kind:"github",value:"https://github.com/octocat",audience:"friends"}],hasPrivateFields:privateView,history:{enabled:true,visibility:privateView?"private":"visible",entries:[]}}}));
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.instance={profileDetails:true};});});
+    await page.locator(".message-author").last().click();await page.getByRole("button",{name:"Ver perfil completo",exact:true}).click();
+    const modal=page.locator(".full-profile");await expect(modal.getByRole("link",{name:/github.com/})).toBeVisible();
+    privateView=true;await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.profileRevision=1;});});
+    await expect(modal.getByText("Os contatos deste perfil são privados para você.")).toBeVisible();await expect(modal.getByRole("link")).toHaveCount(0);
+    await page.keyboard.press("Escape");await expect(modal).toHaveCount(0);await expect(page.getByRole("button",{name:"Ver perfil completo",exact:true})).toBeFocused();
+  }finally{await cleanup();}
+});
+
 test("latest messages, personal colors, saved panels, voice and scoped reconnect", async () => {
   const { app, page, cleanup } = await launch();
   const errors: string[] = [];

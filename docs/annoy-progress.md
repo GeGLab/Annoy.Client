@@ -412,3 +412,26 @@ Estado: **implementado; valida??o conjunta agendada ap?s M4, conforme pedido**.
 - Testes novos preparados para um milh?o de mensagens em banco tempor?rio,
   duas sess?es simult?neas, autoriza??o, idempot?ncia e limites de mem?ria.
   N?o executados ainda; conclus?o depende da valida??o final de M3/M4.
+
+
+## Implementa??o M4 ? amigos, perfil e privacidade (30/10/2026)
+
+Estado: **implementado; valida??o conjunta em andamento**.
+
+- Amigos t?m resumo da atividade principal +N com expans?o por a??o/foco.
+  V?deo/atividade gen?rica t?m contrato negociado e filtro para clientes antigos;
+  o compartilhamento real de tela do Annoy fornece atividade de v?deo.
+- Detalhes do perfil s?o carregados sob demanda. Redes e contatos ficam em
+  tabelas pr?prias, privados inicialmente, com audi?ncia por campo. Apenas
+  amizade m?tua ou comunidade em comum autoriza as respectivas audi?ncias;
+  uma DM e pedidos de amizade n?o concedem esse acesso.
+- Editor oferece as sete redes/site, e-mail e telefone, normaliza??o comum ao
+  cliente/servidor, pr?via, remo??o e save/discard. Falha conserva o rascunho
+  isolado por conta. O modal completo distingue carregamento, erro, aus?ncia,
+  vazio e privacidade; eventos invalidam os detalhes sem transportar contatos.
+- Hist?rico de atividades separado do compartilhamento, desligado inicialmente.
+  Guarda sess?es observadas ap?s consentimento, limita tr?s encerradas por 30
+  dias e exclui os registros ao desativar. Interrup??es t?m dura??o desconhecida;
+  nomes de arquivos, projetos e caminhos locais n?o entram na persist?ncia.
+- Typecheck e build iniciais aprovados. A bateria completa e os cen?rios novos
+  de interface est?o em andamento; o resultado final ser? registrado abaixo.

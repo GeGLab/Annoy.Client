@@ -1,3 +1,4 @@
+import {normalizeProfileField} from "@distopic/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
 import { confirmAction, promptText } from "../ui/action-dialog.tsx";
@@ -331,7 +332,7 @@ export function UserSettingsModal() {
   const dirtyProfiles = accounts.filter((account) => {
     const change = profiles[account.id],
       user = instances[account.id]?.user;
-    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? ""));
+    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? "") || change.details !== undefined);
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0;
   const update = (patch: Partial<Settings>) => setDraft((current) => ({ ...current, ...patch }));
@@ -412,6 +413,8 @@ export function UserSettingsModal() {
         const name = change.displayName.trim();
         if (!name) throw new Error("Informe um nome de exibição.");
         const api = apiFor(account.id);
+        const profileDetails=change.details?{fields:change.details.fields.map(field=>({...field,value:normalizeProfileField(field.kind,field.value)})).filter(field=>field.value),historyEnabled:change.details.historyEnabled}:undefined;
+        if(profileDetails&&!getState().instances[account.id]?.instance?.profileDetails)throw new Error("Atualize o Annoy.Server para editar contatos e privacidade.");
         const bioChanged = change.bio !== undefined && change.bio !== (user.bio ?? "");
         if (bioChanged && !getState().instances[account.id]?.instance?.socialProfiles) throw new Error("Atualize esta instância para salvar biografias.");
         if (name !== user.displayName || bioChanged) {
@@ -419,6 +422,7 @@ export function UserSettingsModal() {
           signal.throwIfAborted();
           applyUserUpdate(account.id, updated);
         }
+        if(profileDetails){await api.patch("/users/@me/profile",profileDetails,signal);signal.throwIfAborted();setState(s=>{const inst=s.instances[account.id];if(inst)inst.profileRevision=(inst.profileRevision??0)+1;});}
         if (change.avatar !== undefined) {
           const updated =
             change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }, signal) : await api.uploadAvatar<User>(change.avatar, signal);
@@ -427,7 +431,6 @@ export function UserSettingsModal() {
           if (change.avatar === null && updated.avatarUrl !== null)
             throw new Error("Esta instância precisa ser atualizada para remover fotos.");
           applyUserUpdate(account.id, updated);
-          setProfiles((current) => ({ ...current, [account.id]: { displayName: name } }));
         }
       }
       setState((s) => {
