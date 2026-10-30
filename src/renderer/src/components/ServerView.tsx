@@ -21,6 +21,7 @@ import { Tooltip } from "./ui/tooltip.tsx";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 import { screenQualityLabel } from "../lib/screen-profile.ts";
 import { UserPanel } from "./TopBar.tsx";
+import { VoiceUserContextMenu, VoiceUserMenuButton } from "./VoiceUserMenu.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { ResizablePanel, togglePanel } from "./layout/ResizablePanel.tsx";
 
@@ -58,8 +59,9 @@ function VoiceUsers({
           local: localActivity?.activities,
           reported: instance?.activities[v.userId],
         });
-        return (
-          <li key={v.userId} className="voice-user" data-user-id={v.userId} tabIndex={canModerate && !isSelf ? 0 : undefined}>
+        const menuProps = { accountId, serverId: state.server.id, member, voice: v, canModerate };
+        const row = (
+          <li key={v.userId} className="voice-user" data-user-id={v.userId} tabIndex={!isSelf ? 0 : undefined}>
             <Avatar user={member.user} size={22} speaking={v.speaking && !v.selfMute && !v.serverMute} />
             <span className="voice-user-name" title={displayNameOf(member)}>{displayNameOf(member)}</span>
             <span className="voice-user-status">
@@ -83,26 +85,10 @@ function VoiceUsers({
               </Tooltip>;
             })}
             </span>
-            {canModerate && !isSelf && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="icon-btn tiny voice-mod" aria-label={`Ações de voz de ${displayNameOf(member)}`}><Icon name="more" size={14} /></button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {(v.serverMute || !v.selfMute) && (
-                    <DropdownMenuItem onSelect={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { serverMute: !v.serverMute }))}>
-                      <Icon name={v.serverMute ? "mic" : "micOff"} size={16} />
-                      {v.serverMute ? "Remover silêncio do servidor" : "Silenciar no servidor"}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem destructive onSelect={() => void act(apiFor(accountId).patch(`/servers/${state.server.id}/members/${v.userId}/voice`, { disconnect: true }))}>
-                    <Icon name="hangup" size={16} />Desconectar da voz
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {!isSelf && <VoiceUserMenuButton {...menuProps} />}
           </li>
         );
+        return isSelf ? row : <VoiceUserContextMenu key={v.userId} {...menuProps}>{row}</VoiceUserContextMenu>;
       })}
     </ul>
   );

@@ -8,12 +8,16 @@ import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Settings } from "./store.ts";
 import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
+import { userVolume } from "../../shared/user-volume.ts";
+import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
 
 interface Remote {
   source: MediaSource;
   /** Our section for this track, reported when resuming the session. */
   mid: string;
   audio: HTMLAudioElement | null;
+  userId: string;
+  amplified: AmplifiedAudio | null;
 }
 
 export class CloudflareVoiceSession {
@@ -33,6 +37,7 @@ export class CloudflareVoiceSession {
   /** What we publish, by track name, reported when resuming. */
   private published = new Map<string, { mid: string; kind: "audio" | "video"; source: MediaSource; maxBitrate?: number }>();
   private remote = new Map<string, Remote>();
+  private mixer = new RemoteAudioMixer();
   private closed = false;
   canSpeak = false;
   canStream = false;
@@ -44,6 +49,7 @@ export class CloudflareVoiceSession {
     private settings: Settings,
     private readonly onLocalMedia: () => void,
     private readonly onMediaFailed: () => void,
+    private readonly accountId: string,
   ) {}
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
@@ -119,21 +125,26 @@ export class CloudflareVoiceSession {
         await pc.setLocalDescription(await pc.createAnswer());
         await this.gw.voice("renegotiate", { sdp: pc.localDescription!.sdp });
       }
+      if (this.closed) return;
       const transceiver = pc.getTransceivers().find((t) => t.mid === res.mid);
       if (!transceiver) throw new Error("Faixa recebida não encontrada na conexão");
       const track = transceiver.receiver.track;
       let audio: HTMLAudioElement | null = null;
+      let amplified: AmplifiedAudio | null = null;
       if (res.kind === "audio") {
         audio = new Audio();
         audio.autoplay = true;
-        audio.srcObject = new MediaStream([track]);
+        amplified = this.mixer.connect(new MediaStream([track]), userVolume(this.settings.userVolumes, this.accountId, userId), audio);
         audio.muted = this.settings.selfDeaf;
         await this.applySink(audio);
+        if (this.closed) { audio.pause(); audio.srcObject = null; amplified.close(); return; }
+        audio.muted = this.settings.selfDeaf;
+        amplified.setVolume(userVolume(this.settings.userVolumes, this.accountId, userId));
         void audio.play().catch(() => undefined);
       } else {
         putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([track]), local: false });
       }
-      this.remote.set(producerId, { source, mid: res.mid, audio });
+      this.remote.set(producerId, { source, mid: res.mid, audio, amplified, userId });
     });
   }
 
@@ -159,7 +170,7 @@ export class CloudflareVoiceSession {
     const entry = this.remote.get(producerId);
     if (!entry) return;
     this.remote.delete(producerId);
-    if (entry.audio) entry.audio.srcObject = null;
+    if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
     else dropTile(producerId);
   }
 
@@ -267,8 +278,9 @@ export class CloudflareVoiceSession {
     const deviceChanged = settings.outputDeviceId !== this.settings.outputDeviceId;
     this.settings = settings;
     this.mic?.update(settings);
-    for (const { audio } of this.remote.values()) {
+    for (const { audio, amplified, userId } of this.remote.values()) {
       if (!audio) continue;
+      amplified?.setVolume(userVolume(settings.userVolumes, this.accountId, userId));
       audio.muted = settings.selfDeaf;
       if (deviceChanged) void this.applySink(audio);
     }
@@ -291,6 +303,7 @@ export class CloudflareVoiceSession {
     this.closed = true;
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.remote.keys()]) this.dropRemote(id);
+    this.mixer.close();
     for (const { track } of this.video.values()) track.stop();
     this.video.clear();
     this.screenAudio?.track.stop();

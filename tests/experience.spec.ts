@@ -295,6 +295,137 @@ test("call membership sounds, stable participants, status icons and channel swit
   } finally { await close(); }
 });
 
+test("individual voice volume reaches 200%, works without moderation and persists without changing other users", async () => {
+  const { page, close } = await launch();
+  const sharedChanges: unknown[] = [];
+  try {
+    await seed(page, (socket) => socket.onMessage((raw) => {
+      const message = JSON.parse(String(raw));
+      if (message.op === "voice_state" || message.op === "voice") sharedChanges.push(message);
+    }));
+    await page.route("http://experience.test/api/servers/server/members/**", (route) => {
+      sharedChanges.push(route.request().method());
+      return route.fulfill({ contentType: "application/json", body: "{}" });
+    });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test, state = inst.serverStates.server;
+        state.server.ownerId = "alice"; inst.servers[0].ownerId = "alice";
+        state.permissions = 0; state.roles[0].permissions = 0;
+        for (const id of ["alice", "bob"]) state.members.push({ ...state.members[0], user: { id, username: id, displayName: id === "alice" ? "Alice" : "Bob", avatarUrl: null } });
+        state.voiceStates = ["person", "alice", "bob"].map((userId) => ({ userId, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, video: false, screen: false }));
+      });
+    });
+    const alice = page.locator('.voice-user[data-user-id="alice"]'), bob = page.locator('.voice-user[data-user-id="bob"]');
+    await alice.click({ button: "right" });
+    const slider = page.getByRole("slider", { name: "Volume de Alice", exact: true });
+    await expect(slider).toHaveAttribute("aria-valuenow", "100");
+    await expect(slider).toHaveAttribute("aria-valuemax", "200");
+    await expect(slider).toBeFocused();
+    await expect(page.getByRole("menuitem", { name: "Silenciar no servidor", exact: true })).toHaveCount(0);
+    await slider.press("End");
+    await expect(slider).toHaveAttribute("aria-valuenow", "200");
+    await slider.press("Escape");
+    await bob.click({ button: "right" });
+    const bobSlider = page.getByRole("slider", { name: "Volume de Bob", exact: true });
+    await expect(bobSlider).toHaveAttribute("aria-valuenow", "100");
+    await bobSlider.press("Home");
+    await expect(bobSlider).toHaveAttribute("aria-valuenow", "0");
+    await bobSlider.press("Escape");
+    await alice.hover();
+    await alice.getByRole("button", { name: "Ações de voz de Alice", exact: true }).click();
+    await expect(slider).toHaveAttribute("aria-valuenow", "200");
+    await page.getByRole("button", { name: "Restaurar volume de Alice para 100%", exact: true }).click();
+    await expect(slider).toHaveAttribute("aria-valuenow", "100");
+    await slider.press("Escape");
+    await expect(page.getByRole("button", { name: "Ações de voz de Pessoa de teste", exact: true })).toHaveCount(0);
+    expect(sharedChanges).toEqual([]);
+    await page.reload();
+    expect(await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().settings.userVolumes;
+    })).toEqual({ '["test","bob"]': 0 });
+  } finally { await close(); }
+});
+
+test("RTC amplification doubles a quiet signal at 200% and native playback survives processing failure", async () => {
+  const { page, close } = await launch();
+  try {
+    await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
+    const measured = await page.evaluate(async () => {
+      const { RemoteAudioMixer } = await import(/* @vite-ignore */ `${location.origin}/src/lib/remote-audio.ts`);
+      const context = new AudioContext(), inputContext = new AudioContext();
+      const mixer = new RemoteAudioMixer(() => context);
+      const oscillator = inputContext.createOscillator(), inputGain = inputContext.createGain(), input = inputContext.createMediaStreamDestination();
+      oscillator.frequency.value = 440; inputGain.gain.value = 0.05;
+      oscillator.connect(inputGain).connect(input); oscillator.start();
+      const sender = new RTCPeerConnection(), receiver = new RTCPeerConnection();
+      sender.onicecandidate = ({ candidate }) => { if (candidate) void receiver.addIceCandidate(candidate); };
+      receiver.onicecandidate = ({ candidate }) => { if (candidate) void sender.addIceCandidate(candidate); };
+      const received = new Promise<MediaStream>((resolve) => { receiver.ontrack = ({ track }) => resolve(new MediaStream([track])); });
+      sender.addTrack(input.stream.getAudioTracks()[0], input.stream);
+      await sender.setLocalDescription(await sender.createOffer());
+      await receiver.setRemoteDescription(sender.localDescription!);
+      await receiver.setLocalDescription(await receiver.createAnswer());
+      await sender.setRemoteDescription(receiver.localDescription!);
+      const remote = await received;
+      const aliceAudio = new Audio(), bobAudio = new Audio();
+      aliceAudio.muted = bobAudio.muted = true;
+      const alice = mixer.connect(remote, 100, aliceAudio), bob = mixer.connect(remote, 100, bobAudio);
+      const nativeInitially = alice.stream === remote && bob.stream === remote;
+      await Promise.all([context.resume(), inputContext.resume(), aliceAudio.play(), bobAudio.play()]);
+      const silence = inputContext.createGain(); silence.gain.value = 0; silence.connect(inputContext.destination);
+      const analyse = (stream: MediaStream) => {
+        const analyser = inputContext.createAnalyser(); analyser.fftSize = 2048;
+        inputContext.createMediaStreamSource(stream).connect(analyser).connect(silence);
+        return analyser;
+      };
+      let a = analyse(alice.stream);
+      const b = analyse(bob.stream);
+      const rms = (analyser: AnalyserNode) => {
+        const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
+        return Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+      };
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
+      for (let attempt = 0; attempt < 20 && rms(a) < 0.01; attempt++) await settle();
+      const baseline = rms(a), other = rms(b);
+      alice.setVolume(200);
+      for (let attempt = 0; attempt < 10 && alice.stream === remote; attempt++) await settle();
+      const amplified = alice.stream !== remote, processed = alice.stream;
+      a = analyse(alice.stream); await settle();
+      const boosted = rms(a), unchanged = rms(b);
+      alice.setVolume(0);
+      const muted = aliceAudio.volume === 0 && alice.stream === remote;
+      alice.setVolume(200); await settle();
+      await context.suspend();
+      for (let attempt = 0; attempt < 10 && alice.stream !== remote; attempt++) await settle();
+      const nativeFallback = alice.stream === remote && aliceAudio.volume === 1;
+      const recovered = analyse(alice.stream); await settle();
+      const recoveredLevel = rms(recovered);
+      oscillator.stop(); mixer.close();
+      const outputsEnded = processed.getTracks().every((track) => track.readyState === "ended");
+      const sourcePreserved = remote.getTracks().every((track) => track.readyState === "live");
+      aliceAudio.pause(); bobAudio.pause(); sender.close(); receiver.close();
+      input.stream.getTracks().forEach((track) => track.stop());
+      await inputContext.close();
+      return { recoveredLevel, baseline, other, boosted, unchanged, muted, nativeInitially, amplified, nativeFallback, outputsEnded, sourcePreserved };
+    });
+    expect(measured.baseline).toBeGreaterThan(0.01);
+    expect(measured.boosted / measured.baseline).toBeGreaterThan(1.8);
+    expect(measured.boosted / measured.baseline).toBeLessThan(2.2);
+    expect(measured.unchanged / measured.other).toBeGreaterThan(0.9);
+    expect(measured.unchanged / measured.other).toBeLessThan(1.1);
+    expect(measured.muted).toBe(true);
+    expect(measured.nativeInitially).toBe(true);
+    expect(measured.amplified).toBe(true);
+    expect(measured.nativeFallback).toBe(true);
+    expect(measured.recoveredLevel / measured.baseline).toBeGreaterThan(0.8);
+    expect(measured.outputsEnded).toBe(true);
+    expect(measured.sourcePreserved).toBe(true);
+  } finally { await close(); }
+});
+
 test("voice names show local and online game activity, respecting sharing and friendship", async () => {
   const { page, app, close } = await launch();
   try {
@@ -650,6 +781,16 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
       await expect(session.page.getByText("Chamada conectada", { exact: true })).toBeVisible({ timeout: 20_000 });
       await expect.poll(() => session.page.locator(".direct-call-video video").first().evaluate((video: HTMLVideoElement) => video.videoWidth)).toBeGreaterThan(0);
     }
+    const volume = left.page.getByRole("slider", { name: "Volume de Bob", exact: true });
+    await volume.press("End");
+    await expect(volume).toHaveAttribute("aria-valuenow", "200");
+    await expect(right.page.getByRole("slider", { name: "Volume de Alice", exact: true })).toHaveAttribute("aria-valuenow", "100");
+    await left.page.getByRole("button", { name: "Desativar áudio da chamada", exact: true }).click();
+    await expect(left.page.locator(".direct-call-panel audio")).toHaveJSProperty("muted", true);
+    await volume.press("Home"); await volume.press("End");
+    await expect(left.page.locator(".direct-call-panel audio")).toHaveJSProperty("muted", true);
+    await left.page.getByRole("button", { name: "Ativar áudio da chamada", exact: true }).click();
+    await expect(left.page.locator(".direct-call-panel audio")).toHaveJSProperty("muted", false);
     await left.page.screenshot({ path: join(capture, "private-video-call-connected.png") });
     await left.page.getByRole("button", { name: "Encerrar", exact: true }).click();
     for (const session of [left, right]) {

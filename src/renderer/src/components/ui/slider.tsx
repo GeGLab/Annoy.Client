@@ -8,6 +8,7 @@ export function Slider({
   onChange,
   className,
   "aria-label": label,
+  "aria-valuetext": valueText,
   ...props
 }: Omit<ComponentProps<typeof SliderPrimitive.Root>, "value" | "onValueChange" | "onChange"> & {
   value: number;
@@ -26,7 +27,7 @@ export function Slider({
       <SliderPrimitive.Track className="ui-slider-track">
         <SliderPrimitive.Range className="ui-slider-fill" />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="ui-slider-thumb" aria-label={label} />
+      <SliderPrimitive.Thumb className="ui-slider-thumb" aria-label={label} aria-valuetext={valueText} />
     </SliderPrimitive.Root>
   );
 }

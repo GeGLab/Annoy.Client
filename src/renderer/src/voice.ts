@@ -7,6 +7,8 @@ import { MicGate } from "./mic.ts";
 import type { Gateway } from "./gateway.ts";
 import type { Settings } from "./store.ts";
 import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
+import { userVolume } from "../../shared/user-volume.ts";
+import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
 
 type TransportInfo = {
   id: string;
@@ -21,6 +23,7 @@ interface RemoteMedia {
   source: MediaSource;
   userId: string;
   audio: HTMLAudioElement | null;
+  amplified: AmplifiedAudio | null;
 }
 
 /**
@@ -38,6 +41,7 @@ export class VoiceSession {
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
   private consumers = new Map<string, RemoteMedia>();
+  private mixer = new RemoteAudioMixer();
   private micGate: MicGate | null = null;
   private closed = false;
   canSpeak = true;
@@ -52,6 +56,7 @@ export class VoiceSession {
     private readonly onLocalMedia: () => void,
     /** Media can't reach the server even though signaling works: almost always the announced IP or a closed port. */
     private readonly onMediaFailed: () => void,
+    private readonly accountId: string,
   ) {}
 
   async start(): Promise<void> {
@@ -110,8 +115,9 @@ export class VoiceSession {
     const deviceChanged = settings.outputDeviceId !== this.settings.outputDeviceId;
     this.settings = settings;
     this.micGate?.update(settings);
-    for (const { audio } of this.consumers.values()) {
+    for (const { audio, amplified, userId } of this.consumers.values()) {
       if (!audio) continue;
+      amplified?.setVolume(userVolume(settings.userVolumes, this.accountId, userId));
       audio.muted = settings.selfDeaf;
       if (deviceChanged) void this.applySink(audio);
     }
@@ -216,17 +222,22 @@ export class VoiceSession {
       rtpParameters: ms.RtpParameters;
     }>("consume", { producerId, transportId: this.recv.id, rtpCapabilities: this.device.rtpCapabilities });
     const consumer = await this.recv.consume(params);
+    if (this.closed) { consumer.close(); return; }
     let audio: HTMLAudioElement | null = null;
+    let amplified: AmplifiedAudio | null = null;
     if (consumer.kind === "audio") {
       audio = new Audio();
       audio.autoplay = true;
-      audio.srcObject = new MediaStream([consumer.track]);
+      amplified = this.mixer.connect(new MediaStream([consumer.track]), userVolume(this.settings.userVolumes, this.accountId, userId), audio);
       audio.muted = this.settings.selfDeaf;
       await this.applySink(audio);
+      if (this.closed) { audio.pause(); audio.srcObject = null; amplified.close(); consumer.close(); return; }
+      audio.muted = this.settings.selfDeaf;
+      amplified.setVolume(userVolume(this.settings.userVolumes, this.accountId, userId));
     } else {
       putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([consumer.track]), local: false });
     }
-    this.consumers.set(producerId, { consumer, source, userId, audio });
+    this.consumers.set(producerId, { consumer, source, userId, audio, amplified });
     await this.gw.voice("resumeConsumer", { consumerId: consumer.id });
     if (audio) void audio.play().catch(() => undefined);
   }
@@ -235,7 +246,7 @@ export class VoiceSession {
     const entry = this.consumers.get(producerId);
     if (!entry) return;
     entry.consumer.close();
-    if (entry.audio) entry.audio.srcObject = null;
+    if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
     else dropTile(producerId);
     this.consumers.delete(producerId);
   }
@@ -254,6 +265,7 @@ export class VoiceSession {
     this.closed = true;
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.consumers.keys()]) this.dropConsumer(id);
+    this.mixer.close();
     for (const { producer, track } of this.video.values()) {
       producer.close();
       track.stop();

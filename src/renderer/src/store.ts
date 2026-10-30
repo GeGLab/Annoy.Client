@@ -107,6 +107,8 @@ export interface Settings {
   mutedServers: string[];
   mutedChannels: string[];
   noiseFilter: NoiseFilter;
+  /** Local playback percentages, scoped to [account ID, remote user ID]. */
+  userVolumes: Record<string, number>;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
@@ -182,6 +184,7 @@ const DEFAULT_SETTINGS: Settings = {
   mutedServers: [],
   mutedChannels: [],
   noiseFilter: "gtcrn",
+  userVolumes: {},
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",

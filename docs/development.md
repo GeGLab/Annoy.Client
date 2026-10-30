@@ -14,6 +14,7 @@ npm run typecheck
 npm run build
 npm run test:desktop
 npm run test:activity
+npm run test:voice
 npm run brand:icons
 ```
 
@@ -45,6 +46,9 @@ antes de iniciar o modo dev: o aplicativo permite apenas uma instância por perf
 Referência: [HMR e hot reload no electron-vite](https://electron-vite.org/guide/hmr-and-hot-reloading).
 
 ## Estrutura
+
+[Volume individual](user-volume.md) descreve os controles de reprodução por
+usuário e a amplificação de áudio até 200%.
 
 Busca, controles compartilhados e integração privada de atividade estão descritos
 em [busca e atividades](search-activity.md), incluindo os módulos, contratos,

@@ -12,6 +12,7 @@ import { isMessageMuted, notificationKey } from "./lib/notification-preferences.
 import { screenProfile } from "./lib/screen-profile.ts";
 import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
+import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -400,6 +401,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         "Sem áudio: o app não alcançou a porta de voz do servidor. Quem hospeda deve conferir ANNOY_ANNOUNCED_IP e liberar a porta 40000 (UDP e TCP).",
         12000,
       ),
+    accountId,
   );
   voice = { accountId, serverId, session };
   setState((s) => {
@@ -443,6 +445,18 @@ export function updateVoiceSettings(): void {
   const settings = getState().settings;
   voice?.session.updateSettings(settings);
   if (voice) gatewayFor(voice.accountId)?.send({ op: "voice_state", selfMute: settings.selfMute, selfDeaf: settings.selfDeaf, ...(voice.session.isSharing("screen") && { screenQuality: screenProfile(settings).quality }) });
+}
+
+/** Only local playback changes: this never sends a voice state or moderation request. */
+export function setUserVolume(accountId: string, userId: string, percent: number): void {
+  const value = normalizeUserVolume(percent);
+  setState((s) => {
+    s.settings.userVolumes ??= {};
+    const key = userVolumeKey(accountId, userId);
+    if (value === 100) delete s.settings.userVolumes[key];
+    else s.settings.userVolumes[key] = value;
+  });
+  if (voice?.accountId === accountId) voice.session.updateSettings(getState().settings);
 }
 
 /** Shared by the profile controls and the call stage. */
