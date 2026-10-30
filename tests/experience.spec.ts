@@ -157,7 +157,8 @@ test("native idle, manual presence and member profile file activity", async () =
     // Older servers must not prevent the local OS-idle indicator from working.
     await expect(page.locator(".user-identity .presence-idle")).toBeVisible();
     await nativeIdle(0); await page.mouse.move(600, 200);
-    await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    // The native idle probe polls every five seconds; allow a complete polling cycle.
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible({ timeout: 10_000 });
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
