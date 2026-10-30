@@ -1,4 +1,5 @@
 import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] } });
 const origin = 'http://disconnect.test';
@@ -159,4 +160,32 @@ test('disconnected account rejects text, attachments and account mutations befor
   });
   expect(result).toHaveLength(6);
   expect(result.every(error => error.includes('Sem conexão com o servidor'))).toBe(true);
+});
+
+
+for (const type of ['song', 'theater']) test(`${type} playback ends on disconnect and does not restart when the server returns`, async ({ page }) => {
+  const fixture = await setup(page);
+  await page.route(`${origin}/fixture.webm`, async route => route.fulfill({ contentType: 'video/webm', body: await readFile('tests/fixtures/flower.webm') }));
+  await page.route(`${origin}/api/channels/media/playback`, route => {
+    const now = Date.now();
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ channelId: 'media', queue: [{ id: 'clip', url: '/fixture.webm', title: 'Video sintético', kind: 'file', addedBy: 'me', addedAt: new Date(now).toISOString() }], currentId: 'clip', paused: false, position: 0, updatedAt: now, serverTime: now, autoplay: false }) });
+  });
+  await page.evaluate(async (type) => {
+    const client = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+    await client.ensureServer('test', 'server');
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    setState((s: any) => { s.instances.test.serverStates.server.channels.push({ id: 'media', serverId: 'server', name: 'Media de teste', type, topic: '', parentId: null, position: 1, overwrites: [] }); });
+    if (type === 'song') {
+      const { listenTo } = await import(/* @vite-ignore */ `${location.origin}/src/features/channels/PlaybackRooms.tsx`);
+      listenTo({ accountId: 'test', serverId: 'server', channelId: 'media', name: 'Media de teste' });
+    } else client.navigate({ kind: 'server', accountId: 'test', serverId: 'server', channelId: 'media' });
+  }, type);
+  await expect(page.locator('video')).toHaveCount(1);
+  await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => !video.paused)).toBe(true);
+  fixture.stop(4010);
+  await expect(page.locator('video')).toHaveCount(0);
+  fixture.resume();
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).reconnect('test'));
+  await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.status)).toBe('ready');
+  await expect(page.locator('video')).toHaveCount(0);
 });

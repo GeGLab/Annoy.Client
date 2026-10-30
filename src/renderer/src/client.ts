@@ -108,6 +108,11 @@ export function connectAccount(account: Account): void {
         if (inst) {
           inst.status = status;
           if (status !== "ready") {
+            const view = s.view;
+            if (view.kind === "server" && view.accountId === account.id && view.channelId &&
+                inst.serverStates[view.serverId]?.channels.some((channel) => channel.id === view.channelId && channel.type === "theater")) {
+              view.channelId = null;
+            }
             inst.presences = {};
             inst.activities = {};
             inst.typing = {};
