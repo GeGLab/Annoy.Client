@@ -59,6 +59,8 @@ export type View =
   | { kind: "home"; accountId: string | null; dmId: string | null }
   | { kind: "server"; accountId: string; serverId: string; channelId: string | null };
 
+export type CreatableChannel = "text" | "voice" | "category" | "files" | "code" | "theater" | "song";
+
 export type Modal =
   | { kind: "addAccount"; rememberedId?: string }
   | { kind: "switchAccount" }
@@ -66,7 +68,7 @@ export type Modal =
   | { kind: "createServer"; accountId: string }
   | { kind: "serverSettings"; accountId: string; serverId: string }
   | { kind: "channelSettings"; accountId: string; serverId: string; channelId: string }
-  | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: "text" | "voice" | "category" }
+  | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
   | { kind: "userSettings"; section?: "voice" }

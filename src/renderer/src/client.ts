@@ -1,4 +1,5 @@
 import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
+import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api } from "./api.ts";
 import { previewText } from "./format.tsx";
 import { Gateway } from "./gateway.ts";
@@ -750,6 +751,10 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       if (event.d.serverId && advanced) invalidateServerMessages(accountId, event.d.serverId);
       return;
     }
+    case "PLAYBACK_UPDATE":
+    case "CODE_UPDATE":
+      emitRoomEvent(accountId, event);
+      return;
     case "INVALID_SESSION":
       toast(`Sessão expirada em ${getState().accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor"}; entre novamente`);
       return;

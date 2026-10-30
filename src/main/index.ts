@@ -4,6 +4,7 @@ import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, 
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
+import { registerTheater } from "./theater.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
@@ -266,6 +267,7 @@ function createWindow(): void {
     }
   });
   win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
+  registerTheater(win);
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
@@ -323,6 +325,10 @@ ipcMain.on("window:control", (event, action: unknown) => {
   if (action === "minimize") win.minimize();
   else if (action === "maximize") win.isMaximized() ? win.unmaximize() : win.maximize();
   else if (action === "close") win.close();
+});
+ipcMain.on("file:download", (event, url: unknown) => {
+  if (!win || event.sender !== win.webContents || typeof url !== "string" || !/^https?:\/\//.test(url)) return;
+  win.webContents.downloadURL(url);
 });
 ipcMain.handle("system:idle", (event) => event.sender === win?.webContents ? powerMonitor.getSystemIdleTime() : 0);
 ipcMain.handle("window:maximized", (event) => event.sender === win?.webContents && win.isMaximized());

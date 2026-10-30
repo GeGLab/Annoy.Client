@@ -156,6 +156,24 @@ export class Api {
     return parse<T>(res);
   }
 
+  /** Like sendMessage with files, reporting upload progress from 0 to 1. */
+  uploadMessage<T>(channelId: string, content: string, files: File[], onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
+    const form = new FormData();
+    form.append("content", content);
+    for (const f of files) form.append("files", f, f.name);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${this.baseUrl}/api/channels/${channelId}/messages`);
+      xhr.setRequestHeader("authorization", `Bearer ${this.token}`);
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+      xhr.onload = () => void parse<T>(new Response(xhr.responseText || null, { status: xhr.status })).then(resolve, reject);
+      xhr.onerror = () => reject(new TypeError("Falha de rede ao enviar"));
+      xhr.onabort = () => reject(new DOMException("Envio cancelado", "AbortError"));
+      signal?.addEventListener("abort", () => xhr.abort());
+      xhr.send(form);
+    });
+  }
+
   /** Attachment URLs are server-relative. */
   resolve(path: string): string {
     return path.startsWith("http") ? path : `${this.baseUrl}${path}`;

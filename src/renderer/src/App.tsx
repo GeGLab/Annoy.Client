@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
+import { SongDock } from "./features/channels/PlaybackRooms.tsx";
 import { LazyMotion, MotionConfig } from "framer-motion";
 import { applyTheme } from "./lib/theme.ts";
 import { TooltipProvider } from "./components/ui/tooltip.tsx";
@@ -165,6 +166,7 @@ export function App() {
       <div className="content">
       <UpdateBanner />
       <VoiceStatusBar />
+      <SongDock />
       <main className="main" ref={mainRef}>
         {view.kind === "news" ? <News /> : view.kind === "service" ? (
           !service ? (

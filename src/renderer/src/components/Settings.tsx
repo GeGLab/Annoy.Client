@@ -25,8 +25,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
 import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
 import { displayNameOf, rankOf } from "../perms.ts";
-import { getState, setState, toast, useStore, type Settings } from "../store.ts";
-import { act, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
+import { getState, setState, toast, useStore, type CreatableChannel, type Settings } from "../store.ts";
+import { act, closeModal, Field, Icon, Modal, openModal, type IconName } from "./ui.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../noise.ts";
 import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
@@ -570,6 +570,15 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
 
 // Create channel / invite ------------------------------------------------
 
+const CHANNEL_KINDS: { type: Exclude<CreatableChannel, "category">; icon: IconName; label: string; hint: string; placeholder: string }[] = [
+  { type: "text", icon: "hash", label: "Texto", hint: "Mensagens, imagens e arquivos", placeholder: "novo-canal" },
+  { type: "voice", icon: "speaker", label: "Voz", hint: "Conversa por voz em tempo real", placeholder: "Sala" },
+  { type: "files", icon: "folder", label: "Arquivos", hint: "Um lugar para compartilhar arquivos", placeholder: "arquivos" },
+  { type: "code", icon: "code", label: "Código", hint: "Editor com Git ligado a um repositório externo", placeholder: "projeto" },
+  { type: "theater", icon: "theater", label: "Theater", hint: "Sessão de cinema: vídeo sincronizado, voz e tela", placeholder: "Cinema" },
+  { type: "song", icon: "song", label: "Song", hint: "Fila de música que todos ouvem juntos", placeholder: "Rádio" },
+];
+
 export function CreateChannelModal({
   accountId,
   serverId,
@@ -579,7 +588,7 @@ export function CreateChannelModal({
   accountId: string;
   serverId: string;
   parentId: string | null;
-  type: "text" | "voice" | "category";
+  type: CreatableChannel;
 }) {
   const { state } = useServer(accountId, serverId);
   const [type, setType] = useState(initialType);
@@ -596,7 +605,7 @@ export function CreateChannelModal({
         parentId: type === "category" ? null : parentId || null,
       });
       closeModal();
-      if (channel.type === "text") openChannel(accountId, serverId, channel.id);
+      if (channel.type !== "category" && channel.type !== "voice" && channel.type !== "theater") openChannel(accountId, serverId, channel.id);
     } catch (err) {
       toast((err as Error).message);
     }
@@ -610,15 +619,15 @@ export function CreateChannelModal({
             cards
             label="Tipo de canal"
             value={type}
-            onValueChange={(value) => setType(value as "text" | "voice")}
-            options={["text", "voice"].map((t) => ({
-              value: t,
+            onValueChange={(value) => setType(value as CreatableChannel)}
+            options={CHANNEL_KINDS.map((kind) => ({
+              value: kind.type,
               label: (
                 <>
-                  <Icon name={t === "text" ? "hash" : "speaker"} />
+                  <Icon name={kind.icon} />
                   <span>
-                    <strong>{t === "text" ? "Texto" : "Voz"}</strong>
-                    <span className="muted small">{t === "text" ? "Mensagens, imagens e arquivos" : "Conversa por voz em tempo real"}</span>
+                    <strong>{kind.label}</strong>
+                    <span className="muted small">{kind.hint}</span>
                   </span>
                 </>
               ),
@@ -630,7 +639,7 @@ export function CreateChannelModal({
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={type === "text" ? "novo-canal" : type === "voice" ? "Sala" : "Nova categoria"}
+            placeholder={type === "category" ? "Nova categoria" : (CHANNEL_KINDS.find((k) => k.type === type)?.placeholder ?? "novo-canal")}
             required
             maxLength={100}
           />

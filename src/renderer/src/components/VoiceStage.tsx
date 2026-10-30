@@ -65,7 +65,7 @@ function PersonCard({ person, accountId }: { person: Person; accountId: string }
 }
 
 /** Voice channel view: everyone in the call, with cameras and screen shares. */
-export function VoiceStage({ accountId, state, channel }: { accountId: string; state: ServerState; channel: Channel }) {
+export function VoiceStage({ accountId, state, channel, embedded = false }: { accountId: string; state: ServerState; channel: Channel; embedded?: boolean }) {
   const voice = useStore((s) => s.voice);
   const settings = useStore((s) => s.settings);
   const tiles = useVideoTiles();
@@ -90,12 +90,17 @@ export function VoiceStage({ accountId, state, channel }: { accountId: string; s
 
 
   return (
-    <section className="chat stage">
-      <header className="chat-header">
-        <Icon name="speaker" size={20} />
-        <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{people.size === 0 ? "Ninguém na chamada" : `${people.size} na chamada`}</span>
-      </header>
+    <section className={`chat stage${embedded ? " embedded" : ""}`}>
+      {!embedded && (
+        <header className="chat-header">
+          <Icon name={channel.temporary ? "hourglass" : "speaker"} size={20} />
+          <h1 className="truncate">{channel.name}</h1>
+          <span className="chat-topic">
+            {people.size === 0 ? "Ninguém na chamada" : `${people.size} na chamada`}
+            {channel.temporary ? " · sala temporária, some quando todos saírem" : ""}
+          </span>
+        </header>
+      )}
 
       {!connected ? (
         <div className="stage-empty">

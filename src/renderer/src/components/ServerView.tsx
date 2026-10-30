@@ -13,13 +13,16 @@ import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
-import { has, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
+import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
 import { useMemo, useState } from "react";
-import { apiFor, joinVoice, navigate, openChannel, openDm, reconnect } from "../client.ts";
+import { apiFor, ensureServer, joinVoice, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
-import { toast, useStore } from "../store.ts";
+import { getState, toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
 import { VoiceStage } from "./VoiceStage.tsx";
+import { FilesView } from "../features/channels/FilesView.tsx";
+import { CodeView } from "../features/channels/CodeView.tsx";
+import { SongView, TheaterView } from "../features/channels/PlaybackRooms.tsx";
 import { act, Avatar, Icon, openModal, type IconName } from "./ui.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
@@ -98,6 +101,8 @@ function VoiceUsers({
   );
 }
 
+const CHANNEL_ICONS: Partial<Record<Channel["type"], IconName>> = { text: "hash", files: "folder", code: "code", song: "song" };
+
 function ChannelRow({
   accountId,
   state,
@@ -129,22 +134,25 @@ function ChannelRow({
     </button>
   );
 
-  if (channel.type === "voice") {
+  if (isVoiceChannel(channel.type)) {
     const inChannel = state.voiceStates.filter((v) => v.channelId === channel.id);
     const connected = voice?.accountId === accountId && voice.serverId === state.server.id && voice.channelId === channel.id;
     const canConnect = has(perms, Permission.CONNECT);
+    // A theater opens first: people may watch along without joining the call.
+    const theater = channel.type === "theater";
     return (
       <li>
         <div
-          className={`channel voice${canManage ? " has-gear" : ""}${connected ? " active" : ""}${canConnect ? "" : " locked"}`}
+          className={`channel voice${canManage ? " has-gear" : ""}${connected || (theater && activeId === channel.id) ? " active" : ""}${canConnect || theater ? "" : " locked"}`}
           onClick={() => {
+            if (theater) return openChannel(accountId, state.server.id, channel.id);
             if (!canConnect) return toast("Sem permissão para conectar");
             if (!connected) void joinVoice(accountId, state.server.id, channel.id);
             openChannel(accountId, state.server.id, channel.id);
           }}
-          title={canConnect ? "Clique para entrar" : "Sem permissão para conectar"}
+          title={theater ? "Abrir sessão" : channel.temporary ? "Sala temporária: some quando todos saírem" : canConnect ? "Clique para entrar" : "Sem permissão para conectar"}
         >
-          <Icon name={canConnect ? "speaker" : "lock"} size={16} />
+          <Icon name={theater ? "theater" : !canConnect ? "lock" : channel.temporary ? "hourglass" : "speaker"} size={16} />
           <span className="channel-name">{channel.name}</span>
           {connected && <span className={`voice-here ${voice.status}`}>{voice.status === "connected" ? "Na sala" : "Entrando"}</span>}
           {canManage && <span className="channel-voice-actions">{gear}</span>}
@@ -162,7 +170,7 @@ function ChannelRow({
         className={`channel${activeId === channel.id ? " active" : ""}${unread ? " unread" : ""}`}
         onClick={() => openChannel(accountId, state.server.id, channel.id)}
       >
-        <Icon name="hash" size={16} />
+        <Icon name={CHANNEL_ICONS[channel.type] ?? "hash"} size={16} />
         <span className="channel-name">{channel.name}</span>
         {muted && <Icon name="bellOff" size={14} />}
         {unread?.mention && <span className="badge">{unread.count}</span>}
@@ -176,6 +184,27 @@ function ChannelRow({
       </div>
     </li>
   );
+}
+
+/** A voice room that disappears once everyone leaves (or after 10 minutes if nobody comes). */
+async function createTempRoom(accountId: string, state: ServerState): Promise<void> {
+  const me = state.members.find((m) => m.user.id === getState().instances[accountId]?.user?.id);
+  const name = await promptText(
+    "Nome da sala temporária. Ela some quando todos saírem; se ninguém entrar, é excluída em 10 minutos.",
+    me ? `Sala de ${displayNameOf(me)}` : "Sala temporária",
+    { confirmLabel: "Criar e entrar" },
+  );
+  if (!name?.trim()) return;
+  // Next to the other voice rooms, in the first category that has one.
+  const parentId = state.channels.find((c) => c.type === "voice" && c.parentId)?.parentId ?? null;
+  try {
+    const channel = await apiFor(accountId).post<Channel>(`/servers/${state.server.id}/temp-rooms`, { name: name.trim(), parentId });
+    await ensureServer(accountId, state.server.id, true);
+    await joinVoice(accountId, state.server.id, channel.id);
+    openChannel(accountId, state.server.id, channel.id);
+  } catch (err) {
+    toast((err as Error).message);
+  }
 }
 
 function ChannelList({ accountId, state, me, activeId }: { accountId: string; state: ServerState; me: string; activeId: string | null }) {
@@ -245,6 +274,12 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
                 Criar categoria
               </DropdownMenuItem>
             </>
+          )}
+          {has(perms, Permission.CONNECT) && (
+            <DropdownMenuItem onSelect={() => void createTempRoom(accountId, state)}>
+              <Icon name="hourglass" />
+              Criar sala temporária
+            </DropdownMenuItem>
           )}
           {isOwner && (
             <DropdownMenuItem onSelect={() => openModal({ kind: "importDiscord", accountId, serverId: state.server.id })}>
@@ -559,15 +594,24 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   const showMembers = useStore((s) => s.settings.membersOpen);
   if (!state || !me) return <ServerUnavailable accountId={accountId} />;
 
-  const channel = state.channels.find((c) => c.id === channelId && c.type === "text");
-  const voiceChannel = state.channels.find((c) => c.id === channelId && c.type === "voice");
-  const perms = channel ? channelPerms(state, me, channel) : 0;
+  const opened = state.channels.find((c) => c.id === channelId);
+  const channel = opened?.type === "text" ? opened : undefined;
+  const voiceChannel = opened?.type === "voice" ? opened : undefined;
+  const perms = opened ? channelPerms(state, me, opened) : 0;
   const names = new Map(state.members.map((m) => [m.user.id, displayNameOf(m)]));
 
   return (
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
-      {voiceChannel ? (
+      {opened?.type === "files" ? (
+        <FilesView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+      ) : opened?.type === "code" ? (
+        <CodeView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+      ) : opened?.type === "theater" ? (
+        <TheaterView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+      ) : opened?.type === "song" ? (
+        <SongView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+      ) : voiceChannel ? (
         <VoiceStage accountId={accountId} state={state} channel={voiceChannel} />
       ) : channel ? (
         <Chat

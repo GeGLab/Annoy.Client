@@ -7,7 +7,12 @@ export default defineConfig({
   main: {},
   preload: {
     // Sandboxed preloads must be CommonJS.
-    build: { rollupOptions: { output: { format: "cjs", entryFileNames: "[name].cjs" } } },
+    build: {
+      rollupOptions: {
+        input: { index: resolve(import.meta.dirname, "src/preload/index.ts"), theater: resolve(import.meta.dirname, "src/preload/theater.ts") },
+        output: { format: "cjs", entryFileNames: "[name].cjs" },
+      },
+    },
   },
   renderer: {
     root: resolve(import.meta.dirname, "src/renderer"),

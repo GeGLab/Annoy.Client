@@ -3,6 +3,14 @@ import type { Service } from "../shared/services.ts";
 import type { UpdateState } from "../shared/update.ts";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../shared/activity.ts";
 
+export type TheaterSlot = "theater" | "music";
+export interface TheaterEvents {
+  status: { position: number; duration: number | null; paused: boolean; ended: boolean };
+  user: { action: "play" | "pause" | "seek"; position: number };
+  ended: { position: number };
+  title: string;
+}
+
 const bridge = {
   platform: process.platform,
   idleSeconds: () => ipcRenderer.invoke("system:idle") as Promise<number>,
@@ -48,6 +56,22 @@ const bridge = {
       return () => ipcRenderer.off("service:badge", handler);
     },
   },
+  /** Theater and song rooms: YouTube and websites in a native view, ads blocked. */
+  theater: {
+    open: (slot: TheaterSlot, url: string, kind: string) => ipcRenderer.send("theater:open", slot, url, kind),
+    close: (slot: TheaterSlot) => ipcRenderer.send("theater:close", slot),
+    /** Window coordinates; an empty rect hides the view. */
+    setBounds: (slot: TheaterSlot, rect: { x: number; y: number; width: number; height: number }) => ipcRenderer.send("theater:bounds", slot, rect),
+    control: (slot: TheaterSlot, command: { action: "play" | "pause" | "seek"; position?: number }) => ipcRenderer.send("theater:control", slot, command),
+    openExternal: (slot: TheaterSlot) => ipcRenderer.send("theater:open-external", slot),
+    on<K extends keyof TheaterEvents>(name: K, listener: (slot: TheaterSlot, payload: TheaterEvents[K]) => void): () => void {
+      const handler = (_e: IpcRendererEvent, slot: TheaterSlot, payload: TheaterEvents[K]) => listener(slot, payload);
+      ipcRenderer.on(`theater:${name}`, handler);
+      return () => ipcRenderer.off(`theater:${name}`, handler);
+    },
+  },
+  /** Saves an http(s) file through the system's save dialog. */
+  download: (url: string) => ipcRenderer.send("file:download", url),
   openTeamSpeak: (link: string) => ipcRenderer.send("teamspeak:open", link),
   screen: {
     /** "system": the OS portal picks the source (Wayland); "app": show Annoy's own picker. */
