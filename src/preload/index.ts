@@ -25,6 +25,8 @@ const bridge = {
       return () => ipcRenderer.off("activity:snapshot", handler);
     },
   },
+  /** Appends to errors.log in the app's data folder; nothing leaves the computer. */
+  logError: (text: string) => ipcRenderer.send("log:error", text),
   /** Kept by the OS keychain; null when there's none (the value isn't stored then). */
   secrets: {
     get: (name: "global") => ipcRenderer.invoke("secrets:get", name) as Promise<string | null>,

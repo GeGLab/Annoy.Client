@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
@@ -267,6 +267,11 @@ function createWindow(): void {
     }
   });
   win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
+  // A crashed or killed renderer leaves an empty window; bring the app back.
+  win.webContents.on("render-process-gone", (_event, details) => {
+    logError(`renderer gone: ${details.reason} (exit ${details.exitCode})`);
+    if (details.reason !== "clean-exit") win?.webContents.reload();
+  });
   registerTheater(win);
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
@@ -286,6 +291,21 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
+
+// Interface errors land in a local file (never sent anywhere) so a report can
+// say what broke. Kept small: past 1 MB it starts over.
+const errorLog = () => join(app.getPath("userData"), "errors.log");
+function logError(text: string): void {
+  try {
+    if (existsSync(errorLog()) && statSync(errorLog()).size > 1_000_000) writeFileSync(errorLog(), "");
+    appendFileSync(errorLog(), `${new Date().toISOString()} [${app.getVersion()}] ${text.slice(0, 8000)}\n`);
+  } catch {
+    // Logging must never take the app down.
+  }
+}
+ipcMain.on("log:error", (event, text: unknown) => {
+  if (event.sender === win?.webContents && typeof text === "string") logError(text);
+});
 
 // Secrets the renderer keeps across restarts (the Annoy Global keys), sealed by
 // the OS keychain. Without a real keychain nothing is written: the app asks for
