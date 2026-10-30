@@ -1,3 +1,4 @@
+import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
@@ -19,7 +20,7 @@ import {
 } from "react";
 import { apiFor, loadMessages, returnToLatest, sendTyping } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
-import { toast, setState, useStore } from "../store.ts";
+import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { Button } from "./ui/button.tsx";
@@ -190,6 +191,7 @@ function MessageRow({
   nameOf,
   channelOf,
   canModerate,
+  canReact,
   onReply,
 }: {
   accountId: string;
@@ -200,18 +202,24 @@ function MessageRow({
   nameOf: NameOf;
   channelOf: NameOf | undefined;
   canModerate: boolean;
+  canReact: boolean;
   onReply: (m: Message) => void;
 }) {
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
-    if (reacting || !reactionsEnabled) return;
+    if (reacting || !reactionsEnabled || !canReact) return;
     setReacting(true);
     try {
       const path = `/channels/${message.channelId}/messages/${message.id}/reactions/${encodeURIComponent(emoji)}`;
       const exists = message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(me));
       const updated = exists ? await apiFor(accountId).del<Message>(path) : await apiFor(accountId).put<Message>(path);
-      setState((s) => { const current = s.instances[accountId]?.messages[message.channelId]?.items.find((item) => item.id === message.id); if (current) current.reactions = updated.reactions ?? []; });
+      const latest = getState().instances[accountId]?.messages[message.channelId]?.items.find((item) => item.id === message.id);
+      // A newer gateway update may already include reactions from another person.
+      if (latest?.reactions === message.reactions) setState((s) => {
+        const current = s.instances[accountId]?.messages[message.channelId]?.items.find((item) => item.id === message.id);
+        if (current) current.reactions = updated.reactions ?? [];
+      });
     } catch (error) { toast((error as Error).message); }
     finally { setReacting(false); }
   };
@@ -288,13 +296,17 @@ function MessageRow({
             )
           )}
           <GiphyMessage accountId={accountId} content={message.content} />
-          {!!message.reactions?.length && <div className="message-reactions" aria-label="Reações à mensagem">{message.reactions.map((reaction) => <button key={reaction.emoji} className={reaction.userIds.includes(me) ? "reaction selected" : "reaction"} aria-label={`${reaction.emoji}: ${reaction.userIds.length} reações`} aria-pressed={reaction.userIds.includes(me)} title={reaction.userIds.map((id) => id === me ? "Você" : nameOf(id) ?? "Usuário").join(", ")} disabled={reacting || !reactionsEnabled} onClick={() => void react(reaction.emoji)}><span>{reaction.emoji}</span><span>{reaction.userIds.length}</span></button>)}{reactionsEnabled && <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />}</div>}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
+          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} onToggle={(emoji) => void react(emoji)} />
         </div>
       </div>
       {!editing && (
         <div className="message-actions">
-          {reactionsEnabled && <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />}
+          {reactionsEnabled && canReact && <>
+            <div className="reaction-shortcuts" aria-label="Reações rápidas">{REACTION_SHORTCUTS.map((emoji) => <button key={emoji} className="reaction-quick" aria-label={`Reagir com ${emoji}`} aria-pressed={message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(me)) ?? false} title={`Reagir com ${emoji}`} disabled={reacting} onClick={() => void react(emoji)}>{emoji}</button>)}</div>
+            <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />
+            <span className="message-action-divider" aria-hidden="true" />
+          </>}
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
@@ -695,6 +707,7 @@ export function Chat(props: ChatProps) {
                   nameOf={nameOf}
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
+                  canReact={props.canSend}
                   onReply={setReplyTo}
                 />
               </Fragment>

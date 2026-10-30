@@ -195,3 +195,37 @@
 
 .resizable-panel.members > .panel-content { padding-top: 0; }
 .member-search-slot { margin-inline: -12px; }
+
+/* A single home for direct conversations, followed by communities and services. */
+.clean-rail { gap: 12px; padding-top: 14px; }
+.clean-rail .rail-home { display: grid; place-items: center; width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 14px; background: #fff; }
+.clean-rail .rail-home:hover { background: #fff; }
+.clean-rail .rail-divider { flex: none; width: 26px; min-height: 1px; height: 1px; margin: 2px 0; background: var(--border); }
+.app.bar-side .clean-rail .tabs-strip { gap: 10px; padding: 4px 0; }
+.app.bar-side .clean-rail .tab-item:not(.rail-home) { width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 14px; background: transparent; }
+.app.bar-side .clean-rail .tab-item:hover:not(.rail-home) { background: var(--bg-hover); }
+.app.bar-side .clean-rail .tab-item .tab-tile { width: 40px; height: 40px; border-radius: 12px; overflow: hidden; background: var(--bg-elev); color: var(--text-soft); }
+.app.bar-side .clean-rail .tab-item.active .tab-tile { background: var(--accent); color: var(--on-accent); }
+.app.bar-side .clean-rail .rail-label { display: none; }
+.clean-rail .tab-group:empty { display: none; }
+.rail-footer { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 8px; }
+.clean-rail .tabbar-add { width: 40px; min-height: 40px; height: 40px; padding: 0; border: 0; border-radius: 12px; color: var(--text-soft); background: var(--bg-elev); }
+.clean-rail .tabbar-add:hover { color: var(--accent-strong); background: var(--accent-soft); }
+.rail-news.active { color: var(--accent); background: var(--accent-soft); }
+.app.bar-top .clean-rail { padding: 8px 12px; }
+.app.bar-top .clean-rail .rail-home { width: 38px; min-height: 38px; height: 38px; border-radius: 10px; }
+.app.bar-top .clean-rail .rail-divider { width: 1px; min-height: 24px; height: 24px; margin: 0 2px; }
+.app.bar-top .clean-rail .rail-footer { flex-direction: row; padding: 0; }
+.app.bar-top .clean-rail .tabbar-add { min-height: 36px; height: 36px; width: 36px; }
+
+/* Shared emoji counters stay beneath the content; shortcuts appear on hover/focus. */
+.message-actions { display: flex; align-items: center; padding: 4px; gap: 2px; border-radius: 10px; opacity: 0; pointer-events: none; transform: translateY(3px); transition: opacity 120ms var(--ease), transform 120ms var(--ease); }
+.message:hover .message-actions, .message:focus-within .message-actions, .message:has(.message-actions [data-state="open"]) .message-actions { opacity: 1; pointer-events: auto; transform: none; }
+.reaction-shortcuts { display: flex; gap: 2px; }
+.reaction-quick { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 6px; font-size: 19px; line-height: 1; }
+.reaction-quick:hover, .reaction-quick[aria-pressed="true"] { background: var(--accent-soft); }
+.message-action-divider { width: 1px; height: 18px; margin: 0 4px; background: var(--border-strong); }
+.message-reactions { margin-top: 10px; }
+.message-reactions .reaction { min-height: 30px; padding: 3px 8px; border-radius: 8px; gap: 6px; }
+.reaction-count { font-size: 12px; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .message-actions { transition: none; transform: none; } }

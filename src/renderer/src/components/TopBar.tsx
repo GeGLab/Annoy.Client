@@ -152,7 +152,7 @@ export function TopBar() {
   const shown = services.filter((sv) => !sv.hidden);
   const before = shown.filter((sv) => tabLayout(sv, settings).placement === "before");
   const after = shown.filter((sv) => tabLayout(sv, settings).placement === "after");
-  const directMessages = accounts.flatMap((account) => (instances[account.id]?.dms ?? []).filter((dm) => dm.lastMessageId || instances[account.id]?.unread[dm.id]).map((dm) => ({ account, dm, unread: instances[account.id]?.unread[dm.id]?.count ?? 0 })));
+  const directMessages = accounts.flatMap((account) => (instances[account.id]?.dms ?? []).filter((dm) => (instances[account.id]?.unread[dm.id]?.count ?? 0) > 0).map((dm) => ({ account, dm, unread: instances[account.id]?.unread[dm.id]?.count ?? 0 })));
 
   let homeCount = 0;
   for (const a of accounts) {
@@ -162,98 +162,37 @@ export function TopBar() {
   }
 
   return (
-    <header className="topbar">
-      <button className="rail-brand" title="Novidades do Annoy" aria-label="Novidades do Annoy" aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}>
-        <Brand size={settings.barPosition === "top" ? 30 : 42} />
-      </button>
-      <nav className="tabs-strip" aria-label="Navegação do Annoy">
-        <span className="rail-section-label">Atalhos</span>
-        <button
-          className={`tab-item${view.kind === "home" ? " active" : ""}`}
-          onClick={() =>
-            navigate({ kind: "home", accountId: view.kind === "home" ? view.accountId : (accounts[0]?.id ?? null), dmId: null })
-          }
-          title="Amigos e mensagens diretas"
-          aria-label="Amigos e mensagens diretas"
-          aria-current={view.kind === "home" ? "page" : undefined}
-        >
-          <span className="tab-tile">
-            <Icon name="home" size={15} />
-          </span>
-          <span className="rail-label">Início</span>
+    <header className="topbar clean-rail">
+      <Tooltip content="Mensagens diretas">
+        <button className={`rail-brand rail-home tab-item${view.kind === "home" ? " active" : ""}`} aria-label="Mensagens diretas" aria-current={view.kind === "home" ? "page" : undefined} onClick={() => navigate({ kind: "home", accountId: "accountId" in view ? view.accountId ?? accounts[0]?.id ?? null : accounts[0]?.id ?? null, dmId: null })}>
+          <Brand size={settings.barPosition === "top" ? 30 : 44} />
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
+      </Tooltip>
+      <span className="rail-divider rail-home-divider" aria-hidden="true" />
+      <nav className="tabs-strip" aria-label="Navegação do Annoy">
         {directMessages.map(({ account, dm, unread }) => {
           const user = dm.recipients[0];
           if (!user) return null;
           const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
-          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname}${unread ? ` · ${unread} novas mensagens` : ""}`}><button className={`tab-item dm-shortcut${view.kind === "home" && view.accountId === account.id && view.dmId === dm.id ? " active" : ""}`} aria-label={`Conversa com ${nickname}${unread ? `, ${unread} mensagens não lidas` : ""}`} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} />{unread > 0 && <span key={unread} className="tab-badge">{unread}</span>}</button></Tooltip>;
+          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname} · ${unread} novas mensagens`}><button className="tab-item dm-shortcut" aria-label={`Conversa com ${nickname}, ${unread} mensagens não lidas`} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
         })}
-        {before.map((service) => (
-          <ServiceTab key={service.id} service={service} />
-        ))}
-        {/* Integrações temporariamente ocultas enquanto a compatibilidade é definida.
-        <Tooltip content="Integrações">
-          <button
-            className={`tab-item${view.kind === "marketplace" ? " active" : ""}`}
-            aria-label="Integrações"
-            aria-current={view.kind === "marketplace" ? "page" : undefined}
-            onClick={() =>
-              navigate({
-                kind: "marketplace",
-                accountId: "accountId" in view ? view.accountId : (accounts[0]?.id ?? null),
-                serverId: view.kind === "server" || view.kind === "marketplace" ? view.serverId : null,
-              })
-            }
-          >
-            <span className="tab-tile">
-              <Icon name="cable" size={21} />
-            </span>
-            <span className="rail-label">Integrações</span>
-          </button>
-        </Tooltip>
-        */}
-        <span className="rail-divider" />
-        <span className="rail-section-label">Servidores</span>
+        {before.map((service) => <ServiceTab key={service.id} service={service} />)}
+        {before.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {accounts.map((account) => {
           const inst = instances[account.id];
-          return (
-            <div key={account.id} className="tab-group" title={account.instanceName}>
-              {inst?.status !== "ready" && (
-                <button
-                  className={`instance-status ${inst?.status ?? "connecting"}`}
-                  title={
-                    inst?.status === "invalid"
-                      ? `${account.instanceName}: sessão expirada, entre de novo`
-                      : `${account.instanceName}: sem conexão. Clique para tentar agora`
-                  }
-                  onClick={() =>
-                    inst?.status === "invalid" ? setState((s) => void (s.modal = { kind: "addAccount" })) : reconnect(account.id)
-                  }
-                />
-              )}
-              {inst?.servers.map((server) => (
-                <ServerTab key={server.id} account={account} server={server} inst={inst} />
-              ))}
-            </div>
-          );
+          return <div key={account.id} className="tab-group">
+            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status === "invalid" ? "sessão expirada, entre de novo" : "sem conexão. Clique para tentar agora"}`} aria-label={`${account.instanceName}: ${inst?.status === "invalid" ? "entrar novamente" : "tentar reconectar"}`} onClick={() => inst?.status === "invalid" ? setState((s) => { s.modal = { kind: "addAccount" }; }) : reconnect(account.id)} />}
+            {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
+          </div>;
         })}
-        {after.length > 0 && accounts.length > 0 && <span className="rail-divider" />}
-        {after.map((service) => (
-          <ServiceTab key={service.id} service={service} />
-        ))}
-        <button
-          className="tabbar-add"
-          title="Nova aba: servidor Annoy ou serviço"
-          aria-label="Nova aba"
-          onClick={() => openModal({ kind: "addTab" })}
-        >
-          <span className="tab-tile">
-            <Icon name="plus" size={18} />
-          </span>
-          <span className="rail-label">Nova aba</span>
-        </button>
+        {after.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
+        {after.map((service) => <ServiceTab key={service.id} service={service} />)}
       </nav>
+      <div className="rail-footer">
+        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" aria-label="Nova aba" onClick={() => openModal({ kind: "addTab" })}><Icon name="plus" size={21} /></button></Tooltip>
+        <Tooltip content="Novidades do Annoy"><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label="Novidades do Annoy" aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
+      </div>
     </header>
   );
 }

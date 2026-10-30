@@ -76,8 +76,12 @@ video and audio previews with a non-wrapping file size. Voice controls use share
 sound feedback: disabling audio also mutes the microphone, and enabling audio
 unmutes it.
 
-The brand destination opens Annoy news; store entry points remain commented at
-user request. Preference cards explain effects. Server/channel mute preferences
+The earlier brand destination to Annoy news is superseded: the first rail action
+opens direct messages. News remains a separate footer action beside the add
+entry point. Keep the rail compact, with unread DM shortcuts and server/service
+tiles; omit duplicate Home labels and idle recent-DM clutter. The user requested
+a white rounded logo background while preserving the Annoy silhouette and
+amber/indigo artwork. Store entry points remain commented at user request. Preference cards explain effects. Server/channel mute preferences
 suppress message sounds. Screen capture offers resolution/FPS and publishes the
 selected quality. Automatic away defaults to ten minutes of system inactivity.
 
@@ -115,3 +119,8 @@ the existing amber/indigo and warm-ivory world, shared controls and typography;
 no replacement palette or type system was approved. See `docs/social-media.md`
 for validation limits, provider configuration and the companion-server update
 boundary. Local implementation and visual review do not establish deployment.
+
+Message reactions are shared per message: show one emoji chip with a participant
+count, let other users join the same emoji, and let each user toggle their own
+participation. Preserve server-backed persistence and live updates. Quick emoji
+actions and the picker complement chips displayed below message attachments.

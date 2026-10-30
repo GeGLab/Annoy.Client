@@ -1707,7 +1707,7 @@ test("emoji reactions toggle and the media library installs, imports and restore
     const row=page.locator('[data-message-id="message"]');await row.hover();
     await row.getByRole("button",{name:"Adicionar reação",exact:true}).click();
     await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
-    const reaction=row.getByRole("button",{name:"👍: 1 reações",exact:true});await expect(reaction).toHaveAttribute("aria-pressed","true");
+    const reaction=row.getByRole("button",{name:"👍: 1 reação",exact:true});await expect(reaction).toHaveAttribute("aria-pressed","true");
     await reaction.click();await expect(reaction).toHaveCount(0);expect(writes).toEqual(["PUT","DELETE"]);
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
     const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});
@@ -1819,4 +1819,84 @@ test("packaged renderer installs bundled stickers without a development server U
   await page.evaluate(({user,server,channel})=>{localStorage.setItem("distopic.accounts",JSON.stringify([{id:"packaged",url:"http://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
   await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"Loja",exact:true}).click();const pack=picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Instalado",exact:true})).toBeDisabled();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
  }finally{await close();}
+});
+
+test("shared reaction chips group participants and ignore a stale HTTP response", async () => {
+  const { page, close } = await launch();
+  let socket: WebSocketRoute;
+  let release: (() => Promise<void>) | undefined;
+  try {
+    await seed(page, (ws) => { socket = ws; });
+    const message = await page.evaluate(async () => {
+      const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.test.instance = { ...s.instances.test.instance, reactions: true };
+        s.instances.test.messages.general.items[0].reactions = [{ emoji: "👍", userIds: ["peer"] }];
+      });
+      return getState().instances.test!.messages.general!.items[0]!;
+    });
+    await page.route("http://experience.test/api/channels/general/messages/message/reactions/**", async (route) => {
+      if (route.request().method() === "PUT") await new Promise<void>((resolve) => {
+        release = async () => { await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...message, reactions: [{ emoji: "👍", userIds: ["peer", "person"] }] }) }); resolve(); };
+      });
+      else await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...message, reactions: [{ emoji: "👍", userIds: ["peer", "other"] }] }) });
+    });
+    const row = page.locator('[data-message-id="message"]');
+    await expect(row.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await row.hover();
+    await expect(row.locator(".reaction-quick")).toHaveCount(3);
+    await row.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
+    await expect.poll(() => !!release).toBe(true);
+    socket!.send(JSON.stringify({ t: "MESSAGE_UPDATE", d: { ...message, reactions: [{ emoji: "👍", userIds: ["peer", "person", "other"] }] } }));
+    await expect(row.getByRole("button", { name: "👍: 3 reações", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await release!();
+    await expect(row.getByRole("button", { name: "Reagir com 👍", exact: true })).toBeEnabled();
+    await expect(row.locator(".message-reactions .reaction")).toHaveCount(1);
+    await expect(row.getByRole("button", { name: "👍: 3 reações", exact: true })).toBeVisible();
+    const media = await row.locator(".attachments").boundingBox(), reactions = await row.locator(".message-reactions").boundingBox();
+    expect(reactions!.y).toBeGreaterThan(media!.y + media!.height);
+    await page.screenshot({ path: join(capture, "shared-reactions-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await row.locator(".message-reactions").scrollIntoViewIfNeeded(); await row.hover();
+    await page.screenshot({ path: join(capture, "shared-reactions-light-minimum.png") });
+    await row.getByRole("button", { name: "👍: 3 reações", exact: true }).click();
+    await expect(row.getByRole("button", { name: "👍: 2 reações", exact: true })).toHaveAttribute("aria-pressed", "false");
+  } finally { if (release) await release().catch(() => undefined); await close(); }
+});
+
+test("clean navigation starts with direct messages and keeps secondary destinations accessible", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const instance = s.instances.test;
+        instance.servers.push({ id: "second", name: "Outro servidor", ownerId: "person", iconUrl: null });
+        instance.dms = [{ id: "old-dm", recipients: [{ id: "friend", username: "amiga", displayName: "Amiga", avatarUrl: null }], lastMessageId: "last" }];
+        s.services = [{ id: "discord", kind: "discord", name: "Discord", url: "https://discord.com/app" }];
+      });
+    });
+    const rail = page.locator(".topbar");
+    await expect(rail.getByRole("button").first()).toHaveAccessibleName("Mensagens diretas");
+    await expect(rail.locator(".rail-section-label")).toHaveCount(0);
+    await expect(rail.locator(".dm-shortcut")).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "Discord", exact: true })).toBeVisible();
+    await expect(rail.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true })).toBeVisible();
+    await expect(rail.getByRole("button", { name: "Nova aba", exact: true })).toBeVisible();
+    await page.screenshot({ path: join(capture, "clean-rail-dark.png") });
+    await rail.getByRole("button", { name: "Mensagens diretas", exact: true }).click();
+    await expect(page.locator(".chat-header h1")).toHaveText("Amigos");
+    await expect(rail.getByRole("button", { name: "Mensagens diretas", exact: true })).toHaveAttribute("aria-current", "page");
+    await rail.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Novidades do Annoy", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "general" }; }); });
+    await page.screenshot({ path: join(capture, "clean-rail-light-minimum.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.barPosition = "top"; }); });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect(rail.getByRole("button", { name: "Mensagens diretas", exact: true })).toBeVisible();
+    await page.screenshot({ path: join(capture, "clean-rail-top-light-minimum.png") });
+  } finally { await close(); }
 });
