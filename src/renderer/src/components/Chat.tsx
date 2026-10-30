@@ -1,3 +1,5 @@
+import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
+import { GiphyMessage } from "../features/expression/giphy.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
 import {
@@ -17,7 +19,7 @@ import {
 } from "react";
 import { apiFor, loadMessages, returnToLatest, sendTyping } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
-import { toast, useStore } from "../store.ts";
+import { toast, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { Button } from "./ui/button.tsx";
@@ -200,6 +202,19 @@ function MessageRow({
   canModerate: boolean;
   onReply: (m: Message) => void;
 }) {
+  const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
+  const [reacting, setReacting] = useState(false);
+  const react = async (emoji: string) => {
+    if (reacting || !reactionsEnabled) return;
+    setReacting(true);
+    try {
+      const path = `/channels/${message.channelId}/messages/${message.id}/reactions/${encodeURIComponent(emoji)}`;
+      const exists = message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(me));
+      const updated = exists ? await apiFor(accountId).del<Message>(path) : await apiFor(accountId).put<Message>(path);
+      setState((s) => { const current = s.instances[accountId]?.messages[message.channelId]?.items.find((item) => item.id === message.id); if (current) current.reactions = updated.reactions ?? []; });
+    } catch (error) { toast((error as Error).message); }
+    finally { setReacting(false); }
+  };
   const [editing, setEditing] = useState(false);
   const recent = useStore((s) => s.recentMessages[notificationKey(accountId, message.id)]);
   const arrival = recent && Date.now() - recent.at < 4000 ? (recent.own ? " message-sent" : " message-received") : "";
@@ -272,11 +287,14 @@ function MessageRow({
               </div>
             )
           )}
+          <GiphyMessage accountId={accountId} content={message.content} />
+          {!!message.reactions?.length && <div className="message-reactions" aria-label="Reações à mensagem">{message.reactions.map((reaction) => <button key={reaction.emoji} className={reaction.userIds.includes(me) ? "reaction selected" : "reaction"} aria-label={`${reaction.emoji}: ${reaction.userIds.length} reações`} aria-pressed={reaction.userIds.includes(me)} title={reaction.userIds.map((id) => id === me ? "Você" : nameOf(id) ?? "Usuário").join(", ")} disabled={reacting || !reactionsEnabled} onClick={() => void react(reaction.emoji)}><span>{reaction.emoji}</span><span>{reaction.userIds.length}</span></button>)}{reactionsEnabled && <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />}</div>}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
         </div>
       </div>
       {!editing && (
         <div className="message-actions">
+          {reactionsEnabled && <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />}
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
@@ -389,6 +407,13 @@ function Composer({
     requestAnimationFrame(() => el?.setSelectionRange(before.length, before.length));
   };
 
+  const insertExpression = (value: string) => {
+    const element = input.current, start = element?.selectionStart ?? text.length, end = element?.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + value + text.slice(end);
+    if (next.length > LIMITS.messageMax) return toast("A mensagem atingiu o limite de caracteres.");
+    setText(next);
+    requestAnimationFrame(() => { element?.focus(); element?.setSelectionRange(start + value.length, start + value.length); });
+  };
   const addFiles = (list: FileList | File[]) => {
     if (!canAttach) return;
     setFiles((f) => [...f, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage));
@@ -506,6 +531,7 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
+        <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
         <Button
           variant="ghost"
           size="icon"

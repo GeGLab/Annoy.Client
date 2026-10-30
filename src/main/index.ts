@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -8,6 +8,26 @@ import { registerActivity } from "./activity/index.ts";
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
 let win: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let quitting = false;
+app.on("before-quit", () => { quitting = true; });
+function restoreWindow(): void {
+  if (!win) return;
+  win.show();
+  if (win.isMinimized()) win.restore();
+  win.focus();
+}
+function createTray(): void {
+  if (process.platform !== "win32") return;
+  tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));
+  tray.setToolTip("Annoy");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Abrir Annoy", click: restoreWindow },
+    { type: "separator" },
+    { label: "Sair do Annoy", click: () => app.quit() },
+  ]));
+  tray.on("double-click", restoreWindow);
+}
 const stopActivity = registerActivity(ipcMain, () => win);
 app.on("before-quit", stopActivity);
 /** One sandboxed view per browser service, created on first open and kept alive. */
@@ -40,8 +60,7 @@ if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
-  if (win?.isMinimized()) win.restore();
-  win?.focus();
+  restoreWindow();
 });
 
 /** Discord and WhatsApp gate features on the user agent; present plain Chrome like Vesktop does. */
@@ -208,6 +227,12 @@ function createWindow(): void {
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
+  win.on("close", (event) => {
+    if (process.platform === "win32" && tray && !quitting) {
+      event.preventDefault();
+      win?.hide();
+    }
+  });
   win.on("closed", () => {
     win = null;
     views.clear();
@@ -292,6 +317,7 @@ ipcMain.on("window:flash", () => {
 
 app.whenReady().then(() => {
   createWindow();
+  createTray();
   if (win) startUpdater(win);
 });
 app.on("window-all-closed", () => {

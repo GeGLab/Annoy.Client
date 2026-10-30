@@ -1,3 +1,5 @@
+import { bindUserVolume } from "../lib/user-volume.ts";
+import { UserVolume } from "./UserVolume.tsx";
 import { useEffect, useRef } from "react";
 import { useStore } from "../store.ts";
 import { callAction, useDirectCallMedia } from "../features/direct-calls.ts";
@@ -17,6 +19,7 @@ export function DirectCallPanel() {
   const settings = useStore((s) => s.settings);
   const media = useDirectCallMedia();
   const audio = useRef<HTMLAudioElement>(null);
+  const otherUserId = entry?.call.callerId === instance?.user?.id ? entry?.call.calleeId : entry?.call.callerId;
   const ringing = entry?.call.status === "ringing";
   useEffect(() => {
     if (!ringing || settings.manualPresence === "dnd") return;
@@ -28,10 +31,12 @@ export function DirectCallPanel() {
     const element = audio.current;
     if (!element) return;
     element.srcObject = media.remote;
+    const release = bindUserVolume(element, entry?.accountId ?? "", otherUserId ?? "");
     element.muted = settings.selfDeaf;
-    if ("setSinkId" in element) void element.setSinkId(settings.outputDeviceId).catch(() => undefined);
+    if ("setSinkId" in element) void element.setSinkId(settings.outputDeviceId === "default" ? "" : settings.outputDeviceId).catch(() => undefined);
     void element.play().catch(() => undefined);
-  }, [media.remote, settings.selfDeaf, settings.outputDeviceId]);
+    return () => { release(); element.srcObject = null; };
+  }, [media.remote, settings.selfDeaf, settings.outputDeviceId, entry?.accountId, otherUserId]);
   if (!entry || !instance?.user) return null;
   const incoming = entry.call.calleeId === instance.user.id;
   const otherId = incoming ? entry.call.callerId : entry.call.calleeId;
@@ -46,6 +51,7 @@ export function DirectCallPanel() {
     <header>{other && <Avatar user={other} size={32} />}<div><strong>{name}</strong><small>{media.connected ? "Chamada conectada" : "Conectando mídia…"}</small></div><Icon name={entry.call.video ? "camera" : "phone"} /></header>
     <audio ref={audio} autoPlay />
     {entry.call.video && <div className="direct-call-video"><CallVideo stream={media.remote} /><CallVideo stream={media.local} local /></div>}
+    <UserVolume accountId={entry.accountId} userId={otherId} />
     <footer><button className={`icon-btn${settings.selfMute ? " danger" : ""}`} aria-label={settings.selfMute ? "Ativar microfone da chamada" : "Silenciar microfone da chamada"} onClick={() => toggleVoiceSetting("selfMute")}><Icon name={settings.selfMute ? "micOff" : "mic"} /></button><button className="icon-btn" aria-label={settings.selfDeaf ? "Ativar áudio da chamada" : "Desativar áudio da chamada"} onClick={() => toggleVoiceSetting("selfDeaf")}><Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} /></button><Button variant="destructive" onClick={() => callAction("end")}><Icon name="hangup" />Encerrar</Button></footer>
   </section>;
 }

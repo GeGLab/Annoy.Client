@@ -1,3 +1,4 @@
+import { bindUserVolume } from "./lib/user-volume.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
@@ -5,7 +6,7 @@ import type { GatewayEvent, MediaSource } from "@distopic/protocol";
 import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
 import type { Gateway } from "./gateway.ts";
-import type { Settings } from "./store.ts";
+import { toast, type Settings } from "./store.ts";
 import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
 
 type TransportInfo = {
@@ -21,6 +22,7 @@ interface RemoteMedia {
   source: MediaSource;
   userId: string;
   audio: HTMLAudioElement | null;
+  releaseVolume?: () => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export class VoiceSession {
     private readonly onLocalMedia: () => void,
     /** Media can't reach the server even though signaling works: almost always the announced IP or a closed port. */
     private readonly onMediaFailed: () => void,
+    private readonly accountId = "",
   ) {}
 
   async start(): Promise<void> {
@@ -147,6 +150,10 @@ export class VoiceSession {
     if (!this.send || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
     const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
+    if (source === "screen" && this.settings.screenAudio) {
+      if (!screenAudioSupported()) toast("Áudio da transmissão disponível apenas no Windows.", 8000);
+      else if (!this.serverScreenAudio) toast("Transmissão sem som: esta instância precisa anunciar suporte a screen_audio. Atualize o servidor Annoy.", 12000);
+    }
     const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
       source === "camera"
@@ -154,6 +161,7 @@ export class VoiceSession {
         : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
+    if (withAudio && !sound) toast("O Windows não forneceu áudio para a transmissão. Confira a saída de som e tente compartilhar novamente.", 10000);
     if (!track) throw new Error("Nenhuma imagem capturada");
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
@@ -179,6 +187,7 @@ export class VoiceSession {
       } catch (err) {
         sound.stop();
         console.warn("screen audio failed", err);
+        toast("A imagem está sendo transmitida, mas o envio do áudio falhou. Pare a transmissão e tente novamente.", 10000);
       }
     }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });
@@ -217,16 +226,18 @@ export class VoiceSession {
     }>("consume", { producerId, transportId: this.recv.id, rtpCapabilities: this.device.rtpCapabilities });
     const consumer = await this.recv.consume(params);
     let audio: HTMLAudioElement | null = null;
+    let releaseVolume: (() => void) | undefined;
     if (consumer.kind === "audio") {
       audio = new Audio();
       audio.autoplay = true;
       audio.srcObject = new MediaStream([consumer.track]);
       audio.muted = this.settings.selfDeaf;
+      if (source === "mic") releaseVolume = bindUserVolume(audio, this.accountId, userId);
       await this.applySink(audio);
     } else {
       putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([consumer.track]), local: false });
     }
-    this.consumers.set(producerId, { consumer, source, userId, audio });
+    this.consumers.set(producerId, { consumer, source, userId, audio, releaseVolume });
     await this.gw.voice("resumeConsumer", { consumerId: consumer.id });
     if (audio) void audio.play().catch(() => undefined);
   }
@@ -235,6 +246,7 @@ export class VoiceSession {
     const entry = this.consumers.get(producerId);
     if (!entry) return;
     entry.consumer.close();
+    entry.releaseVolume?.();
     if (entry.audio) entry.audio.srcObject = null;
     else dropTile(producerId);
     this.consumers.delete(producerId);

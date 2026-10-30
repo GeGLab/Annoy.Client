@@ -9,6 +9,8 @@ export function playCallFeedback(event: "join" | "leave"): void {
   playCue(event === "join" ? [392, 523, 659] : [659, 523, 392]);
 }
 
+export function playStreamFeedback(): void { playCue([523, 784, 1047, 784]); }
+
 export function playMessageFeedback(): void {
   playCue([880, 1175]);
 }

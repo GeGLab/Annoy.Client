@@ -1,18 +1,18 @@
 import { Input } from "./ui/input.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
-import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { ActivityStack } from "../features/activity/ActivityCard.tsx";
 import type { Relationship } from "@distopic/protocol";
 import { useState, type FormEvent } from "react";
 import { apiFor, navigate, openDm } from "../client.ts";
-import { EMPTY_ACTIVITIES, useStore } from "../store.ts";
+import { EMPTY_ACTIVITIES, setState, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
 import { ResizablePanel } from "./layout/ResizablePanel.tsx";
 import { Brand } from "./Brand.tsx";
 import { UserPanel } from "./TopBar.tsx";
 import { Button } from "./ui/button.tsx";
-import { UserProfile } from "./UserProfile.tsx";
+import { DmProfile, UserProfile } from "./UserProfile.tsx";
 import { startDirectCall } from "../features/direct-calls.ts";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 
@@ -31,7 +31,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
         <span className="muted">
           {rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : presence === "idle" ? "Ausente" : presence === "dnd" ? "Não incomodar" : online ? "Online" : "Offline"}
         </span>
-        {rel.status === "friend" && activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} compact />)}
+        {rel.status === "friend" && <ActivityStack activities={activities} compact />}
       </div>
       <span className="spacer" />
       {rel.status === "friend" && (
@@ -220,7 +220,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
 
   return (
     <div className="server-view">
-      <ResizablePanel panel="channels">
+      <ResizablePanel panel="channels" reservedWidth={dm && other && settings.dmProfileOpen ? 320 : 0}>
         <header className="channels-header static">
           {accounts.length > 1 ? (
             <Select
@@ -268,19 +268,19 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
         <UserPanel />
       </ResizablePanel>
       {dm && other && me ? (
-        <Chat
+        <div className="dm-conversation"><Chat
           key={dm.id}
           accountId={accountId}
           channelId={dm.id}
           title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}
-          headerExtra={<><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" aria-label="Ligar para este amigo" onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" aria-label="Chamada de vídeo com este amigo" onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "Ativar notificações da conversa" : "Silenciar conversa"} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
+          headerExtra={<><button className="icon-btn" aria-label={settings.dmProfileOpen ? "Ocultar perfil do amigo" : "Mostrar perfil do amigo"} aria-pressed={settings.dmProfileOpen} onClick={() => setState((s) => { s.settings.dmProfileOpen = !s.settings.dmProfileOpen; })}><Icon name="users" /></button><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" aria-label="Ligar para este amigo" onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" aria-label="Chamada de vídeo com este amigo" onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "Ativar notificações da conversa" : "Silenciar conversa"} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
           icon={null}
           canSend
           canAttach
           canModerate={false}
           nameOf={(id) => (id === me.id ? me.displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || dm.recipients.find((r) => r.id === id)?.displayName)}
           mentionables={dm.recipients.map((r) => ({ id: r.id, name: r.displayName, username: r.username }))}
-        />
+        />{settings.dmProfileOpen && <DmProfile key={other.id} user={other} accountId={accountId} />}</div>
       ) : (
         <Friends accountId={accountId} />
       )}

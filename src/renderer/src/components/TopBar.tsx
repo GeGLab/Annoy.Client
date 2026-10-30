@@ -8,7 +8,7 @@ import { ServiceTab, tabLayout } from "./Services.tsx";
 import { Brand } from "./Brand.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import { VoicePanel, DeviceMenu } from "./VoicePanel.tsx";
-import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { ActivityStack } from "../features/activity/ActivityCard.tsx";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import { Select } from "./ui/select.tsx";
 import { presenceLabel, type ManualPresence } from "../../../shared/presence.ts";
@@ -39,7 +39,7 @@ function ServerTab({ account, server, inst }: { account: Account; server: Server
         aria-current={active ? "page" : undefined}
         title={`${server.name} · ${account.instanceName}`}
       >
-        <span className="tab-tile">{initials(server.name)}</span>
+        <span className="tab-tile">{server.iconUrl ? <img className="server-icon" src={server.iconUrl} alt="" /> : initials(server.name)}</span>
         <span className="rail-label">{server.name}</span>
         {unread.mention && <span className="tab-badge">{unread.count}</span>}
       </button>
@@ -55,6 +55,7 @@ export function UserPanel() {
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
   const manualSupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
+  const groupActivitySupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.groupActivity);
   const snapshot = useStore((s) => s.desktopActivity);
   const activities = settings.shareActivity ? (snapshot?.activities ?? EMPTY_ACTIVITIES) : EMPTY_ACTIVITIES;
 
@@ -93,9 +94,9 @@ export function UserPanel() {
               {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">Atualize esta instância para seus amigos também verem o status manual.</p>}
               <div className="self-profile-activity">
                 <h3>Minha atividade</h3>
-                {activities.map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
+                <ActivityStack activities={activities} />
                 {!activities.length && <p className="muted">{!settings.shareActivity ? "O compartilhamento está desativado." : snapshot?.error ?? "Nenhuma atividade detectada agora."}</p>}
-                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? "Visível apenas para você enquanto aparece offline." : "Compartilhada com seus amigos nesta instância."}</p>}
+                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? "Visível apenas para você enquanto aparece offline." : groupActivitySupported ? "Compartilhada com amigos e membros dos seus servidores." : "Compartilhada com seus amigos nesta instância."}</p>}
               </div>
               <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />Editar perfil</button></Popover.Close>
               <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" size={16} />Trocar de conta</button></Popover.Close>

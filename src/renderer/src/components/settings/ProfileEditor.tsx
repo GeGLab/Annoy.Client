@@ -39,13 +39,14 @@ export function ProfileEditor({
     setPreview(draft.avatar === null ? null : user.avatarUrl);
   }, [draft.avatar, user.avatarUrl]);
   const pick = (photo: File) => {
-    if (!/^image\/(png|jpeg|webp)$/.test(photo.type) || photo.size > 8 * 1024 * 1024) {
-      setError("Use uma foto PNG, JPEG ou WebP de até 8 MB.");
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(photo.type) || photo.size > 8 * 1024 * 1024) {
+      setError("Use uma foto PNG, JPEG, WebP ou GIF de até 8 MB.");
       return;
     }
     setError(null);
     original.current = photo;
-    setFile(photo);
+    if (photo.type === "image/gif") { onChange({ ...draft, avatar: photo }); setFile(null); }
+    else setFile(photo);
   };
   const recrop = async () => {
     if (original.current) {
@@ -95,7 +96,7 @@ export function ProfileEditor({
           </Button>
           {preview && (
             <>
-              <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void recrop()}>
+              <Button variant="ghost" size="sm" disabled={disabled || draft.avatar?.type === "image/gif"} onClick={() => void recrop()}>
                 <Icon name="crop" size={15} />
                 Ajustar recorte
               </Button>
@@ -106,11 +107,11 @@ export function ProfileEditor({
             </>
           )}
         </div>
-        <p className="muted small">PNG, JPEG ou WebP · até 8 MB. A foto só é enviada ao salvar as alterações.</p>
+        <p className="muted small">PNG, JPEG, WebP ou GIF · até 8 MB. GIFs mantêm a animação em repetição. A foto só é enviada ao salvar as alterações.</p>
         <input
           hidden
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg,image/webp,image/gif"
           ref={input}
           aria-label={`Selecionar foto de ${user.username}`}
           onChange={(event) => {
