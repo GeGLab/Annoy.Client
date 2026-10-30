@@ -33,10 +33,10 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 
 | ID | Requisito | Estado | Evidência atual / lacuna principal | Marco |
 | --- | --- | --- | --- | --- |
-| R01 | Listagem e disponibilidade | pendente | Navegação/cache existentes; falta listagem completa com diagnóstico. | M1 |
-| R02 | Reconexão e retorno | em andamento | M1.1 isola a recuperação e mantém autenticação acessível; prazo, retorno à listagem e preservação completa pendentes em M1.3–M1.5. | M1 |
-| R03 | Feedback assíncrono | em andamento | Inventário inicial de gateway/Global registrado em M1.1; timeout, cancelamento e demais fluxos ainda pendentes. | M1–M7 |
-| R04 | Conectividade global | em andamento | Dimensões rede/Global/instâncias, diagnóstico observado e isolamento testados; scheduler, backoff com jitter e diagnóstico completo pendentes. | M1 |
+| R01 | Listagem e disponibilidade | implementação pronta; validação adiada | M1.4 adiciona destino agrupado, busca, filtro por conta, cache com instante observado e erros de abertura recuperáveis; testes aguardam M1.5. | M1 |
+| R02 | Reconexão e retorno | implementação parcial; validação adiada | M1.3 agenda backoff com jitter, pausa offline e redireciona após o prazo se a pessoa ainda está na área; preservação de rascunho/âncora em M1.5. | M1 |
+| R03 | Feedback assíncrono | em andamento | M1.2–M1.4 cobrem requests, gateway, histórico, listagem e erros de abertura; auditoria restante e validação conjunta em M1.5. | M1–M7 |
+| R04 | Conectividade global | implementação pronta; validação adiada | M1.1–M1.3 observam camadas e adicionam scheduler com causa, tentativa, próximo retry, jitter e pausa offline; testes aguardam M1.5. | M1 |
 | R05 | Seis layouts de canal | pendente | Seis modalidades existentes; padronizar estados e validar escala/permissões. | M2 |
 | R06 | Nova Aba | pendente | Funcionalidades existentes; reorganizar hierarquia e destino por conta. | M2 |
 | R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
@@ -163,7 +163,8 @@ não foi executada; lint continua sem script configurado. Nenhum teste falhou.
 ## Entrega M1.2 — requests e ciclo de vida (30/10/2026)
 
 Estado: **concluído**. PR [#7](https://github.com/GeGLab/Annoy.Client/pull/7),
-branch `feat/connectivity-modernization-20261030`. M1.3 não foi iniciado.
+branch `feat/connectivity-modernization-20261030`. Na data deste registro inicial,
+M1.3 ainda não havia sido iniciado; sua implementação está descrita abaixo.
 
 - `src/shared/requests.ts`: dono de requests por conta/sessão, prazo cobrindo
   headers e corpo, classificação de rede/timeout/401/403/5xx/resposta inválida e
@@ -232,6 +233,57 @@ branch `feat/connectivity-modernization-20261030`. M1.3 não foi iniciado.
   o runner Node emite aviso de transformação experimental. Sem teste Linux,
   produção, leitor de tela ou suíte completa de experiência. Lint não configurado.
 
+## Implementação M1.3 — recuperação (30/10/2026)
+
+Estado: **implementado; validação adiada até M1.5 conforme pedido do usuário**.
+Nenhum teste, typecheck, build ou validação automatizada foi executado nesta etapa.
+
+- `gateway.ts`: reconexão exponencial de 1/2/4/8/16/30 segundos com jitter
+  simétrico de 25%; a indicação de reinício anunciado mantém tentativas de um
+  segundo com pequeno espalhamento e uma janela especial de até 180 segundos.
+  Tentativas param enquanto o sistema reporta offline e retomam imediatamente
+  quando retorna online. A sessão inválida não é repetida.
+- Observações por instância carregam causa, instante, número da tentativa,
+  próximo horário, prazo de primeiro plano e janela de reinício. READY limpa os
+  dados da recuperação; início de nova tentativa remove o horário já vencido.
+- `ConnectionOverlay` apresenta diagnóstico e contagem regressiva. Depois de
+  60 segundos, ou do prazo de reinício anunciado (máximo de três minutos), o
+  cliente navega à lista de servidores somente se a vista ainda pertencer à
+  instância indisponível. A conexão continua tentando em segundo plano e as
+  outras instâncias permanecem disponíveis.
+- Causas/rede continuam sendo observações locais de sessão; nenhuma chamada de
+  sondagem, credencial, endpoint ou migração de backend foi adicionada.
+
+## Implementação M1.4 — listagem de servidores (30/10/2026)
+
+Estado: **implementado; validação adiada até M1.5 conforme pedido do usuário**.
+Nenhum teste, typecheck, build ou validação automatizada foi executado nesta etapa.
+
+- `View` e barra de navegação têm o destino **Servidores**. A nova tela agrupa
+  comunidades por instância/conta, pesquisa nomes de comunidade e instância,
+  filtra pela conta selecionada e abre cada comunidade com sua conta de origem.
+- Dados conhecidos seguem visíveis offline. A lista salva o instante da última
+  observação no cache já existente; cache legado sem instante é identificado
+  sem inventar uma data. Cada item informa se a disponibilidade está confirmada
+  pela conexão READY ou se ainda não foi verificada.
+- A tela tem skeleton enquanto não há primeiro READY, estados sem contas/sem
+  comunidades/sem resultados, sessão expirada com entrada, instância offline
+  com retry e mensagens de cache/horário. Busca, filtro, links e retry usam
+  controles nativos/compartilhados e navegação por teclado.
+- Falha ao abrir detalhe da comunidade sai do skeleton infinito; erro de acesso
+  403 é explicado e a pessoa pode tentar de novo ou voltar à lista. Não foi
+  necessário alterar Annoy.Server: a lista autorizada já é entregue no READY.
+- Testes adicionados para jitter/prazos/transições e para busca, filtro,
+  agrupamento e abertura por conta. Não foram executados; serão parte da rodada
+  integrada após M1.5, como solicitado.
+
+## Validação conjunta pendente após M1.5
+
+Executar nessa rodada `npm run typecheck`, build, `npm run test:connectivity`,
+testes de requests e as suítes Playwright de conectividade/workspace. Corrigir
+falhas introduzidas e só então concluir o status integral de R01/R02/R04 e a
+auditoria correspondente de R03. Sem afirmação de aprovação antecipada.
+
 ## Dependências e riscos em acompanhamento
 
 Integração para PR em 30/10/2026: a branch incorpora `upstream/main` em
@@ -259,9 +311,10 @@ Typecheck e build aprovados. As alterações locais foram commitadas por etapa
 
 ## Próxima tarefa recomendada
 
-M1.1 e M1.2 concluídos. Executar **M1.3 — recuperação**, conforme o plano:
-eventos detalhados do gateway, jitter, pausa offline/retomada e prazo de
-recuperação em primeiro plano, preservando isolamento e cancelamento. Listagem
-e preservação completa de rascunhos permanecem em M1.4 e M1.5.
+M1.3 e M1.4 estão implementados, mas a validação foi deliberadamente adiada.
+Executar **M1.5 — preservação e auditoria**, sem iniciar outro marco. Depois de
+concluir M1.5, executar em conjunto a validação de M1.3–M1.5, corrigir falhas e
+atualizar os estados R01–R04. Persistência de rascunhos/âncoras e revisão completa
+dos fluxos permanecem pendentes em M1.5.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.

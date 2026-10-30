@@ -83,6 +83,50 @@
 .connection-account > .icon { color: var(--warn); }
 .connection-account > span { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .connection-account small { color: var(--text-muted); font-size: 11px; }
+.connection-diagnostics { align-self: stretch; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.server-directory { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; padding: clamp(22px, 4vw, 48px); gap: 24px; }
+.server-directory-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; max-width: 1000px; width: 100%; margin: 0 auto; }
+.server-directory-header h1 { margin: 5px 0 4px; font-size: 28px; letter-spacing: -.025em; }
+.server-directory-header p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.server-directory-header > .ui-button { flex: none; }
+.server-directory-tools { display: flex; align-items: center; gap: 14px; max-width: 1000px; width: 100%; margin: 0 auto; }
+.server-directory-search { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 180px; max-width: 520px; padding: 0 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-muted); }
+.server-directory-search:focus-within { border-color: var(--accent); outline: 2px solid var(--accent-line); }
+.server-directory-search input { min-width: 0; width: 100%; height: 40px; color: var(--text); background: transparent; border: 0; outline: 0; }
+.server-directory-account { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.server-directory-account select { min-width: 150px; }
+.server-directory-groups { display: grid; align-content: start; gap: 18px; max-width: 1000px; width: 100%; margin: 0 auto; }
+.server-directory-group { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-channels); }
+.server-directory-group > header { display: flex; align-items: center; gap: 12px; }
+.server-directory-instance-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; color: var(--accent); background: var(--accent-soft); font-size: 13px; font-weight: 700; }
+.server-directory-instance-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.server-directory-instance-copy h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+.server-directory-status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11px; }
+.server-directory-status > span { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.server-directory-status.ready > span { background: var(--ok); }
+.server-directory-status.invalid > span { background: var(--danger); }
+.server-directory-freshness { display: flex; align-items: center; gap: 7px; margin: 12px 0; color: var(--text-muted); font-size: 11px; }
+.server-directory-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 10px; }
+.server-directory-card { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 11px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); background: var(--bg-main); text-align: left; cursor: pointer; }
+.server-directory-card:hover, .server-directory-card:focus-visible { border-color: var(--accent-line); background: var(--bg-hover); outline: none; }
+.server-directory-header h1:focus { outline: 2px solid var(--accent-line); outline-offset: 5px; }
+.server-directory-avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: none; overflow: hidden; border-radius: 12px; color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.server-directory-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.server-directory-card-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.server-directory-card-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.server-directory-card-copy small, .server-directory-no-results { color: var(--text-muted); font-size: 11px; }
+.server-directory-no-results { margin: 8px 0 0; }
+.server-directory-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; min-height: 240px; color: var(--text-muted); text-align: center; }
+.server-directory-empty > .icon { margin-bottom: 8px; color: var(--accent); }
+.server-directory-empty h2 { margin: 4px 0; color: var(--text); font-size: 17px; }
+.server-directory-empty p { max-width: 400px; font-size: 13px; }
+.server-directory-skeleton { display: grid; gap: 8px; }
+.server-directory-skeleton span { display: block; height: 42px; border-radius: var(--radius-md); background: linear-gradient(90deg, var(--bg-main), var(--bg-hover), var(--bg-main)); background-size: 200% 100%; animation: server-skeleton 1.3s ease-in-out infinite; }
+@keyframes server-skeleton { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .server-directory-skeleton span { animation: none; } }
+.server-directory:has(.server-directory-empty) { gap: 10px; }
+.server-directory .eyebrow { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+@media (max-width: 640px) { .server-directory { padding: 20px 14px; } .server-directory-header { align-items: flex-start; flex-direction: column; } .server-directory-tools { align-items: stretch; flex-direction: column; } .server-directory-search { max-width: none; } .server-directory-account { justify-content: space-between; } }
 @keyframes reconnect-wave { 0% { transform: scale(.65); opacity: 0; } 20% { opacity: .8; } 100% { transform: scale(1.05); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .reconnect-symbol > .reconnect-wave, .voice-status-bar.connecting .voice-connection-icon { animation: none; } }
 

@@ -10,13 +10,27 @@ export interface EndpointObservation {
   authentication: "unknown" | "valid" | "invalid" | "forbidden";
   cause: "system-offline" | "network" | "timeout" | "service" | "unauthorized" | "forbidden" | null;
   observedAt: number | null;
-  /** Filled by the recovery scheduler when retry diagnostics are implemented. */
+  /** Number of attempts since the last READY event. */
+  attempt: number;
   nextRetryAt: number | null;
+  recoveryDeadline: number | null;
+  restartUntil: number | null;
 }
 
 export const unknownEndpoint = (): EndpointObservation => ({
-  availability: "unknown", authentication: "unknown", cause: null, observedAt: null, nextRetryAt: null,
+  availability: "unknown", authentication: "unknown", cause: null, observedAt: null,
+  attempt: 0, nextRetryAt: null, recoveryDeadline: null, restartUntil: null,
 });
+
+/** Spread reconnect work while keeping the configured exponential ceiling. */
+export function jitterRetryDelay(baseMs: number, random = Math.random): number {
+  return Math.max(0, Math.round(baseMs * (0.75 + random() * 0.5)));
+}
+
+/** A server announced restart gets its own window; normal failures get one minute. */
+export function recoveryDeadline(offlineSince: number | null, restartUntil: number | null): number | null {
+  return restartUntil ?? (offlineSince === null ? null : offlineSince + 60_000);
+}
 
 export function observeNetwork(online: boolean, at: number): NetworkObservation {
   return { status: online ? "unknown" : "offline", observedAt: at };

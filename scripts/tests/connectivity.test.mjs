@@ -1,12 +1,34 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { affectedAccountId, observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport, unknownEndpoint } from "../../src/shared/connectivity.ts";
+import { affectedAccountId, jitterRetryDelay, observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport, recoveryDeadline, unknownEndpoint } from "../../src/shared/connectivity.ts";
 
 const network = { status: "unknown", observedAt: null };
 
 test("OS online does not prove internet access and offline is explicit", () => {
   assert.deepEqual(observeNetwork(false, 10), { status: "offline", observedAt: 10 });
   assert.deepEqual(observeNetwork(true, 20), { status: "unknown", observedAt: 20 });
+});
+
+test("recovery delay spreads clients and foreground deadline honors announced restarts", () => {
+  assert.equal(jitterRetryDelay(1000, () => 0), 750);
+  assert.equal(jitterRetryDelay(1000, () => 0.5), 1000);
+  assert.equal(jitterRetryDelay(30_000, () => 1), 37_500);
+  assert.equal(recoveryDeadline(10_000, null), 70_000);
+  assert.equal(recoveryDeadline(10_000, 190_000), 190_000);
+  assert.equal(recoveryDeadline(null, null), null);
+});
+
+test("transport observations carry scheduler diagnostics without persisting them elsewhere", () => {
+  const initial = unknownEndpoint();
+  assert.equal(initial.attempt, 0);
+  assert.equal(initial.nextRetryAt, null);
+  const recovering = { ...initial, attempt: 3, nextRetryAt: 5000, recoveryDeadline: 60_000, restartUntil: null };
+  const connecting = observeTransport(recovering, "connecting", 4000, network);
+  assert.equal(connecting.attempt, 3);
+  assert.equal(connecting.nextRetryAt, 5000);
+  const ready = observeTransport(connecting, "ready", 6000, network);
+  assert.equal(ready.attempt, 0);
+  assert.equal(ready.recoveryDeadline, null);
 });
 
 test("cached and unobserved endpoints start unknown, independently", () => {

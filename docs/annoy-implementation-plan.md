@@ -80,10 +80,10 @@ Não modificar código funcional neste marco.
 2. **M1.2 — requests e ciclo de vida (concluído):** timeout, cancelamento, classificação
    de erros e deduplicação de consultas. Proteger respostas contra troca de
    conta/canal; liberar timers, listeners e operações em andamento.
-3. **M1.3 — recuperação:** enriquecer eventos do gateway com causa, instante,
+3. **M1.3 — recuperação (implementado; validação adiada até M1.5):** enriquecer eventos do gateway com causa, instante,
    tentativa e próxima tentativa; jitter, pausa offline e retomada. Implementar
    prazo de recuperação em primeiro plano sem desligar tentativas de fundo.
-4. **M1.4 — listagem:** adicionar destino de servidores ao `View`, renderer e
+4. **M1.4 — listagem (implementado; validação adiada até M1.5):** adicionar destino de servidores ao `View`, renderer e
    navegação; busca, agrupamento, estados, retry e seleção de conta. Distinguir
    dados conhecidos em cache de disponibilidade confirmada.
 5. **M1.5 — preservação e auditoria:** retirar rascunhos/âncoras do ciclo de vida
@@ -395,12 +395,10 @@ marcos futuros; não impedem implementação local/documentação.
 
 ## 8. Próxima tarefa executável
 
-**M1.3 — recuperação.** M1.1 e M1.2 estão concluídos; consultar as evidências no
-progresso. Ler `gateway.ts`, as transições de conectividade e sua coordenação no
-cliente. Acrescentar causa, instante, tentativa e próximo retry aos eventos;
-implementar jitter, pausa offline/retomada e prazo de recuperação em primeiro
-plano, mantendo a janela de reinício anunciado. Preservar autenticação inválida,
-cancelamento por geração e isolamento entre contas, sem interromper tentativas
-de fundo nem redirecionar quem já saiu da área afetada. A listagem é M1.4:
-coordenar esse limite sem implementar a listagem inteira nesta tarefa. Executar
-typecheck e testes de relógio/socket/isolamento; atualizar o progresso ao concluir.
+**M1.5 — preservação e auditoria.** M1.3 e M1.4 estão implementados, com casos
+de teste preparados e execução deliberadamente adiada a pedido do usuário até
+concluir M1.5. Persistir rascunhos/âncoras fora do ciclo de vida de componentes,
+preservar anexos em memória ao redirecionar e auditar autenticação, comunidade/DM,
+configurações e uploads. Em seguida executar typecheck, testes unitários e de
+interface de M1.3–M1.5 em conjunto, corrigir regressões e registrar evidências.
+Não iniciar M2 nesta execução.

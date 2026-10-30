@@ -2,7 +2,7 @@ import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSu
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api } from "./api.ts";
 import { previewText } from "./format.tsx";
-import { Gateway } from "./gateway.ts";
+import { Gateway, type RecoveryEvent } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
 import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
 import type { Service } from "../../shared/services.ts";
@@ -75,10 +75,12 @@ function patchInstance(accountId: string, recipe: (inst: InstanceState) => void)
 // Last-known servers and profile per account, so tabs survive restarts and outages.
 const cacheKey = (accountId: string) => `distopic.cache.${accountId}`;
 
-function readCache(accountId: string): Pick<InstanceState, "servers" | "user"> | null {
+function readCache(accountId: string): Pick<InstanceState, "servers" | "user" | "serversObservedAt"> | null {
   try {
     const raw = localStorage.getItem(cacheKey(accountId));
-    return raw ? (JSON.parse(raw) as Pick<InstanceState, "servers" | "user">) : null;
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as Partial<Pick<InstanceState, "servers" | "user" | "serversObservedAt">>;
+    return { servers: cached.servers ?? [], user: cached.user ?? null, serversObservedAt: cached.serversObservedAt ?? null };
   } catch {
     return null;
   }
@@ -88,7 +90,7 @@ function writeCache(accountId: string): void {
   const inst = getState().instances[accountId];
   if (!inst || inst.status !== "ready") return;
   try {
-    localStorage.setItem(cacheKey(accountId), JSON.stringify({ servers: inst.servers, user: inst.user }));
+    localStorage.setItem(cacheKey(accountId), JSON.stringify({ servers: inst.servers, user: inst.user, serversObservedAt: inst.serversObservedAt }));
   } catch {
     // Storage full or unavailable: the cache is a convenience only.
   }
@@ -104,7 +106,7 @@ window.addEventListener("online", () => {
 });
 window.addEventListener("offline", () => {
   setState((s) => { s.connectivity.network = observeNetwork(false, Date.now()); });
-  for (const entry of live.values()) entry.gateway.networkLost();
+  for (const entry of live.values()) entry.gateway.pauseForOffline();
 });
 
 // Keep the cache in step with the server list, whatever changed it.
@@ -153,6 +155,10 @@ export function connectAccount(account: Account): void {
         if (inst) {
           inst.status = status;
           inst.connection = observeTransport(inst.connection, status, Date.now(), s.connectivity.network);
+          if (status === "ready") {
+            const saved = s.accounts.find((a) => a.id === account.id);
+            if (saved) delete saved.offlineSince;
+          }
           for (const [id, entry] of Object.entries(inst.messages)) if (entry.loading) {
             if (!entry.items.length) delete inst.messages[id];
             else entry.loading = false;
@@ -181,8 +187,21 @@ export function connectAccount(account: Account): void {
       setState((s) => {
         const inst = s.instances[account.id];
         if (inst) inst.connection = observeReachable(inst.connection, Date.now());
-        const saved = s.accounts.find((a) => a.id === account.id);
-        if (saved) delete saved.offlineSince;
+      });
+    },
+    (recovery: RecoveryEvent) => {
+      setState((s) => {
+        const inst = s.instances[account.id];
+        if (!inst) return;
+        inst.connection = {
+          ...inst.connection,
+          cause: recovery.cause,
+          observedAt: recovery.observedAt,
+          attempt: recovery.attempt,
+          nextRetryAt: recovery.nextRetryAt,
+          recoveryDeadline: recovery.recoveryDeadline,
+          restartUntil: recovery.restartUntil,
+        };
       });
     },
   );
@@ -368,8 +387,12 @@ export async function openDm(accountId: string, userId: string): Promise<void> {
 // Server state -----------------------------------------------------------------
 
 export async function ensureServer(accountId: string, serverId: string, force = false, signal?: AbortSignal): Promise<ServerState | undefined> {
-  const existing = getState().instances[accountId]?.serverStates[serverId];
+  const instance = getState().instances[accountId];
+  const existing = instance?.serverStates[serverId];
   if (existing && !force) return existing;
+  if (instance?.status !== "ready") return undefined;
+  if (instance.serverLoading[serverId]) return undefined;
+  patchInstance(accountId, (inst) => { inst.serverLoading[serverId] = true; delete inst.serverLoadErrors[serverId]; });
   try {
     const api = apiFor(accountId), generation = api.generation;
     const fresh = await api.get<ServerState>(`/servers/${serverId}`, signal);
@@ -383,8 +406,15 @@ export async function ensureServer(accountId: string, serverId: string, force = 
     });
     return fresh;
   } catch (err) {
-    if (!isCancellation(err)) toast((err as Error).message);
+    if (!isCancellation(err)) {
+      const message = err instanceof RequestError && err.status === 403
+        ? "Sua conta não tem mais acesso a esta comunidade. Atualize a lista de servidores."
+        : (err as Error).message || "Não foi possível carregar esta comunidade.";
+      patchInstance(accountId, (inst) => { inst.serverLoadErrors[serverId] = message; });
+    }
     return undefined;
+  } finally {
+    patchInstance(accountId, (inst) => { delete inst.serverLoading[serverId]; });
   }
 }
 
@@ -665,6 +695,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       patchInstance(accountId, (inst) => {
         inst.user = event.d.user;
         inst.servers = event.d.servers;
+        inst.serversObservedAt = Date.now();
         inst.dms = event.d.dms;
         inst.relationships = event.d.relationships;
         inst.presences = event.d.presences;
@@ -673,6 +704,8 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         // History may have gaps after a reconnect; reload lazily.
         inst.messages = {};
         inst.serverStates = {};
+        inst.serverLoadErrors = {};
+        inst.serverLoading = {};
       });
       // Instances are small (TeamSpeak scale): load every server so unread
       // badges and voice rosters work without opening each one.

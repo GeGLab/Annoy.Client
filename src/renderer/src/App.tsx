@@ -19,6 +19,7 @@ import { Home } from "./components/Home.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { AddTabModal, ServicePlaceholder, ServiceSettingsModal, TeamSpeakView } from "./components/Services.tsx";
 import { TopBar } from "./components/TopBar.tsx";
+import { ServerDirectory } from "./components/ServerDirectory.tsx";
 import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
@@ -169,7 +170,7 @@ export function App() {
       <SongDock />
       <main className="main" ref={mainRef}>
         <div className="connection-content" inert={!!blockedAccountId}>
-        {view.kind === "news" ? <News /> : view.kind === "service" ? (
+        {view.kind === "news" ? <News /> : view.kind === "servers" ? <ServerDirectory /> : view.kind === "service" ? (
           !service ? (
             <Home accountId={null} dmId={null} />
           ) : service.kind === "teamspeak" ? (

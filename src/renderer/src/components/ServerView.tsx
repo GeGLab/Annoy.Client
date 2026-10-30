@@ -566,10 +566,19 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
 // View ---------------------------------------------------------------------
 
 /** Shown while the instance is unreachable, instead of an empty screen. */
-function ServerUnavailable({ accountId }: { accountId: string }) {
+function ServerUnavailable({ accountId, serverId }: { accountId: string; serverId: string }) {
   const status = useStore((s) => s.instances[accountId]?.status);
+  const error = useStore((s) => s.instances[accountId]?.serverLoadErrors[serverId]);
+  const loading = useStore((s) => s.instances[accountId]?.serverLoading[serverId] === true);
   const name = useStore((s) => s.accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor");
-  if (status === "ready" || status === undefined) return <ChatSkeleton />;
+  if (status === "ready" && (!error || loading) || status === undefined) return <ChatSkeleton />;
+  if (status === "ready" && error) return <div className="empty-main offline-panel" role="alert">
+    <div className="offline-icon"><Icon name="wifiOff" size={26} /></div>
+    <h2>{error.includes("não tem mais acesso") ? "Acesso indisponível" : "Comunidade não carregada"}</h2>
+    <p className="muted">{error}</p>
+    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? "Carregando…" : "Tentar carregar novamente"}</button>
+    <button className="btn btn-ghost" disabled={loading} onClick={() => navigate({ kind: "servers" })}>Voltar à lista de servidores</button>
+  </div>;
   return (
     <div className="empty-main offline-panel">
       <div className="offline-icon">
@@ -593,7 +602,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   const showMembers = useStore((s) => s.settings.membersOpen);
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
-  if (!state || !me) return <ServerUnavailable accountId={accountId} />;
+  if (!state || !me) return <ServerUnavailable accountId={accountId} serverId={serverId} />;
 
   const opened = state.channels.find((c) => c.id === channelId);
   const channel = opened?.type === "text" ? opened : undefined;
@@ -604,7 +613,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   return (
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
-      {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} /> : opened?.type === "files" ? (
+      {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} serverId={serverId} /> : opened?.type === "files" ? (
         <FilesView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "code" ? (
         <CodeView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />

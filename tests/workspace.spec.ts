@@ -342,6 +342,108 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
   }
 });
 
+test("server directory groups known communities, searches, filters and opens with its owning account", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.workspace.status = "ready";
+        s.instances.workspace.connection = { availability: "available", authentication: "valid", cause: null, observedAt: Date.now(), attempt: 0, nextRetryAt: null, recoveryDeadline: null, restartUntil: null };
+        s.instances.workspace.serversObservedAt = Date.now();
+      });
+    });
+    await page.getByRole("button", { name: "Servidores", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Servidores", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Instância de teste", exact: true })).toBeVisible();
+    await expect(page.getByText(/Disponibilidade confirmada/)).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.workspace.status = "offline";
+        s.instances.workspace.connection.availability = "unavailable";
+        s.instances.workspace.connection.cause = "network";
+      });
+    });
+    await expect(page.getByText(/Última informação conhecida/)).toBeVisible();
+    await expect(page.getByText(/Disponibilidade não confirmada/)).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.workspace.status = "ready"; s.instances.workspace.connection.availability = "available"; });
+    });
+    await expect(page.getByText(/Disponibilidade confirmada/)).toBeVisible();
+    await page.getByRole("searchbox", { name: "Buscar servidor ou instância" }).fill("Comunidade de teste");
+    await expect(page.locator(".server-directory-card")).toHaveCount(1);
+    await page.getByRole("combobox", { name: "Filtrar por instância" }).click();
+    await page.getByRole("option", { name: "Instância de teste" }).click();
+    await page.locator(".server-directory-card").click();
+    await expect(page.locator(".chat-header h1")).toHaveText("geral");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("offline gateway pauses its retry clock and resumes when the system returns online", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const connection = getState().instances.workspace.connection;
+      return [getState().instances.workspace.status, connection.cause, connection.nextRetryAt];
+    })).toEqual(["offline", "system-offline", null]);
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().connectivity.network.status;
+    })).toBe("unknown");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("recovery deadline opens server list only if the user remains in the affected account view", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      navigate({ kind: "news" });
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const connection = s.instances.workspace.connection;
+        s.instances.workspace.status = "offline";
+        connection.availability = "unavailable";
+        connection.cause = "network";
+        connection.observedAt = Date.now();
+        connection.attempt = 4;
+        connection.nextRetryAt = Date.now() + 1000;
+        connection.recoveryDeadline = Date.now() + 250;
+      });
+    });
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().view.kind;
+    })).toBe("news");
+    await page.evaluate(async () => {
+      const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      navigate({ kind: "server", accountId: "workspace", serverId: "server", channelId: "general" });
+      setState((s: any) => { s.instances.workspace.connection.recoveryDeadline = Date.now() + 250; });
+    });
+    await expect.poll(() => page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().view.kind;
+    })).toBe("servers");
+    await expect(page.getByRole("heading", { name: "Servidores", exact: true })).toBeVisible();
+  } finally {
+    await cleanup();
+  }
+});
+
 test("connectivity observes Global failures independently and preserves expired-session recovery", async () => {
   const { page, cleanup } = await launch();
   let gateway: WebSocketRoute | undefined;

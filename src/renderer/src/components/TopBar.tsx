@@ -171,6 +171,7 @@ export function TopBar() {
       </Tooltip>
       <span className="rail-divider rail-home-divider" aria-hidden="true" />
       <nav className="tabs-strip" aria-label="Navegação do Annoy">
+        <Tooltip content="Todos os servidores"><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label="Servidores" aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">Servidores</span></button></Tooltip>
         {directMessages.map(({ account, dm, unread }) => {
           const user = dm.recipients[0];
           if (!user) return null;

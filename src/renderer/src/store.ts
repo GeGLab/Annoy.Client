@@ -40,6 +40,9 @@ export interface InstanceState {
   connection: EndpointObservation;
   user: User | null;
   servers: ServerSummary[];
+  serversObservedAt: number | null;
+  serverLoadErrors: Record<string, string>;
+  serverLoading: Record<string, boolean>;
   serverStates: Record<string, ServerState>;
   dms: DmChannel[];
   relationships: Relationship[];
@@ -56,6 +59,7 @@ export interface InstanceState {
 
 export type View =
   | { kind: "news" }
+  | { kind: "servers" }
   /** A browser service (Discord, WhatsApp…) or a TeamSpeak launcher. */
   | { kind: "service"; serviceId: string }
   | { kind: "marketplace"; accountId: string | null; serverId: string | null }
@@ -239,6 +243,9 @@ export const emptyInstance = (): InstanceState => ({
   connection: unknownEndpoint(),
   user: null,
   servers: [],
+  serversObservedAt: null,
+  serverLoadErrors: {},
+  serverLoading: {},
   serverStates: {},
   dms: [],
   relationships: [],
