@@ -190,3 +190,8 @@
 .giphy-message small { font-size: 10px; color: var(--text-muted); }
 @media (max-width: 1000px) { .server-identity-editor { gap: 16px; } .server-image-preview { width: 84px; height: 84px; border-radius: 16px; } }
 @media (prefers-reduced-motion: reduce) { .expression-picker { animation: none; } }
+
+.giphy-attribution, .giphy-message .giphy-attribution { display: block; width: 100px; height: auto; max-height: 40px; border-radius: 0; object-fit: contain; }
+
+.resizable-panel.members > .panel-content { padding-top: 0; }
+.member-search-slot { margin-inline: -12px; }

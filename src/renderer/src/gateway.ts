@@ -93,7 +93,17 @@ export class Gateway {
 
   /** Skips the backoff wait: used when the network comes back or the user asks to retry. */
   reconnectNow(): void {
-    if (this.closed || this.socket) return;
+    if (this.closed) return;
+    if (this.socket) {
+      // A socket without READY can be stuck in its handshake. An explicit retry
+      // starts a fresh attempt; a confirmed live connection stays untouched.
+      if (!this.connectTimeout) return;
+      const pending = this.socket;
+      this.socket = null;
+      clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+      pending.close();
+    }
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
     this.backoff = 1000;

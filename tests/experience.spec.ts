@@ -22,11 +22,12 @@ async function fullyInside(page: Page, selector: string, top = 12) {
     })
     .toBe(true);
 }
-async function launch({ fakeMedia = false } = {}) {
+async function launch({ fakeMedia = false, packaged = false } = {}) {
   const root = resolve(tmpdir()),
     data = await mkdtemp(join(root, "distopic-experience-"));
   const env = { ...process.env, DISTOPIC_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
+  if (packaged) delete (env as Partial<typeof env>).ELECTRON_RENDERER_URL;
   const app = await electron.launch({ executablePath: require("electron"), args: [...(fakeMedia ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] : []), resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -313,7 +314,7 @@ test("call membership sounds, stable participants, status icons and channel swit
     await page.locator(".channel.voice").filter({ hasText: "Sala de conversa" }).click();
     await expect.poll(tones).toBe(3); // Local join, without a second cue for our gateway echo.
     update("friend", state("friend", "voice", { selfMute: true, selfDeaf: true, video: true, screen: true }));
-    await expect.poll(tones).toBe(6);
+    await expect.poll(tones).toBe(10);
     const friend = users.filter({ hasText: "Amiga na chamada" });
     await expect(friend.getByRole("img")).toHaveCount(5);
     await friend.hover();
@@ -322,12 +323,12 @@ test("call membership sounds, stable participants, status icons and channel swit
     await expect(page.getByRole("menuitem", { name: "Desconectar da voz", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     update("visitor", state("visitor", "voice"));
-    await expect.poll(tones).toBe(9);
+    await expect.poll(tones).toBe(13);
     await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
     update("person", state("person", "voice", { speaking: true }));
     update("friend", state("friend", "voice", { speaking: true }));
     await expect(users.locator(".voice-user-name")).toHaveText(["Pessoa de teste", "Amiga na chamada", "Visitante"]);
-    await expect.poll(tones).toBe(9); // Speaking, mute and media updates never announce membership.
+    await expect.poll(tones).toBe(13); // Speaking and mute updates do not add cues; stream start uses its own cue.
     await page.locator('.channel-name').filter({ hasText: /^geral$/ }).click();
     const avatar = (await friend.locator(".avatar").boundingBox())!;
     const channel = (await page.locator(".channel.voice").first().boundingBox())!;
@@ -345,16 +346,16 @@ test("call membership sounds, stable participants, status icons and channel swit
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(page.locator(".voice-status-bar")).toHaveCSS("animation-name", "none");
     update("visitor", state("visitor", "other-voice"));
-    await expect.poll(tones).toBe(12); // Leaving our room for another channel.
+    await expect.poll(tones).toBe(20); // Leaving our room for another channel.
     update("visitor", state("visitor", "other-voice", { speaking: true }));
-    await expect.poll(tones).toBe(12);
+    await expect.poll(tones).toBe(20);
     update("friend", null);
-    await expect.poll(tones).toBe(15);
+    await expect.poll(tones).toBe(23);
     await page.locator(".channel.voice").filter({ hasText: "Outra chamada" }).click();
-    await expect.poll(tones).toBe(21); // Local leave + local join on channel switch.
+    await expect.poll(tones).toBe(29); // Local leave + local join on channel switch.
     expect(methods).toEqual(["join", "leave", "join"]);
     await page.getByRole("button", { name: "Sair da chamada de voz", exact: true }).click();
-    await expect.poll(tones).toBe(24);
+    await expect.poll(tones).toBe(32);
     expect(methods).toEqual(["join", "leave", "join", "leave"]);
     await expect(page.locator(".voice-status-bar")).toHaveCount(0);
   } finally { await close(); }
@@ -1650,4 +1651,172 @@ test("both voice backends send screen audio separately and explain incompatible 
       expect(result.explanation).toContain("screen_audio");
     }
   } finally { await close(); }
+});
+
+
+test("server search sits above group activities and server editing saves image drafts", async () => {
+  const {page,close}=await launch(); const writes:string[]=[];
+  try {
+    await seed(page);
+    await page.evaluate(async()=>{
+      const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"http://experience.test/image.png",startedAt:Date.now()-200000}];});
+    });
+    await expect(page.locator(".titlebar .titlebar-search")).toHaveCount(0);
+    await expect(page.locator(".member-search-slot").getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toBeVisible();
+    await expect(page.locator(".friend-activities")).toContainText("Jogo do grupo");
+    await expect(page.locator(".friend-activities")).toContainText("Atividades do grupo");
+    await page.screenshot({path:join(capture,"group-search-dark.png")});
+    await page.route("http://experience.test/api/servers/server",async(route)=>{
+      if(route.request().method()==="PATCH"){writes.push("name");const body=route.request().postDataJSON();return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:body.name,ownerId:"person",iconUrl:null})});}await route.continue();
+    });
+    await page.route("http://experience.test/api/servers/server/icon",(route)=>{writes.push("icon");return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:"Comunidade renovada",ownerId:"person",iconUrl:"http://experience.test/image.png"})});});
+    await page.getByRole("button",{name:"Menu de Comunidade de teste"}).click();
+    await page.getByRole("menuitem",{name:"Configurações do servidor",exact:true}).click();
+    await page.getByLabel("Imagem do servidor",{exact:true}).setInputFiles("build/icon.png");
+    await page.getByLabel("Nome do servidor",{exact:true}).fill("Comunidade renovada");
+    expect(writes).toHaveLength(0);
+    await expect(page.getByAltText("Prévia da imagem do servidor")).toHaveAttribute("src",/^blob:/);
+    await page.screenshot({path:join(capture,"server-edit-image-dark.png")});
+    await page.setViewportSize({width:940,height:620});
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
+    await fullyInside(page,".server-settings-modal");
+    await page.screenshot({path:join(capture,"server-edit-image-light-minimum.png")});
+    await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
+    await expect(page.locator(".settings-savebar")).toHaveCount(0);expect(writes).toEqual(["name","icon"]);
+    await expect(page.locator(".tab-tile .server-icon")).toHaveAttribute("src","http://experience.test/image.png");
+    await page.keyboard.press("Escape");
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.modal={kind:"addTab"};});});
+    await expect(page.locator(".service-card .service-logo")).toHaveCount(6);
+    for(const img of await page.locator(".service-card .service-logo").all())await expect.poll(()=>img.evaluate((image:HTMLImageElement)=>image.naturalWidth)).toBeGreaterThan(0);
+    await page.locator(".service-card").last().scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(capture,"official-service-logos-light.png")});
+  } finally {await close();}
+});
+
+test("emoji reactions toggle and the media library installs, imports and restores packs", async()=>{
+  const {page,close}=await launch();const writes:string[]=[];
+  try{
+    await seed(page);
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};});});
+    await page.route("http://experience.test/api/channels/general/messages/message/reactions/**",async(route)=>{
+      writes.push(route.request().method());
+      const message=await page.evaluate(async()=>{const {getState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);return getState().instances.test!.messages.general!.items[0];});
+      await route.fulfill({contentType:"application/json",body:JSON.stringify({...message,reactions:route.request().method()==="PUT"?[{emoji:"👍",userIds:["person"]}]:[]})});
+    });
+    const row=page.locator('[data-message-id="message"]');await row.hover();
+    await row.getByRole("button",{name:"Adicionar reação",exact:true}).click();
+    await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
+    const reaction=row.getByRole("button",{name:"👍: 1 reações",exact:true});await expect(reaction).toHaveAttribute("aria-pressed","true");
+    await reaction.click();await expect(reaction).toHaveCount(0);expect(writes).toEqual(["PUT","DELETE"]);
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
+    const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});
+    await picker.getByRole("button",{name:"sorriso feliz",exact:true}).click();
+    await expect(page.locator(".composer textarea")).toHaveValue("😀");
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Loja",exact:true}).click();
+    await picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Baixar",exact:true}).click();
+    await expect(picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Instalado",exact:true})).toBeDisabled();
+    await picker.getByLabel("Importar imagens da biblioteca",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
+    await expect(picker.locator(".expression-installed")).toContainText("Minha coleção");
+    await page.screenshot({path:join(capture,"media-store-dark.png")});
+    await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);
+    await page.screenshot({path:join(capture,"sticker-library-dark.png")});
+    await picker.getByRole("button",{name:"Gato",exact:true}).click();await expect(page.locator(".pending-file")).toContainText("Gato.png");
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"GIFs",exact:true}).click();
+    await expect(picker.getByRole("button",{name:"profile-animation.gif",exact:true})).toBeVisible();
+    await picker.getByRole("button",{name:"profile-animation.gif",exact:true}).click();await expect(page.locator(".pending-file")).toHaveCount(2);
+    await page.setViewportSize({width:940,height:620});
+    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();
+    await fullyInside(page,".expression-picker",0);await page.screenshot({path:join(capture,"sticker-library-light-minimum.png")});
+    await picker.getByRole("tab",{name:"Loja",exact:true}).click();await page.screenshot({path:join(capture,"media-store-light-minimum.png")});
+    await page.reload();
+    const saved=await page.evaluate(async()=>{const {readPacks}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);return(await readPacks()).map((pack)=>({name:pack.name,count:pack.items.length,blob:pack.items[0]?.blob?.size}));});
+    expect(saved.some((pack)=>pack.name==="Bichos do OpenMoji"&&pack.count===6&&pack.blob!>0)).toBe(true);
+    expect(saved.some((pack)=>pack.name==="Minha coleção"&&pack.count===1&&pack.blob!>0)).toBe(true);
+  }finally{await close();}
+});
+
+test("GIPHY queries the official API directly and shares a link without copying media",async()=>{
+ const {page,close}=await launch();
+ try{
+  await seed(page);
+  await page.route("http://experience.test/api/media/config",(route)=>route.fulfill({contentType:"application/json",body:JSON.stringify({giphyApiKey:"synthetic-client-key"})}));
+  await page.route("https://api.giphy.com/v1/gifs/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify({data:[{id:"syntheticGIF",title:"GIF sintético de teste",images:{fixed_height:{url:"https://media.giphy.com/media/synthetic/giphy.gif"},original:{url:"https://media.giphy.com/media/synthetic/giphy.gif"}}}],pagination:{offset:0,count:1,total_count:1}})}));
+  await page.route("https://media.giphy.com/**",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
+  await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
+  const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"GIFs",exact:true}).click();await picker.getByRole("button",{name:"GIPHY",exact:true}).click();
+  await expect(picker.getByRole("button",{name:"GIF sintético de teste"})).toBeVisible();await expect(picker.getByAltText("Powered by GIPHY")).toBeVisible();
+  await page.screenshot({path:join(capture,"giphy-picker-dark.png")});
+  await picker.getByRole("button",{name:"GIF sintético de teste"}).click();await expect(page.locator(".composer textarea")).toHaveValue("https://giphy.com/gifs/syntheticGIF");
+  expect(await page.evaluate(async()=>{const {readPacks}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);return(await readPacks()).length;})).toBe(0);
+ }finally{await close();}
+});
+
+test("profile editor stages an animated GIF without flattening it through cropping",async()=>{
+ const {page,close}=await launch();let bytes:Buffer|undefined;
+ try{
+  await seed(page);
+  await page.evaluate(async()=>{const {Api}=await import(/* @vite-ignore */ `${location.origin}/src/api.ts`);const original=Api.prototype.uploadAvatar;Api.prototype.uploadAvatar=async function<T>(photo:Blob):Promise<T>{(window as any).stagedAvatarType=photo.type;(window as any).stagedAvatarHeader=new TextDecoder().decode((await photo.arrayBuffer()).slice(0,6));return original.call(this,photo) as Promise<T>;};});
+  await page.route("http://experience.test/api/users/@me/avatar",async(route)=>{bytes=route.request().postDataBuffer()!;await route.fulfill({contentType:"application/json",body:JSON.stringify({id:"person",username:"tester",displayName:"Pessoa de teste",avatarUrl:"http://experience.test/profile.gif"})});});
+  await page.route("http://experience.test/profile.gif",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
+  await page.getByRole("button",{name:"Configurações",exact:true}).click();
+  await page.getByLabel("Selecionar foto de tester",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
+  await expect(page.getByRole("dialog",{name:/recorte/i})).toHaveCount(0);expect(bytes).toBeUndefined();
+  await expect(page.locator(".profile-preview img").first()).toHaveAttribute("src",/^blob:/);
+  await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
+  await expect(page.locator(".settings-savebar")).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>(window as any).stagedAvatarHeader)).toBe("GIF89a");expect(await page.evaluate(()=>(window as any).stagedAvatarType)).toBe("image/gif");
+ }finally{await close();}
+});
+
+
+test("stream start has a distinct room cue and message senders stay silent",async()=>{
+ const {page,close}=await launch();let socket:WebSocketRoute;
+ try{
+  await seed(page,(ws)=>{socket=ws;});
+  await page.evaluate(async()=>{
+   const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+   const create=AudioContext.prototype.createOscillator;(window as any).feedbackFrequencies=[];
+   AudioContext.prototype.createOscillator=function(){const oscillator=create.call(this),start=oscillator.start.bind(oscillator);oscillator.start=function(...args){(window as any).feedbackFrequencies.push(oscillator.frequency.value);start(...args);};return oscillator;};
+   setState((s:any)=>{s.voice={accountId:"test",serverId:"server",channelId:"voice",status:"connected",canStream:true,camera:false,screen:false};const state=(userId:string)=>({userId,serverId:"server",channelId:"voice",selfMute:false,selfDeaf:false,serverMute:false,speaking:false,screen:false,video:false});s.instances.test.serverStates.server.voiceStates=[state("person"),state("peer")];});
+  });
+  const frequencies=()=>page.evaluate(()=>(window as any).feedbackFrequencies as number[]);
+  const stream=(userId:string,channelId="voice")=>socket.send(JSON.stringify({t:"VOICE_STATE_UPDATE",d:{userId,serverId:"server",state:{userId,serverId:"server",channelId,selfMute:false,selfDeaf:false,serverMute:false,speaking:false,screen:true,video:false}}}));
+  stream("peer");await expect.poll(frequencies).toEqual([523,784,1047,784]);stream("peer");expect(await frequencies()).toHaveLength(4);
+  stream("person");await expect.poll(async()=>(await frequencies()).length).toBe(8);stream("other","elsewhere");
+  const message=(id:string,author:string)=>socket.send(JSON.stringify({t:"MESSAGE_CREATE",d:{id,channelId:"general",author:{id:author,username:author,displayName:author,avatarUrl:null},content:id,createdAt:new Date().toISOString(),editedAt:null,replyToId:null,attachments:[],mentionIds:[],mentionsEveryone:false}}));
+  message("own-message","person");await expect(page.getByText("own-message",{exact:true})).toBeVisible();expect(await frequencies()).toHaveLength(8);
+  message("received-message","peer");await expect.poll(async()=>(await frequencies()).length).toBe(10);expect((await frequencies()).slice(-2)).toEqual([880,1175]);
+ }finally{await close();}
+});
+
+
+test("media pack export round-trips blobs and rejects malformed packages",async()=>{
+ const {page,close}=await launch();
+ try{
+  const result=await page.evaluate(async()=>{
+   const {CATALOG,installPack,readPacks,exportPack,parsePack,removePack}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
+   await installPack(CATALOG[1]!);const first=(await readPacks())[0]!;
+   const exported=JSON.parse(await (await exportPack(first)).text());const imported=parsePack(exported);await installPack(imported);
+   const copy=(await readPacks()).find((pack)=>pack.id===imported.id)!;
+   const same=Array.from(new Uint8Array(await first.items[0]!.blob!.arrayBuffer())).join()===Array.from(new Uint8Array(await copy.items[0]!.blob!.arrayBuffer())).join();
+   let rejected=0;for(const raw of [null,{}, {...exported,items:[{name:"invalid",kind:"emoji",emoji:"<script>"}]}, {...exported,items:Array(61).fill(exported.items[0])}]){try{parsePack(raw);}catch{rejected++;}}
+   await removePack(first.id);return {same,count:copy.items.length,rejected,remaining:(await readPacks()).length};
+  });expect(result).toEqual({same:true,count:6,rejected:4,remaining:1});
+ }finally{await close();}
+});
+
+
+test("packaged renderer installs bundled stickers without a development server URL",async()=>{
+ const {page,close}=await launch({packaged:true});
+ try{
+  expect(page.url()).toMatch(/^file:/);
+  const user={id:"production",username:"production",displayName:"Pessoa",avatarUrl:null};
+  const server={id:"packaged-server",name:"Servidor",ownerId:user.id,iconUrl:null};
+  const channel={id:"packaged-general",serverId:server.id,type:"text",name:"geral",topic:"",parentId:null,position:0,overwrites:[]};
+  await page.route("http://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(route.request().url().endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
+  await page.routeWebSocket("ws://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
+  await page.evaluate(({user,server,channel})=>{localStorage.setItem("distopic.accounts",JSON.stringify([{id:"packaged",url:"http://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
+  await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"Loja",exact:true}).click();const pack=picker.locator(".expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Instalado",exact:true})).toBeDisabled();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
+ }finally{await close();}
 });

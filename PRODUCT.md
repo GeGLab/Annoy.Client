@@ -85,3 +85,33 @@ Social profiles include a 1,000-character biography and mutually visible friend
 nicknames. Direct audio/video calls use authenticated friendship-scoped signaling
 and WebRTC media. Account switching remembers signed-out account metadata only.
 The companion server is authorized for these social and presence additions.
+
+## Latest Confirmed Social and Media Scope
+
+The latest user request supersedes the friend-only activity and disabled-store
+scope above: opt-in activity is shared with friends and members of the same
+server on an updated Annoy instance. A DM alone grants no access. Keep activity
+ephemeral and clear it when the last qualifying relationship is lost. The bot
+marketplace remains disabled; the new store manages local media packages.
+
+Server search belongs in the right member-panel header, aligned with the
+conversation header, with Ctrl+K retained. Starting a stream plays a distinct
+room cue for everyone in that room, including the sender. Message-receive audio
+plays only for recipients and respects mute preferences. Use recognizable
+official service logos within the existing Annoy visual identity.
+
+Profiles accept looping animated GIFs. Refreshed edit dialogs preserve explicit
+save behavior; server editing includes image selection, preview and removal.
+Messages support server-persisted emoji reactions. The composer offers emojis,
+GIFs, stickers and a manageable local package store with install/remove,
+image and JSON import, export, and visible attribution. Selecting local media
+prepares a draft attachment; sending remains explicit. Package storage is local
+to the device and does not imply account or server synchronization.
+
+Online GIF search uses the official GIPHY API with visible attribution and a
+configured public client key; it inserts GIF links rather than importing the
+provider catalog. Local media remains usable without that key. This extends
+the existing amber/indigo and warm-ivory world, shared controls and typography;
+no replacement palette or type system was approved. See `docs/social-media.md`
+for validation limits, provider configuration and the companion-server update
+boundary. Local implementation and visual review do not establish deployment.

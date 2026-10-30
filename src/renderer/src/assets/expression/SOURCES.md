@@ -1,0 +1,1 @@
+GIPHY attribution mark, unmodified from https://media.giphy.com/giphy-attribution-marks.zip, Animated Logos/Badge/Poweredby_100px_Badge.gif. Used to identify the GIPHY API as required by https://developers.giphy.com/docs/api/.

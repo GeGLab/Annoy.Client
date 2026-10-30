@@ -5,9 +5,10 @@ const entries = [
  ["😀","sorriso feliz"], ["😃","alegre"], ["😄","rindo"], ["😁","sorriso dentes"], ["😆","risada"], ["😅","suor alívio"], ["😂","chorando de rir"], ["🤣","gargalhada"], ["😊","tímido feliz"], ["🙂","sorriso leve"], ["🙃","invertido"], ["😉","piscando"], ["😍","apaixonado"], ["🥰","amor"], ["😘","beijo"], ["😎","óculos legal"], ["🤓","nerd"], ["🤔","pensando"], ["🤨","desconfiado"], ["😐","neutro"], ["😴","dormindo"], ["🤤","babando"], ["😢","triste choro"], ["😭","chorando"], ["😤","bravo"], ["😡","raiva"], ["🤯","explodindo"], ["🥺","por favor"], ["😱","grito"], ["😳","surpreso"], ["🙄","olhos"], ["🤡","palhaço"], ["💀","caveira"], ["👻","fantasma"], ["👽","alien"], ["🤖","robô"], ["💩","cocô"], ["🔥","fogo"], ["✨","brilho"], ["🎉","festa"], ["❤️","coração amor"], ["💜","coração roxo"], ["💛","coração amarelo"], ["💔","coração partido"], ["👍","positivo gostei"], ["👎","negativo"], ["👏","palmas"], ["🙌","celebrar"], ["🙏","obrigado"], ["💪","força"], ["👀","olhando"], ["✅","certo"], ["❌","errado"], ["💯","cem"], ["🚀","foguete"], ["🎮","jogo"], ["🎵","música"], ["☕","café"], ["🍕","pizza"], ["🐱","gato"], ["🐶","cachorro"], ["🐸","sapo"], ["🦊","raposa"], ["🐼","panda"], ["🦄","unicórnio"], ["🌈","arco íris"], ["🌙","lua"], ["⭐","estrela"]
 ];
 export const EMOJIS: MediaItem[] = entries.map(([emoji, name], index) => ({ id: `unicode-${index}`, name: name!, emoji: emoji!, kind: "emoji" }));
+const bundledBase = new URL(`${import.meta.env.BASE_URL}expression/`, window.location.href).href;
 export const CATALOG: MediaPack[] = [
  { id: "reactions", name: "Reações do dia a dia", author: "Unicode", license: "Caracteres Unicode", source: "https://unicode.org/emoji/", items: EMOJIS.filter((item) => ["positivo gostei", "palmas", "obrigado", "coração amor", "fogo", "chorando de rir", "olhando", "festa", "pensando", "certo"].includes(item.name)) },
- { id: "openmoji-animals", name: "Bichos do OpenMoji", author: "OpenMoji", license: "CC BY-SA 4.0", source: "https://openmoji.org/", items: [["1F431","Gato"],["1F436","Cachorro"],["1F438","Sapo"],["1F98A","Raposa"],["1F43C","Panda"],["1F984","Unicórnio"]].map(([code,name]) => ({ id: code!, name: name!, kind: "sticker", url: `/expression/openmoji/${code}.png` })) }
+ { id: "openmoji-animals", name: "Bichos do OpenMoji", author: "OpenMoji", license: "CC BY-SA 4.0", source: "https://openmoji.org/", items: [["1F431","Gato"],["1F436","Cachorro"],["1F438","Sapo"],["1F98A","Raposa"],["1F43C","Panda"],["1F984","Unicórnio"]].map(([code,name]) => ({ id: code!, name: name!, kind: "sticker", url: `${bundledBase}openmoji/${code}.png` })) }
 ];
 let database: Promise<IDBDatabase> | null = null;
 function db(): Promise<IDBDatabase> {
@@ -31,7 +32,14 @@ export const readPacks = () => access<MediaPack[]>("readonly", (store) => store.
 export const savePack = (pack: MediaPack) => access("readwrite", (store) => store.put(pack));
 export const removePack = (id: string) => access("readwrite", (store) => store.delete(id));
 export async function downloadMedia(url: string, signal?: AbortSignal): Promise<Blob> {
-  if (!url.startsWith("/expression/") && !/^https:\/\//.test(url) && !/^data:image\/(png|jpeg|webp|gif);base64,/.test(url)) throw new Error("Use imagens HTTPS ou imagens incorporadas no pacote.");
+  const embedded = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]*={0,2})$/.exec(url);
+  if (embedded) {
+    if (embedded[2]!.length > Math.ceil(8 * 1024 * 1024 / 3) * 4) throw new Error("Cada imagem pode ter até 8 MB.");
+    const binary = atob(embedded[2]!);
+    if (binary.length > 8 * 1024 * 1024) throw new Error("Cada imagem pode ter até 8 MB.");
+    return new Blob([Uint8Array.from(binary, (character) => character.charCodeAt(0))], { type: embedded[1] });
+  }
+  if (!url.startsWith(bundledBase) && !/^https:\/\//.test(url) && !/^data:image\/(png|jpeg|webp|gif);base64,/.test(url)) throw new Error("Use imagens HTTPS ou imagens incorporadas no pacote.");
   const response = await fetch(url, { credentials: "omit", signal: signal ?? AbortSignal.timeout(20000) });
   if (!response.ok || !response.body) throw new Error("Não foi possível baixar a imagem.");
   const reader = response.body.getReader(), chunks: Uint8Array<ArrayBuffer>[] = []; let size = 0;
