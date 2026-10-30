@@ -336,8 +336,6 @@ test("individual voice volume reaches 200%, works without moderation and persist
     await alice.hover();
     await alice.getByRole("button", { name: "Ações de voz de Alice", exact: true }).click();
     await expect(slider).toHaveAttribute("aria-valuenow", "200");
-    await page.getByRole("button", { name: "Restaurar volume de Alice para 100%", exact: true }).click();
-    await expect(slider).toHaveAttribute("aria-valuenow", "100");
     await slider.press("Escape");
     await expect(page.getByRole("button", { name: "Ações de voz de Pessoa de teste", exact: true })).toHaveCount(0);
     expect(sharedChanges).toEqual([]);
@@ -345,7 +343,7 @@ test("individual voice volume reaches 200%, works without moderation and persist
     expect(await page.evaluate(async () => {
       const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       return getState().settings.userVolumes;
-    })).toEqual({ '["test","bob"]': 0 });
+    })).toEqual({ '["test","alice"]': 200, '["test","bob"]': 0 });
   } finally { await close(); }
 });
 

@@ -52,9 +52,6 @@
 .user-volume-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text-soft); }
 .user-volume-heading > span { display: inline-flex; align-items: center; gap: 8px; }
 .user-volume-heading output { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
-.user-volume-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; color: var(--text-muted); }
-.volume-reset { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 4px; color: var(--text-muted); }
-.volume-reset:hover { color: var(--text); background: var(--bg-hover); }
 .game-icon { display: block; flex: none; object-fit: contain; border-radius: 2px; }
 .voice-user .avatar { transition: box-shadow 120ms var(--ease); }
 .voice-status-bar { animation: call-connected 220ms var(--ease); }

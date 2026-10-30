@@ -7,7 +7,7 @@ três pontos ao lado do nome. **Volume do usuário** vai de **0% a 200%**:
 - **100%** mantém o volume original.
 - **200%** aplica ganho de amplitude 2 ao áudio recebido.
 
-O botão **100%** restaura o volume original. O ajuste é imediato, fica salvo
+O ajuste é imediato, fica salvo
 neste cliente por conta e usuário e continua valendo ao reconectar ou trocar
 de sala. IDs iguais em instâncias diferentes não compartilham a preferência.
 Qualquer participante pode ajustar o próprio volume de reprodução, sem cargo
