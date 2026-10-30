@@ -109,6 +109,7 @@ export interface Settings {
   noiseFilter: NoiseFilter;
   /** Local playback percentages, scoped to [account ID, remote user ID]. */
   userVolumes: Record<string, number>;
+  dmProfileOpen: boolean;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
   serviceDisplay: TabDisplay;
@@ -120,6 +121,7 @@ export interface Settings {
   showVoiceBar: boolean;
   voiceBarMode: "external" | "always";
   awayMinutes: number;
+  manualPresence: import("../../shared/presence.ts").ManualPresence;
   screenHeight: number;
   screenFps: number;
   screenAudio: boolean;
@@ -183,8 +185,9 @@ const DEFAULT_SETTINGS: Settings = {
   messageSounds: true,
   mutedServers: [],
   mutedChannels: [],
-  noiseFilter: "gtcrn",
+  noiseFilter: "rnnoise",
   userVolumes: {},
+  dmProfileOpen: true,
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
@@ -193,6 +196,7 @@ const DEFAULT_SETTINGS: Settings = {
   showVoiceBar: true,
   voiceBarMode: "external",
   awayMinutes: 10,
+  manualPresence: "online",
   screenHeight: 1080,
   screenFps: 30,
   screenAudio: true,

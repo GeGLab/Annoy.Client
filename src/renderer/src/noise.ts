@@ -1,6 +1,7 @@
 // Microphone capture with optional neural noise suppression, shared by voice
 // sessions and the settings meter. Everything runs locally in AudioWorklets;
 // no audio leaves the machine before the filters.
+import { toast } from "./store.ts";
 import { GtcrnWorkletNode, loadGtcrn, loadRnnoise, RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import gtcrnWasm from "@sapphi-red/web-noise-suppressor/gtcrn.wasm?url";
 import gtcrnWorklet from "@sapphi-red/web-noise-suppressor/gtcrnWorklet.js?url";
@@ -18,7 +19,7 @@ export type NoiseFilter = "gtcrn" | "rnnoise" | "max" | "browser" | "off";
 
 export const NOISE_FILTERS: { value: NoiseFilter; label: string; hint: string }[] = [
   { value: "gtcrn", label: "IA forte (recomendado)", hint: "Remove teclado, cliques e ventilador. Atraso de ~30 ms." },
-  { value: "rnnoise", label: "RNNoise", hint: "Mais leve. Ótimo para ventilador e ar-condicionado, fraco com teclado." },
+  { value: "rnnoise", label: "RNNoise (IA)", hint: "Mais leve. Ótimo para ventilador e ar-condicionado, fraco com teclado." },
   { value: "max", label: "Máximo", hint: "As duas IAs juntas: o mínimo de ruído, com a voz um pouco mais processada. Atraso de ~50 ms." },
   { value: "browser", label: "Do navegador", hint: "O filtro padrão do Chromium, mais fraco." },
   { value: "off", label: "Desligado", hint: "Áudio do microfone sem filtro." },
@@ -78,7 +79,9 @@ export async function openMic(deviceId: string, filter: NoiseFilter): Promise<Mi
   } catch (err) {
     // Fall back to the unfiltered signal rather than losing the microphone.
     console.warn("noise filter unavailable", err);
+    toast("Não foi possível carregar a redução de ruído. O microfone continua disponível; confira o filtro nas configurações de voz.", 10000);
   }
+  await ctx.resume();
   const dest = ctx.createMediaStreamDestination();
   output.connect(dest);
   return {

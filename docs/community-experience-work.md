@@ -40,3 +40,11 @@ Integration preserves upstream system audio, frame-rate/content hints, native
 capture, uncapped FPS, Cloudflare stream budgets and call recovery. Old saved
 FPS preferences migrate to the new resolution/FPS picker. New quality metadata
 uses zero to label native/uncapped choices without imposing capture caps.
+
+Follow-up: file-type artwork (including JSON), automatic away recovery independent
+of server capability, persisted manual status with DND/invisible semantics, and
+self activity/biography in the member list profile. Integrated upstream 0.5.0
+(Annoy Global and account linking) without replacing its behavior. Verified both
+types, client build, 18 desktop tests, 8 helper tests and 8 server tests. Upstream
+Global integration tests skip because the separate Annoy-api-global checkout is
+not available here.

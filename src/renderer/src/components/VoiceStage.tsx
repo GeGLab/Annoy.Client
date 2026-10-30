@@ -1,3 +1,4 @@
+import { UserProfile } from "./UserProfile.tsx";
 import type { Channel, ServerState, VoiceState } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting } from "../client.ts";
@@ -49,11 +50,11 @@ function VideoCard({ tile, person, focused, onFocus }: { tile: VideoTile; person
   );
 }
 
-function PersonCard({ person }: { person: Person }) {
+function PersonCard({ person, accountId }: { person: Person; accountId: string }) {
   const muted = person.state.selfMute || person.state.serverMute;
   return (
     <div className={`stage-card person${person.state.speaking && !muted ? " speaking" : ""}`}>
-      <Avatar user={person.user} size={72} speaking={person.state.speaking && !muted} />
+      <UserProfile user={person.user} accountId={accountId}><Avatar user={person.user} size={72} speaking={person.state.speaking && !muted} /></UserProfile>
       <div className="stage-label">
         <span className="truncate">{person.name}</span>
         {muted && <Icon name="micOff" size={14} />}
@@ -123,7 +124,7 @@ export function VoiceStage({ accountId, state, channel }: { accountId: string; s
                   <VideoCard key={t.key} tile={t} person={people.get(t.userId)} focused={false} onFocus={() => setFocus(t.key)} />
                 ))}
               {audioOnly.map((p) => (
-                <PersonCard key={p.state.userId} person={p} />
+                <PersonCard key={p.state.userId} person={p} accountId={accountId} />
               ))}
             </div>
           </div>

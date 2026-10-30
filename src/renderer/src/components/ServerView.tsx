@@ -1,7 +1,11 @@
+import { SearchButton } from "../features/search/SearchButton.tsx";
+import { canViewActivity } from "../features/activity/access.ts";
+import { UserProfile } from "./UserProfile.tsx";
+import { UserVolume } from "./UserVolume.tsx";
 import { confirmAction, promptText } from "./ui/action-dialog.tsx";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "./ui/dropdown-menu.tsx";
 import { Select } from "./ui/select.tsx";
-import { ActivityCard } from "../features/activity/ActivityCard.tsx";
+import { ActivityCard, ActivityStack } from "../features/activity/ActivityCard.tsx";
 import { ProviderIcon } from "../features/activity/ProviderIcon.tsx";
 import { Code2 } from "lucide-react";
 import { GameIcon } from "../features/activity/GameIcon.tsx";
@@ -55,7 +59,7 @@ function VoiceUsers({
         const activities = visibleUserActivities({
           isSelf,
           sharing: shareActivity,
-          isFriend: instance?.relationships.some((r) => r.user.id === v.userId && r.status === "friend") ?? false,
+          isFriend: canViewActivity(instance, v.userId),
           local: localActivity?.activities,
           reported: instance?.activities[v.userId],
         });
@@ -63,7 +67,7 @@ function VoiceUsers({
         const row = (
           <li key={v.userId} className="voice-user" data-user-id={v.userId} tabIndex={!isSelf ? 0 : undefined}>
             <Avatar user={member.user} size={22} speaking={v.speaking && !v.selfMute && !v.serverMute} />
-            <span className="voice-user-name" title={displayNameOf(member)}>{displayNameOf(member)}</span>
+            <UserProfile user={member.user} accountId={accountId}><span className="voice-user-name" title={displayNameOf(member)}>{displayNameOf(member)}</span></UserProfile>
             <span className="voice-user-status">
             {(v.serverMute || v.selfMute) && (
               <VoiceFlag icon="micOff" server={v.serverMute} label={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"} />
@@ -324,7 +328,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
 function MemberCard({
   accountId,
   state,
-  member,
+  member: supplied,
   me,
   at,
   onClose,
@@ -336,7 +340,9 @@ function MemberCard({
   at: { anchor: HTMLElement };
   onClose: () => void;
 }) {
+  const inst = useStore((s) => s.instances[accountId]);
   const relationships = useStore((s) => s.instances[accountId]?.relationships);
+  const member = useStore((s) => s.instances[accountId]?.serverStates[state.server.id]?.members.find((item) => item.user.id === supplied.user.id) ?? supplied);
   const perms = state.permissions;
   const myRank = rankOf(state, me);
   const isSelf = member.user.id === me;
@@ -344,7 +350,7 @@ function MemberCard({
   const api = apiFor(accountId);
   const sid = state.server.id;
   const rel = relationships?.find((r) => r.user.id === member.user.id);
-  const activities = useStore((s) => s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const activities = useStore((s) => isSelf ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
   return (
@@ -370,12 +376,10 @@ function MemberCard({
             </div>
           </div>
           {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
-          {rel?.status === "friend" && activities.length > 0 && (
+          {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
-              <div className="section-label">Atividade · Só para amigos</div>
-              {activities.map((activity) => (
-                <ActivityCard key={activity.kind} activity={activity} />
-              ))}
+              <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? "Atividade · Só para amigos" : "Atividade"}</div>
+              <ActivityStack activities={activities} />
             </div>
           )}
           <div className="member-card-section">
@@ -412,6 +416,7 @@ function MemberCard({
               />
             )}
           </div>
+          {!isSelf && <UserVolume accountId={accountId} userId={member.user.id} name={displayNameOf(member)} />}
           {!isSelf && (
             <div className="member-card-actions">
               <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>
@@ -460,8 +465,8 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
   const activeFriends = state.members.filter(
     (m) =>
       m.user.id !== me &&
-      inst?.relationships.some((r) => r.user.id === m.user.id && r.status === "friend") &&
-      (inst.activities?.[m.user.id]?.length ?? 0) > 0,
+      canViewActivity(inst, m.user.id) &&
+      (inst?.activities?.[m.user.id]?.length ?? 0) > 0,
   );
   const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null);
   const online = state.members.filter((m) => m.presence !== "offline");
@@ -493,9 +498,10 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
     );
   return (
     <ResizablePanel panel="members" otherVisible>
+      <div className="member-search-slot"><SearchButton placement="members" /></div>
       {activeFriends.length > 0 && (
         <section className="friend-activities">
-          <h3>Atividade dos amigos — {activeFriends.length}</h3>
+          <h3>Atividades do grupo — {activeFriends.length}</h3>
           {activeFriends.map((m) => (
             <button key={m.user.id} onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}>
               <strong>{displayNameOf(m)}</strong>

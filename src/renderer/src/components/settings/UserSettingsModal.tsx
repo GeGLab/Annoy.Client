@@ -671,15 +671,14 @@ export function UserSettingsModal() {
             )}
             {page === "activity" && (
               <section className="settings-section">
-                <h3><Icon name="radio" size={24} />Atividade para amigos</h3>
+                <h3><Icon name="radio" size={24} />Compartilhamento de atividade</h3>
                 <p className="muted">
-                  Somente amizades confirmadas nesta instância recebem sua atividade. Membros do servidor e contatos por DM não recebem esses
-                  dados.
+                  Amigos e pessoas nos mesmos servidores podem ver sua atividade. Conversas diretas sem amizade ou servidor em comum não dão acesso.
                 </p>
                 {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
-                      <span><strong><Icon name="radio" />Compartilhar minha atividade</strong><small>Mostre aos amigos o que você está jogando, ouvindo ou programando, conforme as integrações disponíveis no seu sistema. Ao programar, podem aparecer arquivo, linguagem e projeto; caminhos completos e conteúdo dos arquivos não são enviados.</small></span>
+                      <span><strong><Icon name="radio" />Compartilhar minha atividade</strong><small>Compartilhe o que você está jogando, ouvindo ou programando, conforme as integrações disponíveis no seu sistema. Ao programar, podem aparecer arquivo, linguagem e projeto; caminhos completos e conteúdo dos arquivos não são enviados.</small></span>
                       <Switch aria-label="Compartilhar minha atividade" checked={draft.shareActivity} onCheckedChange={(checked) => update({ shareActivity: checked })} />
                     </label>
                     <p className="muted small">

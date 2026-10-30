@@ -13,6 +13,7 @@ export function useDesktopActivity() {
     return () => window.removeEventListener("steam-connection-changed", changed);
   }, []);
   const sharing = useStore((s) => s.settings.shareActivity);
+  const invisible = useStore((s) => s.settings.manualPresence === "offline");
   const ready = useStore((s) =>
     Object.entries(s.instances)
       .filter(([, i]) => i.status === "ready")
@@ -39,13 +40,14 @@ export function useDesktopActivity() {
   useEffect(() => {
     const controller = new AbortController();
     let inFlight = false;
-    if (!sharing) online.current.clear();
+    if (!sharing || invisible) online.current.clear();
     for (const id of online.current.keys()) if (!ready.split("|").includes(id)) online.current.delete(id);
     const send = (id: string) => {
       const s = getState(), instance = s.instances[id];
       if (controller.signal.aborted || instance?.status !== "ready") return;
-      const local = s.settings.shareActivity ? (s.desktopActivity?.activities ?? []) : [];
-      const remote = s.settings.shareActivity && !local.some((a) => a.kind === "game") ? online.current.get(id) : undefined;
+      const visible = s.settings.shareActivity && s.settings.manualPresence !== "offline";
+      const local = visible ? (s.desktopActivity?.activities ?? []) : [];
+      const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(id) : undefined;
       const activities = withSteamFallback(local, remote);
       gatewayFor(id)?.send({
         op: "activity",
@@ -60,7 +62,7 @@ export function useDesktopActivity() {
     const publish = () => {
       const s = getState();
       for (const [id, instance] of Object.entries(s.instances)) if (instance.status === "ready") send(id);
-      if (inFlight || !s.settings.shareActivity || s.desktopActivity?.activities.some((a) => a.kind === "game")) return;
+      if (inFlight || !s.settings.shareActivity || s.settings.manualPresence === "offline" || s.desktopActivity?.activities.some((a) => a.kind === "game")) return;
       inFlight = true;
       void Promise.all(Object.entries(s.instances).map(async ([id, instance]) => {
         if (instance.status !== "ready" || !instance.instance?.steamConnection) return;
@@ -80,5 +82,5 @@ export function useDesktopActivity() {
     publish();
     const timer = setInterval(publish, 25_000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [snapshot, ready, sharing, connectionsVersion]);
+  }, [snapshot, ready, sharing, invisible, connectionsVersion]);
 }

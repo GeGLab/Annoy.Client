@@ -7,7 +7,7 @@ import { emptyInstance, getState, setState, subscribe, toast, type Account, type
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
-import { playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/voice-feedback.ts";
+import { playStreamFeedback, playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/voice-feedback.ts";
 import { isMessageMuted, notificationKey } from "./lib/notification-preferences.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
@@ -523,7 +523,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
   if (!s.settings.notifications) return;
   const inst = s.instances[accountId];
   const serverId = Object.values(inst?.serverStates ?? {}).find((st) => st.channels.some((c) => c.id === message.channelId))?.server.id;
-  if (isMessageMuted(s.settings, accountId, message.channelId, serverId)) return;
+  if (s.settings.manualPresence === "dnd" || isMessageMuted(s.settings, accountId, message.channelId, serverId)) return;
   const me = inst?.user?.id;
   if (!me || message.author.id === me) return;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
@@ -565,7 +565,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.dms = event.d.dms;
         inst.relationships = event.d.relationships;
         inst.presences = event.d.presences;
-        inst.activities = Object.fromEntries(Object.entries(event.d.activities ?? {}).filter(([id])=>id===event.d.user.id || event.d.relationships.some(r=>r.user.id===id && r.status==="friend")));
+        inst.activities = Object.fromEntries(Object.entries(event.d.activities ?? {}).filter(([id])=>event.d.instance?.groupActivity || id===event.d.user.id || event.d.relationships.some(r=>r.user.id===id && r.status==="friend")));
         inst.instance = event.d.instance;
         // History may have gaps after a reconnect; reload lazily.
         inst.messages = {};
@@ -641,7 +641,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       receivedMessages.add(receipt);
       if (receivedMessages.size > 2000) receivedMessages.delete(receivedMessages.values().next().value!);
       const serverId = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === msg.channelId))?.server.id;
-      if (s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
+      if (msg.author.id !== inst.user?.id && s.settings.manualPresence !== "dnd" && s.settings.messageSounds && !isMessageMuted(s.settings, accountId, msg.channelId, serverId)) playMessageFeedback();
       const viewing =
         (s.view.kind === "server" && s.view.accountId === accountId && s.view.channelId === msg.channelId) ||
         (s.view.kind === "home" && s.view.accountId === accountId && s.view.dmId === msg.channelId);
@@ -687,7 +687,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       });
     case "ACTIVITY_UPDATE":
       patchInstance(accountId, inst => {
-        if(event.d.userId===inst.user?.id || inst.relationships.some(r=>r.user.id===event.d.userId && r.status==="friend")) inst.activities[event.d.userId]=event.d.activities;
+        if(inst.instance?.groupActivity || event.d.userId===inst.user?.id || inst.relationships.some(r=>r.user.id===event.d.userId && r.status==="friend")) inst.activities[event.d.userId]=event.d.activities;
         else delete inst.activities[event.d.userId];
       });
       break;
@@ -712,6 +712,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         const isHere = event.d.state?.channelId === room.channelId;
         if (wasHere !== isHere) playCallFeedback(isHere ? "join" : "leave");
       }
+      if (listening && event.d.state?.channelId === room.channelId && event.d.state.screen && !previous?.screen) playStreamFeedback();
       return patchInstance(accountId, (inst) => {
         const st = inst.serverStates[event.d.serverId];
         if (!st) return;
@@ -737,7 +738,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
     case "RELATIONSHIP_REMOVE":
       return patchInstance(accountId, (inst) => {
         inst.relationships = inst.relationships.filter((r) => r.user.id !== event.d.userId);
-        delete inst.activities[event.d.userId];
+        if (!Object.values(inst.serverStates).some((state) => state.members.some((member) => member.user.id === event.d.userId))) delete inst.activities[event.d.userId];
       });
     case "IMPORT_PROGRESS": {
       const prev = getState().instances[accountId]?.imports[event.d.id];

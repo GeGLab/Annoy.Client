@@ -19,7 +19,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
       if (version !== generation) return;
       next.activities = next.activities.map((item) => {
         const old = snapshot.activities.find(
-          (a) => a.kind === item.kind && a.name === item.name && a.appId === item.appId && a.artist === item.artist,
+          (a) => a.kind === item.kind && a.provider === item.provider && a.name === item.name && a.appId === item.appId && a.artist === item.artist,
         );
         return { ...item, startedAt: old?.startedAt ?? Date.now() };
       });

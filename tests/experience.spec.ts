@@ -140,6 +140,71 @@ function silence() {
   return result;
 }
 
+test("native idle, manual presence and member profile file activity", async () => {
+  const { page, app, close } = await launch();
+  const ops: any[] = [];
+  let socket: WebSocketRoute;
+  const nativeIdle = async (seconds: number) => app.evaluate(({ ipcMain }, seconds) => {
+    ipcMain.removeHandler("system:idle"); ipcMain.handle("system:idle", () => seconds);
+  }, seconds);
+  try {
+    await nativeIdle(601);
+    await seed(page, (ws) => { socket = ws; ws.onMessage((raw) => {
+      const op = JSON.parse(String(raw)); ops.push(op);
+      if (op.op === "presence") socket.send(JSON.stringify({ t: "PRESENCE_UPDATE", d: { userId: "person", presence: op.status && op.status !== "online" ? op.status : op.idle ? "idle" : "online" } }));
+    }); });
+    // Older servers must not prevent the local OS-idle indicator from working.
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible();
+    await nativeIdle(0); await page.mouse.move(600, 200);
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.instances.test.instance = { presenceStatus: true, manualPresence: true };
+        s.instances.test.user.bio = "Minha biografia na lista de membros.";
+        s.instances.test.serverStates.server.members[0].user.bio = s.instances.test.user.bio;
+        s.desktopActivity = { supported: true, error: null, activities: [{ kind: "development", provider: "vscode", name: "Annoy.Client", project: "Annoy.Client", file: "package.json", language: "json" }] };
+      });
+    });
+    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
+    const selectStatus = async (label: string) => {
+      await page.getByRole("combobox", { name: "Meu status", exact: true }).click();
+      await page.getByRole("option", { name: label, exact: true }).click();
+    };
+    await selectStatus("Ausente");
+    await expect.poll(() => ops.filter((op) => op.op === "presence").at(-1)?.status).toBe("idle");
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible();
+    await selectStatus("Não incomodar");
+    await expect(page.locator(".user-identity .presence-dnd")).toBeVisible();
+    await page.evaluate(() => { const original = AudioContext.prototype.createOscillator; (window as any).cueCount = 0; AudioContext.prototype.createOscillator = function () { (window as any).cueCount++; return original.call(this); }; });
+    socket!.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id: "dnd-message", channelId: "general", author: { id: "other", username: "other", displayName: "Other", avatarUrl: null }, content: "Mensagem silenciosa", createdAt: new Date().toISOString(), editedAt: null, attachments: [], replyToId: null, mentionIds: [], mentionsEveryone: false } }));
+    await expect(page.getByText("Mensagem silenciosa", { exact: true })).toBeAttached();
+    expect(await page.evaluate(() => (window as any).cueCount)).toBe(0);
+    await selectStatus("Aparecer como offline");
+    await expect(page.locator(".user-identity .presence-offline")).toBeVisible();
+    await expect.poll(() => ops.filter((op) => op.op === "activity").at(-1)?.activities).toEqual([]);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).manualPresence)).toBe("offline");
+    await selectStatus("Online");
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible();
+    await nativeIdle(601);
+    await expect(page.locator(".user-identity .presence-idle")).toBeVisible({ timeout: 10_000 });
+    await nativeIdle(0);
+    await expect(page.locator(".user-identity .presence-online")).toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: join(capture, "manual-presence-profile.png") });
+    await page.keyboard.press("Escape");
+    await page.locator(".members .member").first().click();
+    const card = page.getByRole("dialog", { name: "Perfil de Pessoa de teste", exact: true });
+    await expect(card).toContainText("Minha biografia na lista de membros.");
+    await expect(card).toContainText("package.json");
+    await expect(card.locator(".activity-artwork .provider-json")).toBeVisible();
+    await expect.poll(() => card.locator(".activity-artwork img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(card.locator(".activity-provider .provider-vscode")).toBeVisible();
+    await page.screenshot({ path: join(capture, "member-json-activity-dark.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    await page.screenshot({ path: join(capture, "member-json-activity-light.png") });
+  } finally { await close(); }
+});
+
 test("attachment previews, compact call bar, profile activity and shared voice controls", async () => {
   const { page, app, close } = await launch();
   try {
@@ -752,7 +817,7 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
       await session.page.evaluate(async (id) => {
         const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); (window as any).callStreams = [];
         navigator.mediaDevices.getUserMedia = async (constraints) => {
-          const stream = await original({ audio: constraints?.audio, video: false });
+          const stream = constraints?.audio ? await original({ audio: constraints.audio, video: false }) : new MediaStream();
           if (constraints?.video) {
             const canvas = document.createElement("canvas"); canvas.width = 320; canvas.height = 180;
             const context = canvas.getContext("2d")!;
@@ -879,6 +944,20 @@ test("Steam connection publishes online fallback, prefers local games and clears
     await expect(page.getByRole("link", { name: "Perfil Steam · 76561198000000001" })).toBeVisible();
     await expect.poll(() => sent.at(-1)?.[0]?.appId).toBe("480");
     expect(JSON.stringify(sent)).not.toContain("76561198000000001");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.manualPresence = "offline"; });
+    });
+    await expect.poll(() => sent.at(-1)).toEqual([]);
+    const requestsWhileInvisible = activityRequests;
+    await page.evaluate(() => window.dispatchEvent(new Event("steam-connection-changed")));
+    await expect.poll(() => sent.at(-1)).toEqual([]);
+    expect(activityRequests).toBe(requestsWhileInvisible);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.manualPresence = "online"; });
+    });
+    await expect.poll(() => sent.at(-1)?.[0]?.appId).toBe("480");
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [
@@ -1417,4 +1496,158 @@ test("server, role and channel settings share pending-save and exit guards", asy
   } finally {
     await close();
   }
+});
+
+
+test("friend sidebar, elapsed activity, animated stack and persistent personal voice volume", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const user = { id: "friend", username: "bruna", displayName: "Bruna", bio: "Jogos, música e boas conversas.", avatarUrl: null };
+        const i = s.instances.test;
+        i.relationships = [{ user, status: "friend", nickname: "Bru" }];
+        i.dms = [{ id: "dm-test", recipients: [user] }];
+        i.messages["dm-test"] = { items: [], hasMore: false, loading: false };
+        i.activities.friend = [
+          { kind: "game", provider: "steam", name: "Jogo de teste", appId: "480", artwork: "http://experience.test/image.png", startedAt: Date.now() - 125000 },
+          { kind: "music", provider: "spotify", name: "Faixa de teste", artist: "Artista de teste", artwork: "http://experience.test/image.png", startedAt: Date.now() - 60000 }
+        ];
+        s.view = { kind: "home", accountId: "test", dmId: "dm-test" };
+      });
+    });
+    const sidebar = page.getByRole("complementary", { name: "Perfil de Bruna" });
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByRole("heading", { name: "Bru", exact: true })).toBeVisible();
+    await expect(sidebar).toContainText("Jogos, música e boas conversas.");
+    await expect(sidebar.locator(".activity-elapsed").first()).toContainText("02:");
+    await expect(sidebar.locator(".activity-game .activity-artwork")).toHaveCSS("border-radius", "12px");
+    await expect(sidebar.locator(".activity-stack")).not.toHaveClass(/expanded/);
+    await sidebar.locator(".activity-stack").hover();
+    await expect(sidebar.locator(".activity-stack")).toHaveClass(/expanded/);
+    await page.getByRole("heading", { name: "Bru", exact: true }).first().hover();
+    const slider = sidebar.getByRole("slider");
+    await slider.focus(); await slider.press("Home"); await slider.press("ArrowRight");
+    await expect(sidebar.locator("output")).toHaveText("1%");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).userVolumes['["test","friend"]'])).toBe(1);
+    await page.getByRole("button", { name: "Ocultar perfil do amigo" }).click();
+    await expect(sidebar).toHaveCount(0);
+    await page.getByRole("button", { name: "Mostrar perfil do amigo" }).click();
+    await expect(sidebar.locator("output")).toHaveText("1%");
+    const card = await sidebar.locator(".activity-game").boundingBox(), volume = await sidebar.locator(".user-volume").boundingBox();
+    expect(volume!.y).toBeGreaterThan(card!.y + card!.height);
+    await page.screenshot({ path: join(capture, "dm-profile-stack-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; s.settings.channelsWidth = 380; }); });
+    await expect(page.locator(".composer")).toBeVisible();
+    await expect(sidebar).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect((await page.locator(".dm-conversation > .chat").boundingBox())!.width).toBeGreaterThanOrEqual(360);
+    await page.screenshot({ path: join(capture, "dm-profile-stack-light-minimum.png") });
+    const toggle = sidebar.locator(".activity-stack-toggle");
+    await toggle.focus();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await toggle.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await sidebar.evaluate((element) => { element.scrollTop = 250; });
+    await page.screenshot({ path: join(capture, "dm-profile-expanded-light-minimum.png") });
+  } finally { await close(); }
+});
+
+test("personal volume accepts 200%, isolates accounts and restores after renderer reload", async () => {
+  const { page, close } = await launch();
+  try {
+    const result = await page.evaluate(async () => {
+      const { setUserVolume } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const volumeKey = (accountId: string) => JSON.stringify([accountId, "friend"]);
+      setUserVolume("account-a", "friend", 200);
+      const saved = getState().settings.userVolumes;
+      const values = [saved[volumeKey("account-a")] ?? 100, saved[volumeKey("account-b")] ?? 100];
+      setUserVolume("account-a", "friend", 0);
+      return values;
+    });
+    expect(result).toEqual([200, 100]);
+    await page.reload();
+    expect(await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().settings.userVolumes['["account-a","friend"]'];
+    })).toBe(0);
+  } finally { await close(); }
+});
+
+test("Windows close hides Annoy and a second instance restores it", async () => {
+  test.skip(process.platform !== "win32");
+  const { app, close } = await launch();
+  try {
+    expect(await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]!; window.close(); return { visible: window.isVisible(), destroyed: window.isDestroyed() }; })).toEqual({ visible: false, destroyed: false });
+    expect(await app.evaluate(({ app, BrowserWindow }) => { app.emit("second-instance", {}, [], ""); return BrowserWindow.getAllWindows()[0]!.isVisible(); })).toBe(true);
+  } finally { await close(); }
+});
+
+test("RNNoise loads its local worklet and releases the microphone", async () => {
+  const { page, close } = await launch({ fakeMedia: true });
+  try {
+    const result = await page.evaluate(async () => {
+      const { openMic } = await import(/* @vite-ignore */ `${location.origin}/src/noise.ts`);
+      const mic = await openMic("default", "rnnoise");
+      const result = { node: mic.output.constructor.name, sampleRate: mic.ctx.sampleRate, state: mic.track.readyState };
+      mic.stop();
+      return { ...result, stopped: mic.track.readyState };
+    });
+    expect(result.sampleRate).toBe(48000);
+    expect(result.node).toBe("RnnoiseWorkletNode");
+    expect(result.state).toBe("live"); expect(result.stopped).toBe("ended");
+    await expect(page.locator(".toast")).toHaveCount(0);
+  } finally { await close(); }
+});
+
+
+test("both voice backends send screen audio separately and explain incompatible servers", async () => {
+  const { page, close } = await launch();
+  try {
+    for (const backend of ["builtin", "cloudflare"]) {
+      const result = await page.evaluate(async (backend) => {
+        const { VoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice.ts`);
+        const { CloudflareVoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice-cloudflare.ts`);
+        const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        const canvas = document.createElement("canvas"); canvas.width = 320; canvas.height = 180;
+        const ctx = new AudioContext();
+        const published: string[] = [], requested: boolean[] = [];
+        const original = navigator.mediaDevices.getDisplayMedia;
+        navigator.mediaDevices.getDisplayMedia = async (constraints) => {
+          requested.push(!!constraints?.audio);
+          const video = canvas.captureStream().getVideoTracks()[0]!;
+          return new MediaStream([video, ...(constraints?.audio ? ctx.createMediaStreamDestination().stream.getAudioTracks() : [])]);
+        };
+        const Session = backend === "builtin" ? VoiceSession : CloudflareVoiceSession;
+        const session: any = new Session({ voice: async () => ({}) } as any, "channel", "me", { ...getState().settings, screenAudio: true }, () => {}, () => {}, "account");
+        session.canStream = true;
+        session.send = { produce: async (options: any) => { published.push(options.appData.source); return { id: options.appData.source, close() {} }; } };
+        session.pc = { createOffer: async () => ({}), setLocalDescription: async () => {}, localDescription: { sdp: "" } };
+        session.publish = async (_track: any, _kind: string, source: string) => { published.push(source); return { trackName: source, transceiver: { sender: { replaceTrack: async () => {} }, stop() {} } }; };
+        try {
+          session.serverScreenAudio = true;
+          await session.startVideo("screen");
+          const audioTrack = session.screenAudio.track;
+          await session.stopVideo("screen");
+          const stopped = audioTrack.readyState;
+          session.serverScreenAudio = false;
+          setState((s: any) => { s.toast = null; });
+          await session.startVideo("screen");
+          const explanation = getState().toast?.text;
+          await session.stopVideo("screen");
+          return { requested, published, stopped, explanation };
+        } finally { navigator.mediaDevices.getDisplayMedia = original; await ctx.close(); }
+      }, backend);
+      expect(result.requested).toEqual([true, false]);
+      expect(result.published).toEqual(["screen", "screen_audio", "screen"]);
+      expect(result.stopped).toBe("ended");
+      expect(result.explanation).toContain("screen_audio");
+    }
+  } finally { await close(); }
 });

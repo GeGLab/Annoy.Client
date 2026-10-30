@@ -27,11 +27,11 @@ export function DirectCallPanel() {
   const percent = userVolume(settings.userVolumes, entry?.accountId ?? "", otherId);
   const audioTracks = media.remote?.getAudioTracks().map((track) => track.id).join("|") ?? "";
   useEffect(() => {
-    if (!ringing) return;
+    if (!ringing || settings.manualPresence === "dnd") return;
     playCallFeedback("join");
     const timer = setInterval(() => playCallFeedback("join"), 1800);
     return () => clearInterval(timer);
-  }, [ringing]);
+  }, [ringing, settings.manualPresence]);
   useEffect(() => {
     const element = audio.current;
     if (!element || !media.remote?.getAudioTracks().length) return;

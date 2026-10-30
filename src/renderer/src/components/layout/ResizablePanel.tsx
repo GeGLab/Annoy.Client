@@ -29,7 +29,7 @@ export function togglePanel(panel: "members") {
 }
 
 /** Local drag preview; persist once on release rather than writing storage per pixel. */
-export function ResizablePanel({ panel, children, otherVisible = false }: { panel: Panel; children: ReactNode; otherVisible?: boolean }) {
+export function ResizablePanel({ panel, children, otherVisible = false, reservedWidth = 0 }: { panel: Panel; children: ReactNode; otherVisible?: boolean; reservedWidth?: number }) {
   const settings = useStore((s) => s.settings);
   const saved = panel === "channels" ? settings.channelsWidth : settings.membersWidth;
   const open = panel === "channels" ? true : settings.membersOpen;
@@ -58,7 +58,7 @@ export function ResizablePanel({ panel, children, otherVisible = false }: { pane
       ? clamp(preview?.panel === "members" ? preview.width : settings.membersWidth, 180, 340)
       : clamp(preview?.panel === "channels" ? preview.width : settings.channelsWidth, 220, 380);
   const otherMinimum = panel === "channels" ? 180 : 220;
-  const budget = Math.max(limit.min, viewport - 76 - 360);
+  const budget = Math.max(limit.min, viewport - 76 - 360 - reservedWidth);
   const desiredTotal = requested + (otherOpen ? otherWidth : 0);
   const remaining = Math.max(0, budget - limit.min - (otherOpen ? otherMinimum : 0));
   const extras = requested - limit.min + (otherOpen ? otherWidth - otherMinimum : 0);

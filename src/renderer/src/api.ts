@@ -132,6 +132,11 @@ export class Api {
   put = <T>(path: string, body: unknown = {}) => this.request<T>("PUT", path, body);
   del = <T>(path: string) => this.request<T>("DELETE", path);
 
+  async uploadServerIcon<T>(serverId: string, photo: Blob): Promise<T> {
+    const body = new FormData(); body.append("icon", photo, "icon");
+    return parse<T>(await fetch(`${this.baseUrl}/api/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
+  }
+
   async uploadAvatar<T>(photo: Blob): Promise<T> {
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");
     return parse<T>(await fetch(`${this.baseUrl}/api/users/@me/avatar`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));

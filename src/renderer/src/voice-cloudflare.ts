@@ -6,7 +6,7 @@ import type { GatewayEvent, MediaSource } from "@distopic/protocol";
 import type { Gateway } from "./gateway.ts";
 import { clearTiles, dropTile, putTile } from "./media.ts";
 import { MicGate } from "./mic.ts";
-import type { Settings } from "./store.ts";
+import { toast, type Settings } from "./store.ts";
 import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
 import { userVolume } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
@@ -190,6 +190,10 @@ export class CloudflareVoiceSession {
     if (!this.pc || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
     if (this.video.has(source)) return;
     const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
+    if (source === "screen" && this.settings.screenAudio) {
+      if (!screenAudioSupported()) toast("Áudio da transmissão disponível apenas no Windows.", 8000);
+      else if (!this.serverScreenAudio) toast("Transmissão sem som: esta instância precisa anunciar suporte a screen_audio. Atualize o servidor Annoy.", 12000);
+    }
     const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
       source === "camera"
@@ -197,6 +201,7 @@ export class CloudflareVoiceSession {
         : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
+    if (withAudio && !sound) toast("O Windows não forneceu áudio para a transmissão. Confira a saída de som e tente compartilhar novamente.", 10000);
     if (!track) throw new Error("Nenhuma imagem capturada");
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
@@ -213,6 +218,7 @@ export class CloudflareVoiceSession {
       } catch (err) {
         sound.stop();
         console.warn("screen audio failed", err);
+        toast("A imagem está sendo transmitida, mas o envio do áudio falhou. Pare a transmissão e tente novamente.", 10000);
       }
     }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });

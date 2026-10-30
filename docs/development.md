@@ -185,6 +185,19 @@ A detecção de programação usa títulos de janelas de editores conhecidos. O
 adaptador publica nomes de arquivo/projeto e linguagem, sem caminhos completos
 nem conteúdo de arquivos. O compartilhamento geral também controla essa categoria.
 
+O tipo de arquivo ocupa o ícone principal da atividade (JSON, React etc.); a marca
+do editor permanece ao lado do nome. O card de membros também mostra a própria
+atividade local e a biografia, respeitando a visibilidade de amizade para terceiros.
+
+O seletor Meu status fica no perfil da barra inferior e salva a escolha no cliente.
+Online permite ausência automática; Ausente e Não incomodar são escolhas manuais
+mantidas até outra seleção. Não incomodar silencia avisos de mensagens/chamadas.
+Aparecer como offline mantém a conexão e oculta as atividades no servidor novo.
+`manualPresence` anuncia suporte no READY; servidores antigos continuam mostrando
+a ausência local, mas precisam da atualização para compartilhar os novos status.
+A consulta de inatividade do sistema roda a cada cinco segundos e conserva o
+fallback de eventos de entrada quando o IPC falha, em vez de assumir zero.
+
 A integração com upstream 0.4.4 preserva áudio de sistema no Windows, captura
 com resolução nativa/FPS sem limite, orçamento por transmissão e recuperação
 de sala após reinícios. Preferências antigas de FPS são migradas para o seletor

@@ -18,6 +18,7 @@ import {
   type PermissionName,
   type Role,
   type ServerState,
+  type ServerSummary,
   type User,
 } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -187,19 +188,38 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const [tab, setTab] = useState<"overview" | "roles" | "bans">("overview");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
+  const [icon, setIcon] = useState<File | null | undefined>();
+  const [preview, setPreview] = useState<string | null>(state?.server.iconUrl ?? null);
+  const [savingServer, setSavingServer] = useState(false);
+  const iconInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (icon) { const url = URL.createObjectURL(icon); setPreview(url); return () => URL.revokeObjectURL(url); }
+    setPreview(icon === null ? null : state?.server.iconUrl ?? null);
+  }, [icon, state?.server.iconUrl]);
   const [baselineName, setBaselineName] = useState(state?.server.name ?? "");
   const [nextOwner, setNextOwner] = useState("");
   const [transferring, setTransferring] = useState(false);
   const ownershipSupported = useStore((s) => s.instances[accountId]?.instance?.serverOwnership === true);
   const saveName = async () => {
-    if (!state || !name.trim()) return false;
-    const ok = await act(apiFor(accountId).patch(`/servers/${serverId}`, { name }), "Servidor renomeado");
-    if (ok) setBaselineName(name);
-    return ok;
+    if (!state || !name.trim() || savingServer || !has(state.permissions, Permission.MANAGE_SERVER)) return false;
+    setSavingServer(true);
+    try {
+      const api = apiFor(accountId);
+      let server = await api.patch<ServerSummary>(`/servers/${serverId}`, { name: name.trim(), ...(icon === null && { iconUrl: null }) });
+      if (icon) server = await api.uploadServerIcon<ServerSummary>(serverId, icon);
+      setState((s) => {
+        const instance = s.instances[accountId];
+        if (instance?.serverStates[serverId]) instance.serverStates[serverId]!.server = server;
+        const index = instance?.servers.findIndex((item) => item.id === serverId) ?? -1;
+        if (instance && index >= 0) instance.servers[index] = server;
+      });
+      setName(server.name); setBaselineName(server.name); setIcon(undefined); toast("Servidor atualizado");
+      return true;
+    } catch (error) { toast((error as Error).message); return false; }
+    finally { setSavingServer(false); }
   };
-  useSettingsDraft("server-name", !!state && name !== baselineName, saveName, () => {
-    setName(state?.server.name ?? "");
-    setBaselineName(state?.server.name ?? "");
+  useSettingsDraft("server-name", !!state && (name !== baselineName || icon !== undefined), saveName, () => {
+    setName(state?.server.name ?? ""); setBaselineName(state?.server.name ?? ""); setIcon(undefined);
   });
   if (!state || !me) return null;
   const isOwner = state.server.ownerId === me;
@@ -228,7 +248,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   };
 
   return (
-    <Modal title={`${state.server.name} · Configurações`} wide>
+    <Modal title={`${state.server.name} · Configurações`} wide className="edit-settings-modal server-settings-modal">
       <div className="tabs">
         <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("overview"))}>
           Visão geral
@@ -246,7 +266,12 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       </div>
 
       {tab === "overview" && (
-        <div className="form">
+        <div className="form server-overview">
+          <div className="server-identity-editor">
+            <div className="server-image-preview">{preview ? <img src={preview} alt="Prévia da imagem do servidor" /> : <Icon name="users" size={42} />}</div>
+            <div><h2>Uma cara para sua comunidade</h2><p>Use uma imagem que ajude as pessoas a reconhecer seu servidor.</p><div className="profile-actions"><button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => iconInput.current?.click()}><Icon name="upload" size={16} />Alterar imagem</button>{preview && <button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => setIcon(null)}>Remover</button>}</div><small>PNG, JPEG, WebP ou GIF · até 8 MB</small></div>
+            <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Imagem do servidor" onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast("Use uma imagem de até 8 MB."); else setIcon(file); } event.target.value = ""; }} />
+          </div>
           <form
             className="inline-form"
             onSubmit={(e) => {
@@ -255,9 +280,9 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             }}
           >
             <Field label="Nome do servidor">
-              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer} maxLength={100} />
+              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer || savingServer} maxLength={100} />
             </Field>
-            <button className="btn" disabled={!canServer || !name.trim() || name === state.server.name}>
+            <button className="btn" disabled={!canServer || savingServer || !name.trim() || (name === baselineName && icon === undefined)}>
               Salvar
             </button>
           </form>
@@ -485,7 +510,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const categories = state.channels.filter((c) => c.type === "category");
 
   return (
-    <Modal title={`Editar ${channel.type === "category" ? "categoria" : "canal"}: ${channel.name}`} wide>
+    <Modal title={`Editar ${channel.type === "category" ? "categoria" : "canal"}: ${channel.name}`} wide className="edit-settings-modal channel-settings-modal">
       <div className="tabs">
         <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("overview"))}>
           Visão geral
