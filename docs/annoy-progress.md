@@ -393,3 +393,22 @@ com autorização e sincronização no servidor. Seguir as dependências e etapa
 plano; não começar requisitos posteriores automaticamente.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.
+
+
+## Implementa??o M3 ? hist?rico, leitura e fixa??es (30/10/2026)
+
+Estado: **implementado; valida??o conjunta agendada ap?s M4, conforme pedido**.
+
+- Contrato adicional de janela por cursor com p?ginas de 50, navega??o anterior,
+  posterior e contexto, mantendo a rota legada `Message[]`.
+- Janela com deduplica??o, descarte e virtualiza??o de alturas vari?veis; limite
+  de 500 mensagens por canal e 5.000 no conjunto. Busca mant?m salto de contexto
+  e retorno ?s recentes. Inst?ncias antigas continuam usando a rota legada.
+- Cursor privado persistido por usu?rio/canal, monot?nico entre dispositivos e
+  preservado quando a mensagem ? exclu?da. A visita mant?m a fronteira inicial
+  de novidades; leitura exige foco e intera??o com mensagens vis?veis.
+- Pins persistidos, eventos de sincroniza??o, painel e salto ao contexto.
+  DMs aceitam ambos os participantes; comunidades exigem MANAGE_MESSAGES.
+- Testes novos preparados para um milh?o de mensagens em banco tempor?rio,
+  duas sess?es simult?neas, autoriza??o, idempot?ncia e limites de mem?ria.
+  N?o executados ainda; conclus?o depende da valida??o final de M3/M4.

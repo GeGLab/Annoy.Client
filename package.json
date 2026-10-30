@@ -29,7 +29,8 @@
     "postinstall": "node scripts/ensure-electron.mjs",
     "predev": "node scripts/ensure-electron.mjs",
     "prestart": "node scripts/ensure-electron.mjs",
-    "test:disconnect": "playwright test tests/disconnect.spec.ts"
+    "test:disconnect": "playwright test tests/disconnect.spec.ts",
+    "test:history": "node --experimental-strip-types --test scripts/tests/message-window.test.mjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -56,6 +57,7 @@
     "@radix-ui/react-tooltip": "^1.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-virtual": "^3.14.24",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -99,7 +101,7 @@
   "build": {
     "appId": "br.dev.geg.distopic",
     "productName": "Annoy",
-    "copyright": "Copyright © 2026 Gustavo Cruz",
+    "copyright": "Copyright \u00c2\u00a9 2026 Gustavo Cruz",
     "directories": {
       "output": "dist",
       "buildResources": "build"

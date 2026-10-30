@@ -1,8 +1,10 @@
 import type {
+  ChannelReadState,
   DmChannel,
   GatewayEvent,
   ImportJob,
   Message,
+  PinnedMessage,
   Presence,
   Relationship,
   ServerState,
@@ -31,8 +33,15 @@ export type RememberedAccount = Omit<Account, "token"> & { username: string; dis
 export interface ChannelMessages {
   items: Message[];
   hasMore: boolean;
+  hasMoreAfter?: boolean;
   loading: boolean;
   error?: string | null;
+  readState?: ChannelReadState | null;
+  unreadBoundary?: string | null;
+  initialPosition?: string | null;
+  pins?: PinnedMessage[];
+  pinsLoading?: boolean;
+  pinsError?: string | null;
 }
 
 export interface InstanceState {

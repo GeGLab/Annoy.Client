@@ -283,6 +283,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           canSend
           canAttach
           canModerate={false}
+          canPin
           nameOf={(id) => (id === me.id ? me.displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || dm.recipients.find((r) => r.id === id)?.displayName)}
           mentionables={dm.recipients.map((r) => ({ id: r.id, name: r.displayName, username: r.username }))}
         />{settings.dmProfileOpen && <DmProfile key={other.id} user={other} accountId={accountId} />}</div>

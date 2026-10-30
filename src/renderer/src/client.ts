@@ -1,4 +1,4 @@
-import type { DmChannel, GatewayEvent, ImportJob, MemberPage, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
+import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api } from "./api.ts";
 import { previewText } from "./format.tsx";
@@ -17,6 +17,8 @@ import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts"
 import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport } from "../../shared/connectivity.ts";
 import { cancelled, isCancellation, RequestError } from "../../shared/requests.ts";
 import { clearAccountChatState, clearChatAnchor, clearRecoveryReturn, flushChatState, readChatAnchor, readRecoveryReturn, type RecoveryReturn } from "./chat-state.ts";
+
+import { mergeMessageWindow, TOTAL_MESSAGE_LIMIT } from "../../shared/message-window.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -183,6 +185,7 @@ export function connectAccount(account: Account): void {
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
       });
+
     },
     () => {
       setState((s) => {
@@ -294,7 +297,10 @@ export function markServerRead(accountId: string, serverId: string): void {
   setState((s) => {
     const instance = s.instances[accountId];
     if (!instance) return;
-    for (const channel of instance.serverStates[serverId]?.channels ?? []) delete instance.unread[channel.id];
+    for (const channel of instance.serverStates[serverId]?.channels ?? []) {
+      if(instance.instance?.historyWindow)void apiFor(accountId).get<MessageWindow>(`/channels/${encodeURIComponent(channel.id)}/messages/window?limit=1`).then(page=>{const id=page.items.at(-1)?.id;if(id)return markChannelRead(accountId,channel.id,id);}).catch(()=>undefined);
+      else delete instance.unread[channel.id];
+    }
   });
 }
 
@@ -314,7 +320,7 @@ export function navigate(view: View): void {
     if(s.messageFocus) { delete s.instances[s.messageFocus.accountId]?.messages[s.messageFocus.channelId]; s.messageFocus=null; }
     if (view.kind === "server" || (view.kind === "home" && view.dmId)) s.chatNavigation++;
     const channelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
-    if (channelId && destinationAccountId) delete s.instances[destinationAccountId]?.unread[channelId];
+    if (channelId && destinationAccountId && !s.instances[destinationAccountId]?.instance?.historyWindow) delete s.instances[destinationAccountId]?.unread[channelId];
   });
   // `openServer` owns the initial details request while its destination has no channel.
   // Starting a second request here made the caller observe `serverLoading` and return early.
@@ -436,6 +442,8 @@ export async function ensureServer(accountId: string, serverId: string, force = 
     const fresh = await api.get<ServerState>(`/servers/${serverId}?membersLimit=100`, signal);
     if (signal?.aborted || !currentApi(accountId, api, generation)) return;
     patchInstance(accountId, (inst) => {
+      const allowed=new Set(fresh.channels.map(channel=>channel.id));
+      for(const channel of inst.serverStates[serverId]?.channels??[])if(!allowed.has(channel.id)){delete inst.messages[channel.id];delete inst.unread[channel.id];}
       inst.serverStates[serverId] = fresh;
       // The summary in the rail comes from READY; keep it in sync with renames.
       const idx = inst.servers.findIndex((sv) => sv.id === serverId);
@@ -495,82 +503,91 @@ function scheduleRefresh(accountId: string, serverId: string): void {
 
 // Messages -----------------------------------------------------------------
 
-export async function loadMessages(accountId: string, channelId: string, older = false): Promise<void> {
-  const inst = getState().instances[accountId];
-  if (inst?.status !== "ready") return;
-  const current = inst?.messages[channelId];
-  const anchor = older ? null : readChatAnchor(accountId, channelId);
-  if (current?.loading || (older && !current?.hasMore) || (!older && current && !current.error && !anchor)) return;
-  const api = apiFor(accountId), generation = api.generation;
-  const key = messageKey(accountId, channelId), controller = new AbortController();
-  messageReads.get(key)?.abort();
-  messageReads.set(key, controller);
-  const viewSignal = navigationSignal(accountId, channelId);
-  const signal = viewSignal ? AbortSignal.any([viewSignal, controller.signal]) : controller.signal;
-  const active = () => currentApi(accountId, api, generation) && messageReads.get(key) === controller;
-  patchInstance(accountId, (i) => {
-    i.messages[channelId] = { items: current?.items ?? [], hasMore: current?.hasMore ?? true, loading: true };
-  });
-  const before = older ? current?.items[0]?.id : undefined;
-  let loadedAround = anchor !== null;
-  try {
-    let page: Message[];
-    if (anchor) {
-      try {
-        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(anchor.messageId)}`, signal);
-      } catch (error) {
-        if (!(error instanceof RequestError) || error.status !== 404) throw error;
-        clearChatAnchor(accountId, channelId);
-        loadedAround = false;
-        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}`, signal);
-      }
-      if (anchor && !page.some((message) => message.id === anchor.messageId)) {
-        clearChatAnchor(accountId, channelId);
-        loadedAround = false;
-        page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}`, signal);
-      }
-    } else {
-      page = await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE}${before ? `&before=${encodeURIComponent(before)}` : ""}`, signal);
-    }
-    if (!active() || signal.aborted) return;
-    patchInstance(accountId, (i) => {
-      const prev = i.messages[channelId]?.items ?? [];
-      const known = new Set(prev.map((m) => m.id));
-      i.messages[channelId] = { items: loadedAround ? page : [...page.filter((m) => !known.has(m.id)), ...prev], hasMore: loadedAround ? page.length > 0 : page.length === PAGE, loading: false };
-    });
-  } catch (err) {
-    if (!active()) return;
-    patchInstance(accountId, (i) => {
-      const entry = i.messages[channelId];
-      if (!entry) return;
-      if (isCancellation(err)) {
-        if (!entry.items.length) delete i.messages[channelId];
-        else entry.loading = false;
-      } else {
-        entry.loading = false;
-        entry.error = (err as Error).message;
-      }
-    });
-  } finally {
-    if (messageReads.get(key) === controller) messageReads.delete(key);
+async function fetchMessageWindow(accountId:string,channelId:string,query:string,signal?:AbortSignal):Promise<MessageWindow> {
+  const path=`/channels/${encodeURIComponent(channelId)}/messages`;
+  if(getState().instances[accountId]?.instance?.historyWindow) return apiFor(accountId).get<MessageWindow>(`${path}/window?limit=${PAGE}${query?`&${query}`:""}`,signal);
+  const items=await apiFor(accountId).get<Message[]>(`${path}?limit=${PAGE}${query?`&${query}`:""}`,signal);
+  return {items,hasMoreBefore:items.length>=PAGE,hasMoreAfter:query.startsWith("around=")};
+}
+function boundMessages(inst:InstanceState,channelId:string):void {
+  let overflow=Object.values(inst.messages).reduce((sum,entry)=>sum+entry.items.length,0)-TOTAL_MESSAGE_LIMIT;
+  for(const [id,entry] of Object.entries(inst.messages)) {
+    if(overflow<=0) break;
+    if(id===channelId) continue;
+    overflow-=entry.items.length;
+    delete inst.messages[id];
   }
+}
+export async function loadMessages(accountId:string,channelId:string,direction:boolean|"newer"|"latest"=false):Promise<void> {
+  const inst=getState().instances[accountId]; if(inst?.status!=="ready") return;
+  const current=inst.messages[channelId];
+  const paging=direction===true||direction==="newer";
+  const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!anchor) return;
+  const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
+  messageReads.get(key)?.abort(); messageReads.set(key,controller);
+  const viewSignal=navigationSignal(accountId,channelId),signal=viewSignal?AbortSignal.any([viewSignal,controller.signal]):controller.signal;
+  const active=()=>currentApi(accountId,api,generation)&&messageReads.get(key)===controller&&!signal.aborted;
+  patchInstance(accountId,i=>{i.messages[channelId]={...current,items:current?.items??[],hasMore:current?.hasMore??true,loading:true,error:null};});
+  try {
+    const read=!paging&&inst.instance?.historyWindow?await api.get<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,signal):current?.readState;
+    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:anchor?`around=${encodeURIComponent(anchor.messageId)}`:direction!=="latest"&&read?.messageId&&read.unread?.count?`after=${encodeURIComponent(read.messageId)}`:"";
+    let page:MessageWindow;
+    try {page=await fetchMessageWindow(accountId,channelId,query,signal);}
+    catch(error){if(!anchor||!(error instanceof RequestError)||error.status!==404) throw error;clearChatAnchor(accountId,channelId);query="";page=await fetchMessageWindow(accountId,channelId,"",signal);}
+    if(!active()) return;
+    patchInstance(accountId,i=>{
+      const entry=i.messages[channelId]!;
+      const merged=mergeMessageWindow(paging?entry.items:[],page.items,direction===true?"before":direction==="newer"?"after":"replace");
+      i.messages[channelId]={...entry,items:merged.items,hasMore:(direction==="newer"?entry.hasMore:page.hasMoreBefore)||merged.evictedBefore,hasMoreAfter:(direction===true?entry.hasMoreAfter:page.hasMoreAfter)||merged.evictedAfter,loading:false,error:null,readState:read??null,
+        unreadBoundary:paging?entry.unreadBoundary:read?.unread?.count?read.messageId:null,
+        initialPosition:paging?entry.initialPosition:query.startsWith("after=")?page.items[0]?.id:null};
+      if(read?.unread) i.unread[channelId]=read.unread;
+      boundMessages(i,channelId);
+    });
+    void loadPinnedMessages(accountId,channelId);
+  } catch(error) {
+    if(messageReads.get(key)!==controller) return;
+    patchInstance(accountId,i=>{const entry=i.messages[channelId];if(!entry)return;entry.loading=false;if(!isCancellation(error))entry.error=(error as Error).message;});
+  } finally {if(messageReads.get(key)===controller)messageReads.delete(key);}
 }
 
 export async function jumpToMessage(accountId:string,channelId:string,messageId:string,serverId:string|null, signal?: AbortSignal) {
   const navigation = navigationGeneration, api = apiFor(accountId), generation = api.generation;
   const active = signal ? AbortSignal.any([navigationAbort.signal, signal]) : navigationAbort.signal;
-  const items=await api.get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(messageId)}`, active);
+  const window=await fetchMessageWindow(accountId,channelId,`around=${encodeURIComponent(messageId)}`,active);
   if (active.aborted || navigation !== navigationGeneration || !currentApi(accountId, api, generation)) throw cancelled();
   messageReads.get(messageKey(accountId, channelId))?.abort();
   messageReads.delete(messageKey(accountId, channelId));
   navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
-  setState(s=>{s.instances[accountId]!.messages[channelId]={items,hasMore:items.length>=26,loading:false};s.messageFocus={accountId,channelId,messageId};s.modal=null;});
+  setState(s=>{s.instances[accountId]!.messages[channelId]={items:window.items,hasMore:window.hasMoreBefore,hasMoreAfter:window.hasMoreAfter,loading:false};s.messageFocus={accountId,channelId,messageId};s.modal=null;});
 }
+
+export async function loadReadStates(accountId:string):Promise<void> {
+  try { const states=await apiFor(accountId).get<Array<ChannelReadState & {unread:{count:number;mention:boolean}}>>("/users/@me/read-states");
+    patchInstance(accountId,inst=>{ for(const value of states){inst.unread[value.channelId]=value.unread; const entry=inst.messages[value.channelId]; if(entry) entry.readState={channelId:value.channelId,messageId:value.messageId,updatedAt:value.updatedAt};} });
+  } catch { /* Reconnect can retry without blocking READY. */ }
+}
+export async function markChannelRead(accountId:string,channelId:string,messageId:string):Promise<void> {
+  const inst=getState().instances[accountId]; if(inst?.status!=="ready" || !inst.instance?.historyWindow || !messageId || (inst.messages[channelId]?.readState?.messageId??"")>=messageId) return;
+  try { const state=await apiFor(accountId).put<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,{messageId});
+    patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; if(state.unread) i.unread[channelId]=state.unread; });
+  } catch { /* Read cursor sync retries when the channel becomes visible again. */ }
+}
+export async function loadPinnedMessages(accountId:string,channelId:string):Promise<void> {
+  const inst=getState().instances[accountId];if(!inst?.instance?.messagePins || inst.messages[channelId]?.pinsLoading)return;
+  const api=apiFor(accountId),generation=api.generation;
+  patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=true;entry.pinsError=null;}});
+  try {const pins=await api.get<PinnedMessage[]>(`/channels/${encodeURIComponent(channelId)}/pins`);
+    if(currentApi(accountId,api,generation))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pins=pins;entry.pinsLoading=false;}});
+  } catch(error){if(!isCancellation(error))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=false;entry.pinsError=(error as Error).message;}});}
+}
+
 export function returnToLatest(accountId:string,channelId:string) {
   messageReads.get(messageKey(accountId, channelId))?.abort();
   clearChatAnchor(accountId, channelId);
   setState(s=>{delete s.instances[accountId]?.messages[channelId];s.messageFocus=null;s.chatNavigation++;});
-  void loadMessages(accountId,channelId);
+  void loadMessages(accountId,channelId,"latest");
 }
 
 function invalidateServerMessages(accountId: string, serverId: string): void {
@@ -783,6 +800,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.serverLoadErrors = {};
         inst.serverLoading = {};
       });
+      if(event.d.instance.historyWindow) void loadReadStates(accountId);
       // Server summaries arrive with READY; fetch channel/member details only
       // for the currently open community or when the user opens another one.
       const view = getState().view;
@@ -822,6 +840,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       if (s.voice?.accountId === accountId && s.voice.serverId === serverId) leaveVoice(false);
       patchInstance(accountId, (inst) => {
         inst.servers = inst.servers.filter((sv) => sv.id !== serverId);
+        for(const channel of inst.serverStates[serverId]?.channels??[]){delete inst.messages[channel.id];delete inst.unread[channel.id];}
         delete inst.serverStates[serverId];
       });
       if (s.view.kind === "server" && s.view.accountId === accountId && s.view.serverId === serverId) {
@@ -851,7 +870,9 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       const me = inst.user?.id;
       patchInstance(accountId, (i) => {
         const list = i.messages[msg.channelId];
-        if (list && !list.items.some((m) => m.id === msg.id)) list.items.push(msg);
+        if (list && !list.items.some(m=>m.id===msg.id) && (!list.hasMoreAfter || msg.id >= (list.items[0]?.id??"") && msg.id <= (list.items.at(-1)?.id??""))) {
+          const merged=mergeMessageWindow(list.items,[msg],"after"); list.items=merged.items; list.hasMore ||= merged.evictedBefore; boundMessages(i,msg.channelId);
+        }
         const typing = i.typing[msg.channelId];
         if (typing) delete typing[msg.author.id];
         const dm = i.dms.find((d) => d.id === msg.channelId);
@@ -859,7 +880,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
           dm.lastMessageId = msg.id;
           i.dms.sort((a, b) => (b.lastMessageId ?? "").localeCompare(a.lastMessageId ?? ""));
         }
-        if ((!viewing || !document.hasFocus()) && msg.author.id !== me) {
+        if ((!viewing || !document.hasFocus() || list?.hasMoreAfter === true) && msg.author.id !== me) {
           const u = (i.unread[msg.channelId] ??= { count: 0, mention: false });
           u.count++;
           if (isDm || msg.mentionsEveryone || (me && msg.mentionIds.includes(me))) u.mention = true;
@@ -878,12 +899,27 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         const list = inst.messages[event.d.channelId];
         const idx = list?.items.findIndex((m) => m.id === event.d.id) ?? -1;
         if (list && idx >= 0) list.items[idx] = event.d;
+        const pinned=list?.pins?.find(pin=>pin.message.id===event.d.id);if(pinned)pinned.message=event.d;
       });
     case "MESSAGE_DELETE":
       emitRoomEvent(accountId, event);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
         if (list) list.items = list.items.filter((m) => m.id !== event.d.messageId);
+        if (list?.pins) list.pins = list.pins.filter(pin => pin.message.id !== event.d.messageId);
+      });
+    case "CHANNEL_READ_STATE":
+      return patchInstance(accountId,inst=>{
+        if(event.d.userId!==inst.user?.id) return;
+        const entry=inst.messages[event.d.state.channelId]; if(entry) entry.readState=event.d.state;
+        if(event.d.state.unread) inst.unread[event.d.state.channelId]=event.d.state.unread;
+      });
+    case "CHANNEL_PIN_UPDATE":
+      return patchInstance(accountId,inst=>{
+        const entry=inst.messages[event.d.channelId]; if(!entry) return;
+        entry.pins ??=[];
+        entry.pins=entry.pins.filter(pin=>pin.message.id!==event.d.messageId);
+        if(event.d.message) entry.pins.unshift(event.d.message);
       });
     case "TYPING_START":
       return patchInstance(accountId, (inst) => {

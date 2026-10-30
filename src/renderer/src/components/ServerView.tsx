@@ -677,6 +677,8 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           canSend={has(perms, Permission.SEND_MESSAGES)}
           canAttach={has(perms, Permission.ATTACH_FILES)}
           canModerate={has(perms, Permission.MANAGE_MESSAGES)}
+          canPin={has(perms, Permission.MANAGE_MESSAGES)}
+          serverId={serverId}
           nameOf={(id) => names.get(id)}
           channelOf={(id) => state.channels.find((c) => c.id === id)?.name}
           mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: m.user.username }))}

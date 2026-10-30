@@ -3,8 +3,8 @@ import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Fragment,
   lazy,
   Suspense,
   useEffect,
@@ -17,8 +17,9 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
+  type UIEvent,
 } from "react";
-import { apiFor, loadMessages, returnToLatest, sendTyping } from "../client.ts";
+import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -82,6 +83,8 @@ interface ChatProps {
   canSend: boolean;
   canAttach: boolean;
   canModerate: boolean;
+  canPin?: boolean;
+  serverId?: string | null;
   nameOf: NameOf;
   /** Resolves <#channel> mentions; DMs have none. */
   channelOf?: NameOf;
@@ -195,6 +198,7 @@ function MessageRow({
   nameOf,
   channelOf,
   canModerate,
+  canPin = canModerate,
   canReact,
   onReply,
 }: {
@@ -206,10 +210,12 @@ function MessageRow({
   nameOf: NameOf;
   channelOf: NameOf | undefined;
   canModerate: boolean;
+  canPin?: boolean;
   canReact: boolean;
   onReply: (m: Message) => void;
 }) {
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
+  const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
     if (reacting || !reactionsEnabled || !canReact) return;
@@ -315,6 +321,10 @@ function MessageRow({
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
+          {canPin && <button className="icon-btn tiny" title={isPinned ? "Desafixar mensagem" : "Fixar mensagem"} aria-pressed={isPinned} onClick={async () => {
+            try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
+            catch(error){toast((error as Error).message);}
+          }}><Icon name="pin" size={16} /></button>}
           {own && (
             <button
               className="icon-btn tiny"
@@ -614,12 +624,15 @@ function Composer({
   );
 }
 
+const EMPTY_UNREAD={count:0,mention:false};
+
 export function Chat(props: ChatProps) {
   const { accountId, channelId, nameOf } = props;
   const entry = useStore((s) => s.instances[accountId]?.messages[channelId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const items = entry?.items ?? EMPTY;
+  const unread = useStore((s) => s.instances[accountId]?.unread[channelId] ?? EMPTY_UNREAD);
   const [draft, setDraft] = useState<ChatDraft>(() => readChatDraft(accountId, channelId));
   const [draftPersistenceFailed, setDraftPersistenceFailed] = useState(false);
   const [replyResolution, setReplyResolution] = useState<{ id: string; status: "checking" | "valid" | "unavailable"; message: Message | null } | null>(
@@ -628,6 +641,12 @@ export function Chat(props: ChatProps) {
   const [replyValidationAttempt, setReplyValidationAttempt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const pinsSupported=useStore(s=>s.instances[accountId]?.instance?.messagePins===true);
+  const readingIntent=useRef(false);
+  const pendingAnchor=useRef<{id:string;offset:number}|null>(null);
+  const focusVisit=useRef<string|null>(null);
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
   const pinned = useRef(true);
   const prevHeight = useRef<number | null>(null);
   const restoredVisit = useRef<string | null>(null);
@@ -686,51 +705,42 @@ export function Chat(props: ChatProps) {
   }, [accountId, channelId, draft.replyToId, entry, connected, items, replyValidationAttempt, chatRequests]);
 
   useEffect(() => () => flushChatState(), []);
-  useLayoutEffect(() => {
-    if (!focus) return;
-    pinned.current = false;
-    const row = scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focus.messageId)}"]`);
-    row?.scrollIntoView({ block: "center" });
-    row?.classList.add("search-highlight");
-    return () => row?.classList.remove("search-highlight");
-  }, [focus, items]);
+  useLayoutEffect(()=>{
+    restoredVisit.current=null; focusVisit.current=null; readingIntent.current=false;
+    pinned.current=!focus; prevHeight.current=null;
+  },[accountId,channelId,navigation]);
 
-  useLayoutEffect(() => {
-    restoredVisit.current = null;
-    pinned.current = !focus;
-    prevHeight.current = null;
-  }, [accountId, channelId, navigation]);
+  useLayoutEffect(()=>{
+    if(!focus||entry?.loading||!items.length)return;
+    const visit=JSON.stringify([navigation,focus.messageId]);if(focusVisit.current===visit)return;
+    const index=items.findIndex(message=>message.id===focus.messageId);if(index<0)return;
+    focusVisit.current=visit;pinned.current=false;
+    virtualizer.scrollToIndex(index,{align:"center"});
+    const frame=requestAnimationFrame(()=>{
+      const row=scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focus.messageId)}"]`);
+      row?.scrollIntoView({block:"center"});row?.classList.add("search-highlight");
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[focus,items,entry?.loading,navigation]);
 
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el || focus) return;
-    const visit = JSON.stringify([draftKey(accountId, channelId), navigation]);
-    if (restoredVisit.current === visit) return;
-    const anchor = readChatAnchor(accountId, channelId);
-    if (!anchor) {
-      pinned.current = true;
-      if (!entry?.loading && !entry?.error) {
-        el.scrollTop = el.scrollHeight;
-        lastTop.current = el.scrollTop;
-        restoredVisit.current = visit;
-      }
-      return;
+  useLayoutEffect(()=>{
+    const el=scroller.current;if(!el||focus||!entry||entry.loading||entry.error||!items.length)return;
+    const visit=JSON.stringify([draftKey(accountId,channelId),navigation]);if(restoredVisit.current===visit)return;
+    restoredVisit.current=visit;
+    const saved=readChatAnchor(accountId,channelId);
+    const target=saved?.messageId??entry.initialPosition;
+    const index=target?items.findIndex(message=>message.id===target):-1;
+    if(index>=0){
+      pinned.current=false;virtualizer.scrollToIndex(index,{align:"start"});
+      const frame=requestAnimationFrame(()=>{
+        const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(target!)}"]`);
+        if(row)el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-(saved?.offset??0);
+        lastTop.current=el.scrollTop;
+      });return()=>cancelAnimationFrame(frame);
     }
-    const row = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.messageId)}"]`);
-    if (row) {
-      const rowOffset = row.getBoundingClientRect().top - el.getBoundingClientRect().top;
-      el.scrollTop += rowOffset - anchor.offset;
-      pinned.current = false;
-      lastTop.current = el.scrollTop;
-      restoredVisit.current = visit;
-    } else if (entry && !entry.loading && !entry.error && items.length) {
-      clearChatAnchor(accountId, channelId);
-      el.scrollTop = el.scrollHeight;
-      pinned.current = true;
-      lastTop.current = el.scrollTop;
-      restoredVisit.current = visit;
-    }
-  }, [accountId, channelId, navigation, items, entry?.loading, entry?.error, focus]);
+    if(saved)clearChatAnchor(accountId,channelId);
+    pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
+  },[accountId,channelId,navigation,items,entry?.loading,entry?.error,focus]);
 
   // Images can grow after the message list mounts. Follow that growth only
   // while the reader remains at the latest message, never while reading back.
@@ -750,19 +760,25 @@ export function Chat(props: ChatProps) {
 
   useEffect(() => {
     void loadMessages(accountId, channelId);
+    void loadPinnedMessages(accountId, channelId);
   }, [accountId, channelId]);
 
   // Keep the view pinned to the bottom for new messages, and steady when older ones load above.
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (prevHeight.current !== null) {
-      el.scrollTop += el.scrollHeight - prevHeight.current;
-      prevHeight.current = null;
-    } else if (pinned.current) el.scrollTop = el.scrollHeight;
+    const anchor=pendingAnchor.current;
+    if(anchor){
+      pendingAnchor.current=null;prevHeight.current=null;
+      const index=items.findIndex(message=>message.id===anchor.id);
+      if(index>=0){virtualizer.scrollToIndex(index,{align:"start"});requestAnimationFrame(()=>{
+        const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`);
+        if(row)el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-anchor.offset;
+      });}
+    } else if(pinned.current) el.scrollTop=el.scrollHeight;
   }, [items, firstId]);
 
-  const onScroll = () => {
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
     const el = scroller.current;
     if (!el) return;
     if (el.scrollTop < lastTop.current - 1) pinned.current = false;
@@ -775,8 +791,14 @@ export function Chat(props: ChatProps) {
       writeChatAnchor(accountId, channelId, { messageId: firstVisible.dataset.messageId, offset: firstVisible.getBoundingClientRect().top - viewportTop });
     }
     if (el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
+      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
+    }
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160 && entry?.hasMoreAfter && !entry.loading && !entry.error) void loadMessages(accountId,channelId,"newer");
+    if (readingIntent.current && event.nativeEvent.isTrusted && document.hasFocus() && firstVisible?.dataset.messageId) {
+      const visible=[...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]")??[])].filter(row=>{const rect=row.getBoundingClientRect();return rect.bottom>el.getBoundingClientRect().top && rect.top<el.getBoundingClientRect().bottom;});
+      const last=visible.at(-1)?.dataset.messageId; if(last) void markChannelRead(accountId,channelId,last);
     }
   };
 
@@ -806,10 +828,15 @@ export function Chat(props: ChatProps) {
         <h1 className="truncate">{props.title}</h1>
         {props.topic && <span className="chat-topic truncate">{props.topic}</span>}
         <span className="spacer" />
+        <button className={`icon-btn${pinsOpen ? " on" : ""}`} aria-label="Mensagens fixadas" aria-expanded={pinsOpen} title="Mensagens fixadas" onClick={() => {if(!pinsSupported){toast("Atualize o Annoy.Server e reconecte para usar mensagens fixadas.");return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} /></button>
         {props.headerExtra}
       </header>
+      {pinsOpen && <div className="pins-panel" role="region" aria-label="Mensagens fixadas">
+        <div className="pins-panel-title"><strong>Mensagens fixadas</strong><button className="icon-btn tiny" aria-label="Fechar mensagens fixadas" onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
+        {entry?.pinsLoading && <p role="status">Carregando fixadas?</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>Tentar novamente</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">Nenhuma mensagem fixada.</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null);}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString()}</small></span><span className="pinned-message-content">{pin.message.content || "Anexo"}</span></button>)}
+      </div>}
       <ConnectionNotice accountId={accountId} />
-      <div className="messages" ref={scroller} onScroll={onScroll}>
+      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={()=>{readingIntent.current=true;}} onPointerDown={()=>{readingIntent.current=true;}} onKeyDown={()=>{readingIntent.current=true;}}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
             <div className="channel-start">
@@ -829,7 +856,10 @@ export function Chat(props: ChatProps) {
             <p>{entry.error}</p>
             <button className="btn btn-ghost" onClick={() => void loadMessages(accountId, channelId, items.length > 0)}>Tentar carregar mensagens novamente</button>
           </div>}
-          {items.map((m, i) => {
+          <div className="message-window" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const i=virtualRow.index;
+            const m=items[i]!;
             const prev = items[i - 1];
             const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
             const compact =
@@ -839,7 +869,8 @@ export function Chat(props: ChatProps) {
               prev.author.id === m.author.id &&
               Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
-              <Fragment key={m.id}>
+              <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start}px)` }}>
+                {entry?.unreadBoundary && m.id > entry.unreadBoundary && (i===0 || items[i-1]!.id <= entry.unreadBoundary) && <div className="unread-divider" role="separator"><span>Não lidas</span></div>}
                 {newDay && (
                   <div className="day-divider" role="separator">
                     <span>{formatDay(m.createdAt)}</span>
@@ -854,17 +885,19 @@ export function Chat(props: ChatProps) {
                   nameOf={nameOf}
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
+                  canPin={pinsSupported && (props.canPin??props.canModerate)}
                   canReact={props.canSend}
                   onReply={(message) => { changeDraft({ replyToId: message.id }); setReplyResolution({ id: message.id, status: "valid", message }); }}
                 />
-              </Fragment>
+              </div>
             );
           })}
+          </div>
         </div>
       </div>
-      {focus && (
+      {(focus || entry?.hasMoreAfter || unread.count>0) && (
         <button className="return-latest" onClick={() => returnToLatest(accountId, channelId)}>
-          Você está vendo uma mensagem da busca · Voltar às mais recentes
+          {focus ? "Você está vendo uma mensagem da busca · " : `${unread.count} nova${unread.count===1?"":"s"} · `}Mais recentes
         </button>
       )}
       <Composer
