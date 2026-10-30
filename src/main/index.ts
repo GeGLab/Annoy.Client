@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -194,6 +194,47 @@ function parseService(raw: unknown): Service | null {
   return { id, kind: kind as Service["kind"], name, url };
 }
 
+/**
+ * Fallback right-click menu for whatever the renderer has no menu of its own for (its menus call preventDefault,
+ * so this never fires on them): images can be copied or saved, selections copied and text fields edited.
+ */
+function showNativeMenu(params: Electron.ContextMenuParams): void {
+  if (!win) return;
+  const wc = win.webContents;
+  const items: Electron.MenuItemConstructorOptions[] = [];
+  const image = params.mediaType === "image" && /^(https?|blob|data):/.test(params.srcURL);
+  if (image) {
+    items.push(
+      { label: "Copiar imagem", click: () => wc.copyImageAt(params.x, params.y) },
+      { label: "Salvar imagem como…", click: () => wc.downloadURL(params.srcURL) },
+    );
+    if (/^https?:/.test(params.srcURL)) {
+      items.push(
+        { label: "Copiar endereço da imagem", click: () => clipboard.writeText(params.srcURL) },
+        { label: "Abrir original", click: () => openExternal(params.srcURL) },
+      );
+    }
+  }
+  if (params.linkURL && /^https?:/.test(params.linkURL) && params.linkURL !== params.srcURL) {
+    if (items.length) items.push({ type: "separator" });
+    items.push({ label: "Copiar link", click: () => clipboard.writeText(params.linkURL) });
+  }
+  if (params.isEditable) {
+    if (items.length) items.push({ type: "separator" });
+    items.push(
+      { label: "Recortar", role: "cut", enabled: params.editFlags.canCut },
+      { label: "Copiar", role: "copy", enabled: params.editFlags.canCopy },
+      { label: "Colar", role: "paste", enabled: params.editFlags.canPaste },
+      { type: "separator" },
+      { label: "Selecionar tudo", role: "selectAll" },
+    );
+  } else if (params.selectionText.trim()) {
+    if (items.length) items.push({ type: "separator" });
+    items.push({ label: "Copiar", role: "copy" });
+  }
+  if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
+}
+
 function createWindow(): void {
   configureSession(session.defaultSession, true);
   win = new BrowserWindow({
@@ -224,6 +265,7 @@ function createWindow(): void {
       openExternal(url);
     }
   });
+  win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
