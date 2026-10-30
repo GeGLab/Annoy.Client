@@ -1,5 +1,7 @@
+import giphyAttribution from "../../assets/expression/powered-by-giphy.gif";
 import { useEffect, useState } from "react";
 import { apiFor } from "../../client.ts";
+export function GiphyAttribution() { return <img className="giphy-attribution" src={giphyAttribution} alt="Powered by GIPHY" />; }
 export interface GiphyItem { id: string; title: string; images: { fixed_height: { url: string }; original: { url: string } }; }
 const keyRequests = new Map<string, Promise<string | null>>();
 export const localGiphyKey = () => localStorage.getItem("annoy.giphy-client-key") ?? "";
@@ -28,10 +30,10 @@ export function GiphyMessage({accountId, content}: {accountId: string; content: 
     void giphyKey(accountId).then(async (key) => {
       if (!key || controller.signal.aborted) return;
       const response = await fetch(`https://api.giphy.com/v1/gifs/${id}?${new URLSearchParams({api_key:key})}`, {signal:controller.signal,cache:"no-store",credentials:"omit"});
-      if (response.ok) { const result = await response.json(); if (!controller.signal.aborted) setItem(result.data); }
+      if (response.ok) { const result = await response.json(); if (!controller.signal.aborted && result.data && !Array.isArray(result.data)) setItem(result.data); }
     }).catch(() => undefined);
     return () => controller.abort();
   }, [accountId,id]);
-  const url = giphyImage(item?.images.original.url);
-  return url ? <a className="giphy-message" href={content.trim()} target="_blank" rel="noreferrer"><img src={url} alt={item?.title || "GIF do GIPHY"} loading="lazy" /><small>Powered by GIPHY</small></a> : null;
+  const url = giphyImage(item?.images?.original?.url);
+  return url ? <a className="giphy-message" href={content.trim()} target="_blank" rel="noreferrer"><img src={url} alt={item?.title || "GIF do GIPHY"} loading="lazy" /><GiphyAttribution /></a> : null;
 }

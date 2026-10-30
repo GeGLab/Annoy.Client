@@ -413,7 +413,7 @@ function MemberCard({
           {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
           {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
-              <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? "Atividade · Só para amigos" : "Atividade"}</div>
+              <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? "Atividade" : "Atividade"}</div>
               <ActivityStack activities={activities} />
             </div>
           )}
