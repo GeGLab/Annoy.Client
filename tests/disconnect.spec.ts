@@ -42,7 +42,7 @@ async function setup(page: Page, acknowledge = true) {
   await page.route(`${origin}/api/**`, route => {
     if (route.request().method() !== 'GET') writes.push(route.request().url());
     if (!available) return route.abort('connectionrefused');
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(route.request().url().endsWith('/servers/server') ? state : []) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(new URL(route.request().url()).pathname.endsWith('/servers/server') ? state : []) });
   });
   await page.routeWebSocket('ws://disconnect.test/gateway', ws => {
     if (!available) { ws.close({ code: 1013, reason: 'server unavailable' }); return; }

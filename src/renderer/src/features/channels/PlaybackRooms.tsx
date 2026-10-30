@@ -116,6 +116,12 @@ function Controls({ playback, canControl, canSkip }: { playback: Playback; canCo
   );
 }
 
+function PlaybackFeedback({ playback }: { playback: Playback }) {
+  if (playback.loading && !playback.state) return <div className="playback-feedback" role="status">Carregando a fila…</div>;
+  if (!playback.error) return null;
+  return <div className="playback-feedback error" role="alert"><span>Não foi possível atualizar a fila: {playback.error}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? "Tentando…" : "Tentar novamente"}</button></div>;
+}
+
 function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean }) {
   const { state, send } = playback;
   const [url, setUrl] = useState("");
@@ -321,13 +327,14 @@ export function TheaterView({ accountId, state, channel, perms }: { accountId: s
       </header>
       <div className="theater-body">
         <div className="theater-stage">
+          <PlaybackFeedback playback={playback} />
           {mode === "player" ? (
             <>
               <TheaterPlayer accountId={accountId} playback={playback} />
               <Controls playback={playback} canControl={canControl} canSkip={canSkip} />
             </>
           ) : (
-            <VoiceStage accountId={accountId} state={state} channel={channel} embedded />
+            <VoiceStage accountId={accountId} state={state} channel={channel} embedded canConnect={has(perms, Permission.CONNECT)} />
           )}
         </div>
         <aside className="theater-side">
@@ -414,6 +421,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
       </header>
       <div className="song-body">
         <div className="song-now">
+          <PlaybackFeedback playback={playback} />
           {here && inView(item) ? (
             <div className="song-video" ref={setVideoSlot} />
           ) : (
@@ -460,6 +468,7 @@ function SongPlayer({ session }: { session: Listening }) {
         <strong>{item?.title ?? "Fila vazia"}</strong>
         <span className="muted"> · {session.name}</span>
       </button>
+      <PlaybackFeedback playback={playback} />
       {item && <span className="muted">{clock(position)}</span>}
       {item && !inView(item) && <video key={item.id} ref={setAudio} className="song-audio" src={apiFor(session.accountId).resolve(item.url)} autoPlay />}
       <button className="icon-btn tiny" title="Parar de ouvir" onClick={() => listenTo(null)}>

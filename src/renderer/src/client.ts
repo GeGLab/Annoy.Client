@@ -1,4 +1,4 @@
-import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
+import type { DmChannel, GatewayEvent, ImportJob, MemberPage, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api } from "./api.ts";
 import { previewText } from "./format.tsx";
@@ -316,7 +316,9 @@ export function navigate(view: View): void {
     const channelId = view.kind === "server" ? view.channelId : view.kind === "home" ? view.dmId : null;
     if (channelId && destinationAccountId) delete s.instances[destinationAccountId]?.unread[channelId];
   });
-  if (view.kind === "server") void ensureServer(view.accountId, view.serverId);
+  // `openServer` owns the initial details request while its destination has no channel.
+  // Starting a second request here made the caller observe `serverLoading` and return early.
+  if (view.kind === "server" && view.channelId) void ensureServer(view.accountId, view.serverId);
 }
 
 /** Reopen the account-local destination saved when recovery moved to the server directory. */
@@ -431,7 +433,7 @@ export async function ensureServer(accountId: string, serverId: string, force = 
   patchInstance(accountId, (inst) => { inst.serverLoading[serverId] = true; delete inst.serverLoadErrors[serverId]; });
   try {
     const api = apiFor(accountId), generation = api.generation;
-    const fresh = await api.get<ServerState>(`/servers/${serverId}`, signal);
+    const fresh = await api.get<ServerState>(`/servers/${serverId}?membersLimit=100`, signal);
     if (signal?.aborted || !currentApi(accountId, api, generation)) return;
     patchInstance(accountId, (inst) => {
       inst.serverStates[serverId] = fresh;
@@ -452,6 +454,24 @@ export async function ensureServer(accountId: string, serverId: string, force = 
   } finally {
     patchInstance(accountId, (inst) => { delete inst.serverLoading[serverId]; });
   }
+}
+
+/** Loads a bounded server-side member search/page and merges its data into the active server cache. */
+export async function loadServerMembers(accountId: string, serverId: string, options: { after?: string | null; query?: string; signal?: AbortSignal; merge?: boolean } = {}): Promise<MemberPage> {
+  const query = new URLSearchParams({ limit: "100" });
+  if (options.after) query.set("after", options.after);
+  if (options.query?.trim()) query.set("q", options.query.trim());
+  const page = await apiFor(accountId).get<MemberPage>(`/servers/${encodeURIComponent(serverId)}/members?${query}`, options.signal);
+  if (options.merge !== false && !options.query?.trim()) patchInstance(accountId, (instance) => {
+    const state = instance.serverStates[serverId];
+    if (!state) return;
+    const byId = new Map(state.members.map((member) => [member.user.id, member]));
+    for (const member of page.members) byId.set(member.user.id, member);
+    state.members = [...byId.values()];
+    state.membersNextCursor = page.nextCursor;
+    state.membersTotal = page.total;
+  });
+  return page;
 }
 
 function scheduleRefresh(accountId: string, serverId: string): void {
@@ -763,9 +783,19 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.serverLoadErrors = {};
         inst.serverLoading = {};
       });
-      // Instances are small (TeamSpeak scale): load every server so unread
-      // badges and voice rosters work without opening each one.
-      for (const server of event.d.servers) void ensureServer(accountId, server.id);
+      // Server summaries arrive with READY; fetch channel/member details only
+      // for the currently open community or when the user opens another one.
+      const view = getState().view;
+      if (view.kind === "server" && view.accountId === accountId) {
+        const visit = navigationGeneration;
+        void ensureServer(accountId, view.serverId).then((server) => {
+          const current = getState().view;
+          if (!server || visit !== navigationGeneration || current.kind !== "server" || current.accountId !== accountId || current.serverId !== view.serverId || current.channelId) return;
+          const remembered = localStorage.getItem(`distopic.lastChannel.${view.serverId}`);
+          const target = server.channels.find((channel) => channel.id === remembered && channel.type === "text") ?? server.channels.find((channel) => channel.type === "text");
+          if (target) navigate({ kind: "server", accountId, serverId: view.serverId, channelId: target.id });
+        });
+      }
       // Imports keep running server-side across reconnects; resync their progress.
       void apiFor(accountId)
         .get<ImportJob[]>("/import/jobs")
@@ -804,6 +834,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return scheduleRefresh(accountId, event.d.serverId);
     case "MESSAGE_CREATE": {
       const msg = event.d;
+      emitRoomEvent(accountId, event);
       const s = getState();
       const inst = s.instances[accountId];
       if (!inst) return;
@@ -842,12 +873,14 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return;
     }
     case "MESSAGE_UPDATE":
+      emitRoomEvent(accountId, event);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
         const idx = list?.items.findIndex((m) => m.id === event.d.id) ?? -1;
         if (list && idx >= 0) list.items[idx] = event.d;
       });
     case "MESSAGE_DELETE":
+      emitRoomEvent(accountId, event);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
         if (list) list.items = list.items.filter((m) => m.id !== event.d.messageId);

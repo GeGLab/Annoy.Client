@@ -654,7 +654,7 @@ test("owners with other members must transfer ownership before leaving or removi
       const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       return structuredClone(getState().instances.test.serverStates.server);
     });
-    await page.route("http://experience.test/api/servers/server", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }));
+    await page.route("http://experience.test/api/servers/server**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }));
     await page.route("http://experience.test/api/servers/server/ownership", async (route) => {
       expect(route.request().postDataJSON()).toEqual({ userId: "next-owner" });
       transfers++;
@@ -1674,7 +1674,7 @@ test("server search sits above group activities and server editing saves image d
     await expect(page.locator(".friend-activities")).toContainText("Jogo do grupo");
     await expect(page.locator(".friend-activities")).toContainText("Atividades do grupo");
     await page.screenshot({path:join(capture,"group-search-dark.png")});
-    await page.route("http://experience.test/api/servers/server",async(route)=>{
+    await page.route("http://experience.test/api/servers/server**",async(route)=>{
       if(route.request().method()==="PATCH"){writes.push("name");const body=route.request().postDataJSON();return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:body.name,ownerId:"person",iconUrl:null})});}await route.continue();
     });
     await page.route("http://experience.test/api/servers/server/icon",(route)=>{writes.push("icon");return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:"Comunidade renovada",ownerId:"person",iconUrl:"http://experience.test/image.png"})});});
@@ -1694,6 +1694,8 @@ test("server search sits above group activities and server editing saves image d
     await expect(page.locator(".tab-tile .server-icon")).toHaveAttribute("src","http://experience.test/image.png");
     await page.keyboard.press("Escape");
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.modal={kind:"addTab"};});});
+    await page.getByRole("tab",{name:"Serviços e sites"}).click();
+    await page.getByRole("button",{name:/Ver todos os serviços/}).click();
     await expect(page.locator(".service-card .service-logo")).toHaveCount(6);
     for(const img of await page.locator(".service-card .service-logo").all())await expect.poll(()=>img.evaluate((image:HTMLImageElement)=>image.naturalWidth)).toBeGreaterThan(0);
     await page.locator(".service-card").last().scrollIntoViewIfNeeded();
@@ -1821,7 +1823,7 @@ test("packaged renderer installs bundled stickers without a development server U
   const user={id:"production",username:"production",displayName:"Pessoa",avatarUrl:null};
   const server={id:"packaged-server",name:"Servidor",ownerId:user.id,iconUrl:null};
   const channel={id:"packaged-general",serverId:server.id,type:"text",name:"geral",topic:"",parentId:null,position:0,overwrites:[]};
-  await page.route("http://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(route.request().url().endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
+  await page.route("http://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(new URL(route.request().url()).pathname.endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
   await page.routeWebSocket("ws://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
   await page.evaluate(({user,server,channel})=>{localStorage.setItem("distopic.accounts",JSON.stringify([{id:"packaged",url:"http://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
   await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();const pack=page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Usar",exact:true})).toBeEnabled();await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);

@@ -411,5 +411,6 @@ produção, Linux, leitor de tela e instâncias publicadas.
 
 ## 9. Próxima tarefa executável
 
-Iniciar **M2 — Nova Aba e canais**, seguindo a ordem e dependências desta seção.
-Não iniciar os subitens de M2 automaticamente nesta execução concluída.
+M2 — Nova Aba e canais (R05–R06) foi concluído. Iniciar **M3 — histórico,
+leitura e fixações** (R08, R09, R19), seguindo a ordem e as dependências desta
+seção; não iniciar os subitens de M3 automaticamente nesta execução concluída.

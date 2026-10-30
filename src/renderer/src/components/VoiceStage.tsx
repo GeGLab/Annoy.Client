@@ -65,12 +65,13 @@ function PersonCard({ person, accountId }: { person: Person; accountId: string }
 }
 
 /** Voice channel view: everyone in the call, with cameras and screen shares. */
-export function VoiceStage({ accountId, state, channel, embedded = false }: { accountId: string; state: ServerState; channel: Channel; embedded?: boolean }) {
+export function VoiceStage({ accountId, state, channel, embedded = false, canConnect = true }: { accountId: string; state: ServerState; channel: Channel; embedded?: boolean; canConnect?: boolean }) {
   const voice = useStore((s) => s.voice);
   const settings = useStore((s) => s.settings);
   const tiles = useVideoTiles();
   const [focus, setFocus] = useState<string | null>(null);
   const connected = voice?.accountId === accountId && voice.channelId === channel.id;
+  const joining = connected && voice.status === "connecting";
 
   const people = useMemo(() => {
     const map = new Map<string, Person>();
@@ -102,7 +103,9 @@ export function VoiceStage({ accountId, state, channel, embedded = false }: { ac
         </header>
       )}
 
-      {!connected ? (
+      {!connected && !canConnect ? (
+        <div className="stage-empty" role="status"><Icon name="lock" size={30} /><h2>Sem permissão para entrar</h2><p className="muted">Você pode ver esta sala, mas não tem permissão para conectar.</p></div>
+      ) : !connected ? (
         <div className="stage-empty">
           <div className="stage-avatars">
             {[...people.values()].slice(0, 6).map((p) => (
@@ -114,6 +117,8 @@ export function VoiceStage({ accountId, state, channel, embedded = false }: { ac
             Entrar na chamada
           </button>
         </div>
+      ) : joining ? (
+        <div className="stage-empty" role="status" aria-live="polite"><Icon name="loader" size={30} /><h2>Conectando à chamada…</h2><p className="muted">Aguarde enquanto o áudio e os participantes são preparados.</p><button className="btn btn-ghost" onClick={() => leaveVoice()}>Cancelar conexão</button></div>
       ) : (
         <>
           <div className={`stage-grid${focusedTile ? " has-focus" : ""}`}>

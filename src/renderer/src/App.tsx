@@ -47,7 +47,7 @@ function Modals() {
     case "addAccount":
       return <AddAccountModal />;
     case "createServer":
-      return <CreateServerModal accountId={modal.accountId} />;
+      return <CreateServerModal accountId={modal.accountId} initialMode={modal.initialMode} />;
     case "serverSettings":
       return <SettingsGuard><ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} /></SettingsGuard>;
     case "channelSettings":

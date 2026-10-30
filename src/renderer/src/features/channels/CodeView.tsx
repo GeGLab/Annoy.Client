@@ -128,6 +128,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const tokenKey = `${accountId}:${channel.id}`;
 
   const [repo, setRepo] = useState<CodeRepo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [entries, setEntries] = useState<CodeEntry[]>([]);
   const [status, setStatus] = useState<CodeStatus | null>(null);
   const [panel, setPanel] = useState<"files" | "git">("files");
@@ -159,15 +161,19 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const ready = repo?.status === "ready";
 
   const refresh = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const info = await api.get<CodeRepo>(base);
       setRepo(info);
-      if (info.status !== "ready") return;
+      if (info.status !== "ready") { setEntries([]); setStatus(null); return; }
       const [tree, git] = await Promise.all([api.get<CodeEntry[]>(`${base}/tree`), api.get<CodeStatus>(`${base}/status`)]);
       setEntries(tree);
       setStatus(git);
     } catch (err) {
-      toast((err as Error).message);
+      setLoadError((err as Error).message || "Não foi possível carregar o repositório.");
+    } finally {
+      setLoading(false);
     }
   }, [api, base]);
 
@@ -425,7 +431,12 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const changed = useMemo(() => new Map(status?.files.map((f) => [f.path, f.code]) ?? []), [status]);
   const activeFile = files.find((f) => f.path === active) ?? null;
 
-  if (!repo) return <section className="chat code-room" aria-busy />;
+  if (!repo) return <section className="chat code-room">
+    <header className="chat-header"><Icon name="code" size={20} /><h1 className="truncate">{channel.name}</h1></header>
+    <div className="code-load-state" role={loadError ? "alert" : "status"} aria-busy={loading}>
+      {loading ? <><span className="code-load-skeleton" /><span className="code-load-skeleton short" /><p>Carregando o repositório…</p></> : <><Icon name="wifiOff" size={26} /><h2>Não foi possível carregar este canal</h2><p>{loadError ?? "O servidor não retornou os dados do repositório."}</p><button className="btn" onClick={() => void refresh()}>Tentar novamente</button></>}
+    </div>
+  </section>;
 
   if (repo.status !== "ready") {
     return (
@@ -482,6 +493,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
         )}
       </header>
       <div className="code-body">
+        {loadError && <div className="code-load-banner" role="alert"><span>Alguns dados não foram atualizados: {loadError}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? "Atualizando…" : "Tentar novamente"}</button></div>}
         <nav className="code-activity" aria-label="Painéis">
           <button className={panel === "files" ? "active" : ""} title="Explorador" onClick={() => setPanel("files")}>
             <Icon name="file" size={20} />

@@ -183,7 +183,7 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
       const inst = getState().instances.workspace;
       return { state: inst.serverStates.server, user: inst.user, servers: inst.servers };
     });
-    await page.route(`${origin}/api/servers/server`, (route) =>
+    await page.route(`${origin}/api/servers/server**`, (route) =>
       route.fulfill({ contentType: "application/json", body: JSON.stringify(ready.state) }),
     );
     await page.getByRole("textbox", { name: "Conversar em #geral", exact: true }).fill("Rascunho durante a indisponibilidade");
@@ -221,7 +221,7 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
         if (message.op === "heartbeat") ws.send(JSON.stringify({ t: "HEARTBEAT_ACK", d: null }));
       }),
     );
-    await page.getByRole("button", { name: "Tentar agora", exact: true }).click();
+    await page.getByRole("region", { name: "Reconectando ao seu espaço" }).getByRole("button", { name: "Tentar agora", exact: true }).click();
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(page.locator(".connection-dialog")).toHaveCount(0);
     await expect(page.locator(".chat-header h1")).toHaveText("geral");
@@ -268,13 +268,13 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
         if (message.op === "heartbeat") ws.send(JSON.stringify({ t: "HEARTBEAT_ACK", d: null }));
       });
     });
-    await page.route(`${origin}/api/servers/server`, (route) => route.fulfill({ json: fixture.state }));
+    await page.route(`${origin}/api/servers/server**`, (route) => route.fulfill({ json: fixture.state }));
     await page.route("http://healthy.test/api/**", async (route) => {
       if (route.request().method() === "POST" && route.request().url().endsWith("/messages")) {
         expect(route.request().headers().authorization).toBe("Bearer healthy-token");
         sent.push(route.request().postDataJSON().content);
       }
-      await route.fulfill({ json: route.request().url().endsWith("/servers/server") ? { ...fixture.state, server: healthyServer } : [] });
+      await route.fulfill({ json: new URL(route.request().url()).pathname.endsWith("/servers/server") ? { ...fixture.state, server: healthyServer } : [] });
     });
     await page.evaluate(async () => {
       const { addAccount, reconnect } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
@@ -307,7 +307,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
     await expect(page.locator(".connection-account")).not.toContainText("Instância saudável");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const beforeRetry = aConnections;
-    await page.getByRole("button", { name: "Tentar agora", exact: true }).click();
+    await page.getByRole("region", { name: "Reconectando ao seu espaço" }).getByRole("button", { name: "Tentar agora", exact: true }).click();
     await expect.poll(() => aConnections).toBeGreaterThan(beforeRetry);
     expect(bConnections).toBe(1);
     await page.screenshot({ path: join(screenshots, "connectivity-scoped-dark.png") });
@@ -379,6 +379,67 @@ test("server directory groups known communities, searches, filters and opens wit
     await page.getByRole("option", { name: "Instância de teste" }).click();
     await page.locator(".server-directory-card").click();
     await expect(page.locator(".chat-header h1")).toHaveText("geral");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("new tab prioritizes Annoy communities and requires an explicit account for create or invite", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.accounts.push({ id: "second", url: "http://second.test", token: "synthetic", userId: "me", instanceName: "Segunda instância" }); });
+    });
+    await page.getByRole("button", { name: "Nova aba", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Nova aba" });
+    await expect(dialog.getByRole("heading", { name: "Suas comunidades" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Comunidade de teste" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Criar comunidade" }).click();
+    const create = page.getByRole("dialog", { name: "Criar uma comunidade" });
+    const target = create.getByLabel("Escolha a instância de destino");
+    await expect(target).toContainText("Escolha uma instância");
+    await expect(create.getByRole("button", { name: "Criar comunidade", exact: true })).toBeDisabled();
+    await target.click();
+    await page.getByRole("option", { name: /Segunda instância/ }).click();
+    await expect(create.getByRole("button", { name: "Criar comunidade", exact: true })).toBeDisabled();
+    await create.getByLabel("Nome do servidor").fill("Alvo escolhido");
+    await expect(create.getByRole("button", { name: "Criar comunidade", exact: true })).toBeEnabled();
+    await create.getByRole("tab", { name: "Entrar com convite" }).click();
+    await expect(page.getByRole("dialog", { name: "Entrar com convite" })).toBeVisible();
+    await expect(page.getByLabel("Escolha a instância de destino")).toContainText("Segunda instância");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("file channel searches and orders the full server result with explicit paging", async () => {
+  const { page, cleanup } = await launch();
+  const queries: URL[] = [];
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.workspace.serverStates.server.channels.push({ id: "file-channel", serverId: "server", type: "files", name: "arquivos", topic: "", parentId: null, position: 1, overwrites: [] }); });
+    });
+    await page.route(`${origin}/api/channels/file-channel/files**`, (route) => {
+      const url = new URL(route.request().url());
+      queries.push(url);
+      const all = url.searchParams.get("q") ? [{ id: "report", name: "Relatório final.pdf" }] : [{ id: "video", name: "video.mp4" }, { id: "report", name: "Relatório final.pdf" }];
+      const offset = Number(url.searchParams.get("offset"));
+      const selected = all.slice(offset, offset + Number(url.searchParams.get("limit")));
+      return route.fulfill({ json: { files: selected.map((item) => ({ attachment: { id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }, message: { id: `message-${item.id}`, channelId: "file-channel", author: { id: "me", username: "teste", displayName: "Pessoa de teste", avatarUrl: null }, content: "Documento compartilhado", createdAt: new Date().toISOString(), editedAt: null, replyToId: null, attachments: [{ id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }], mentionIds: [], mentionsEveryone: false } })), nextOffset: offset + selected.length < all.length ? offset + selected.length : null, total: all.length } });
+    });
+    await page.locator(".channel-name", { hasText: /^arquivos$/ }).click();
+    await expect(page.getByRole("heading", { name: "arquivos" })).toBeVisible();
+    await expect(page.getByText("video.mp4", { exact: true })).toBeVisible();
+    await page.getByLabel("Buscar arquivos").fill("relatório");
+    await expect(page.getByText("Relatório final.pdf", { exact: true })).toBeVisible();
+    await expect.poll(() => queries.at(-1)?.searchParams.get("q")).toBe("relatório");
+    await page.getByLabel("Ordenar").click();
+    await page.getByRole("option", { name: "Nome" }).click();
+    await expect.poll(() => queries.at(-1)?.searchParams.get("sort")).toBe("name");
   } finally {
     await cleanup();
   }

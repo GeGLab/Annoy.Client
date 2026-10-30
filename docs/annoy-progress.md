@@ -22,7 +22,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | --- | --- | --- |
 | M0 — análise/documentação | concluído | Três documentos criados e validados, com R01–R20, decisões, arquitetura, testes e próxima tarefa. |
 | M1 — conectividade | concluído | M1.1–M1.5 implementados e validados. R01, R02 e R04 passaram; auditoria inicial de R03 registrada, com revisão restante nos marcos de domínio. Próximo: M2. |
-| M2 — navegação/canais | pendente | Depende dos estados e recuperação de M1. |
+| M2 — navegação/canais | concluído | R05–R06 implementados; cliente e Annoy.Server validados abaixo. Próximo: M3. |
 | M3 — mensagens/leitura/pins | pendente | Requer contratos e migrações aditivas no servidor. |
 | M4 — social/perfis | pendente | Requer autorização por audiência antes da exposição de dados. |
 | M5 — idiomas/acessibilidade | pendente | Completa migração de textos e adaptação das superfícies anteriores. |
@@ -37,8 +37,8 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | R02 | Reconexão e retorno | concluído em M1 | M1.3/M1.5 validados: backoff com jitter, pausa offline, prazo de primeiro plano condicionado à área atual, retorno explícito e preservação da conversa. | M1 |
 | R03 | Feedback assíncrono | auditoria inicial concluída; contínuo | M1 revisa autenticação, abertura de comunidade/DM, configurações e uploads; M1.5 cancela trabalhos obsoletos e preserva edições. Cada novo fluxo segue os critérios do seu marco. | M1–M7 |
 | R04 | Conectividade global | concluído em M1 | M1.1–M1.3 validados: observações por camada, scheduler com causa/tentativa/próximo retry, jitter e pausa offline; isolamento confirmado em testes unitários e Playwright. | M1 |
-| R05 | Seis layouts de canal | pendente | Seis modalidades existentes; padronizar estados e validar escala/permissões. | M2 |
-| R06 | Nova Aba | pendente | Funcionalidades existentes; reorganizar hierarquia e destino por conta. | M2 |
+| R05 | Seis layouts de canal | concluído em M2 | Estados de loading/erro/vazio/permissão, recuperação, pesquisa paginada de membros/arquivos e detalhes de comunidades sob demanda; testes integrados aprovados. | M2 |
+| R06 | Nova Aba | concluído em M2 | Comunidades e conexão priorizadas, serviços em seção própria, descoberta progressiva e escolha explícita da instância com várias contas; testes integrados aprovados. | M2 |
 | R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
 | R08 | Histórico escalável | pendente | Backend já tem `before`/`around` e índice; cliente acumula itens sem limite. | M3 |
 | R09 | Última leitura | pendente | Contadores em memória; não há marcador persistido/sincronizado. | M3 |
@@ -318,6 +318,48 @@ Estado: **concluído e validado em conjunto com M1.3/M1.4**.
   âncoras, recuperação e limpeza por conta. Playwright valida rascunho, anexo
   da sessão e âncora ao navegar para a lista e retornar.
 
+## Implementação M2 — Nova Aba e canais (30/10/2026)
+
+Estado: **concluído e validado**.
+
+- Nova Aba abre por padrão em Comunidades Annoy, lista destinos conhecidos e
+  oferece conexão à instância como ação principal. Criar/entrar por convite são
+  ações distintas; serviços e sites ficam em seção própria com catálogo
+  progressivo. Links personalizados exigem HTTPS sem credenciais; abas ocultas,
+  TeamSpeak, nomes e ordenação permanecem compatíveis.
+- Com várias contas, criar/entrar exige escolha da instância de destino. A tela
+  Servidores consulta resumos em páginas de 50, pesquisa no servidor e preserva
+  os dados locais enquanto a instância está indisponível. Detalhes só carregam
+  ao abrir uma comunidade. Membros carregam em páginas de 100 e a busca remota
+  não altera a lista-base; arquivos carregam em páginas de 50 com pesquisa e
+  ordenação sobre todo o acervo no servidor.
+- Texto mantém histórico, composição, permissões e recuperação M1. Voz informa
+  acesso negado e conexão pendente. Arquivo, Código, Filme e Música distinguem
+  carregamento, erro e vazio, oferecem retry quando aplicável e limpam trabalhos
+  obsoletos na troca de canal. Filas e sincronização existentes foram mantidas.
+- Cobertura nova valida páginas autorizadas de comunidades/membros e consultas
+  globais de arquivos no Annoy.Server; Playwright valida Nova Aba com múltiplas
+  contas e pesquisa/ordenação de arquivos. A remoção do carregamento antecipado
+  também mantém o fluxo de abertura/reconexão da comunidade.
+
+### Validação conjunta M2
+
+- Cliente: `npm run typecheck`, `npm run build` e todos os 66 testes Playwright
+  aprovados. Grupos unitários `test:activity` (18), `test:servers` (5),
+  `test:connectivity` (10), `test:chat-state` (4), `test:requests` (12) e
+  `test:voice` (6) aprovados; o caso Linux Steam foi ignorado neste Windows.
+- Annoy.Server: `npm run typecheck` e `test:discovery` (8 testes) aprovados;
+  suítes social (5), profile (2), Steam (11), ownership (7), presence (2) e
+  updates (4) aprovadas. Global (5) foi ignorada porque o checkout Annoy-api-global
+  não está disponível. Em `test:channels`, 4/5 passaram; o teste restante tenta
+  criar um symlink no Windows e falha com `EPERM` antes de testar a proteção de
+  fuga de repositório. A falha depende da permissão de symlink do ambiente e não
+  foi causada pelas mudanças M2.
+- Os dois arquivos de protocolo têm SHA-256 igual. `git diff --check` aprovado.
+  O build mantém o aviso existente de chunks acima de 500 kB; Playwright emite
+  aviso `ResizeObserver` sem falhas. Sem validação Linux ou contra instâncias
+  publicadas; as novas rotas requerem atualização do Annoy.Server.
+
 ## Dependências e riscos em acompanhamento
 
 Integração para PR em 30/10/2026: a branch incorpora `upstream/main` em
@@ -345,8 +387,9 @@ Typecheck e build aprovados. As alterações locais foram commitadas por etapa
 
 ## Próxima tarefa recomendada
 
-Iniciar **M2 — Nova Aba e canais**: reorganizar os destinos e avançar a
-padronização dos estados de canal, com trabalho por modalidade e contratos
-existentes. A revisão de feedback assíncrono continua dentro de cada novo fluxo.
+Iniciar **M3 — histórico, leitura e fixações** (R08, R09, R19): paginação
+bidirecional/virtualização do histórico, marcador de leitura persistido e pins
+com autorização e sincronização no servidor. Seguir as dependências e etapas do
+plano; não começar requisitos posteriores automaticamente.
 
 Não iniciar todos os subitens de M1 ou os 20 requisitos em uma única execução.

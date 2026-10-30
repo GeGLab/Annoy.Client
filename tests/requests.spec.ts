@@ -14,7 +14,7 @@ const deferred = () => { let resolve!: () => void; const promise = new Promise<v
 async function seed(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const id of ["a", "b"]) {
-    await page.route(`http://requests-${id}.test/api/**`, (route) => route.fulfill({ json: route.request().url().endsWith("/servers/shared") ? state(id.toUpperCase()) : [] }));
+    await page.route(`http://requests-${id}.test/api/**`, (route) => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith("/servers/shared") ? state(id.toUpperCase()) : [] }));
     await page.routeWebSocket(`ws://requests-${id}.test/gateway`, (ws) => ws.onMessage((raw) => {
       const payload = JSON.parse(String(raw));
       if (payload.op === "identify") ws.send(JSON.stringify({ t: "READY", d: {
@@ -83,7 +83,7 @@ test("requests coalesce server reads and cannot navigate across accounts with id
   await seed(page);
   const late = deferred();
   let reads = 0;
-  await page.route("http://requests-a.test/api/servers/shared", async (route) => {
+  await page.route("http://requests-a.test/api/servers/shared**", async (route) => {
     reads++;
     await late.promise;
     await route.fulfill({ json: state("A atrasada") }).catch(() => {});

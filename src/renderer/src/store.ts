@@ -72,7 +72,7 @@ export type Modal =
   | { kind: "addAccount"; rememberedId?: string }
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
-  | { kind: "createServer"; accountId: string }
+  | { kind: "createServer"; accountId?: string; initialMode?: "create" | "join" }
   | { kind: "serverSettings"; accountId: string; serverId: string }
   | { kind: "channelSettings"; accountId: string; serverId: string; channelId: string }
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
