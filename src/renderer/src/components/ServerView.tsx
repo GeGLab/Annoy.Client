@@ -1,3 +1,4 @@
+import {FullProfileButton} from "./FullProfile.tsx";
 import { SearchButton } from "../features/search/SearchButton.tsx";
 import { canViewActivity } from "../features/activity/access.ts";
 import { UserProfile } from "./UserProfile.tsx";
@@ -14,8 +15,8 @@ import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
-import { useMemo, useState } from "react";
-import { apiFor, ensureServer, joinVoice, navigate, openChannel, openDm, reconnect } from "../client.ts";
+import { useEffect, useMemo, useState } from "react";
+import { apiFor, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { getState, toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
@@ -27,6 +28,8 @@ import { act, Avatar, Icon, openModal, type IconName } from "./ui.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 import { screenQualityLabel } from "../lib/screen-profile.ts";
+import { Input } from "./ui/input.tsx";
+import { isCancellation } from "../../../shared/requests.ts";
 import { UserPanel } from "./TopBar.tsx";
 import { VoiceUserContextMenu, VoiceUserMenuButton } from "./VoiceUserMenu.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
@@ -101,7 +104,7 @@ function VoiceUsers({
   );
 }
 
-const CHANNEL_ICONS: Partial<Record<Channel["type"], IconName>> = { text: "hash", files: "folder", code: "code", song: "song" };
+const CHANNEL_ICONS: Partial<Record<Channel["type"], IconName>> = { text: "hash", files: "folder", code: "code", theater: "theater", song: "song" };
 
 function ChannelRow({
   accountId,
@@ -411,6 +414,7 @@ function MemberCard({
             </div>
           </div>
           {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
+          <FullProfileButton accountId={accountId} user={member.user}/>
           {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
               <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? "Atividade" : "Atividade"}</div>
@@ -497,15 +501,48 @@ function MemberCard({
 
 function MemberList({ accountId, state, me }: { accountId: string; state: ServerState; me: string }) {
   const inst = useStore((s) => s.instances[accountId]);
-  const activeFriends = state.members.filter(
+  const [query, setQuery] = useState("");
+  const [searchMembers, setSearchMembers] = useState<Member[] | null>(null);
+  const [searchTotal, setSearchTotal] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState(state.membersNextCursor ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null);
+  const members = searchMembers ?? state.members;
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) { setSearchMembers(null); setSearchTotal(null); setNextCursor(state.membersNextCursor ?? null); setError(null); setLoading(false); return; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      void loadServerMembers(accountId, state.server.id, { query: term, signal: controller.signal, merge: false })
+        .then((page) => { if (!controller.signal.aborted) { setSearchMembers(page.members); setSearchTotal(page.total); setNextCursor(page.nextCursor); } })
+        .catch((reason) => { if (!controller.signal.aborted && !isCancellation(reason)) setError((reason as Error).message); })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }, 220);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [accountId, state.server.id, state.membersNextCursor, query]);
+  const activeFriends = members.filter(
     (m) =>
       m.user.id !== me &&
       canViewActivity(inst, m.user.id) &&
       (inst?.activities?.[m.user.id]?.length ?? 0) > 0,
   );
-  const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null);
-  const online = state.members.filter((m) => m.presence !== "offline");
-  const offline = state.members.filter((m) => m.presence === "offline");
+  const online = members.filter((m) => m.presence !== "offline");
+  const offline = members.filter((m) => m.presence === "offline");
+  const loadMoreMembers = async () => {
+    if (!nextCursor || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await loadServerMembers(accountId, state.server.id, { after: nextCursor, query: query.trim() || undefined, merge: !query.trim() });
+      if (query.trim()) setSearchMembers((current) => [...(current ?? []), ...page.members]);
+      setNextCursor(page.nextCursor);
+      if (query.trim()) setSearchTotal(page.total);
+    } catch (reason) { if (!isCancellation(reason)) setError((reason as Error).message); }
+    finally { setLoading(false); }
+  };
   const section = (label: string, list: Member[]) =>
     list.length > 0 && (
       <>
@@ -534,7 +571,11 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
   return (
     <ResizablePanel panel="members" otherVisible>
       <div className="member-search-slot"><SearchButton placement="members" /></div>
-      {activeFriends.length > 0 && (
+      <div className="member-directory-search">
+        <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar membros" aria-label="Buscar membros do servidor" />
+      </div>
+      <p className="member-directory-status" aria-live="polite">{query.trim() ? `${members.length} de ${searchTotal ?? "…"} resultados` : `${state.members.length} de ${state.membersTotal ?? state.members.length} membros carregados`}</p>
+      {activeFriends.length > 0 && !query.trim() && (
         <section className="friend-activities">
           <h3>Atividades do grupo — {activeFriends.length}</h3>
           {activeFriends.map((m) => (
@@ -549,11 +590,15 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       )}
       {section("Online", online)}
       {section("Offline", offline)}
-      {card && state.members.some((m) => m.user.id === card.member.user.id) && (
+      {loading && <p className="member-directory-status" role="status">Buscando membros…</p>}
+      {error && <div className="member-directory-error" role="alert"><span>{error}</span><button className="btn btn-ghost btn-small" onClick={() => setQuery((value) => `${value} `)}>Tentar novamente</button></div>}
+      {!loading && !error && query.trim() && members.length === 0 && <p className="member-directory-status">Nenhum membro encontrado.</p>}
+      {nextCursor && <button className="btn btn-ghost btn-small member-load-more" disabled={loading} onClick={() => void loadMoreMembers()}>{loading ? "Carregando…" : `Carregar mais (${Math.max(0, (query.trim() ? searchTotal ?? members.length : state.membersTotal ?? state.members.length) - members.length)} restantes)`}</button>}
+      {card && (
         <MemberCard
           accountId={accountId}
           state={state}
-          member={state.members.find((m) => m.user.id === card.member.user.id)!}
+          member={members.find((m) => m.user.id === card.member.user.id) ?? card.member}
           me={me}
           at={card}
           onClose={() => setCard(null)}
@@ -566,10 +611,19 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
 // View ---------------------------------------------------------------------
 
 /** Shown while the instance is unreachable, instead of an empty screen. */
-function ServerUnavailable({ accountId }: { accountId: string }) {
+function ServerUnavailable({ accountId, serverId }: { accountId: string; serverId: string }) {
   const status = useStore((s) => s.instances[accountId]?.status);
+  const error = useStore((s) => s.instances[accountId]?.serverLoadErrors[serverId]);
+  const loading = useStore((s) => s.instances[accountId]?.serverLoading[serverId] === true);
   const name = useStore((s) => s.accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor");
-  if (status === "ready" || status === undefined) return <ChatSkeleton />;
+  if (status === "ready" && (!error || loading) || status === undefined) return <ChatSkeleton />;
+  if (status === "ready" && error) return <div className="empty-main offline-panel" role="alert">
+    <div className="offline-icon"><Icon name="wifiOff" size={26} /></div>
+    <h2>{error.includes("não tem mais acesso") ? "Acesso indisponível" : "Comunidade não carregada"}</h2>
+    <p className="muted">{error}</p>
+    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? "Carregando…" : "Tentar carregar novamente"}</button>
+    <button className="btn btn-ghost" disabled={loading} onClick={() => navigate({ kind: "servers" })}>Voltar à lista de servidores</button>
+  </div>;
   return (
     <div className="empty-main offline-panel">
       <div className="offline-icon">
@@ -593,7 +647,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   const showMembers = useStore((s) => s.settings.membersOpen);
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
-  if (!state || !me) return <ServerUnavailable accountId={accountId} />;
+  if (!state || !me) return <ServerUnavailable accountId={accountId} serverId={serverId} />;
 
   const opened = state.channels.find((c) => c.id === channelId);
   const channel = opened?.type === "text" ? opened : undefined;
@@ -604,19 +658,19 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
   return (
     <div className="server-view">
       <ChannelList accountId={accountId} state={state} me={me} activeId={channelId} />
-      {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} /> : opened?.type === "files" ? (
-        <FilesView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+      {!connected && opened?.type !== "text" ? <ServerUnavailable accountId={accountId} serverId={serverId} /> : opened?.type === "files" ? (
+        <FilesView key={JSON.stringify([accountId, opened.id])} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "code" ? (
-        <CodeView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+        <CodeView key={JSON.stringify([accountId, opened.id])} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "theater" ? (
-        <TheaterView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+        <TheaterView key={JSON.stringify([accountId, opened.id])} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : opened?.type === "song" ? (
-        <SongView key={opened.id} accountId={accountId} state={state} channel={opened} perms={perms} />
+        <SongView key={JSON.stringify([accountId, opened.id])} accountId={accountId} state={state} channel={opened} perms={perms} />
       ) : voiceChannel ? (
-        <VoiceStage accountId={accountId} state={state} channel={voiceChannel} />
+        <VoiceStage accountId={accountId} state={state} channel={voiceChannel} canConnect={has(perms, Permission.CONNECT)} />
       ) : channel ? (
         <Chat
-          key={channel.id}
+          key={JSON.stringify([accountId, channel.id])}
           accountId={accountId}
           channelId={channel.id}
           title={channel.name}
@@ -625,6 +679,8 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           canSend={has(perms, Permission.SEND_MESSAGES)}
           canAttach={has(perms, Permission.ATTACH_FILES)}
           canModerate={has(perms, Permission.MANAGE_MESSAGES)}
+          canPin={has(perms, Permission.MANAGE_MESSAGES)}
+          serverId={serverId}
           nameOf={(id) => names.get(id)}
           channelOf={(id) => state.channels.find((c) => c.id === id)?.name}
           mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: m.user.username }))}
@@ -640,10 +696,16 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
             </button>
           }
         />
-      ) : (
-        <div className="empty-main">
-          <p>Escolha um canal de texto{state.channels.some((c) => c.type === "voice") ? " ou entre em um canal de voz" : ""}.</p>
+      ) : opened ? (
+        <div className="empty-main channel-unavailable" role="status"><Icon name="lock" size={28} /><h2>Canal indisponível</h2><p>Este canal foi removido ou sua conta perdeu acesso.</p>
+          {state.channels.find((candidate) => candidate.type === "text") && <button className="btn btn-ghost" onClick={() => openChannel(accountId, serverId, state.channels.find((candidate) => candidate.type === "text")!.id)}>Abrir outro canal</button>}
         </div>
+      ) : !state.channels.some((candidate) => candidate.type !== "category") ? (
+        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>Nenhum canal acessível</h2><p>Não há canais visíveis para esta conta nesta comunidade.</p>
+          {has(state.permissions, Permission.MANAGE_CHANNELS) && <button className="btn" onClick={() => openModal({ kind: "createChannel", accountId, serverId, parentId: null, type: "text" })}>Criar canal de texto</button>}
+        </div>
+      ) : (
+        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>Escolha um canal</h2><p>Selecione um canal de texto{state.channels.some((c) => c.type === "voice") ? " ou entre em uma sala de voz" : ""}.</p></div>
       )}
       {channel && <MemberList accountId={accountId} state={state} me={me} />}
     </div>

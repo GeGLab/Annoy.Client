@@ -1,8 +1,10 @@
 import type {
+  ChannelReadState,
   DmChannel,
   GatewayEvent,
   ImportJob,
   Message,
+  PinnedMessage,
   Presence,
   Relationship,
   ServerState,
@@ -14,6 +16,7 @@ import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../..
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
 import { useSyncExternalStore } from "react";
+import { observeNetwork, unknownEndpoint, type EndpointObservation, type NetworkObservation, type TransportStatus } from "../../shared/connectivity.ts";
 
 export interface Account {
   /** Local id: one account per (instance URL, user). */
@@ -28,20 +31,35 @@ export interface Account {
 export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
 
 export interface ChannelMessages {
+  lastAccessed?: number;
   items: Message[];
   hasMore: boolean;
+  hasMoreAfter?: boolean;
   loading: boolean;
+  error?: string | null;
+  readState?: ChannelReadState | null;
+  unreadBoundary?: string | null;
+  initialPosition?: string | null;
+  pins?: PinnedMessage[];
+  pinsLoading?: boolean;
+  pinsNextCursor?: string | null;
+  pinsError?: string | null;
 }
 
 export interface InstanceState {
-  status: "connecting" | "ready" | "offline" | "invalid";
+  status: TransportStatus;
+  connection: EndpointObservation;
   user: User | null;
   servers: ServerSummary[];
+  serversObservedAt: number | null;
+  serverLoadErrors: Record<string, string>;
+  serverLoading: Record<string, boolean>;
   serverStates: Record<string, ServerState>;
   dms: DmChannel[];
   relationships: Relationship[];
   presences: Record<string, Presence>;
   activities: Record<string, import("@distopic/protocol").UserActivity[]>;
+  profileRevision?: number;
   messages: Record<string, ChannelMessages>;
   /** channelId -> userId -> expiry timestamp */
   typing: Record<string, Record<string, number>>;
@@ -53,6 +71,7 @@ export interface InstanceState {
 
 export type View =
   | { kind: "news" }
+  | { kind: "servers" }
   /** A browser service (Discord, WhatsApp…) or a TeamSpeak launcher. */
   | { kind: "service"; serviceId: string }
   | { kind: "marketplace"; accountId: string | null; serverId: string | null }
@@ -65,13 +84,13 @@ export type Modal =
   | { kind: "addAccount"; rememberedId?: string }
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
-  | { kind: "createServer"; accountId: string }
+  | { kind: "createServer"; accountId?: string; initialMode?: "create" | "join" }
   | { kind: "serverSettings"; accountId: string; serverId: string }
   | { kind: "channelSettings"; accountId: string; serverId: string; channelId: string }
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings"; section?: "voice" }
+  | { kind: "userSettings"; section?: "voice" | "expressions" }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }
@@ -135,6 +154,8 @@ export interface AppState {
   recentMessages: Record<string, { own: boolean; at: number }>;
   accounts: Account[];
   instances: Record<string, InstanceState>;
+  /** Live observations, deliberately excluded from local persistence. */
+  connectivity: { network: NetworkObservation; global: EndpointObservation };
   view: View;
   modal: Modal | null;
   voice: VoiceUi | null;
@@ -231,8 +252,12 @@ function loadArray<T>(key: string): T[] {
 
 export const emptyInstance = (): InstanceState => ({
   status: "connecting",
+  connection: unknownEndpoint(),
   user: null,
   servers: [],
+  serversObservedAt: null,
+  serverLoadErrors: {},
+  serverLoading: {},
   serverStates: {},
   dms: [],
   relationships: [],
@@ -268,6 +293,7 @@ let state: AppState = {
   recentMessages: {},
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
+  connectivity: { network: navigator.onLine ? { status: "unknown", observedAt: null } : observeNetwork(false, Date.now()), global: unknownEndpoint() },
   view: initialView(),
   modal: null,
   voice: null,

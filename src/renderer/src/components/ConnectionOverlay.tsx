@@ -1,39 +1,49 @@
-import { confirmAction } from "./ui/action-dialog.tsx";
-import { useEffect, useState } from "react";
-import { reconnect, removeAccount } from "../client.ts";
-import { setState, useStore } from "../store.ts";
+import { useEffect, useRef, useState } from "react";
+import { navigate, reconnect, removeAccount } from "../client.ts";
+import { getState, setState, useStore } from "../store.ts";
+import { affectedAccountId } from "../../../shared/connectivity.ts";
 import { Brand } from "./Brand.tsx";
-import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
 import { Button } from "./ui/button.tsx";
+import { confirmAction } from "./ui/action-dialog.tsx";
 import { Icon } from "./ui.tsx";
+import { saveRecoveryReturn } from "../chat-state.ts";
 
 const BLOCK_AFTER_MS = 2000;
 
 export function useConnectionBlocked() {
-  const accounts = useStore((s) => s.accounts);
-  const instances = useStore((s) => s.instances);
-  const accountId = useStore((s) => "accountId" in s.view ? s.view.accountId : null);
-  const [online, setOnline] = useState(navigator.onLine);
+  const affected = useStore((s) => affectedAccountId(s.view, s.instances, s.connectivity.network));
+  const accountId = useStore((s) => s.accounts.find((a) => a.id === affected)?.id ?? null);
+  const invalid = useStore((s) => !!accountId && s.instances[accountId]?.status === "invalid");
+  const view = useStore((s) => s.view);
+  const deadline = useStore((s) => accountId ? s.instances[accountId]?.connection.recoveryDeadline ?? null : null);
+  const [blockedAccount, setBlockedAccount] = useState<string | null>(null);
+  const [dismissedAccount, setDismissedAccount] = useState<string | null>(null);
   useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
-  // An expired session is not a connection that will come back; its tab offers to sign in again instead.
-  const reconnecting = accounts.filter((a) => a.id === accountId && instances[a.id]?.status !== "ready" && instances[a.id]?.status !== "invalid");
-  const down = reconnecting.length > 0 || (!online && !!accountId);
-  // A server update reconnects in milliseconds; only block if it takes longer.
-  const [blocked, setBlocked] = useState(false);
-  useEffect(() => {
-    if (!down) return setBlocked(false);
-    const timer = setTimeout(() => setBlocked(true), BLOCK_AFTER_MS);
+    setBlockedAccount(null);
+    setDismissedAccount(null);
+    if (!accountId || invalid) return;
+    // A quick restart must not flash recovery. A different account gets its own grace period.
+    const timer = setTimeout(() => setBlockedAccount(accountId), BLOCK_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [down]);
-  return down && blocked;
+  }, [accountId, invalid]);
+  useEffect(() => {
+    if (!accountId || invalid || deadline === null) return;
+    const delay = Math.max(0, deadline - Date.now());
+    const timer = setTimeout(() => {
+      const current = getState().view;
+      if ("accountId" in current && current.accountId === accountId && (current.kind === "server" || current.kind === "home" || current.kind === "marketplace")) {
+        if (current.kind === "server") saveRecoveryReturn(accountId, { kind: "server", serverId: current.serverId, channelId: current.channelId });
+        else if (current.kind === "home") saveRecoveryReturn(accountId, { kind: "home", dmId: current.dmId });
+        else saveRecoveryReturn(accountId, { kind: "marketplace", serverId: current.serverId });
+        navigate({ kind: "servers" });
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [accountId, invalid, deadline, view]);
+  return {
+    accountId: dismissedAccount !== accountId && (invalid || blockedAccount === accountId) ? accountId : null,
+    continueOffline: () => setDismissedAccount(accountId),
+  };
 }
 
 export function ConnectionNotice({ accountId }: { accountId: string }) {
@@ -46,86 +56,67 @@ export function ConnectionNotice({ accountId }: { accountId: string }) {
   </div>;
 }
 
-/** An application-level focus trap also blocks open portals and native Discord. */
-export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
-  const accounts = useStore((s) => s.accounts);
-  const instances = useStore((s) => s.instances);
-  const failed = accounts.filter((a) => instances[a.id]?.status !== "ready");
-  const [authAccount, setAuthAccount] = useState<string | null>(null);
-  // "Continuar mesmo assim" hides the overlay until another server drops.
-  const failedKey = failed.map((a) => a.id).join("|");
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  // Authentication is the one recovery flow that must remain reachable.
-  const authOpen = useStore((s) => s.modal?.kind === "addAccount");
+/** Recovery lives inside the affected area, leaving the navigation and other accounts reachable. */
+export function ConnectionOverlay({ accountId, onContinue }: { accountId: string; onContinue: () => void }) {
+  const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
+  const status = useStore((s) => s.instances[accountId]?.status);
+  const offline = useStore((s) => s.connectivity.network.status === "offline");
+  const connection = useStore((s) => s.instances[accountId]?.connection);
+  const [now, setNow] = useState(Date.now());
+  const panel = useRef<HTMLElement>(null);
+  const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   useEffect(() => {
-    if (!authOpen) setAuthAccount(null);
-  }, [authOpen]);
-  if (!blocked || (authOpen && authAccount) || dismissed === failedKey) return null;
+    // Move focus out of the unavailable area, without stealing it from navigation or a modal.
+    if (opener.current?.closest(".connection-content") || document.activeElement === document.body) panel.current?.focus();
+    return () => {
+      if (opener.current?.isConnected && document.activeElement === document.body && !opener.current.closest("[inert]")) opener.current.focus();
+    };
+  }, []);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  if (!account) return null;
+  const invalid = status === "invalid";
   return (
-    <Dialog open>
-      <DialogContent
-        className="connection-dialog"
-        showClose={false}
-        aria-describedby="connection-description"
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-      >
-        <div className="reconnect-symbol">
-          <span className="reconnect-wave" />
-          <span className="reconnect-wave" />
+    <div className="connection-recovery">
+      <section ref={panel} className="connection-dialog" tabIndex={-1} aria-labelledby="connection-title" aria-describedby="connection-description">
+        <div className="reconnect-symbol" aria-hidden="true">
+          {!invalid && <><span className="reconnect-wave" /><span className="reconnect-wave" /></>}
           <Brand size={48} />
         </div>
-        <DialogTitle>Reconectando ao seu espaço</DialogTitle>
-        <p id="connection-description">A conexão com o servidor foi perdida. Chamadas e transmissões foram encerradas. Você pode consultar as conversas já carregadas enquanto aguarda.</p>
+        <h2 id="connection-title">{invalid ? "Sessão expirada" : "Reconectando ao seu espaço"}</h2>
+        <p id="connection-description">
+          {invalid ? "Entre novamente nesta instância para continuar."
+            : "Esta área aguarda a conexão. Você pode abrir outra comunidade ou serviço pela barra de navegação."}
+        </p>
         <div className="connection-accounts">
-          {failed.map((a) => (
-            <div className="connection-account" key={a.id}>
-              <Icon name={instances[a.id]?.status === "invalid" ? "lock" : "wifiOff"} size={18} />
-              <span>
-                <strong>{a.instanceName}</strong>
-                <small>{instances[a.id]?.status === "invalid" ? "Sua sessão expirou" : "Tentando restabelecer a conexão…"}</small>
-              </span>
-              {instances[a.id]?.status === "invalid" && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setAuthAccount(a.id);
-                    setState((s) => {
-                      s.modal = { kind: "addAccount" };
-                    });
-                  }}
-                >
-                  Entrar novamente
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (await confirmAction(`Desconectar a conta de ${a.instanceName} deste cliente? Você poderá adicioná-la novamente.`))
-                    removeAccount(a.id);
-                }}
-              >
-                Desconectar conta
-              </Button>
-            </div>
-          ))}
+          <div className="connection-account">
+            <Icon name={invalid ? "lock" : "wifiOff"} size={18} />
+            <span><strong>{account.instanceName}</strong><small role="status">
+              {invalid ? "Sua sessão expirou" : offline ? "O sistema informou que está offline; as tentativas serão retomadas quando voltar" : connection?.cause === "timeout" ? "A tentativa expirou; a próxima será automática" : connection?.cause === "service" ? "A instância anunciou uma reinicialização" : connection?.cause === "network" ? "A conexão com esta instância foi interrompida" : "Tentando restabelecer a conexão…"}
+            </small></span>
+          </div>
+          {!invalid && <div className="connection-diagnostics" aria-live="polite">
+            <span>Tentativa {connection?.attempt ?? 0}</span>
+            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>Atualizado às {new Intl.DateTimeFormat("pt-BR", { timeStyle: "medium" }).format(connection.observedAt)}</span>}
+            {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>Próxima tentativa em {Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000))} s</span>}
+            {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>Esta tela irá para a lista de servidores em {Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000))} s</span>}
+          </div>}
         </div>
         <div className="form-actions center">
-          <Button variant="secondary" onClick={() => reconnect()}>
-            <Icon name="refresh" size={16} />
-            Tentar agora
-          </Button>
-          <Button variant="ghost" onClick={() => setDismissed(failedKey)}>
-            Continuar mesmo assim
-          </Button>
+          {invalid ? <Button variant="secondary" onClick={() => setState((s) => { s.modal = { kind: "addAccount" }; })}>
+            Entrar novamente
+          </Button> : <Button variant="secondary" onClick={() => reconnect(accountId)}>
+            <Icon name="refresh" size={16} />Tentar agora
+          </Button>}
+          <Button variant="ghost" onClick={async () => {
+            if (await confirmAction(`Desconectar a conta de ${account.instanceName} deste cliente? Você poderá adicioná-la novamente.`)) removeAccount(accountId);
+          }}>Desconectar conta</Button>
+          <Button variant="ghost" onClick={onContinue}>Ver conteúdo salvo</Button>
         </div>
-        <span className="muted small" role="status">
-          Reconexão automática em andamento. O servidor volta sozinho quando estiver no ar.
-        </span>
-      </DialogContent>
-    </Dialog>
+        {!invalid && <span className="muted small">A reconexão automática continua para esta instância.</span>}
+      </section>
+    </div>
   );
 }

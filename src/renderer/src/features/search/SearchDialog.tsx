@@ -8,7 +8,11 @@ import { Button } from "../../components/ui/button.tsx";
 import { Input } from "../../components/ui/input.tsx";
 import { Select } from "../../components/ui/select.tsx";
 import { DatePicker } from "../../components/ui/date-picker.tsx";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 export default function SearchDialog({ accountId, serverId, channelId }: { accountId: string; serverId?: string; channelId?: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId]));
+  const pending = useRef<AbortController | null>(null);
   const instance = useStore((s) => s.instances[accountId]);
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState(channelId ?? "");
@@ -28,6 +32,9 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
     ? (instance?.serverStates[serverId]?.members.map((m) => m.user) ?? [])
     : (instance?.relationships.filter((r) => r.status === "friend").map((r) => r.user) ?? []);
   const search = async (more = false) => {
+    pending.current?.abort();
+    pending.current = new AbortController();
+    const signal = AbortSignal.any([pending.current.signal, requests.signal]);
     const current = ++generation.current;
     setLoading(true);
     setError(null);
@@ -46,11 +53,12 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
     try {
       const page = await apiFor(accountId).get<MessageSearchPage>(
         `/search/messages?${more ? lastParams.current + `&cursor=${encodeURIComponent(results!.nextCursor!)}` : params}`,
+        signal,
       );
-      if (current !== generation.current) return;
+      if (signal.aborted || current !== generation.current) return;
       setResults((previous) => (more ? { ...page, items: [...(previous?.items ?? []), ...page.items] } : page));
     } catch (error) {
-      if (current === generation.current)
+      if (current === generation.current && !isCancellation(error))
         setError(
           (error as { status?: number }).status === 404
             ? "Atualize esta instância para habilitar a busca de mensagens."
@@ -156,9 +164,9 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             onClick={() => {
               setOpening(message.id);
               setError(null);
-              void jumpToMessage(accountId, message.channelId, message.id, resultServer).catch((error) => {
+              void jumpToMessage(accountId, message.channelId, message.id, resultServer, requests.signal).catch((error) => {
                 setOpening(null);
-                setError((error as Error).message);
+                if (!isCancellation(error)) setError((error as Error).message);
               });
             }}
           >

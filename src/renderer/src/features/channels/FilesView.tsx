@@ -1,12 +1,17 @@
-import { has, LIMITS, Permission, type Attachment, type Channel, type Message, type ServerState } from "@distopic/protocol";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { apiFor, loadMessages } from "../../client.ts";
+import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { apiFor } from "../../client.ts";
+import { RequestError } from "../../api.ts";
 import { formatDay, formatSize } from "../../format.tsx";
 import { displayNameOf } from "../../perms.ts";
 import { toast, useStore } from "../../store.ts";
 import { act, Icon, type IconName } from "../../components/ui.tsx";
 import { confirmAction } from "../../components/ui/action-dialog.tsx";
 import { Select } from "../../components/ui/select.tsx";
+import { readChatDraft, writeChatDraft } from "../../chat-state.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
+import { onRoomEvent } from "./events.ts";
 
 const ImageViewer = lazy(() => import("../../components/ImageViewer.tsx"));
 const MediaViewer = lazy(() => import("../../components/MediaViewer.tsx"));
@@ -38,41 +43,70 @@ let uploadSeq = 0;
 
 /** A files channel: every message is a share, shown as a searchable list of files. */
 export function FilesView({ accountId, state, channel, perms }: { accountId: string; state: ServerState; channel: Channel; perms: number }) {
-  const entry = useStore((s) => s.instances[accountId]?.messages[channel.id]);
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
+  const [files, setFiles] = useState<SharedFile[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loadingFiles, setLoadingFiles] = useState(true);
+  const [filesError, setFilesError] = useState<string | null>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(() => readChatDraft(accountId, channel.id).text);
   const [image, setImage] = useState<number | null>(null);
   const [media, setMedia] = useState<{ url: string; filename: string; contentType: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
+  const fileRequest = useRef<AbortController | null>(null);
+  const uploadControllers = useRef(new Set<AbortController>());
+  const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
   const api = apiFor(accountId);
   const canUpload = has(perms, Permission.SEND_MESSAGES) && has(perms, Permission.ATTACH_FILES);
   const canModerate = has(perms, Permission.MANAGE_MESSAGES);
   const names = useMemo(() => new Map(state.members.map((m) => [m.user.id, displayNameOf(m)])), [state.members]);
 
+  const fetchFiles = useCallback(async (offset = 0, append = false) => {
+    fileRequest.current?.abort();
+    const controller = new AbortController();
+    fileRequest.current = controller;
+    const signal = AbortSignal.any([controller.signal, requests.signal]);
+    setLoadingFiles(true);
+    setFilesError(null);
+    const search = new URLSearchParams({ limit: "50", offset: String(offset), q: query.trim(), sort });
+    try {
+      const page = await api.get<ChannelFilePage>(`/channels/${encodeURIComponent(channel.id)}/files?${search}`, signal);
+      if (signal.aborted || fileRequest.current !== controller) return;
+      setFiles((current) => append ? [...current, ...page.files] : page.files);
+      setNextOffset(page.nextOffset);
+      setTotal(page.total);
+    } catch (error) {
+      if (!signal.aborted && !isCancellation(error)) setFilesError(error instanceof RequestError && error.status === 404
+        ? "Esta instância ainda não oferece busca paginada de arquivos. Atualize o servidor para pesquisar e ordenar o acervo completo."
+        : (error as Error).message);
+    } finally {
+      if (!signal.aborted && fileRequest.current === controller) setLoadingFiles(false);
+    }
+  }, [api, channel.id, query, sort, requests]);
+
   useEffect(() => {
-    void loadMessages(accountId, channel.id);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      fileRequest.current?.abort();
+      for (const controller of uploadControllers.current) controller.abort();
+      uploadControllers.current.clear();
+    };
   }, [accountId, channel.id]);
 
-  const files = useMemo(() => {
-    const all: SharedFile[] = (entry?.items ?? []).flatMap((message) => message.attachments.map((attachment) => ({ attachment, message })));
-    const q = query.trim().toLowerCase();
-    const found = q
-      ? all.filter(({ attachment, message }) =>
-          [attachment.filename, message.content, names.get(message.author.id) ?? message.author.displayName].some((t) => t.toLowerCase().includes(q)),
-        )
-      : all;
-    return [...found].sort((a, b) =>
-      sort === "name"
-        ? a.attachment.filename.localeCompare(b.attachment.filename, "pt-BR", { numeric: true })
-        : sort === "size"
-          ? b.attachment.size - a.attachment.size
-          : b.message.id.localeCompare(a.message.id),
-    );
-  }, [entry?.items, query, sort, names]);
+  useEffect(() => {
+    const timer = setTimeout(() => void fetchFiles(), query.trim() ? 220 : 0);
+    return () => { clearTimeout(timer); fileRequest.current?.abort(); };
+  }, [fetchFiles, query, sort]);
+
+  useEffect(() => onRoomEvent(accountId, channel.id, (event) => {
+    if (event.t === "MESSAGE_CREATE" || event.t === "MESSAGE_UPDATE" || event.t === "MESSAGE_DELETE") void fetchFiles();
+  }), [accountId, channel.id, fetchFiles]);
   const images = files
     .filter((f) => f.attachment.contentType.startsWith("image/"))
     .map((f) => ({ id: f.attachment.id, url: api.resolve(f.attachment.url), filename: f.attachment.filename, size: f.attachment.size }));
@@ -81,20 +115,30 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
   const upload = async (list: File[]) => {
     if (!canUpload) return toast("Sem permissão para enviar arquivos aqui");
     const description = note.trim();
-    setNote("");
+    let allSucceeded = true;
     // The server takes a limited number of files per message.
     for (let i = 0; i < list.length; i += LIMITS.attachmentsPerMessage) {
+      if (!mounted.current) break;
       const batch = list.slice(i, i + LIMITS.attachmentsPerMessage);
       const job: Upload = { id: ++uploadSeq, names: batch.map((f) => f.name).join(", "), progress: 0, error: null, abort: new AbortController() };
+      uploadControllers.current.add(job.abort);
       setUploads((u) => [...u, job]);
-      const update = (patch: Partial<Upload>) => setUploads((u) => u.map((x) => (x.id === job.id ? { ...x, ...patch } : x)));
+      const update = (patch: Partial<Upload>) => { if (mounted.current) setUploads((u) => u.map((x) => (x.id === job.id ? { ...x, ...patch } : x))); };
       try {
         await api.uploadMessage(channel.id, i === 0 ? description : "", batch, (progress) => update({ progress }), job.abort.signal);
-        setUploads((u) => u.filter((x) => x.id !== job.id));
+        if (mounted.current) setUploads((u) => u.filter((x) => x.id !== job.id));
       } catch (err) {
-        if ((err as Error).name === "AbortError") setUploads((u) => u.filter((x) => x.id !== job.id));
+        allSucceeded = false;
+        if ((err as Error).name === "AbortError") { if (mounted.current) setUploads((u) => u.filter((x) => x.id !== job.id)); }
         else update({ error: (err as Error).message });
+      } finally {
+        uploadControllers.current.delete(job.abort);
       }
+    }
+    if (allSucceeded && mounted.current) {
+      setNote("");
+      writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: "", replyToId: null, attachmentCount: 0 });
+      void fetchFiles();
     }
   };
 
@@ -111,7 +155,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       others > 0 ? `Este envio tem mais ${others} arquivo(s), que também serão excluídos.` : `"${file.attachment.filename}" será excluído para todos.`,
       { title: "Excluir arquivo", confirmLabel: "Excluir" },
     );
-    if (ok) void act(api.del(`/channels/${channel.id}/messages/${file.message.id}`));
+    if (ok) void act(api.del(`/channels/${channel.id}/messages/${file.message.id}`)).then((done) => { if (done) void fetchFiles(); });
   };
 
   const open = (file: SharedFile) => {
@@ -137,7 +181,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       <header className="chat-header">
         <Icon name="folder" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{channel.topic || `${files.length} arquivo(s) · ${formatSize(totalSize)}`}</span>
+        <span className="chat-topic">{channel.topic || `${files.length} de ${total} arquivo(s) · ${formatSize(totalSize)} carregados`}</span>
       </header>
 
       <div className="files-toolbar">
@@ -152,7 +196,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         </Select>
         {canUpload && (
           <>
-            <input className="files-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Descrição (opcional)" maxLength={LIMITS.messageMax} />
+            <input className="files-note" value={note} onChange={(e) => { setNote(e.target.value); writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: e.target.value, replyToId: null, attachmentCount: 0 }); }} placeholder="Descrição (opcional)" maxLength={LIMITS.messageMax} />
             <button className="btn" onClick={() => input.current?.click()}>
               <Icon name="upload" size={16} />
               Enviar arquivos
@@ -188,11 +232,13 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       )}
 
       <div className="files-list" role="list">
-        {files.length === 0 && !entry?.loading && (
+        {loadingFiles && files.length === 0 && !filesError && <div className="files-loading" role="status"><span /><span /><span /><span /><span /></div>}
+        {filesError && <div className="files-load-error" role="alert"><Icon name="wifiOff" size={22} /><strong>Não foi possível carregar os arquivos</strong><span>{filesError}</span><button className="btn btn-ghost" onClick={() => void fetchFiles()}>Tentar novamente</button></div>}
+        {files.length === 0 && !loadingFiles && !filesError && (
           <div className="files-empty">
             <Icon name="folderOpen" size={40} />
             <h2>{query ? "Nada encontrado" : "Nenhum arquivo ainda"}</h2>
-            <p className="muted">{query ? "Tente outro termo." : canUpload ? "Arraste arquivos para cá ou use Enviar arquivos." : "Quando alguém compartilhar, os arquivos aparecem aqui."}</p>
+            <p className="muted">{query ? "Nenhum arquivo do canal corresponde à busca. Experimente outros termos." : canUpload ? "Arraste arquivos para cá ou use Enviar arquivos." : "Quando alguém compartilhar, os arquivos aparecem aqui."}</p>
           </div>
         )}
         {files.map((file) => {
@@ -237,9 +283,9 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
             </div>
           );
         })}
-        {entry?.hasMore && (
-          <button className="btn btn-ghost files-more" disabled={entry.loading} onClick={() => void loadMessages(accountId, channel.id, true)}>
-            {entry.loading ? "Carregando…" : "Carregar mais antigos"}
+        {nextOffset !== null && (
+          <button className="btn btn-ghost files-more" disabled={loadingFiles} onClick={() => void fetchFiles(nextOffset, true)}>
+            {loadingFiles ? "Carregando…" : `Carregar mais arquivos (${Math.max(0, total - files.length)} restantes)`}
           </button>
         )}
       </div>

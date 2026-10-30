@@ -42,7 +42,7 @@ async function setup(page: Page, acknowledge = true) {
   await page.route(`${origin}/api/**`, route => {
     if (route.request().method() !== 'GET') writes.push(route.request().url());
     if (!available) return route.abort('connectionrefused');
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(route.request().url().endsWith('/servers/server') ? state : []) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(new URL(route.request().url()).pathname.endsWith('/servers/server') ? state : []) });
   });
   await page.routeWebSocket('ws://disconnect.test/gateway', ws => {
     if (!available) { ws.close({ code: 1013, reason: 'server unavailable' }); return; }
@@ -90,8 +90,8 @@ for (const code of [1001, 4010]) test(`gateway close ${code} ends camera, screen
   await expect(page.getByRole('button', { name: 'Enviar mensagem', exact: true })).toBeDisabled();
   await expect(page.locator('.connection-notice')).toContainText('Sem conexão');
   expect(fixture.writes).toEqual([]);
-  await expect(page.getByRole('button', { name: 'Continuar mesmo assim' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar mesmo assim' }).click();
+  await expect(page.getByRole('button', { name: 'Ver conteúdo salvo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ver conteúdo salvo' }).click();
   await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).navigate({ kind: 'home', accountId: 'test', dmId: null }));
   await expect(page.getByRole('heading', { name: 'Status dos amigos indisponível' })).toBeVisible();
   await page.getByRole('button', { name: 'Todos', exact: true }).click();

@@ -19,6 +19,7 @@ import { Home } from "./components/Home.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { AddTabModal, ServicePlaceholder, ServiceSettingsModal, TeamSpeakView } from "./components/Services.tsx";
 import { TopBar } from "./components/TopBar.tsx";
+import { ServerDirectory } from "./components/ServerDirectory.tsx";
 import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
 
@@ -46,7 +47,7 @@ function Modals() {
     case "addAccount":
       return <AddAccountModal />;
     case "createServer":
-      return <CreateServerModal accountId={modal.accountId} />;
+      return <CreateServerModal accountId={modal.accountId} initialMode={modal.initialMode} />;
     case "serverSettings":
       return <SettingsGuard><ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} /></SettingsGuard>;
     case "channelSettings":
@@ -84,7 +85,7 @@ export function App() {
   const theme = useStore(s => s.settings.theme);
   const accentColor = useStore(s => s.settings.accentColor);
   const surfaceColor = useStore(s => s.settings.surfaceColor);
-  const connectionBlocked = useConnectionBlocked();
+  const { accountId: blockedAccountId, continueOffline } = useConnectionBlocked();
   const inVoice = useStore(s => s.voice !== null);
   const barPosition = useStore((s) => s.settings.barPosition);
   const mainRef = useRef<HTMLElement>(null);
@@ -168,7 +169,8 @@ export function App() {
       <VoiceStatusBar />
       <SongDock />
       <main className="main" ref={mainRef}>
-        {view.kind === "news" ? <News /> : view.kind === "service" ? (
+        <div className="connection-content" inert={!!blockedAccountId}>
+        {view.kind === "news" ? <News /> : view.kind === "servers" ? <ServerDirectory /> : view.kind === "service" ? (
           !service ? (
             <Home accountId={null} dmId={null} />
           ) : service.kind === "teamspeak" ? (
@@ -183,6 +185,8 @@ export function App() {
         ) : (
           <Home accountId={view.accountId} dmId={view.dmId} />
         )}
+        </div>
+        {!blocking && blockedAccountId && <ConnectionOverlay key={blockedAccountId} accountId={blockedAccountId} onContinue={continueOffline} />}
       </main>
       </div>
       </div>
@@ -190,8 +194,6 @@ export function App() {
       <MandatoryUpdate />
       <ActionDialogHost />
       <DirectCallPanel />
-      {/* An offline Annoy server must not lock the browser services, which don't depend on it. */}
-      {!blocking && <ConnectionOverlay blocked={connectionBlocked && view.kind !== "service"} />}
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}

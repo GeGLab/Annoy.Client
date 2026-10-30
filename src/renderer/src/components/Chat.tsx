@@ -3,8 +3,8 @@ import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Fragment,
   lazy,
   Suspense,
   useEffect,
@@ -17,8 +17,9 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
+  type UIEvent,
 } from "react";
-import { apiFor, loadMessages, returnToLatest, sendTyping } from "../client.ts";
+import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -28,6 +29,9 @@ import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
+import { useRequestOwner } from "../lib/use-request-owner.ts";
+import { isCancellation, RequestError } from "../../../shared/requests.ts";
+import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -79,6 +83,8 @@ interface ChatProps {
   canSend: boolean;
   canAttach: boolean;
   canModerate: boolean;
+  canPin?: boolean;
+  serverId?: string | null;
   nameOf: NameOf;
   /** Resolves <#channel> mentions; DMs have none. */
   channelOf?: NameOf;
@@ -192,7 +198,9 @@ function MessageRow({
   nameOf,
   channelOf,
   canModerate,
+  canPin = canModerate,
   canReact,
+  highlighted=false,
   onReply,
 }: {
   accountId: string;
@@ -203,10 +211,13 @@ function MessageRow({
   nameOf: NameOf;
   channelOf: NameOf | undefined;
   canModerate: boolean;
+  canPin?: boolean;
   canReact: boolean;
+  highlighted?: boolean;
   onReply: (m: Message) => void;
 }) {
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
+  const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
     if (reacting || !reactionsEnabled || !canReact) return;
@@ -247,7 +258,7 @@ function MessageRow({
   };
 
   return (
-    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}`}>
+    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${highlighted?" search-highlight":""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -308,9 +319,14 @@ function MessageRow({
             <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />
             <span className="message-action-divider" aria-hidden="true" />
           </>}
+          {!reactionsEnabled && canReact && <button className="icon-btn tiny" aria-label="Adicionar reação" title="Atualize o Annoy Server para habilitar reações compartilhadas" onClick={() => toast("Esta instância ainda não oferece reações. Atualize o Annoy Server e reconecte o Client para reagir às mensagens.")}><Icon name="smile" size={16} /></button>}
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
+          {canPin && <button className="icon-btn tiny" title={isPinned ? "Desafixar mensagem" : "Fixar mensagem"} aria-pressed={isPinned} onClick={async () => {
+            try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
+            catch(error){toast((error as Error).message);}
+          }}><Icon name="pin" size={16} /></button>}
           {own && (
             <button
               className="icon-btn tiny"
@@ -364,7 +380,15 @@ function Composer({
   canAttach,
   mentionables,
   replyTo,
-  clearReply,
+  replyToId,
+  replyValid,
+  replyStatus,
+  draft,
+  onDraftChange,
+  onDiscard,
+  onClearReply,
+  onRetryReply,
+  draftPersistenceFailed,
   nameOf,
 }: {
   dropRef: RefObject<((files: FileList) => void) | null>;
@@ -375,12 +399,21 @@ function Composer({
   canAttach: boolean;
   mentionables: Mentionable[];
   replyTo: Message | null;
-  clearReply: () => void;
+  replyToId: string | null;
+  replyValid: boolean;
+  replyStatus: "checking" | "valid" | "unavailable" | null;
+  draft: ChatDraft;
+  onDraftChange: (patch: Partial<Omit<ChatDraft, "updatedAt">>) => void;
+  onDiscard: () => void;
+  onClearReply: () => void;
+  onRetryReply: () => void;
+  draftPersistenceFailed: boolean;
   nameOf: NameOf;
 }) {
-  const [text, setText] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const text = draft.text;
+  const [files, setFiles] = useState<File[]>(() => readPendingFiles(accountId, channelId));
   const [sending, setSending] = useState(false);
+  const requests = useRequestOwner(JSON.stringify([accountId, channelId]));
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const [query, setQuery] = useState<string | null>(null);
@@ -415,7 +448,7 @@ function Composer({
     const el = input.current;
     const caret = el?.selectionStart ?? text.length;
     const before = text.slice(0, caret).replace(/@([^\s@]{0,32})$/, `@${m.name} `);
-    setText(before + text.slice(caret));
+    onDraftChange({ text: before + text.slice(caret) });
     setPicked((p) => (p.some((x) => x.id === m.id) ? p : [...p, m]));
     setQuery(null);
     requestAnimationFrame(() => el?.setSelectionRange(before.length, before.length));
@@ -425,12 +458,15 @@ function Composer({
     const element = input.current, start = element?.selectionStart ?? text.length, end = element?.selectionEnd ?? text.length;
     const next = text.slice(0, start) + value + text.slice(end);
     if (next.length > LIMITS.messageMax) return toast("A mensagem atingiu o limite de caracteres.");
-    setText(next);
+    onDraftChange({ text: next });
     requestAnimationFrame(() => { element?.focus(); element?.setSelectionRange(start + value.length, start + value.length); });
   };
   const addFiles = (list: FileList | File[]) => {
     if (!canAttach || !connected) return;
-    setFiles((f) => [...f, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage));
+    const next = [...files, ...Array.from(list)].slice(0, LIMITS.attachmentsPerMessage);
+    setFiles(next);
+    writePendingFiles(accountId, channelId, next);
+    onDraftChange({ attachmentCount: next.length });
   };
   dropRef.current = addFiles;
 
@@ -440,16 +476,18 @@ function Composer({
     let content = text;
     for (const m of [...picked].sort((a, b) => b.name.length - a.name.length)) content = content.split(`@${m.name}`).join(`<@${m.id}>`);
     content = content.trim();
-    if ((!content && files.length === 0) || sending) return;
+    if ((!content && files.length === 0) || sending || (replyToId !== null && !replyValid) || draft.attachmentCount > files.length) return;
     setSending(true);
+    const signal = requests.signal;
     try {
-      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null);
-      setText("");
+      await apiFor(accountId).sendMessage(channelId, content, files, replyToId, signal);
+      signal.throwIfAborted();
+      onDraftChange({ text: "", replyToId: null, attachmentCount: 0 });
       setFiles([]);
+      writePendingFiles(accountId, channelId, []);
       setPicked([]);
-      clearReply();
     } catch (err) {
-      toast((err as Error).message);
+      if (!isCancellation(err)) toast((err as Error).message);
     } finally {
       setSending(false);
     }
@@ -469,7 +507,7 @@ function Composer({
       }
       if (e.key === "Escape") return setQuery(null);
     }
-    if (e.key === "Escape" && replyTo) return clearReply();
+    if (e.key === "Escape" && replyToId) return onClearReply();
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void send();
@@ -500,15 +538,31 @@ function Composer({
       {replyTo && (
         <div className="reply-bar">
           Respondendo a <strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
-          <button className="icon-btn tiny" onClick={clearReply} title="Cancelar resposta">
+          <button className="icon-btn tiny" onClick={onClearReply} title="Cancelar resposta">
             <Icon name="x" size={14} />
           </button>
         </div>
       )}
+      {replyToId && !replyTo && <div className="reply-bar" role="status">
+        <span>{replyValid ? "Mensagem original validada" : replyStatus === "checking" ? "Validando mensagem original…" : "Não foi possível validar a mensagem original. Reconecte ou remova a resposta."}</span>
+        <button className="btn btn-ghost" disabled={replyValid || replyStatus === "checking"} onClick={onRetryReply}>Tentar validar</button>
+        <button className="icon-btn tiny" onClick={onClearReply} title="Remover resposta"><Icon name="x" size={14} /></button>
+      </div>}
+      {draft.attachmentCount > files.length && <div className="draft-attachment-notice" role="status">
+        <span>Os anexos não são guardados ao fechar o aplicativo. Selecione novamente os {draft.attachmentCount - files.length} arquivo(s) que faltam.</span>
+        <button className="btn btn-ghost" type="button" onClick={() => fileInput.current?.click()}>Selecionar novamente</button>
+        <button className="btn btn-ghost" type="button" onClick={() => { writePendingFiles(accountId, channelId, files); onDraftChange({ attachmentCount: files.length }); }}>Remover ausentes</button>
+      </div>}
+      {draftPersistenceFailed && <p className="draft-save-warning" role="alert">Não foi possível salvar este rascunho no dispositivo. Mantenha esta conversa aberta para não perder o texto.</p>}
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={sending} onRemove={() => setFiles((list) => list.filter((_, j) => j !== i))} />
+            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={sending} onRemove={() => {
+              const next = files.filter((_, j) => j !== i);
+              setFiles(next);
+              writePendingFiles(accountId, channelId, next);
+              onDraftChange({ attachmentCount: next.length });
+            }} />
           ))}
         </div>
       )}
@@ -539,7 +593,7 @@ function Composer({
           placeholder={connected ? placeholder : "Sem conexão com o servidor"}
           disabled={!connected}
           onChange={(e) => {
-            setText(e.target.value);
+            onDraftChange({ text: e.target.value });
             updateQuery(e.target.value, e.target.selectionStart);
             if (e.target.value) sendTyping(accountId, channelId);
           }}
@@ -553,27 +607,58 @@ function Composer({
           size="icon"
           className="composer-send"
           loading={sending}
-          disabled={!connected || sending || (!text.trim() && files.length === 0)}
+          disabled={!connected || sending || (!text.trim() && files.length === 0) || (replyToId !== null && !replyValid) || draft.attachmentCount > files.length}
           onClick={() => void send()}
           aria-label="Enviar mensagem"
         >
           <Icon name="send" size={19} />
         </Button>
+        {(text.length > 0 || replyToId !== null || files.length > 0 || draft.attachmentCount > files.length) && <button className="icon-btn" type="button" disabled={sending} onClick={async () => {
+          if (await confirmAction("Descartar o texto, a resposta e os anexos deste rascunho?", { title: "Descartar rascunho", confirmLabel: "Descartar" })) {
+            onDiscard();
+            setFiles([]);
+            writePendingFiles(accountId, channelId, []);
+            setPicked([]);
+          }
+        }} title="Descartar rascunho" aria-label="Descartar rascunho"><Icon name="trash" size={16} /></button>}
       </div>
     </div>
   );
 }
 
+const EMPTY_UNREAD={count:0,mention:false};
+
 export function Chat(props: ChatProps) {
   const { accountId, channelId, nameOf } = props;
   const entry = useStore((s) => s.instances[accountId]?.messages[channelId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
+  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const items = entry?.items ?? EMPTY;
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const unread = useStore((s) => s.instances[accountId]?.unread[channelId] ?? EMPTY_UNREAD);
+  const [draft, setDraft] = useState<ChatDraft>(() => readChatDraft(accountId, channelId));
+  const [draftPersistenceFailed, setDraftPersistenceFailed] = useState(false);
+  const [replyResolution, setReplyResolution] = useState<{ id: string; status: "checking" | "valid" | "unavailable"; message: Message | null } | null>(
+    () => draft.replyToId ? { id: draft.replyToId, status: "checking", message: null } : null,
+  );
+  const [replyValidationAttempt, setReplyValidationAttempt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const virtualWindow=useRef<HTMLDivElement>(null);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const pinsButton=useRef<HTMLButtonElement>(null);
+  const pinsSupported=useStore(s=>s.instances[accountId]?.instance?.messagePins===true);
+  const readingIntent=useRef(false);
+  const pendingAnchor=useRef<{id:string;offset:number}|null>(null);
+  const restoringAnchor=useRef<{id:string;offset:number|null}|null>(null);
+  const readingAnchor=useRef<{id:string;offset:number}|null>(null);
+  const focusVisit=useRef<string|null>(null);
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, scrollMargin:virtualWindow.current?.offsetTop??0, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
   const pinned = useRef(true);
   const prevHeight = useRef<number | null>(null);
+  const restoredVisit = useRef<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const chatRequests = useRequestOwner(JSON.stringify([accountId, channelId]));
   const firstId = items[0]?.id;
   const navigation = useStore((s) => s.chatNavigation);
   const focus = useStore((s) =>
@@ -581,24 +666,91 @@ export function Chat(props: ChatProps) {
   );
   const messageLog = useRef<HTMLDivElement>(null);
   const lastTop = useRef(0);
-  useLayoutEffect(() => {
-    if (!focus) return;
-    pinned.current = false;
-    const row = scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focus.messageId)}"]`);
-    row?.scrollIntoView({ block: "center" });
-    row?.classList.add("search-highlight");
-    return () => row?.classList.remove("search-highlight");
-  }, [focus, items]);
+  const changeDraft = (patch: Partial<Omit<ChatDraft, "updatedAt">>) => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraft(next);
+    setDraftPersistenceFailed(!writeChatDraft(accountId, channelId, next));
+  };
+  const localReply = draft.replyToId ? items.find((message) => message.id === draft.replyToId) ?? null : null;
+  const replyTo = localReply ?? (replyResolution?.id === draft.replyToId && replyResolution.status === "valid" ? replyResolution.message : null);
+  const replyValid = !draft.replyToId || !!localReply || (replyResolution?.id === draft.replyToId && replyResolution.status === "valid");
+  const replyStatus = draft.replyToId && replyResolution?.id === draft.replyToId ? replyResolution.status : draft.replyToId ? "checking" : null;
+  const positionMessage=(id:string,offset:number|null)=>{
+    const target={id,offset};restoringAnchor.current=target;
+    const index=items.findIndex(message=>message.id===id);if(index<0){restoringAnchor.current=null;return;}
+    virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
+    let attempts=0;
+    const settle=()=>{
+      const el=scroller.current;if(!el?.isConnected||restoringAnchor.current!==target)return;
+      const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+      if(row){const desired=offset??Math.max(0,(el.clientHeight-row.getBoundingClientRect().height)/2);el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-desired;lastTop.current=el.scrollTop;readingAnchor.current={id,offset:desired};}
+      else virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
+      if(++attempts<8)requestAnimationFrame(settle);else restoringAnchor.current=null;
+    };
+    requestAnimationFrame(settle);
+  };
 
-  useLayoutEffect(() => {
-    pinned.current = !focus;
-    prevHeight.current = null;
-    const el = scroller.current;
-    if (el && !focus) {
-      el.scrollTop = el.scrollHeight;
-      lastTop.current = el.scrollTop;
+  useEffect(() => {
+    const replyId = draft.replyToId;
+    if (!replyId) { setReplyResolution(null); return; }
+    const cached = items.find((message) => message.id === replyId);
+    if (cached) { setReplyResolution({ id: replyId, status: "valid", message: cached }); return; }
+    if (!entry || entry.loading) return;
+    if (!connected) { setReplyResolution({ id: replyId, status: "unavailable", message: null }); return; }
+    const controller = new AbortController();
+    const signal = AbortSignal.any([chatRequests.signal, controller.signal]);
+    setReplyResolution({ id: replyId, status: "checking", message: null });
+    void (async () => {
+      try {
+        const page = await apiFor(accountId).get<Message[]>(`/channels/${encodeURIComponent(channelId)}/messages?around=${encodeURIComponent(replyId)}`, signal);
+        if (signal.aborted || draft.replyToId !== replyId) return;
+        const original = page.find((message) => message.id === replyId && message.channelId === channelId);
+        if (original) setReplyResolution({ id: replyId, status: "valid", message: original });
+        else {
+          setReplyResolution(null);
+          changeDraft({ replyToId: null });
+          toast("A mensagem original não está mais disponível; a referência de resposta foi removida.");
+        }
+      } catch (error) {
+        if (signal.aborted || isCancellation(error) || draft.replyToId !== replyId) return;
+        if (error instanceof RequestError && error.status === 404) {
+          setReplyResolution(null);
+          changeDraft({ replyToId: null });
+          toast("A mensagem original não está mais disponível; a referência de resposta foi removida.");
+        } else setReplyResolution({ id: replyId, status: "unavailable", message: null });
+      }
+    })();
+    return () => controller.abort();
+  }, [accountId, channelId, draft.replyToId, entry, connected, items, replyValidationAttempt, chatRequests]);
+
+  useEffect(() => () => flushChatState(), []);
+  useLayoutEffect(()=>{
+    restoredVisit.current=null; focusVisit.current=null; readingIntent.current=false;restoringAnchor.current=null;readingAnchor.current=null;
+    pinned.current=!focus; prevHeight.current=null;
+  },[accountId,channelId,navigation]);
+
+  useLayoutEffect(()=>{
+    if(!focus||entry?.loading||!items.length)return;
+    const visit=JSON.stringify([navigation,focus.messageId]);if(focusVisit.current===visit)return;
+    const index=items.findIndex(message=>message.id===focus.messageId);if(index<0)return;
+    focusVisit.current=visit;pinned.current=false;
+    positionMessage(focus.messageId,null);
+  },[focus,items,entry?.loading,navigation]);
+
+  useLayoutEffect(()=>{
+    const el=scroller.current;if(!el||focus||!entry||entry.loading||entry.error||!items.length)return;
+    const visit=JSON.stringify([draftKey(accountId,channelId),navigation]);if(restoredVisit.current===visit)return;
+    restoredVisit.current=visit;
+    const saved=readChatAnchor(accountId,channelId);
+    const target=saved?.messageId??entry.initialPosition;
+    const index=target?items.findIndex(message=>message.id===target):-1;
+    if(index>=0){
+      pinned.current=false;positionMessage(target!,saved?.offset??0);return;
     }
-  }, [accountId, channelId, navigation]);
+    if(saved)clearChatAnchor(accountId,channelId);
+    pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
+  },[accountId,channelId,navigation,items,entry?.loading,entry?.error,focus]);
 
   // Images can grow after the message list mounts. Follow that growth only
   // while the reader remains at the latest message, never while reading back.
@@ -609,6 +761,9 @@ export function Chat(props: ChatProps) {
       if (el && pinned.current && prevHeight.current === null) {
         el.scrollTop = el.scrollHeight;
         lastTop.current = el.scrollTop;
+      } else if(el&&!restoringAnchor.current&&readingAnchor.current){
+        const anchor=readingAnchor.current,row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`);
+        if(row){el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-anchor.offset;lastTop.current=el.scrollTop;}
       }
     });
     observer.observe(messageLog.current);
@@ -618,29 +773,59 @@ export function Chat(props: ChatProps) {
 
   useEffect(() => {
     void loadMessages(accountId, channelId);
+    void loadPinnedMessages(accountId, channelId);
   }, [accountId, channelId]);
 
   // Keep the view pinned to the bottom for new messages, and steady when older ones load above.
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (prevHeight.current !== null) {
-      el.scrollTop += el.scrollHeight - prevHeight.current;
-      prevHeight.current = null;
-    } else if (pinned.current) el.scrollTop = el.scrollHeight;
+    const anchor=pendingAnchor.current;
+    if(anchor){
+      pendingAnchor.current=null;prevHeight.current=null;
+      const index=items.findIndex(message=>message.id===anchor.id);
+      if(index>=0)positionMessage(anchor.id,anchor.offset);
+    } else if(pinned.current) el.scrollTop=el.scrollHeight;
   }, [items, firstId]);
 
-  const onScroll = () => {
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
     const el = scroller.current;
     if (!el) return;
+    if(restoringAnchor.current){lastTop.current=el.scrollTop;return;}
     if (el.scrollTop < lastTop.current - 1) pinned.current = false;
-    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) pinned.current = true;
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80 && !entry?.hasMoreAfter) pinned.current = true;
     lastTop.current = el.scrollTop;
-    if (el.scrollTop < 200 && entry?.hasMore && !entry.loading) {
+    const viewportTop = el.getBoundingClientRect().top;
+    const firstVisible = [...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])]
+      .find((row) => row.getBoundingClientRect().bottom > viewportTop);
+    if (firstVisible?.dataset.messageId) {
+      readingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
+      writeChatAnchor(accountId, channelId, { messageId: firstVisible.dataset.messageId, offset: firstVisible.getBoundingClientRect().top - viewportTop });
+    }
+    if (readingIntent.current && el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
+      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
       prevHeight.current = el.scrollHeight;
       void loadMessages(accountId, channelId, true);
     }
+    if (readingIntent.current && el.scrollHeight - el.scrollTop - el.clientHeight < 160 && entry?.hasMoreAfter && !entry.loading && !entry.error) {
+      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
+      void loadMessages(accountId,channelId,"newer");
+    }
+    if(event.nativeEvent.isTrusted)markVisibleRead();
   };
+
+  const markVisibleRead=()=>{
+    const el=scroller.current;if(!el||!readingIntent.current||!document.hasFocus()||document.querySelector(".dialog-overlay"))return;
+    const viewport=el.getBoundingClientRect();
+    const rows=[...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]")??[])].filter(row=>{const rect=row.getBoundingClientRect();return rect.bottom>viewport.top&&rect.top<viewport.bottom;});
+    const id=rows.at(-1)?.dataset.messageId;if(id)void markChannelRead(accountId,channelId,id);
+  };
+  const startReading=()=>{restoringAnchor.current=null;readingIntent.current=true;requestAnimationFrame(markVisibleRead);};
+  useEffect(()=>{
+    const frame=requestAnimationFrame(markVisibleRead);
+    window.addEventListener("focus",markVisibleRead);
+    return()=>{cancelAnimationFrame(frame);window.removeEventListener("focus",markVisibleRead);};
+  },[items,connected]);
 
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
 
@@ -654,6 +839,7 @@ export function Chat(props: ChatProps) {
   return (
     <section
       className="chat"
+      onKeyDown={event=>{if(pinsOpen&&event.key==="Escape"){event.preventDefault();setPinsOpen(false);pinsButton.current?.focus();}}}
       onDragOver={(e) => {
         if (props.canAttach && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
@@ -668,10 +854,16 @@ export function Chat(props: ChatProps) {
         <h1 className="truncate">{props.title}</h1>
         {props.topic && <span className="chat-topic truncate">{props.topic}</span>}
         <span className="spacer" />
+        <button ref={pinsButton} className={`icon-btn${pinsOpen ? " on" : ""}`} aria-label="Mensagens fixadas" aria-expanded={pinsOpen} title="Mensagens fixadas" onClick={() => {if(!pinsSupported){toast("Atualize o Annoy.Server e reconecte para usar mensagens fixadas.");return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} /></button>
         {props.headerExtra}
       </header>
+      {pinsOpen && <div className="pins-panel" role="region" aria-label="Mensagens fixadas">
+        <div className="pins-panel-title"><strong>Mensagens fixadas</strong><button className="icon-btn tiny" aria-label="Fechar mensagens fixadas" onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
+        {entry?.pinsLoading && <p role="status">Carregando fixadas…</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>Tentar novamente</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">Nenhuma mensagem fixada.</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString()}</small></span><span className="pinned-message-content">{pin.message.content || "Anexo"}</span></button>)}
+        {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>Mais fixadas</button>}
+      </div>}
       <ConnectionNotice accountId={accountId} />
-      <div className="messages" ref={scroller} onScroll={onScroll}>
+      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
             <div className="channel-start">
@@ -687,7 +879,14 @@ export function Chat(props: ChatProps) {
                 Carregando mensagens anteriores…
               </div>
             ))}
-          {items.map((m, i) => {
+          {entry?.error && <div className="history-error" role="alert">
+            <p>{entry.error}</p>
+            <button className="btn btn-ghost" onClick={() => void loadMessages(accountId, channelId, items.length > 0)}>Tentar carregar mensagens novamente</button>
+          </div>}
+          <div ref={virtualWindow} className="message-window" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const i=virtualRow.index;
+            const m=items[i]!;
             const prev = items[i - 1];
             const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
             const compact =
@@ -697,7 +896,8 @@ export function Chat(props: ChatProps) {
               prev.author.id === m.author.id &&
               Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
-              <Fragment key={m.id}>
+              <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start-virtualizer.options.scrollMargin}px)` }}>
+                {entry?.unreadBoundary && m.id > entry.unreadBoundary && (i===0 || items[i-1]!.id <= entry.unreadBoundary) && <div className="unread-divider" role="separator"><span>Não lidas</span></div>}
                 {newDay && (
                   <div className="day-divider" role="separator">
                     <span>{formatDay(m.createdAt)}</span>
@@ -712,17 +912,20 @@ export function Chat(props: ChatProps) {
                   nameOf={nameOf}
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
+                  canPin={pinsSupported && (props.canPin??props.canModerate)}
                   canReact={props.canSend}
-                  onReply={setReplyTo}
+                  highlighted={focus?.messageId===m.id}
+                  onReply={(message) => { changeDraft({ replyToId: message.id }); setReplyResolution({ id: message.id, status: "valid", message }); }}
                 />
-              </Fragment>
+              </div>
             );
           })}
+          </div>
         </div>
       </div>
-      {focus && (
+      {(focus || entry?.hasMoreAfter || unread.count>0) && (
         <button className="return-latest" onClick={() => returnToLatest(accountId, channelId)}>
-          Você está vendo uma mensagem da busca · Voltar às mais recentes
+          {focus ? "Você está vendo uma mensagem da busca · Voltar às mais recentes" : unread.count?`${unread.count} nova${unread.count===1?"":"s"} · Mais recentes`:"Mais recentes"}
         </button>
       )}
       <Composer
@@ -733,8 +936,19 @@ export function Chat(props: ChatProps) {
         canSend={props.canSend}
         canAttach={props.canAttach}
         mentionables={props.mentionables}
+        draft={draft}
+        onDraftChange={changeDraft}
         replyTo={replyTo}
-        clearReply={() => setReplyTo(null)}
+        replyToId={draft.replyToId}
+        replyValid={replyValid}
+        replyStatus={replyStatus}
+        onClearReply={() => { changeDraft({ replyToId: null }); setReplyResolution(null); }}
+        onRetryReply={() => setReplyValidationAttempt((attempt) => attempt + 1)}
+        draftPersistenceFailed={draftPersistenceFailed}
+        onDiscard={() => {
+          changeDraft({ text: "", replyToId: null, attachmentCount: 0 });
+          setReplyResolution(null);
+        }}
         nameOf={nameOf}
       />
       <TypingLine accountId={accountId} channelId={channelId} me={me} nameOf={nameOf} />
