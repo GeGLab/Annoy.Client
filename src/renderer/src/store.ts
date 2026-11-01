@@ -31,7 +31,7 @@ export interface Account {
   /** First observed connection failure; cleared as soon as the server responds. */
   offlineSince?: number;
 }
-export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
+export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null; /** Annoy accounts: the e-mail filled in for the next sign-in. */ annoyEmail?: string };
 
 export interface ChannelMessages {
   items: Message[];
@@ -40,7 +40,7 @@ export interface ChannelMessages {
 }
 
 export interface InstanceState {
-  status: "connecting" | "ready" | "offline" | "invalid";
+  status: "connecting" | "ready" | "offline" | "invalid" | "outdated";
   user: User | null;
   servers: ServerSummary[];
   serverStates: Record<string, ServerState>;
@@ -77,7 +77,7 @@ export type Modal =
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings"; section?: "voice" | "security"; accountId?: string }
+  | { kind: "userSettings"; section?: "voice" | "security" | "updates"; accountId?: string }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }

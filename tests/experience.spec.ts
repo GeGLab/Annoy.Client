@@ -908,7 +908,7 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
     await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Novidades do Annoy", exact: true })).toBeVisible();
     await page.screenshot({ path: join(capture, "annoy-news.png") });
-    await page.evaluate(async () => { const { removeAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); removeAccount("test"); openModal({ kind: "switchAccount" }); });
+    await page.evaluate(async () => { const { signOutAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); signOutAccount("test"); openModal({ kind: "switchAccount" }); });
     await expect(page.locator(".saved-account")).toHaveCount(1);
     expect(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("distopic.rememberedAccounts")!)))).not.toContain("token");
     await page.locator(".saved-account").click();

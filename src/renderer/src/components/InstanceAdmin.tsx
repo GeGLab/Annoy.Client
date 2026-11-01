@@ -404,7 +404,7 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
     setBusy(false);
     if (ok) {
       closeModal();
-      removeAccount(accountId);
+      removeAccount(accountId, "remove");
       toast("Conta excluída");
     }
   };

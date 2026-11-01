@@ -144,7 +144,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         disabled={busy}
         onClick={() =>
           requestNavigation(async () => {
-            if (await confirmAction(`Desconectar ${account?.instanceName}?`)) removeAccount(accountId);
+            if (await confirmAction(`Sair de ${account?.instanceName}? Para voltar, você digita a senha de novo.`)) removeAccount(accountId, "signOut");
           })
         }
       >
@@ -415,7 +415,7 @@ export function UserSettingsModal() {
                   return (
                     user && (
                       <div className="settings-account" key={account.id}>
-                        {account.annoy && <span className="account-badge" title="Entra com a conta Annoy"><Icon name="check" size={12} />Conta Annoy</span>}
+                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title="Entra com a conta Annoy"><Icon name="check" size={12} />Conta Annoy</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>Sair da conta Annoy</button></p>}
                         <ProfileEditor
                           account={account}
                           user={user}

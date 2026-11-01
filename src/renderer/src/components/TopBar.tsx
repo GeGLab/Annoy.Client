@@ -188,7 +188,7 @@ export function TopBar() {
         {accounts.map((account) => {
           const inst = instances[account.id];
           return <div key={account.id} className="tab-group">
-            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status === "invalid" ? "sessão expirada, entre de novo" : "sem conexão. Clique para tentar agora"}`} aria-label={`${account.instanceName}: ${inst?.status === "invalid" ? "entrar novamente" : "tentar reconectar"}`} onClick={() => inst?.status === "invalid" ? setState((s) => { s.modal = { kind: "addAccount" }; }) : reconnect(account.id)} />}
+            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status === "outdated" ? "atualize o Annoy para conectar" : inst?.status === "invalid" ? "sessão expirada, entre de novo" : "sem conexão. Clique para tentar agora"}`} aria-label={`${account.instanceName}: ${inst?.status === "outdated" ? "atualizar o Annoy" : inst?.status === "invalid" ? "entrar novamente" : "tentar reconectar"}`} onClick={() => inst?.status === "outdated" ? openModal({ kind: "userSettings", section: "updates" }) : inst?.status === "invalid" ? openModal({ kind: "addAccount", accountId: account.id }) : reconnect(account.id)} />}
             {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
           </div>;
         })}

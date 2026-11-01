@@ -191,23 +191,32 @@ export function addAccountQuietly(account: Account): void {
   connectAccount(account);
 }
 
-/** Signs out of one account: it stays among the saved accounts and in the Annoy account's server list. */
+/** Signs out of one account: it stays saved, with its user name (or Annoy e-mail) filled in;
+ * coming back always asks for the password again. */
 export function signOutAccount(accountId: string): void {
-  removeAccount(accountId, true, true);
+  removeAccount(accountId, "signOut");
 }
 
-export function removeAccount(accountId: string, forget = true, keepInVault = false): void {
+/**
+ * "signOut" keeps the account saved for a new sign-in with the password.
+ * "remove" leaves nothing behind: coming back needs the complete sign-in.
+ * "internal" is for the app's own cleanups (Annoy sign-out, migrations).
+ */
+export function removeAccount(accountId: string, mode: "signOut" | "remove" | "internal" = "remove"): void {
   void window.distopic?.auth.logoutLocal(accountId);
   if (!window.distopic) setState(s => { s.access.localAccounts = s.access.localAccounts.filter(id => id !== accountId); s.access.allowed = s.access.global || s.access.localAccounts.length > 0; });
   const account = getState().accounts.find((item) => item.id === accountId);
   const user = getState().instances[accountId]?.user;
   disconnectDirectCall(accountId);
-  if (forget && account && user) setState((s) => {
-    const { token: _token, ...remembered } = account;
-    s.rememberedAccounts = [...s.rememberedAccounts.filter((item) => item.id !== accountId), { ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }];
+  setState((s) => {
+    s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== accountId);
+    if (mode === "signOut" && account && user) {
+      const { token: _token, ...remembered } = account;
+      s.rememberedAccounts.push({ ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, ...(account.annoy && s.global && { annoyEmail: s.global.email }) });
+    }
   });
-  // Leaving on purpose: the global vault forgets it too, so it doesn't come back.
-  if (forget && !keepInVault && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
+  // Removing on purpose: the Annoy account's server list forgets it too, so it doesn't come back.
+  if (mode === "remove" && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.gateway.close();
@@ -236,7 +245,7 @@ export function removeServerConnection(accountId: string): void {
     toast("Transfira a propriedade ou esteja sozinho para remover. Se o servidor estiver offline, aguarde 7 dias.");
     return;
   }
-  removeAccount(accountId);
+  removeAccount(accountId, "remove");
 }
 
 export function connectAll(): void {

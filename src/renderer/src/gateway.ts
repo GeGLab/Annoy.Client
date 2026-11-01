@@ -1,4 +1,5 @@
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
+import { CLIENT_VERSION } from "./lib/client-version.ts";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";
 import {secureHttpUrl} from '../../shared/transport.ts';
@@ -9,7 +10,7 @@ const MAX_BACKOFF_MS = 30_000;
 /** After the server says it's restarting, retry every second for this long instead of backing off. */
 const RESTART_WINDOW_MS = 3 * 60_000;
 
-type Status = "connecting" | "ready" | "offline" | "invalid";
+type Status = "connecting" | "ready" | "offline" | "invalid" | "outdated";
 
 /** One reconnecting gateway connection per account. */
 export class Gateway {
@@ -50,7 +51,7 @@ export class Gateway {
       let dpop:string|null=null;
       try{dpop=await window.distopic?.crypto?.proof(this.url,this.token,'GET','/gateway')??null;}catch{socket.close(4004,'Desbloqueie o cofre local');return;}
       if(this.socket!==socket)return;
-      this.send({ op: "identify", ...(dpop?{dpop}:{}), token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
+      this.send({ op: "identify", ...(dpop?{dpop}:{}), clientVersion: CLIENT_VERSION, token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
     };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
@@ -67,6 +68,8 @@ export class Gateway {
       if (this.socket === socket) this.socket = null;
       if (this.closed) return;
       if (e.code === 4004) return this.onStatus("invalid");
+      // The server needs a newer app: no retries until the app is updated.
+      if (e.code === 4011) return this.onStatus("outdated");
       if (e.code === 4010) {
         // During an update the new version is already answering: reconnect at
         // once, spread over a moment so every client doesn't land together.

@@ -1,4 +1,5 @@
 import { GlobalSignIn } from "./GlobalSignIn.tsx";
+import { clientAccepted, updateRequired } from "../lib/client-version.ts";
 import { Select } from "./ui/select.tsx";
 import type { AuthResponse, InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -10,7 +11,7 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, migrateServer, signInServer, signOutGlobal, syncVault, toAccount } from "../global.ts";
+import { GlobalError, globalSignedIn, migrateServer, signInServer, signOutGlobal, syncVault, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -29,6 +30,12 @@ export function AddAccountModal() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const globalAccount = useStore(s => s.global);
+  // A remembered name is not a session: without a live Annoy session, ask for the Annoy sign-in.
+  const annoyReady = !!globalAccount && globalSignedIn();
+  // Signing in again after leaving an account always asks for the Annoy credentials:
+  // a session still open in the app never brings a signed-out account back by itself.
+  const [reauthenticated, setReauthenticated] = useState(false);
+  const needsCredentials = !annoyReady || (!!remembered?.annoy && !reauthenticated);
   const [globalFirst, setGlobalFirst] = useState(false);
   const [migration, setMigration] = useState(false);
   const discordAbort = useRef<AbortController | null>(null);
@@ -42,6 +49,7 @@ export function AddAccountModal() {
     let active = true;
     void findInstance(address).then(async value => {
       if (!active) return;
+      if (!clientAccepted(value.info)) { setError(updateRequired(value.info)); return; }
       setInfo(value);
       if (saved) {
         const res = await fetch(`${value.url}/api/auth/migration/status`, {
@@ -58,7 +66,12 @@ export function AddAccountModal() {
 
   async function probe(e: FormEvent) {
     e.preventDefault(); setError(null); setBusy(true);
-    try { setInfo(await findInstance(address)); }
+    try {
+      const found = await findInstance(address);
+      // A server that needs a newer app is not opened: the person updates first.
+      if (!clientAccepted(found.info)) { setError(updateRequired(found.info)); return; }
+      setInfo(found);
+    }
     catch (err) { setError(err instanceof TypeError ? "Não foi possível alcançar o servidor" : (err as Error).message); }
     finally { setBusy(false); }
   }
@@ -123,7 +136,7 @@ export function AddAccountModal() {
     </form> : <>
       {!localMode && <p role={migration ? "alert" : undefined}>Atualização de segurança: este servidor exige uma conta Annoy. Contas locais existentes devem cadastrar ou acessar uma conta Annoy e concluir a migração para preservar seu histórico e permissões.</p>}
       {localMode && <p>{info.info.accountMode === "local" ? "O administrador escolheu contas locais. Este servidor não se comunica com o serviço de contas Annoy." : "Este servidor usa uma versão anterior do Annoy. Entre com a sua conta local."}{migration && " Defina uma senha local para continuar com sua conta."}</p>}
-      {!localMode && !globalAccount ? <GlobalSignIn /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
+      {!localMode && needsCredentials ? <GlobalSignIn email={remembered?.annoyEmail} onSignedIn={() => { setReauthenticated(true); if (remembered?.annoy) void withGlobal(); }} /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
         {migration ? ownershipFields : (localMode || globalFirst) && <>
           {localMode && <div className="tabs"><Button type="button" variant="ghost" onClick={() => setMode("login")}>Entrar</Button><Button type="button" variant="ghost" disabled={!info.info.registrationOpen} onClick={() => setMode("register")}>Criar conta local</Button></div>}
           <Field label="Usuário neste servidor"><Input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
@@ -153,25 +166,12 @@ export function AddAccountModal() {
 
 export function SwitchAccountModal() {
   const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
-  const annoy = useStore((s) => s.global);
   const current = useStore((s) => ("accountId" in s.view ? s.view.accountId : null));
-  // Server accounts that sign in through the Annoy account belong to its single row.
-  const annoyServers = annoy ? accounts.filter((account) => account.annoy) : [];
-  const listed = annoy ? accounts.filter((account) => !account.annoy) : accounts;
-  const annoyInUse = !!annoy && (current === null || annoyServers.some((account) => account.id === current));
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
-  /** Selecting the Annoy account always switches: to its first server account, or to the account itself. */
-  const selectAnnoy = () => {
-    const linked = getState().accounts.find((account) => account.annoy);
-    navigate({ kind: "home", accountId: linked?.id ?? null, dmId: null });
-    closeModal();
-    void syncVault();
-  };
-  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{annoy && <div className="saved-account-row"><button className={annoyInUse ? "annoy-account-option active" : "annoy-account-option"} aria-current={annoyInUse ? "true" : undefined} onClick={selectAnnoy}><Avatar user={{ id: annoy.id, username: annoy.name, displayName: annoy.name, avatarUrl: annoyServers.map((account) => instances[account.id]?.user?.avatarUrl).find(Boolean) ?? null }} size={40} /><span><strong>{annoy.name}</strong><small>Conta Annoy · {annoyServers.length === 1 ? "1 servidor" : `${annoyServers.length} servidores`} · {annoyInUse ? "Em uso" : "Conectada"}</small></span>{annoyInUse && <Icon name="check" />}</button><Tooltip content="Sair da conta Annoy"><button className="icon-btn" aria-label="Sair da conta Annoy" onClick={() => void signOutGlobal()}><Icon name="logout" /></button></Tooltip></div>}
-
-    {listed.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className={account.id === current ? "saved-account active" : "saved-account"} aria-current={account.id === current ? "true" : undefined} onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">
+    {accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className={account.id === current ? "saved-account active" : "saved-account"} aria-current={account.id === current ? "true" : undefined} onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
     {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.annoy ? "Conta Annoy" : "Conta local"} · {account.instanceName} · {account.pending || instances[account.id]?.status === "offline" || instances[account.id]?.status === "invalid" ? "Desconectada" : account.id === current ? "Em uso" : "Conectada"}</small></span>{account.id === current && <Icon name="check" />}</button><Tooltip content="Sair desta conta"><button className="icon-btn" aria-label={`Sair de ${name}`} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
-    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
+    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.annoy ? "Conta Annoy" : "Conta local"} · {account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
   </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;
 }
 

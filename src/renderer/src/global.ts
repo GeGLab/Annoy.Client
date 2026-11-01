@@ -122,7 +122,7 @@ export function signOutGlobal(callApi = true): Promise<void> {
     else setState(s => { s.access = { allowed: false, global: false, localAccounts: [] }; });
     const client = await import("./client.ts");
     const local = new Set(getState().access.localAccounts);
-    for (const account of [...getState().accounts]) if (!local.has(account.id)) client.removeAccount(account.id, false);
+    for (const account of [...getState().accounts]) if (!local.has(account.id)) client.removeAccount(account.id, "internal");
     await persist(null);
     if (callApi && previous) await request(GLOBAL_URL, "/v1/auth/logout", { body: {}, token: previous }).catch(() => undefined);
   })().finally(() => { signingOut = null; });
@@ -253,7 +253,7 @@ export async function migrateServer(url: string, info: InstanceInfo, credentials
   });
   if (auth.removedUserId) {
     const stale = getState().accounts.find(a => a.url === url && a.userId === auth.removedUserId);
-    if (stale) (await import("./client.ts")).removeAccount(stale.id, false);
+    if (stale) (await import("./client.ts")).removeAccount(stale.id, "internal");
     setState(s => { s.rememberedAccounts = s.rememberedAccounts.filter(a => a.url !== url || a.userId !== auth.removedUserId); });
   }
   if (!local) void rememberServer({ url, serverId: info.globalServerId! });

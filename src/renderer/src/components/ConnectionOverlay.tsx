@@ -105,7 +105,7 @@ export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
                 variant="ghost"
                 onClick={async () => {
                   if (await confirmAction(`Desconectar a conta de ${a.instanceName} deste cliente? Você poderá adicioná-la novamente.`))
-                    removeAccount(a.id);
+                    removeAccount(a.id, "signOut");
                 }}
               >
                 Desconectar conta
