@@ -1,6 +1,6 @@
-# Release de segurança de política de contas — pendente
+# Release de segurança de política de contas — 0.9.0
 
-**Status: aguardando aprovação explícita de Gustavo. Não publicar ainda.**
+**Status: aprovada por Gustavo em 2026-11-01 e publicada como 0.9.0 (obrigatória). O servidor 0.9.0 exige o cliente 0.9.0.**
 
 Versão final e data de publicação serão definidas na aprovação. O arquivo ativo
 `security/advisories.json` permanece sem alteração; este documento não ativa
@@ -15,7 +15,7 @@ local válida em uma instância explicitamente configurada nesse modo.
 Contas exclusivamente globais definem uma senha local por sessão anterior ou
 código de recuperação do administrador. Histórico e permissões são preservados.
 
-Pré-requisitos antes de qualquer publicação: auditoria independente, execução Windows/Linux, chave pública de produção embutida e ensaio de instalação do manifesto Ed25519. O conjunto atual não implementa SFrame e não pode ser anunciado como mídia E2EE. Ver `annoy-server/docs/security/README.md` no workspace irmão.
+Pré-requisitos antes de qualquer publicação: auditoria independente, execução Windows/Linux, chave pública de produção embutida e ensaio de instalação do manifesto Ed25519. A 0.9.0 inclui SFrame nas chamadas. Ver `annoy-server/docs/security/README.md` no workspace irmão.
 
 Depois da aprovação:
 

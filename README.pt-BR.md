@@ -25,7 +25,8 @@
 
 **Atualizações:** o app avisa quando sai uma versão nova e você decide quando
 atualizar. A única exceção é uma correção de segurança crítica, que é
-obrigatória. Veja o [SECURITY.md](SECURITY.md).
+obrigatória. Desde a 0.9.0, todo update exige um manifesto assinado (Ed25519),
+e o arquivo é conferido de novo antes de instalar. Veja o [SECURITY.md](SECURITY.md).
 
 ## Conexão com a instância
 
@@ -54,7 +55,17 @@ Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
   alguém ouvir. Veja as [medições](docs/noise-suppression.md).
 - **Moderação:** editor de cargos, permissões por canal, convites, expulsar e
   banir.
-- **Amigos e DMs:** pedidos de amizade, presença e mensagens diretas.
+- **Criptografia de ponta a ponta (0.9.0):** mensagens, anexos, edições e
+  reações novas são cifradas com OpenMLS; o servidor guarda só texto cifrado.
+  Canais de voz e chamadas privadas usam SFrame: o SFU só repassa mídia cifrada.
+  O histórico de antes do E2EE fica separado e somente leitura.
+- **Uma conta por vez:** cada servidor usa contas Annoy ou contas locais.
+  Trocar de conta troca os servidores que aparecem.
+- **Histórico longo:** carregamento sob demanda, posição de leitura
+  sincronizada, mensagens fixadas e tempo de vida definido pelo administrador
+  em cada canal.
+- **Amigos e DMs:** pedidos de amizade, presença, mensagens diretas e perfil
+  completo com público por campo.
 - **Importar do Discord** e **Entrar com Discord**, pela API oficial.
 - **Notificações** de menção e DM, e contadores de não lidas (inclusive os das
   abas de serviço).
@@ -115,6 +126,10 @@ da conta Annoy, as páginas nativas abertas são encerradas e a tela de login
 volta imediatamente. A exceção exige uma sessão local válida em uma instância
 com `ANNOY_ACCOUNT_MODE=local`; apenas conhecer o endereço não libera o cliente.
 
-## Implementação de segurança em validação
+## Segurança
 
-Este código local integra OpenMLS para mensagens/anexos e exige Rust/Cargo na build. Não foi publicado em release nesta sessão. Histórico legado permanece identificado; envio novo legível é bloqueado. SFrame e validação Windows continuam pendentes. A instalação de updates exige chave pública confiável e manifesto Ed25519; pins de produção ainda não foram configurados. Ver a entrega completa, testes, migrações e riscos em `annoy-server/docs/security/README.md` no workspace irmão. Não classificar o produto como totalmente seguro antes da auditoria independente.
+A 0.9.0 é uma atualização de segurança obrigatória: OpenMLS nas mensagens e
+anexos, SFrame nas chamadas, sessões ligadas ao dispositivo, modo de conta
+exclusivo por servidor, updates assinados e versão mínima do app informada pelo
+servidor. Compilar exige Rust/Cargo. Veja as [notas da versão](docs/releases/0.9.0.md)
+e o [SECURITY.md](SECURITY.md). Ainda não houve auditoria independente.

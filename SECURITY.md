@@ -40,13 +40,13 @@ versions lower than `fixedIn`. Publish the fixed release first, then add the
 advisory. If the advisory file cannot be fetched, a previously detected critical advisory remains blocking. With no known advisory, regular updates stay optional.
 
 
-## Account policy security release (pending approval)
+## Account policy security release (0.9.0)
 
-The account-mode update is a mandatory security release. Its public advisory
-must be activated only after Gustavo explicitly approves publishing the release,
-and after the verified Windows/Linux installers and update metadata are available.
-No public advisory is activated by these source changes. See
-[the pending release notes](security/ACCOUNT-MODE-RELEASE.md).
+The account-mode update shipped as the mandatory 0.9.0 release, approved by
+Gustavo on 2026-11-01. The critical advisory in `security/advisories.json`
+(`fixedIn: 0.9.0`) is activated only after the Windows/Linux installers, update
+metadata and signed manifests are published and checked. The 0.9.0 server also
+requires client 0.9.0 (`minClientVersion`). See [release notes](docs/releases/0.9.0.md).
 
 Detection is polling-based (up to one minute plus network/cache delay), so it
 cannot promise instantaneous delivery. Existing 0.8.0 clients still use their
@@ -54,6 +54,13 @@ installed updater: a six-hour poll and a user-triggered restart. New source
 cannot change an already installed binary before it updates. Unsupported
 packages, offline clients and stopped applications cannot update themselves.
 
-## Signed artifacts in the security implementation
+## Signed artifacts
 
-The local security implementation requires an Ed25519 signed artifact manifest before an update becomes ready, and rechecks its hash before installation, including install on quit. Query/download and advisory mechanisms remain present. `src/main/update-trust.ts` intentionally has no production trust key yet: installation without a trusted signature fails closed. Old unsigned releases therefore need a manually verified bootstrap installer. No production key, signed release or new critical advisory was published. See the sibling `annoy-server/docs/security/UPDATE-SIGNING.md` for provisioning, rotation, tested cases and limitations; Authenticode and real Windows installation are not validated.
+Since 0.9.0 an update becomes ready only after its Ed25519 manifest
+(`annoy-<platform>-<arch>-<version>.signed.json`, attached to the release) is
+verified against the key bundled in `src/main/update-trust.ts` (`annoy-release-2026`).
+The file hash is checked again before installing, including install on quit.
+Manifests are signed offline with `scripts/sign-update.mjs`; the private key
+never goes to CI. Clients on 0.8.0 still use their old updater, which installs
+0.9.0 without a manifest; from 0.9.0 on, unsigned updates fail closed.
+Authenticode code signing for Windows is not configured yet.

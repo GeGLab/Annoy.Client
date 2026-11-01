@@ -34,10 +34,12 @@ protected your PC"*. Click **More info → Run anyway**.
 
 ### Updates
 
-The app checks for new versions on launch and every few hours, and **always
+The app checks for new versions on launch and every minute, and **always
 asks before updating**. A banner offers *Update* or *Later*. The one exception
 is a critical security fix: then the update downloads by itself and the app
-asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
+asks you to restart before continuing. Since 0.9.0 every update must carry a
+signed Ed25519 manifest, and the file is checked again before it installs.
+See [SECURITY.md](SECURITY.md).
 
 ## Features
 
@@ -66,7 +68,16 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   and presence reconnect automatically; rejoining media requires your action.
 - **Moderation.** Role editor, per-channel permission overwrites
   (allow/inherit/deny), invites, kick, ban and ban list.
-- **Friends and DMs.** Friend requests, presence, direct messages.
+- **End-to-end encryption (0.9.0).** New messages, attachments, edits and
+  reactions are encrypted with OpenMLS; the server stores only ciphertext.
+  Voice channels and private calls use SFrame, so the SFU only forwards
+  encrypted media. History from before E2EE stays separate and read-only.
+- **One account at a time.** Each server uses either Annoy accounts or local
+  accounts. Switching accounts switches the servers you see.
+- **Long histories.** On-demand loading, synced read position, pinned
+  messages and per-channel message lifetime set by the server admins.
+- **Friends and DMs.** Friend requests, presence, direct messages and full
+  profiles with per-field audiences.
 - **Discord import wizard.** Choose the channels, history, roles and options,
   then watch the import progress live.
 - **Sign in with Discord.** Uses the official OAuth2 in your browser and pulls
@@ -190,6 +201,10 @@ npm run build
 
 See [development](docs/development.md) for automatic Electron binary preparation, shared UI components and isolated tests. [Search and private activity](docs/search-activity.md) documents client/server integration and opt-in friend activity.
 
-## Implementação de segurança em validação
+## Security
 
-Este código local integra OpenMLS para mensagens/anexos e exige Rust/Cargo na build. Não foi publicado em release nesta sessão. Histórico legado permanece identificado; envio novo legível é bloqueado. SFrame e validação Windows continuam pendentes. A instalação de updates exige chave pública confiável e manifesto Ed25519; pins de produção ainda não foram configurados. Ver a entrega completa, testes, migrações e riscos em `annoy-server/docs/security/README.md` no workspace irmão. Não classificar o produto como totalmente seguro antes da auditoria independente.
+0.9.0 is a mandatory security release: OpenMLS for messages and attachments,
+SFrame for calls, device-bound sessions, exclusive account modes per server,
+signed updates and a minimum client version announced by the server. Building
+from source needs Rust/Cargo. See [release notes](docs/releases/0.9.0.md) and
+[SECURITY.md](SECURITY.md). No independent audit has been done yet.
