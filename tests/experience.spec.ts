@@ -1,5 +1,5 @@
 import {electron} from './fixtures/electron-launch.ts';
-import {uiReactionFixture} from "./fixtures/ui-reactions.ts";
+import {uiReactionFixture, uiSendFixture} from "./fixtures/ui-reactions.ts";
 import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect,  type Page, type WebSocketRoute } from "@playwright/test";
 import { createRequire } from "node:module";
@@ -1919,18 +1919,17 @@ test("clean navigation starts with direct messages and keeps secondary destinati
 });
 
 test("installed media packs open their collection and send a real attachment", async () => {
-  const { page, close } = await launch();
+  const { app, page, close } = await launch();
   try {
     await seed(page);
     await expect(page.locator(".brand-symbol").first()).not.toHaveCSS("mask-image", "none");
-    let uploaded = false;
-    await page.route("http://experience.test/api/channels/general/messages", async (route) => {
-      if (route.request().method() !== "POST") return route.fulfill({ contentType: "application/json", body: "[]" });
-      expect(route.request().headers()["content-type"]).toContain("multipart/form-data");
-      expect(route.request().postDataBuffer()!.includes(Buffer.from('filename="Gato.png"'))).toBe(true);
-      uploaded = true;
-      await route.fulfill({ contentType: "application/json", body: "{}" });
+    // Attachments go to the native MLS service, never as a plaintext upload.
+    let plaintext = false;
+    await page.route("https://experience.test/api/channels/general/messages", async (route) => {
+      if (route.request().method() === "POST") plaintext = true;
+      await route.fulfill({ contentType: "application/json", body: "[]" });
     });
+    await uiSendFixture(app);
     await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
     await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
@@ -1943,7 +1942,8 @@ test("installed media packs open their collection and send a real attachment", a
     await picker.getByRole("button", { name: "Gato", exact: true }).click();
     await expect(page.locator(".pending-file")).toContainText("Gato.png");
     await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-    await expect.poll(() => uploaded).toBe(true);
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__uiSendFixture.sends.flatMap((send: { files: string[] }) => send.files))).toEqual(["Gato.png"]);
+    expect(plaintext).toBe(false);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
     await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
@@ -1952,7 +1952,7 @@ test("installed media packs open their collection and send a real attachment", a
   } finally { await close(); }
 });
 
-test("profile preview follows unsaved drafts and global account has its own page", async () => {
+test("profile preview follows unsaved drafts and the Annoy account has no separate page", async () => {
   const { page, close } = await launch();
   try {
     await seed(page);
@@ -1972,33 +1972,26 @@ test("profile preview follows unsaved drafts and global account has its own page
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
     await preview.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(capture, "profile-live-preview-light-minimum.png") });
-    await page.getByRole("button", { name: "Conta global", exact: true }).click();
-    await expect(page.locator(".profile-editor")).toHaveCount(0);
-    await expect(page.locator(".global-signin-form")).toBeVisible();
-    const register = page.getByRole("link", { name: "Criar conta global" });
-    await expect(register).toHaveAttribute("href", /\/cadastro$/);
-    await expect(register).toHaveAttribute("target", "_blank");
-    await expect(page.getByLabel("E-mail", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
+    // The Annoy account lives in "Meu perfil e contas": no separate page and no sign-in form here.
+    await expect(page.getByRole("button", { name: "Conta global", exact: true })).toHaveCount(0);
+    await expect(page.locator(".global-signin-form")).toHaveCount(0);
     await expect(page.locator(".settings-savebar")).toBeVisible();
-    await page.screenshot({ path: join(capture, "global-account-light-minimum.png") });
-    await page.setViewportSize({ width: 1320, height: 840 });
-    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "dark"; }); });
-    await page.screenshot({ path: join(capture, "global-account-dark.png") });
   } finally { await close(); }
 });
 
 test("friend message reactions explain an old server and work when support is advertised", async () => {
-  const { page, close } = await launch();
+  const { app, page, close } = await launch();
   try {
     await seed(page);
+    await uiReactionFixture(app);
+    await page.route("https://experience.test/api/channels/dm-friend/crypto", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ channel: { active: true } }) }));
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         const i = s.instances.test, friend = { id: "friend", username: "bruna", displayName: "Bruna", avatarUrl: null };
         i.relationships = [{ user: friend, status: "friend" }];
         i.dms = [{ id: "dm-friend", recipients: [friend] }];
-        i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [] }], hasMore: false, loading: false };
+        i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [], protection: "e2ee", reactions: [{ emoji: "👍", userIds: ["friend"] }] }], hasMore: false, loading: false };
         s.view = { kind: "home", accountId: "test", dmId: "dm-friend" };
       });
     });
@@ -2007,16 +2000,13 @@ test("friend message reactions explain an old server and work when support is ad
     await message.getByRole("button", { name: "Adicionar reação", exact: true }).click();
     await expect(page.getByText("Esta instância ainda não oferece reações.", { exact: false })).toBeVisible();
     await page.screenshot({ path: join(capture, "reaction-server-requirement-dark.png") });
-    await page.route("http://experience.test/api/channels/dm-friend/messages/message/reactions/**", async (route) => {
-      const current = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.messages["dm-friend"].items[0]);
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...current, reactions: route.request().method() === "PUT" ? [{ emoji: "👍", userIds: ["friend", "person"] }] : [{ emoji: "👍", userIds: ["friend"] }] }) });
-    });
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
     await message.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
     const reaction = message.getByRole("button", { name: "👍: 2 reações", exact: true });
     await expect(reaction).toHaveAttribute("aria-pressed", "true");
     await reaction.click();
     await expect(message.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
+    expect(await app.evaluate(() => (globalThis as any).__uiReactionFixture.writes)).toEqual(["PUT", "DELETE"]);
   } finally { await close(); }
 });
 
@@ -2024,7 +2014,7 @@ test("compact reactions expand and search while library management lives in sett
   const { page, close } = await launch();
   try {
     await seed(page);
-    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; s.instances.test.messages.general.items[0].protection = "e2ee"; }); });
     const row = page.locator('[data-message-id="message"]');
     await row.hover();
     await row.getByRole("button", { name: "Adicionar reação", exact: true }).click();

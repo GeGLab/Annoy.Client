@@ -14,8 +14,8 @@ const deferred = () => { let resolve!: () => void; const promise = new Promise<v
 async function seed(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const id of ["a", "b"]) {
-    await page.route(`http://requests-${id}.test/api/**`, (route) => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith("/servers/shared") ? state(id.toUpperCase()) : [] }));
-    await page.routeWebSocket(`ws://requests-${id}.test/gateway`, (ws) => ws.onMessage((raw) => {
+    await page.route(`https://requests-${id}.test/api/**`, (route) => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith("/servers/shared") ? state(id.toUpperCase()) : [] }));
+    await page.routeWebSocket(`wss://requests-${id}.test/gateway`, (ws) => ws.onMessage((raw) => {
       const payload = JSON.parse(String(raw));
       if (payload.op === "identify") ws.send(JSON.stringify({ t: "READY", d: {
         user: me, servers: [summary(id.toUpperCase())], dms: [], relationships: [], presences: { me: "online" },
@@ -26,8 +26,11 @@ async function seed(page: Page) {
   }
   await page.goto("http://127.0.0.1:5178");
   await page.evaluate(async () => {
+    // The app opens only for a validated session; tests start as signed in.
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    setState((s: any) => { s.access = { allowed: true, global: true, localAccounts: [] }; s.global = { id: "global-test", name: "Test", email: "test@example.com" }; });
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-    for (const id of ["a", "b"]) addAccount({ id, url: `http://requests-${id}.test`, userId: "me", token: `synthetic-${id}`, instanceName: `Instância ${id}` });
+    for (const id of ["a", "b"]) addAccount({ id, url: `https://requests-${id}.test`, userId: "me", token: `synthetic-${id}`, instanceName: `Instância ${id}` });
   });
   await expect.poll(() => page.evaluate(async () => {
     const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -45,7 +48,7 @@ test("requests show history failures with retry and preserve the message draft a
   let historyReads = 0, writes = 0;
   let failHistory = true;
   const write = deferred();
-  await page.route("http://requests-a.test/api/channels/chat/messages**", async (route) => {
+  await page.route("https://requests-a.test/api/channels/chat/messages**", async (route) => {
     if (route.request().method() === "POST") {
       writes++;
       await write.promise;
@@ -69,21 +72,20 @@ test("requests show history failures with retry and preserve the message draft a
   expect(historyReads).toBe(2);
   const input = page.getByRole("textbox", { name: "Conversar em #geral" });
   await input.fill("Texto preservado após erro");
+  // Without the desktop crypto service a message is never sent in plaintext; the draft stays.
   await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-  await expect.poll(() => writes).toBe(1);
-  await input.press("Enter");
+  await expect(page.locator(".toast")).toContainText("serviço criptográfico");
   write.resolve();
-  await expect(page.locator(".toast")).toContainText("Envio indisponível");
   await expect(input).toHaveValue("Texto preservado após erro");
   await expect(page.getByRole("button", { name: "Enviar mensagem", exact: true })).toBeEnabled();
-  expect(writes).toBe(1);
+  expect(writes).toBe(0);
 });
 
 test("requests coalesce server reads and cannot navigate across accounts with identical server/channel IDs", async ({ page }) => {
   await seed(page);
   const late = deferred();
   let reads = 0;
-  await page.route("http://requests-a.test/api/servers/shared**", async (route) => {
+  await page.route("https://requests-a.test/api/servers/shared**", async (route) => {
     reads++;
     await late.promise;
     await route.fulfill({ json: state("A atrasada") }).catch(() => {});
@@ -108,7 +110,7 @@ test("requests cancel stale history/context and replaced-account responses canno
   await open(page);
   const late = deferred();
   let started = 0;
-  await page.route("http://requests-a.test/api/channels/chat/messages?around=target", async (route) => {
+  await page.route("https://requests-a.test/api/channels/chat/messages?around=target", async (route) => {
     started++;
     await late.promise;
     await route.fulfill({ json: [message] }).catch(() => {});
@@ -125,7 +127,7 @@ test("requests cancel stale history/context and replaced-account responses canno
 
   const old = deferred();
   let oldStarted = false;
-  await page.route("http://requests-a.test/api/obsolete", async (route) => { oldStarted = true; await old.promise; await route.fulfill({ json: { stale: true } }).catch(() => {}); });
+  await page.route("https://requests-a.test/api/obsolete", async (route) => { oldStarted = true; await old.promise; await route.fulfill({ json: { stale: true } }).catch(() => {}); });
   await page.evaluate(async () => {
     const client = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     (window as any).__old = client.apiFor("a").get("/obsolete").catch((error: Error) => error.name);
@@ -133,7 +135,7 @@ test("requests cancel stale history/context and replaced-account responses canno
   await expect.poll(() => oldStarted).toBe(true);
   await page.evaluate(async () => {
     const client = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-    client.addAccount({ id: "a", url: "http://requests-a.test", userId: "me", token: "replacement-token", instanceName: "Substituta" });
+    client.addAccount({ id: "a", url: "https://requests-a.test", userId: "me", token: "replacement-token", instanceName: "Substituta" });
   });
   expect(await page.evaluate(() => (window as any).__old)).toBe("AbortError");
   old.resolve();
@@ -144,7 +146,7 @@ test("requests distinguish forbidden access from an expired session discovered o
   await seed(page);
   await open(page);
   let status = 403;
-  await page.route("http://requests-a.test/api/private", (route) => route.fulfill({ status, contentType: "text/html", body: "<html>proxy</html>" }));
+  await page.route("https://requests-a.test/api/private", (route) => route.fulfill({ status, contentType: "text/html", body: "<html>proxy</html>" }));
   const ask = () => page.evaluate(async () => {
     const client = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     return client.apiFor("a").get("/private").catch((error: any) => ({ status: error.status, kind: error.kind }));
@@ -154,30 +156,31 @@ test("requests distinguish forbidden access from an expired session discovered o
   status = 401;
   expect(await ask()).toEqual({ status: 401, kind: "unauthorized" });
   await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
-  await page.getByRole("button", { name: "B · Instância b", exact: true }).click();
+  // Only the selected account is shown; the other one stays usable after switching to it.
+  await open(page, "b");
   await expect(page.getByRole("textbox", { name: "Conversar em #geral" })).toBeEditable();
 });
 
 test("requests cancel authentication when its dialog is closed, without adding an account later", async ({ page }) => {
   const late = deferred();
   let started = false;
-  await page.route("http://auth.test/api/info", (route) => route.fulfill({ json: { name: "Teste", registrationOpen: true, registration: "open", discordLogin: false } }));
-  await page.route("http://auth.test/api/auth/login", async (route) => {
+  await page.route("https://auth.test/api/info", (route) => route.fulfill({ json: { name: "Teste", registrationOpen: true, registration: "open", discordLogin: false } }));
+  await page.route("https://auth.test/api/auth/login", async (route) => {
     started = true;
     await late.promise;
     await route.fulfill({ json: { user: me, token: "obsolete-login" } }).catch(() => {});
   });
   await page.goto("http://127.0.0.1:5178");
-  await page.getByRole("button", { name: "Conectar a um servidor Annoy", exact: true }).click();
-  await page.getByLabel("Endereço", { exact: true }).fill("http://auth.test");
+  await page.getByRole("button", { name: "Conectar a um servidor", exact: true }).click();
+  await page.getByLabel("Endereço", { exact: true }).fill("https://auth.test");
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByLabel("Usuário", { exact: true }).fill("tester");
-  await page.getByLabel("Senha", { exact: true }).fill("synthetic");
+  await page.getByLabel("Usuário neste servidor", { exact: true }).fill("tester");
+  await page.getByLabel("Senha local", { exact: true }).fill("synthetic");
   await page.locator('.auth-modal button[type="submit"]').click();
   await expect.poll(() => started).toBe(true);
   await page.keyboard.press("Escape");
   late.resolve();
-  await expect(page.locator(".welcome")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Entre no Annoy", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().accounts.length)).toBe(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
