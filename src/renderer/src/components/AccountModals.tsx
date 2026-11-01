@@ -10,7 +10,7 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
+import { GlobalError, globalSignedIn, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -106,13 +106,13 @@ export function AddAccountModal() {
   </>;
   const syncNow = async () => {
     setBusy(true); setError(null);
-    try { await syncVault(); toast("Servidores da conta Annoy sincronizados"); closeModal(); }
+    try { const added = await syncVault(); toast(added ? `${added} servidor(es) da conta Annoy adicionado(s)` : "Nenhum servidor novo na sua conta Annoy"); closeModal(); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
   return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Adicionar conta"} className="auth-modal" busy={busy}>
     <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : "Entre com a conta Annoy para trazer seus servidores, ou conecte um servidor pelo endereço."}</p></div>
-    {!info && !saved && (globalAccount
+    {!info && !saved && (globalAccount && globalSignedIn()
       ? <div className="form"><Button type="button" loading={busy} onClick={() => void syncNow()}><Icon name="refresh" />Trazer servidores da conta Annoy</Button></div>
       : <GlobalSignIn intro="Sua conta Annoy guarda a lista dos seus servidores e os conecta automaticamente." onSignedIn={() => { toast("Conta Annoy conectada. Seus servidores estão sendo adicionados."); closeModal(); }} />)}
     {!info && !saved && <p className="muted small auth-divider">ou conecte um servidor pelo endereço (porta padrão {DEFAULT_PORT})</p>}

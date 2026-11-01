@@ -79,7 +79,8 @@ export function initGlobal(): Promise<void> {
   return initializing ??= (async () => {
     await globalUrl();
     const raw = await window.distopic?.secrets.get("global").catch(() => null);
-    if (!raw) return;
+    // A remembered name without a stored session is not a signed-in Annoy account.
+    if (!raw) { session = null; keys = null; if (getState().global) setAccount(null); return; }
     try {
       const saved = JSON.parse(raw) as Saved;
       const restored = kdf.fromEscrow(saved.keys);
@@ -168,8 +169,12 @@ export const forgetServer = (url: string) =>
  * Brings back every server in the vault this device isn't connected to yet
  * (a new device, or a server added elsewhere).
  */
-export async function syncVault(): Promise<void> {
-  if (!keys || !session || getState().global?.cryptoMigrationRequired) return;
+/** True only when this run of the app holds a live Annoy account session, not just its remembered name. */
+export const globalSignedIn = (): boolean => !!keys && !!session;
+
+export async function syncVault(): Promise<number> {
+  if (!keys || !session || getState().global?.cryptoMigrationRequired) return 0;
+  let added = 0;
   const { addAccountQuietly } = await import("./client.ts");
   const { servers } = await readVault().catch(() => ({ servers: [] as VaultEntry[] }));
   const known = new Set(getState().accounts.map((a) => a.url));
@@ -180,10 +185,12 @@ export async function syncVault(): Promise<void> {
       if (info.globalServerId !== entry.serverId) continue;
       const auth = await signInServer(entry.url, entry.serverId);
       addAccountQuietly(toAccount(entry.url, info, auth));
+      added++;
     } catch {
       // Offline, or this account has no user there anymore: try again next time.
     }
   }
+  return added;
 }
 
 export const toAccount = (url: string, info: InstanceInfo, auth: AuthResponse): Account => ({
