@@ -10,14 +10,14 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, migrateServer, signInServer, toAccount } from "../global.ts";
+import { GlobalError, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
   const remembered = modal?.kind === "addAccount" ? getState().rememberedAccounts.find(a => a.id === modal.rememberedId) : undefined;
   const saved = modal?.kind === "addAccount" ? getState().accounts.find(a => a.id === modal.accountId) : undefined;
   const cached = saved ? getState().instances[saved.id]?.user : undefined;
-  const [address, setAddress] = useState(saved?.url ?? remembered?.url ?? "");
+  const [address, setAddress] = useState(saved?.url ?? remembered?.url ?? (modal?.kind === "addAccount" ? modal.address : undefined) ?? "");
   const [info, setInfo] = useState<{ url: string; info: InstanceInfo } | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState(cached?.username ?? remembered?.username ?? "");
@@ -104,9 +104,17 @@ export function AddAccountModal() {
     <Field label="Código de recuperação" hint="Se não tiver a senha anterior, peça um código ao administrador do servidor."><Input value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} autoComplete="off" /></Field>
     {saved && <p className="muted small">A sessão salva comprova sua conta anterior. Senha ou código só são necessários se ela não for mais válida.</p>}
   </>;
+  async function afterAnnoySignIn() {
+    const sync = await syncVault();
+    if (sync.migrationRequired) { toast("Sua conta Annoy usa o cofre antigo. Migre em Configurações → Meu perfil e contas para trazer seus servidores.", 10000); closeModal(); return; }
+    const pending = sync.needsAccount[0];
+    if (pending) { toast(`Crie seu usuário em ${new URL(pending).host} para entrar com a conta Annoy.`, 8000); openModal({ kind: "addAccount", address: pending }); return; }
+    toast(sync.added ? `Conta Annoy conectada: ${sync.added} servidor(es) adicionado(s).` : "Conta Annoy conectada. Nenhum servidor novo na sua lista.");
+    closeModal();
+  }
   return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Adicionar conta"} className="auth-modal" busy={busy}>
     <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : "Entre com a conta Annoy para trazer seus servidores, ou conecte um servidor pelo endereço."}</p></div>
-    {!info && !saved && <GlobalSignIn intro="Entre com a conta Annoy: seus servidores são conectados automaticamente." onSignedIn={() => { toast("Conta Annoy conectada. Seus servidores estão sendo adicionados."); closeModal(); }} />}
+    {!info && !saved && !address && <GlobalSignIn intro="Entre com a conta Annoy: seus servidores são conectados automaticamente." onSignedIn={() => void afterAnnoySignIn()} />}
     {!info && !saved && <p className="muted small auth-divider">ou conecte um servidor pelo endereço (porta padrão {DEFAULT_PORT})</p>}
     {!info ? <form onSubmit={probe} className="form">
       <Field label="Endereço"><Input autoFocus value={address} onChange={e => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required /></Field>

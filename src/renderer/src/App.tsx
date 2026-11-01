@@ -47,7 +47,7 @@ function Modals() {
     case "switchAccount": return <SwitchAccountModal />;
     case "search": return <SearchDialog accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId}/>;
     case "addAccount":
-      return <AddAccountModal key={modal.accountId ?? modal.rememberedId ?? "new"} />;
+      return <AddAccountModal key={modal.address ?? modal.accountId ?? modal.rememberedId ?? "new"} />;
     case "createServer":
       return <CreateServerModal accountId={modal.accountId} />;
     case "serverSettings":

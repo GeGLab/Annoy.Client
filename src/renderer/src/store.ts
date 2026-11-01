@@ -63,7 +63,7 @@ export type View =
 export type CreatableChannel = "text" | "voice" | "category" | "files" | "code" | "theater" | "song";
 
 export type Modal =
-  | { kind: "addAccount"; rememberedId?: string; accountId?: string }
+  | { kind: "addAccount"; rememberedId?: string; accountId?: string; address?: string }
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId: string }

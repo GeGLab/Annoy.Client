@@ -172,9 +172,10 @@ export const forgetServer = (url: string) =>
 /** True only when this run of the app holds a live Annoy account session, not just its remembered name. */
 export const globalSignedIn = (): boolean => !!keys && !!session;
 
-export async function syncVault(): Promise<number> {
-  if (!keys || !session || getState().global?.cryptoMigrationRequired) return 0;
-  let added = 0;
+export interface VaultSync { added: number; needsAccount: string[]; migrationRequired: boolean }
+export async function syncVault(): Promise<VaultSync> {
+  const result: VaultSync = { added: 0, needsAccount: [], migrationRequired: !!getState().global?.cryptoMigrationRequired };
+  if (!keys || !session || result.migrationRequired) return result;
   const { addAccountQuietly } = await import("./client.ts");
   const { servers } = await readVault().catch(() => ({ servers: [] as VaultEntry[] }));
   const known = new Set(getState().accounts.map((a) => a.url));
@@ -185,12 +186,14 @@ export async function syncVault(): Promise<number> {
       if (info.globalServerId !== entry.serverId) continue;
       const auth = await signInServer(entry.url, entry.serverId);
       addAccountQuietly(toAccount(entry.url, info, auth));
-      added++;
-    } catch {
-      // Offline, or this account has no user there anymore: try again next time.
+      result.added++;
+    } catch (error) {
+      // No user there yet (or anymore): the person picks a username for that server.
+      if (error instanceof GlobalError && error.code === "global_new_account") result.needsAccount.push(entry.url);
+      // Otherwise offline or refused: try again next time.
     }
   }
-  return added;
+  return result;
 }
 
 export const toAccount = (url: string, info: InstanceInfo, auth: AuthResponse): Account => ({
