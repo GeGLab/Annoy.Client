@@ -46,7 +46,7 @@ The account-mode update shipped as the mandatory 0.9.0 release, approved by
 Gustavo on 2026-11-01. The critical advisory in `security/advisories.json`
 (`fixedIn: 0.9.0`) is activated only after the Windows/Linux installers, update
 metadata and signed manifests are published and checked. The 0.9.0 server also
-requires client 0.9.0 (`minClientVersion`). See [release notes](docs/releases/0.9.0.md).
+requires client 0.9.0 (`minClientVersion`). See [release notes](docs/releases/0.9.1.md).
 
 Detection is polling-based (up to one minute plus network/cache delay), so it
 cannot promise instantaneous delivery. Existing 0.8.0 clients still use their

@@ -131,5 +131,5 @@ com `ANNOY_ACCOUNT_MODE=local`; apenas conhecer o endereço não libera o client
 A 0.9.0 é uma atualização de segurança obrigatória: OpenMLS nas mensagens e
 anexos, SFrame nas chamadas, sessões ligadas ao dispositivo, modo de conta
 exclusivo por servidor, updates assinados e versão mínima do app informada pelo
-servidor. Compilar exige Rust/Cargo. Veja as [notas da versão](docs/releases/0.9.0.md)
+servidor. Compilar exige Rust/Cargo. Veja as [notas da versão](docs/releases/0.9.1.md)
 e o [SECURITY.md](SECURITY.md). Ainda não houve auditoria independente.

@@ -206,5 +206,5 @@ See [development](docs/development.md) for automatic Electron binary preparation
 0.9.0 is a mandatory security release: OpenMLS for messages and attachments,
 SFrame for calls, device-bound sessions, exclusive account modes per server,
 signed updates and a minimum client version announced by the server. Building
-from source needs Rust/Cargo. See [release notes](docs/releases/0.9.0.md) and
+from source needs Rust/Cargo. See [release notes](docs/releases/0.9.1.md) and
 [SECURITY.md](SECURITY.md). No independent audit has been done yet.

@@ -1922,7 +1922,8 @@ test("installed media packs open their collection and send a real attachment", a
   const { app, page, close } = await launch();
   try {
     await seed(page);
-    await expect(page.locator(".brand-symbol").first()).not.toHaveCSS("mask-image", "none");
+    // The colored app icon (white shell, dark visor), not a single-color mask.
+    await expect(page.locator(".brand img").first()).toHaveAttribute("src", /linearGradient/);
     // Attachments go to the native MLS service, never as a plaintext upload.
     let plaintext = false;
     await page.route("https://experience.test/api/channels/general/messages", async (route) => {
