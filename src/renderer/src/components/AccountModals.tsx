@@ -10,7 +10,7 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, globalSignedIn, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
+import { GlobalError, migrateServer, signInServer, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -104,17 +104,9 @@ export function AddAccountModal() {
     <Field label="Código de recuperação" hint="Se não tiver a senha anterior, peça um código ao administrador do servidor."><Input value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} autoComplete="off" /></Field>
     {saved && <p className="muted small">A sessão salva comprova sua conta anterior. Senha ou código só são necessários se ela não for mais válida.</p>}
   </>;
-  const syncNow = async () => {
-    setBusy(true); setError(null);
-    try { const added = await syncVault(); toast(added ? `${added} servidor(es) da conta Annoy adicionado(s)` : "Nenhum servidor novo na sua conta Annoy"); closeModal(); }
-    catch (err) { setError((err as Error).message); }
-    finally { setBusy(false); }
-  };
   return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Adicionar conta"} className="auth-modal" busy={busy}>
     <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : "Entre com a conta Annoy para trazer seus servidores, ou conecte um servidor pelo endereço."}</p></div>
-    {!info && !saved && (globalAccount && globalSignedIn()
-      ? <div className="form"><Button type="button" loading={busy} onClick={() => void syncNow()}><Icon name="refresh" />Trazer servidores da conta Annoy</Button></div>
-      : <GlobalSignIn intro="Sua conta Annoy guarda a lista dos seus servidores e os conecta automaticamente." onSignedIn={() => { toast("Conta Annoy conectada. Seus servidores estão sendo adicionados."); closeModal(); }} />)}
+    {!info && !saved && <GlobalSignIn intro="Entre com a conta Annoy: seus servidores são conectados automaticamente." onSignedIn={() => { toast("Conta Annoy conectada. Seus servidores estão sendo adicionados."); closeModal(); }} />}
     {!info && !saved && <p className="muted small auth-divider">ou conecte um servidor pelo endereço (porta padrão {DEFAULT_PORT})</p>}
     {!info ? <form onSubmit={probe} className="form">
       <Field label="Endereço"><Input autoFocus value={address} onChange={e => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required /></Field>
