@@ -1,4 +1,5 @@
 import { Checkbox } from "./ui/checkbox.tsx";
+import { ChannelEncryption } from "./crypto/ChannelEncryption.tsx";
 import { Input } from "./ui/input.tsx";
 import { confirmAction, promptText } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
@@ -185,7 +186,7 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
 
 export function ServerSettingsModal({ accountId, serverId }: { accountId: string; serverId: string }) {
   const { state, me } = useServer(accountId, serverId);
-  const [tab, setTab] = useState<"overview" | "roles" | "bans">("overview");
+  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "advanced">("overview");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
   const [icon, setIcon] = useState<File | null | undefined>();
@@ -261,6 +262,11 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         {canBans && (
           <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("bans"))}>
             Banimentos
+          </button>
+        )}
+        {window.distopic?.crypto && (
+          <button className={tab === "advanced" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("advanced"))}>
+            Avançado
           </button>
         )}
       </div>
@@ -362,6 +368,16 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       )}
 
       {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
+      {tab === "advanced" && (
+        <div className="form">
+          <h3>Criptografia de ponta a ponta</h3>
+          <ChannelEncryption
+            accountId={accountId}
+            channels={state.channels.filter((c) => c.type === "text").map((c) => ({ id: c.id, name: "#" + c.name }))}
+            members={state.members.filter((m) => m.user.id !== me).map((m) => ({ id: m.user.id, name: displayNameOf(m) }))}
+          />
+        </div>
+      )}
     </Modal>
   );
 }
@@ -484,8 +500,9 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const [name, setName] = useState(channel?.name ?? "");
   const [topic, setTopic] = useState(channel?.topic ?? "");
   const [parentId, setParentId] = useState(channel?.parentId ?? "");
-  const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? ""]));
-  const values = JSON.stringify([name, topic, parentId]);
+  const [ttl, setTtl] = useState(String(channel?.messageTtlMs ?? 0));
+  const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0)]));
+  const values = JSON.stringify([name, topic, parentId, ttl]);
   const saveChannel = async () => {
     if (!channel || !name.trim()) return false;
     const ok = await act(
@@ -493,6 +510,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
         name,
         topic,
         ...(channel.type !== "category" && { parentId: parentId || null }),
+        ...(channel.type === "text" && { messageTtlMs: Number(ttl) || null }),
       }),
       "Canal salvo",
     );
@@ -503,7 +521,8 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
     setName(channel?.name ?? "");
     setTopic(channel?.topic ?? "");
     setParentId(channel?.parentId ?? "");
-    setBaseline(JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? ""]));
+    setTtl(String(channel?.messageTtlMs ?? 0));
+    setBaseline(JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0)]));
   });
   if (!state || !channel || !me) return null;
   const api = apiFor(accountId);
@@ -533,6 +552,16 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
           {channel.type === "text" && (
             <Field label="Tópico">
               <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} rows={3} />
+            </Field>
+          )}
+          {channel.type === "text" && (
+            <Field label="Apagar mensagens automaticamente" hint="Vale para as mensagens novas. Quem participa vê um aviso no canal.">
+              <Select value={ttl} onChange={(e) => setTtl(e.target.value)} aria-label="Apagar mensagens automaticamente">
+                <option value="0">Nunca (permanentes)</option>
+                <option value="3600000">Após 1 hora</option>
+                <option value="86400000">Após 1 dia</option>
+                <option value="604800000">Após 7 dias</option>
+              </Select>
             </Field>
           )}
           {channel.type !== "category" && (

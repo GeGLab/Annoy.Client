@@ -78,7 +78,6 @@ for (const code of [1001, 4010]) test(`gateway close ${code} ends camera, screen
     client.navigate({ kind: 'home', accountId: 'test', dmId: 'dm' });
     void client.joinVoice('test', 'server', 'voice');
   });
-  await page.getByRole('alertdialog').getByRole('button',{name:'Confirmar ação',exact:true}).click();
   await expect.poll(()=>fixture.methods.includes('join')).toBe(true);
   await page.evaluate(async()=>{const client=await import(location.origin+'/src/client.ts');await client.toggleCamera();await client.startScreenShare(null);
   });
@@ -127,7 +126,6 @@ test('a silent gateway loses its lease within ten seconds and stops the micropho
   await page.clock.install();
   await setup(page, false);
   await page.evaluate(async()=>{const client=await import(location.origin+'/src/client.ts');(window as any).__pendingJoin=client.joinVoice('test','server','voice');});
-  await page.getByRole('alertdialog').getByRole('button',{name:'Confirmar ação',exact:true}).click();
   await page.evaluate(async()=>{await (window as any).__pendingJoin;});
   await page.clock.runFor(10_001);
   expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().voice)).toBeNull();
@@ -146,7 +144,6 @@ test('microphone capture resolving after disconnect is stopped before it can pub
     const { joinVoice } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     (window as any).__pendingJoin = joinVoice('test', 'server', 'voice');
   });
-  await page.getByRole('alertdialog').getByRole('button',{name:'Confirmar ação',exact:true}).click();
   await expect.poll(() => page.evaluate(() => typeof (window as any).__finishCapture)).toBe('function');
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await page.evaluate(async () => { (window as any).__finishCapture(); await (window as any).__pendingJoin; });

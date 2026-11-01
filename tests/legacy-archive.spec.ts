@@ -37,7 +37,10 @@ test('legacy source is separate, paginated, read-only and attachments require au
     s.view={kind:'home',accountId:'archive',dmId:'archive'};
    });
   },user);
-  await page.getByRole('button',{name:'Arquivo legado',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Arquivo legado sem E2EE'});
+  // Encryption tools live in Settings → Privacidade e segurança, never in the chat.
+  await expect(page.getByRole('button',{name:'Arquivo legado',exact:true})).toHaveCount(0);
+  await page.evaluate(async()=>{const {setState}=await import(location.origin+'/src/store.ts');setState((s:any)=>{s.modal={kind:'userSettings',section:'security'};});});
+  await page.getByRole('button',{name:'Ver histórico antigo',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Arquivo legado sem E2EE'});
   await expect(dialog.locator('article')).toHaveCount(50);await expect(dialog).toContainText('somente leitura');
   await dialog.getByRole('button',{name:'Mensagens legadas anteriores'}).click();await expect(dialog.locator('article')).toHaveCount(100);expect([...pages].sort()).toEqual(['latest','old-050']);
   await expect(dialog.getByRole('button',{name:'Editar',exact:true})).toHaveCount(0);

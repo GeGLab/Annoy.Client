@@ -72,6 +72,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
   return controller.proof(value.url,value.token,value.method,value.path,typeof value.nonce==='string'?value.nonce:undefined);
  });
  handle('crypto:guard',(event,raw)=>{const p=payload(event,raw);if(typeof p.raw.userId!=='string'||p.raw.userId.length>100)throw new Error('Identidade inválida');controller.expect(p.url,p.token,p.raw.userId);return controller.guardChannel(p.url,p.raw.userId,p.channel);});
+ handle('crypto:bind',(event,raw)=>{const p=payload(event,raw);if(typeof p.raw.userId!=='string'||!p.raw.userId||p.raw.userId.length>100)throw new Error('Identidade inválida');controller.expect(p.url,p.token,p.raw.userId);return controller.bind(p.url,p.token);});
  handle('crypto:status' ,(event,raw)=>{const p=payload(event,raw);return controller.status(p.url,p.token,p.channel);});
  handle('crypto:sync',(event,raw)=>{const p=payload(event,raw);if(p.raw.before!==undefined&&(typeof p.raw.before!=='string'||p.raw.before.length>100))throw new Error('Cursor inválido');return controller.sync(p.url,p.token,p.channel,p.raw.before as string|undefined);});
  handle('crypto:reconcile',(event,raw)=>{const p=payload(event,raw);const ids=p.raw.knownIds;if(!Array.isArray(ids)||ids.length>10000||ids.some(id=>typeof id!=='string'||id.length>100))throw new Error('Lista de mensagens inválida');return controller.reconcile(p.url,p.token,p.channel,ids);});

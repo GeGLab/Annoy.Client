@@ -381,6 +381,8 @@ export class CryptoController {
   for(const id of users){await this.directory(a,id);const trust=this.read<Trust>('trust:'+a.instance+':'+id)!;if(!review.some(r=>r.userId===id && r.code===hash(JSON.stringify(['annoy/safety/v1',a.instance,id,trust.root]))))throw new Error('Chave de participante mudou');}
   this.write('authorization:'+a.instance+':'+a.user.id+':'+channel,{users},true);
  });}
+ /** Binds a fresh session to this device right after sign-in. Unbound sessions expire within minutes. */
+ async bind(url:string,token:string):Promise<{deviceId:string}>{return this.serial(url,async()=>{const a=await this.account(url,token);return {deviceId:a.keys.id};});}
  async status(url:string,token:string,channel:string){return this.serial(url,async()=>{
   const a=await this.account(url,token);await this.postPending(a,channel);await this.provision(a);
   const state=await this.request<{channel:ChannelState|null}>(a.url,a.token,'/channels/'+encodeURIComponent(channel)+'/crypto');

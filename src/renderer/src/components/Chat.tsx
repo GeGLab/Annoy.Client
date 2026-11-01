@@ -384,7 +384,7 @@ function Composer({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
-  const [expiresIn,setExpiresIn]=useState(0);
+  const expiresIn = useMessageTtl(accountId, channelId);
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const [query, setQuery] = useState<string | null>(null);
@@ -551,9 +551,6 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
-        <select aria-label="Expiração da mensagem" value={expiresIn} onChange={e=>setExpiresIn(Number(e.target.value))} disabled={sending}>
-          <option value={0}>Permanente</option><option value={3600000}>Expira em 1 hora</option><option value={86400000}>Expira em 1 dia</option><option value={604800000}>Expira em 7 dias</option>
-        </select>
         <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
         <Button
           variant="ghost"
@@ -569,6 +566,26 @@ function Composer({
       </div>
     </div>
   );
+}
+
+/** How long new messages live in this channel, as set by the server admins (0: permanent). */
+function useMessageTtl(accountId: string, channelId: string): number {
+  return useStore((s) => {
+    for (const server of Object.values(s.instances[accountId]?.serverStates ?? {})) {
+      const channel = server.channels.find((c) => c.id === channelId);
+      if (channel) return channel.messageTtlMs ?? 0;
+    }
+    return 0;
+  });
+}
+
+const TTL_LABELS: Record<number, string> = { 3_600_000: "1 hora", 86_400_000: "1 dia", 604_800_000: "7 dias" };
+
+/** Only a notice: the lifetime itself is a channel setting of the server admins. */
+function RetentionNotice({ accountId, channelId }: { accountId: string; channelId: string }) {
+  const ttl = useMessageTtl(accountId, channelId);
+  if (!ttl) return null;
+  return <div className="connection-notice" role="note"><Icon name="clock" size={14} /><span>As mensagens deste canal são apagadas automaticamente após {TTL_LABELS[ttl] ?? Math.round(ttl / 3_600_000) + " horas"}.</span></div>;
 }
 
 export function Chat(props: ChatProps) {
@@ -684,6 +701,7 @@ export function Chat(props: ChatProps) {
       </header>
       <ConnectionNotice accountId={accountId} />
       <CryptoStatus accountId={accountId} channelId={channelId} />
+      <RetentionNotice accountId={accountId} channelId={channelId} />
       <div className="messages" ref={scroller} onScroll={onScroll}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (

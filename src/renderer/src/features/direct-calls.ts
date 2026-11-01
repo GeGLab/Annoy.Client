@@ -1,4 +1,3 @@
-import {confirmAction} from '../components/ui/action-dialog.tsx';
 import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
@@ -42,7 +41,7 @@ export async function callAction(action: "accept" | "reject" | "end") {
   const encrypted = entry.call.protection === "sframe";
   if (action === "accept") {
     if (encrypted && !callEncryptionSupported()) return toast("Esta chamada é criptografada de ponta a ponta e precisa do aplicativo Annoy para desktop.");
-    if (!encrypted && !(await confirmAction("Esta chamada não tem criptografia de ponta a ponta: um servidor de sinalização comprometido poderia interceptar a mídia. Atender assim mesmo?"))) return;
+    if (!encrypted) toast("Esta chamada não tem criptografia de ponta a ponta.", 6000);
     if (getState().directCall?.call.id !== entry.call.id) return;
     leaveVoice();
   }
@@ -53,24 +52,21 @@ export async function startDirectCall(accountId: string, userId: string, video: 
   if (getState().instances[accountId]?.status !== "ready") return toast("Sem conexão com o servidor para iniciar a chamada.");
   if (!getState().instances[accountId]?.instance?.directCalls) return toast("Esta instância precisa ser atualizada para chamadas privadas.");
   if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
-  const consent = () => confirmAction("Esta chamada não terá criptografia de ponta a ponta: um servidor de sinalização comprometido poderia interceptar a mídia. Continuar?");
   let encrypted = callEncryptionSupported();
-  if (!encrypted && !(await consent())) return;
+  if (!encrypted) toast("Esta chamada não terá criptografia de ponta a ponta.", 6000);
   try {
     leaveVoice();
     let call: DirectCall;
     try { call = await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId, protection: encrypted ? "sframe" : "transport_only_acknowledged" }); }
     catch (error) {
       // Servers before SFrame refuse the encrypted request: ask before calling without it.
-      if (!encrypted || !/SFrame|E2EE/.test((error as Error).message) || !(await consent())) throw error;
+      if (!encrypted || !/SFrame|E2EE/.test((error as Error).message)) throw error;
+      toast("Este servidor ainda não oferece chamadas com criptografia de ponta a ponta.", 6000);
       encrypted = false;
       call = await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId, protection: "transport_only_acknowledged" });
     }
-    // A server that ignored the request would ring without E2EE: never continue silently.
-    if (encrypted && call.protection !== "sframe" && !(await consent())) {
-      gatewayFor(accountId)?.send({ op: "call", deviceId: callDeviceId, callId: call.id, action: "end" });
-      cleanup(); setState((s) => { s.directCall = null; });
-    }
+    // A server that ignored the request rings without E2EE: say so instead of continuing silently.
+    if (encrypted && call.protection !== "sframe") toast("Este servidor ainda não oferece chamadas com criptografia de ponta a ponta.", 6000);
   }
   catch (error) { toast((error as Error).message); }
 }

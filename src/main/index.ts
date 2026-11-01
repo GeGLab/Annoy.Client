@@ -5,7 +5,7 @@ import {registerPrivateDownload} from './private-download.ts';
 import { registerCrypto } from "./crypto/ipc.ts";
 import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, clipboard, dialog, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
@@ -137,34 +137,22 @@ const systemPicker = process.platform === "linux" && (process.env.XDG_SESSION_TY
 let chosenScreenSource: string | null = null;
 
 function configureSession(s: Session, own: boolean): void {
-  const granted = new Set<string>();
   const trusted = (wc:Electron.WebContents|null,origin:string) => {
     if (!wc || !appAccess.getState().allowed) return false;
     if (own) return wc === win?.webContents;
     const entry=[...views.values()].find(e=>e.view.webContents===wc);
     return !!entry && inSites(origin,sitesFor(entry.service)) && shownService===entry.service.id;
   };
-  s.setPermissionRequestHandler(async (wc,permission,callback,details) => {
-    const origin=details.requestingUrl||wc.getURL();
-    if (!trusted(wc,origin) || !MEDIA_PERMISSIONS.has(permission)) return callback(false);
-    if (['fullscreen','clipboard-sanitized-write','speaker-selection'].includes(permission)) return callback(true);
-    const key=origin+'|'+permission;
-    if(granted.has(key))return callback(true);
-    const result=await dialog.showMessageBox(win!,{type:'question',message:'Permitir '+permission+'?',detail:own?'Solicitado pelo Annoy.':origin,buttons:['Negar','Permitir'],defaultId:0,cancelId:0});
-    if(result.response===1 && trusted(wc,origin)){granted.add(key);callback(true);}else callback(false);
-  });
-  s.setPermissionCheckHandler((wc,permission,origin) => trusted(wc,origin) && (['fullscreen','clipboard-sanitized-write','speaker-selection'].includes(permission)||granted.has(origin+'|'+permission)));
+  // Using the app is consent to its terms: media is granted without asking, but only to
+  // Annoy's own window and to the service tab on screen, never to other or hidden content.
+  s.setPermissionRequestHandler((wc,permission,callback,details) => callback(MEDIA_PERMISSIONS.has(permission) && trusted(wc,details.requestingUrl||wc.getURL())));
+  s.setPermissionCheckHandler((wc,permission,origin) => MEDIA_PERMISSIONS.has(permission) && trusted(wc,origin));
   s.setDisplayMediaRequestHandler(
     async (request, callback) => {
       if (!appAccess.getState().allowed) { callback({}); return; }
       const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
       // Annoy's own UI picks a source first; services (and the portal case) take what the system offers.
-      let picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : undefined;
-      if (!picked && win) {
-        const offered=sources.slice(0,20);
-        const choice=await dialog.showMessageBox(win,{type:'question',message:'Escolha o conteúdo para compartilhar',buttons:['Cancelar',...offered.map(source=>source.name)],defaultId:0,cancelId:0});
-        if(choice.response>0)picked=offered[choice.response-1];
-      }
+      const picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : sources[0];
       chosenScreenSource = null;
       // Windows can add the system's sound (WASAPI loopback); Annoy asks for it only when the user shares audio.
       const loopback = process.platform === "win32" && (!own || request.audioRequested);

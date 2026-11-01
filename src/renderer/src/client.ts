@@ -1,4 +1,3 @@
-import {confirmAction} from './components/ui/action-dialog.tsx';
 import type { DmChannel, GatewayEvent, ImportJob, Message, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api, fetchInfo } from "./api.ts";
@@ -172,7 +171,12 @@ export function addAccountQuietly(account: Account): void {
   connectAccount(account);
 }
 
-export function removeAccount(accountId: string, forget = true): void {
+/** Signs out of one account: it stays among the saved accounts and in the Annoy account's server list. */
+export function signOutAccount(accountId: string): void {
+  removeAccount(accountId, true, true);
+}
+
+export function removeAccount(accountId: string, forget = true, keepInVault = false): void {
   void window.distopic?.auth.logoutLocal(accountId);
   if (!window.distopic) setState(s => { s.access.localAccounts = s.access.localAccounts.filter(id => id !== accountId); s.access.allowed = s.access.global || s.access.localAccounts.length > 0; });
   const account = getState().accounts.find((item) => item.id === accountId);
@@ -183,7 +187,7 @@ export function removeAccount(accountId: string, forget = true): void {
     s.rememberedAccounts = [...s.rememberedAccounts.filter((item) => item.id !== accountId), { ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }];
   });
   // Leaving on purpose: the global vault forgets it too, so it doesn't come back.
-  if (forget && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
+  if (forget && !keepInVault && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.gateway.close();
@@ -417,9 +421,9 @@ const NO_CALL_E2EE = /apenas a criptografia de transporte|SFrame ainda não foi 
 export async function joinVoice(accountId: string, serverId: string, channelId: string, transportOnly = false): Promise<void> {
   if (getState().instances[accountId]?.status !== "ready") return void toast("Sem conexão com o servidor. Conecte novamente para entrar na voz.");
   const account = getState().accounts.find((a) => a.id === accountId);
-  // Voice, camera and screen are sealed with SFrame by default; transport-only needs consent.
+  // Voice, camera and screen are sealed with SFrame by default; otherwise the call goes ahead with a visible "sem E2EE" notice.
   const e2ee = !transportOnly && account && callEncryptionSupported() ? { url: account.url, token: account.token, userId: account.userId } : null;
-  if (!e2ee && !(await confirmAction("Esta chamada não terá criptografia de ponta a ponta. O SFU da instância ou da Cloudflare pode acessar a mídia. Entrar com proteção apenas no transporte?"))) return;
+  if (!e2ee) toast("Esta chamada não terá criptografia de ponta a ponta neste servidor.", 6000);
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
@@ -613,7 +617,10 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
     case "READY": {
       const account = getState().accounts.find(a => a.id === accountId);
       if (account) {
-        if (window.distopic?.auth) void window.distopic.auth.local(account).catch(() => undefined);
+        if (window.distopic?.auth) void window.distopic.auth.local(account).then(
+          // A new session lives only minutes until it is bound to this device's key (DPoP).
+          () => window.distopic?.crypto?.bind(account.url, account.token, account.userId),
+        ).catch((error: Error) => toast(`Não foi possível proteger a sessão neste dispositivo: ${error.message}. Desbloqueie o armazenamento em Configurações → Privacidade e segurança.`, 10000));
         else void fetchInfo(account.url).then(async info => {
           if (info.accountMode !== "local") return;
           const me = await apiFor(accountId).get<User>("/users/@me");

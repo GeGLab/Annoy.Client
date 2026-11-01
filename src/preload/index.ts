@@ -63,6 +63,7 @@ const bridge = {
     devices: (url:string,token:string,channel:string)=>cryptoInvoke('crypto:devices',{url,token,channel}) as Promise<{id:string;public_key:string;revoked_at:string|null}[]>,
     revoke: (url:string,token:string,channel:string,deviceId:string)=>cryptoInvoke('crypto:revoke',{url,token,channel,deviceId}) as Promise<void>,
     unlock: (password:string) => cryptoInvoke("crypto:unlock",password) as Promise<{unlocked:boolean}>,
+    bind: (url:string,token:string,userId:string) => cryptoInvoke("crypto:bind",{url,token,channel:'account',userId}) as Promise<{deviceId:string}>,
     status: (url:string,token:string,channel:string) => cryptoInvoke("crypto:status",{url,token,channel}) as Promise<{active:boolean;deviceId:string;instanceId:string}>,
     sync: (url:string,token:string,channel:string,before?:string) => cryptoInvoke("crypto:sync",{url,token,channel,before}) as Promise<import("@distopic/protocol").Message[]>,
     reconcile: (url:string,token:string,channel:string,knownIds:string[]) => cryptoInvoke("crypto:reconcile",{url,token,channel,knownIds}) as Promise<{items:import("@distopic/protocol").Message[];deletedIds:string[];newIds:string[]}>,

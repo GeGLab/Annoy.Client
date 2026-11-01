@@ -64,7 +64,7 @@ export function UserPanel() {
 
   const openSettings = () =>
     setState((s) => {
-      s.modal = { kind: "userSettings" };
+      s.modal = { kind: "userSettings", ...(accountId && { accountId }) };
     });
 
   return (

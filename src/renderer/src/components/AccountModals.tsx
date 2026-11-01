@@ -3,13 +3,14 @@ import { Select } from "./ui/select.tsx";
 import type { AuthResponse, InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { authenticate, beginDiscordLogin, discordLogin, DEFAULT_PORT, findInstance } from "../api.ts";
-import { addAccount, apiFor, openServer, navigate } from "../client.ts";
+import { addAccount, apiFor, openServer, navigate, signOutAccount } from "../client.ts";
+import { Tooltip } from "./ui/tooltip.tsx";
 import { getState, setState, toast, useStore } from "../store.ts";
 import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, migrateServer, signInServer, toAccount } from "../global.ts";
+import { GlobalError, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -103,8 +104,18 @@ export function AddAccountModal() {
     <Field label="Código de recuperação" hint="Se não tiver a senha anterior, peça um código ao administrador do servidor."><Input value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} autoComplete="off" /></Field>
     {saved && <p className="muted small">A sessão salva comprova sua conta anterior. Senha ou código só são necessários se ela não for mais válida.</p>}
   </>;
-  return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Conectar a um servidor Annoy"} className="auth-modal" busy={busy}>
-    <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : `Digite o endereço da instância. Porta padrão: ${DEFAULT_PORT}.`}</p></div>
+  const syncNow = async () => {
+    setBusy(true); setError(null);
+    try { await syncVault(); toast("Servidores da conta Annoy sincronizados"); closeModal(); }
+    catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Adicionar conta"} className="auth-modal" busy={busy}>
+    <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : "Entre com a conta Annoy para trazer seus servidores, ou conecte um servidor pelo endereço."}</p></div>
+    {!info && !saved && (globalAccount
+      ? <div className="form"><Button type="button" loading={busy} onClick={() => void syncNow()}><Icon name="refresh" />Trazer servidores da conta Annoy</Button></div>
+      : <GlobalSignIn intro="Sua conta Annoy guarda a lista dos seus servidores e os conecta automaticamente." onSignedIn={() => { toast("Conta Annoy conectada. Seus servidores estão sendo adicionados."); closeModal(); }} />)}
+    {!info && !saved && <p className="muted small auth-divider">ou conecte um servidor pelo endereço (porta padrão {DEFAULT_PORT})</p>}
     {!info ? <form onSubmit={probe} className="form">
       <Field label="Endereço"><Input autoFocus value={address} onChange={e => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required /></Field>
       {error && <p className="error">{error}</p>}
@@ -143,8 +154,8 @@ export function AddAccountModal() {
 export function SwitchAccountModal() {
   const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
-  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user; return <button key={account.id} className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
-    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{user?.displayName ?? account.instanceName}</strong><small>{account.instanceName} · Conectada</small></span><Icon name="check" /></button>; })}
+  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.instanceName} · Conectada</small></span><Icon name="check" /></button><Tooltip content="Sair desta conta"><button className="icon-btn" aria-label={`Sair de ${name}`} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
     {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
   </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;
 }

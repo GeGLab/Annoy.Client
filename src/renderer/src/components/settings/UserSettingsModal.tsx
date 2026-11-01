@@ -24,6 +24,7 @@ import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
+import { SecuritySettings } from "../crypto/SecuritySettings.tsx";
 import { GLOBAL_URL, signInGlobal, signOutGlobal } from "../../global.ts";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
@@ -33,6 +34,7 @@ const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: strin
   { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
   { id: "activity", label: "Atividade", icon: "radio", search: "compartilhar jogos Steam Spotify música Apple amigos" },
   { id: "notifications", label: "Notificações", icon: "message", search: "menções mensagens" },
+  { id: "security", label: "Privacidade e segurança", icon: "lock", search: "criptografia e2ee chaves backup dispositivos cofre identidade mensagens diretas" },
   { id: "updates", label: "Atualizações", icon: "download", search: "versão atualizar" },
 ];
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -185,26 +187,21 @@ function GlobalAccountCard() {
       setBusy(false);
     }
   };
+  if (account) {
+    return (
+      <div className="annoy-account-row">
+        {/* Account badges: "Conta Annoy" for every Annoy account; paid plans will add their own. */}
+        <span className="account-badge" title={account.email}><Icon name="check" size={12} />Conta Annoy</span>
+        <strong>{account.name}</strong>
+        <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Gerenciar</a>
+        <button type="button" className="link-button" aria-label="Sair da conta Annoy" onClick={() => void signOutGlobal()}>Sair</button>
+        {account.cryptoMigrationRequired && <p className="error small">Cofre antigo: <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">migre e gere sua chave de recuperação</a> antes de sincronizar servidores.</p>}
+      </div>
+    );
+  }
   return (
-    <PreferenceCard icon="shield" title="Conta Annoy" description="Cofre cifrado no cliente para sua lista de servidores. Contas com recuperação legada precisam migrar.">
-      {account?.cryptoMigrationRequired && <p className="error">Cofre legado: recuperação por servidor foi removida. <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Migre e gere sua chave de recuperação</a> antes de sincronizar servidores.</p>}
-      {account ? (
-        <>
-          <p>
-            Você entrou como <strong>{account.name}</strong> <span className="muted">({account.email})</span>.
-          </p>
-          <p className="muted small">A conta Annoy é o padrão. Contas locais só estão disponíveis quando o administrador do servidor escolhe esse modo.</p>
-          <div className="row">
-            <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
-              Gerenciar conta
-            </a>
-            <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>
-              Sair da conta Annoy
-            </Button>
-          </div>
-        </>
-      ) : (
-        <form className="form" onSubmit={(event) => void submit(event)}>
+    <PreferenceCard icon="shield" title="Conta Annoy" description="Entre para sincronizar sua lista de servidores, cifrada neste dispositivo.">
+      <form className="form" onSubmit={(event) => void submit(event)}>
           <div className="grid-2">
             <Field label="E-mail">
               <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
@@ -223,7 +220,6 @@ function GlobalAccountCard() {
             </a>
           </div>
         </form>
-      )}
     </PreferenceCard>
   );
 }
@@ -236,7 +232,10 @@ export function UserSettingsModal() {
   const [search, setSearch] = useState("");
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
-  const profileUser = accounts[0] ? instances[accounts[0].id]?.user : undefined;
+  // "Editar perfil" opens on the account it was clicked from; the others follow.
+  const [focusId] = useState(() => { const modal = getState().modal; return modal?.kind === "userSettings" ? modal.accountId : undefined; });
+  const ordered = [...accounts].sort((a, b) => Number(b.id === focusId) - Number(a.id === focusId));
+  const profileUser = ordered[0] ? instances[ordered[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
   const filteredPages = SETTINGS_PAGES.filter((item) => normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
   const desktopActivity = useStore((s) => s.desktopActivity);
@@ -460,7 +459,7 @@ export function UserSettingsModal() {
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
                 <GlobalAccountCard />
-                {accounts.map((account) => {
+                {ordered.map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
@@ -557,6 +556,12 @@ export function UserSettingsModal() {
                 <PreferenceCard icon="mic" title="Teste do microfone" description="Confira o nível da sua voz antes de entrar. A opção de retorno reproduz sua voz nos fones.">
                 <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} />
                 </PreferenceCard>
+              </section>
+            )}
+            {page === "security" && (
+              <section className="settings-section">
+                <h3><Icon name="lock" size={24} />Privacidade e segurança</h3>
+                <SecuritySettings />
               </section>
             )}
             {page === "updates" && (

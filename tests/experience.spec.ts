@@ -849,11 +849,9 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
       await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].displayName}`, exact: true })).toBeVisible();
     }
     await left.page.getByRole("button", { name: "Chamada de vídeo com Bob", exact: true }).click();
-    await left.page.getByRole("alertdialog").getByRole("button",{name:"Confirmar ação",exact:true}).click();
     await expect(right.page.getByRole("dialog", { name: "Chamada recebida", exact: true })).toBeVisible();
     await right.page.screenshot({ path: join(capture, "private-call-incoming.png") });
     await right.page.getByRole("button", { name: "Atender", exact: true }).click();
-    await right.page.getByRole("alertdialog").getByRole("button",{name:"Confirmar ação",exact:true}).click();
     for (const session of [left, right]) {
       await expect(session.page.locator(".direct-call-panel")).toBeVisible();
       await expect(session.page.getByText("Chamada conectada", { exact: true })).toBeVisible({ timeout: 20_000 });
