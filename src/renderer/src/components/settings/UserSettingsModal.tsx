@@ -421,10 +421,10 @@ export function UserSettingsModal() {
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
                 {annoyMode && (
-                  <div className="settings-account annoy-profile">
+                  <div className="settings-account annoy-profile global-account-panel">
                     <span className="account-badge"><Icon name="check" size={12} />Conta Annoy</span>
-                    <p><strong>{annoy!.name}</strong> <span className="muted">{annoy!.email}</span></p>
-                    <div className="account-actions">
+                    <p><strong>{annoy!.name}</strong> <span className="muted">({annoy!.email})</span></p>
+                    <div className="account-actions global-account-actions">
                       <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Gerenciar conta</a>
                       <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>Sair da conta Annoy</Button>
                     </div>
