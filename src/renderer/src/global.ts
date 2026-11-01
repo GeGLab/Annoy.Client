@@ -178,19 +178,23 @@ export async function syncVault(): Promise<VaultSync> {
   if (!keys || !session || result.migrationRequired) return result;
   const { addAccountQuietly } = await import("./client.ts");
   const { servers } = await readVault().catch(() => ({ servers: [] as VaultEntry[] }));
-  const known = new Set(getState().accounts.map((a) => a.url));
+  const known = new Set(getState().accounts.filter((a) => !a.pending).map((a) => a.url));
   for (const entry of servers) {
     if (known.has(entry.url)) continue;
+    let name = new URL(entry.url).host;
     try {
       const info = await fetchInfo(entry.url);
-      if (info.globalServerId !== entry.serverId) continue;
+      name = info.name;
+      // Never sign in to a server that is not the one saved in the vault: it stays disconnected.
+      if (info.globalServerId !== entry.serverId) throw new Error("server_mismatch");
       const auth = await signInServer(entry.url, entry.serverId);
       addAccountQuietly(toAccount(entry.url, info, auth));
       result.added++;
     } catch (error) {
-      // No user there yet (or anymore): the person picks a username for that server.
-      if (error instanceof GlobalError && error.code === "global_new_account") result.needsAccount.push(entry.url);
-      // Otherwise offline or refused: try again next time.
+      const needsUser = error instanceof GlobalError && error.code === "global_new_account";
+      if (needsUser) result.needsAccount.push(entry.url);
+      // Every server of the account is listed; one that could not be signed in shows as disconnected.
+      addAccountQuietly({ id: `${entry.url}#annoy`, url: entry.url, token: "", userId: "", instanceName: name, annoy: true, pending: needsUser ? "invalid" : "offline" });
     }
   }
   return result;

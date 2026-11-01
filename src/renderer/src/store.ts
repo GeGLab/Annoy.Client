@@ -25,6 +25,9 @@ export interface Account {
   instanceName: string;
   /** Signed in through the Annoy account (never true for a server's local account). */
   annoy?: boolean;
+  /** A server of the Annoy account that this device could not sign in to yet (no token):
+   * "offline" while it fails, "invalid" when the server needs a username first. */
+  pending?: "offline" | "invalid";
   /** First observed connection failure; cleared as soon as the server responds. */
   offlineSince?: number;
 }

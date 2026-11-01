@@ -76,6 +76,8 @@ function writeCache(accountId: string): void {
 
 export function reconnect(accountId?: string): void {
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
+  // Servers of the Annoy account not signed in yet retry the Annoy sign-in instead.
+  if (getState().accounts.some((a) => a.pending && (!accountId || a.id === accountId))) void import("./global.ts").then((g) => g.syncVault());
 }
 
 window.addEventListener("online", () => reconnect());
@@ -94,6 +96,11 @@ subscribe(() => {
 
 export function connectAccount(account: Account): void {
   if (live.has(account.id)) return;
+  if (account.pending) {
+    // Listed and shown as disconnected (red dot) until the Annoy sign-in succeeds there.
+    setState((s) => { s.instances[account.id] = { ...(s.instances[account.id] ?? emptyInstance()), status: account.pending! }; });
+    return;
+  }
   const api = new Api(account.url, account.token, () => getState().instances[account.id]?.status === "ready",account.userId);
   const gateway = new Gateway(
     account.url,
@@ -152,7 +159,9 @@ export function connectAccount(account: Account): void {
 
 export function addAccount(account: Account): void {
   setState((s) => {
-    s.accounts = s.accounts.filter((a) => a.id !== account.id);
+    // A real sign-in replaces the disconnected placeholder of the same server.
+    for (const stale of s.accounts.filter((a) => a.pending && a.url === account.url)) delete s.instances[stale.id];
+    s.accounts = s.accounts.filter((a) => a.id !== account.id && !(a.pending && a.url === account.url));
     s.accounts.push(account);
     s.modal = null;
     s.view = { kind: "home", accountId: account.id, dmId: null };
@@ -162,10 +171,21 @@ export function addAccount(account: Account): void {
   connectAccount(account);
 }
 
-/** Adds a server account in the background (servers coming back from the global vault). */
+/** Adds a server account in the background (servers coming back from the global vault).
+ * A real sign-in replaces the disconnected placeholder of the same server. */
 export function addAccountQuietly(account: Account): void {
-  if (getState().accounts.some((a) => a.url === account.url)) return;
+  const placeholder = getState().accounts.find((a) => a.url === account.url && a.pending);
+  if (getState().accounts.some((a) => a.url === account.url && !a.pending)) return;
+  if (placeholder && account.pending) {
+    if (placeholder.pending !== account.pending) setState((s) => {
+      const saved = s.accounts.find((a) => a.id === placeholder.id);
+      if (saved) saved.pending = account.pending;
+      if (s.instances[placeholder.id]) s.instances[placeholder.id]!.status = account.pending!;
+    });
+    return;
+  }
   setState((s) => {
+    if (placeholder) { s.accounts = s.accounts.filter((a) => a.id !== placeholder.id); delete s.instances[placeholder.id]; }
     s.accounts.push(account);
   });
   connectAccount(account);
