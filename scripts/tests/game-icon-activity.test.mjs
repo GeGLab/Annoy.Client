@@ -53,8 +53,9 @@ test("the icon IPC accepts only numeric app IDs from the local main frame", asyn
   const icon = dotaIcon.replaceAll("570/", "48005/");
   globalThis.fetch = async () => new Response(`<img src="${icon}">`);
   const handlers = new Map();
-  const frame = {}, webContents = { mainFrame: frame };
-  const stop = registerActivity({ handle: (name, handler) => handlers.set(name, handler) }, () => ({ webContents }));
+  const frame = {}, webContents = { mainFrame: frame, send() {}, isDestroyed: () => false };
+  let allowed = true, trusted = true;
+  const stop = registerActivity({ handle: (name, handler) => handlers.set(name, handler) }, () => ({ webContents, isDestroyed: () => false }), () => allowed, () => trusted);
   t.after(stop);
   const handler = handlers.get("activity:game-icon");
   assert.throws(() => handler({ sender: {}, senderFrame: frame }, "570"), /Invalid activity sender/);
@@ -62,4 +63,26 @@ test("the icon IPC accepts only numeric app IDs from the local main frame", asyn
   assert.equal(handler({ sender: webContents, senderFrame: frame }, 570), null);
   assert.equal(await handler({ sender: webContents, senderFrame: frame }, "bad-id"), null);
   assert.equal(await handler({ sender: webContents, senderFrame: frame }, "48005"), icon);
+  allowed = false;
+  assert.equal(handler({ sender: webContents, senderFrame: frame }, "48005"), null);
+  trusted = false;
+  for (const name of ['activity:get', 'activity:configure', 'activity:game-icon'])
+    assert.throws(() => handlers.get(name)({ sender: webContents, senderFrame: frame }, '48005'), /Invalid activity sender/);
+});
+
+test('activity shutdown after a destroyed window or renderer does not raise a native error dialog', () => {
+  let destroyedWindow = false, destroyedContents = false, publications = 0;
+  const window = {
+    isDestroyed: () => destroyedWindow,
+    get webContents() {
+      if (destroyedWindow) throw new Error('Object has been destroyed');
+      return { isDestroyed: () => destroyedContents, send() { if (destroyedContents) throw new Error('Object has been destroyed'); publications++; } };
+    },
+  };
+  const stop = registerActivity({ handle() {} }, () => window, () => false, () => false);
+  stop(); assert.equal(publications, 1);
+  destroyedContents = true;
+  assert.doesNotThrow(stop); assert.equal(publications, 1);
+  destroyedWindow = true;
+  assert.doesNotThrow(stop); assert.equal(publications, 1);
 });

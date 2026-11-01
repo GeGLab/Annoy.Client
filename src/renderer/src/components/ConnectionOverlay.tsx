@@ -93,7 +93,7 @@ export function ConnectionOverlay({ blocked }: { blocked: boolean }) {
                   onClick={() => {
                     setAuthAccount(a.id);
                     setState((s) => {
-                      s.modal = { kind: "addAccount" };
+                      s.modal = { kind: "addAccount", accountId: a.id };
                     });
                   }}
                 >

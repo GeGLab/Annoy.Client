@@ -84,7 +84,7 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 | <img src="docs/screenshots/chat-and-voice.png" alt="Chat and voice" width="420"><br>**Chat and voice channels** | <img src="docs/screenshots/voice-call.png" alt="Call with cameras" width="420"><br>**Calls with camera and screen sharing** |
 | <img src="docs/screenshots/member-card.png" alt="Member card" width="420"><br>**Member card with roles and moderation** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
 | <img src="docs/screenshots/roles.png" alt="Role editor" width="420"><br>**Role editor** | <img src="docs/screenshots/channel-permissions.png" alt="Channel permissions" width="420"><br>**Per-channel permissions** |
-| <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Sign in with Discord or a local account** |
+| <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Annoy account sign-in by default; local accounts on opted-in hosts** |
 | <img src="docs/screenshots/services.png" alt="New tab menu with services" width="420"><br>**Add Discord, WhatsApp, Telegram, TeamSpeak and more as tabs** | <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** |
 
 ## Build from source
@@ -114,7 +114,7 @@ GitHub release is published.
 1. Choose **Conectar a um servidor Annoy** (Connect to an Annoy server) and type the server address, for
    example `192.168.0.10` or `chat.example.com`. Without a port, the client
    uses `8787`.
-2. Sign in with Discord (if the server enables it) or create a local account.
+2. Sign in or register with an Annoy account. Local accounts are available only when the host selects `ANNOY_ACCOUNT_MODE=local`. Existing local users on global hosts must migrate; their history and permissions stay with their original user.
 3. Create a server with **+**, or join one with an invite code.
 
 **Joining someone's community?** The client is all you need: no server
@@ -189,3 +189,7 @@ npm run build
 ## Desktop interface development
 
 See [development](docs/development.md) for automatic Electron binary preparation, shared UI components and isolated tests. [Search and private activity](docs/search-activity.md) documents client/server integration and opt-in friend activity.
+
+## Implementação de segurança em validação
+
+Este código local integra OpenMLS para mensagens/anexos e exige Rust/Cargo na build. Não foi publicado em release nesta sessão. Histórico legado permanece identificado; envio novo legível é bloqueado. SFrame e validação Windows continuam pendentes. A instalação de updates exige chave pública confiável e manifesto Ed25519; pins de produção ainda não foram configurados. Ver a entrega completa, testes, migrações e riscos em `annoy-server/docs/security/README.md` no workspace irmão. Não classificar o produto como totalmente seguro antes da auditoria independente.

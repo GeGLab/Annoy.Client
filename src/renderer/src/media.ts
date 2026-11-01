@@ -36,6 +36,11 @@ export function clearTiles(): void {
   emit();
 }
 
+/** Current tiles outside React. */
+export function videoTiles(): VideoTile[] {
+  return tiles;
+}
+
 export function useVideoTiles(): VideoTile[] {
   return useSyncExternalStore(
     (l) => {

@@ -1,3 +1,4 @@
+import {confirmAction} from '../components/ui/action-dialog.tsx';
 import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
@@ -5,6 +6,8 @@ import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
 import { getState, setState, toast } from "../store.ts";
 import { playCallFeedback } from "../lib/voice-feedback.ts";
 import { deviceId } from "../lib/device-id.ts";
+import { CallEncryption, callEncryptionSupported, needsEncodedStreamsFlag } from "../media-e2ee/call-encryption.ts";
+import type { VoiceMediaEvent } from "@distopic/protocol";
 
 export const callDeviceId = deviceId;
 let media = { local: null as MediaStream | null, remote: null as MediaStream | null, connected: false };
@@ -14,28 +17,61 @@ let peer: RTCPeerConnection | null = null, sessionId: string | null = null;
 let callMic: Mic | null = null;
 let preparing: Promise<RTCPeerConnection> | null = null;
 let candidates: RTCIceCandidateInit[] = [];
+/** SFrame for an encrypted call: an MLS group of the two devices, sequenced by the server. */
+let crypt: CallEncryption | null = null;
+let protectedReceivers = new WeakSet<RTCRtpReceiver>();
+/** Chromium only feeds a receive transform installed before the section starts receiving. */
+function protectReceiver(receiver: RTCRtpReceiver, kind: "audio" | "video") {
+  if (!crypt || protectedReceivers.has(receiver)) return;
+  protectedReceivers.add(receiver); crypt.protectReceiver(receiver, kind);
+}
 export const useDirectCallMedia = () => useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => media);
 
 function cleanup() {
   sessionId = null; preparing = null; candidates = [];
+  crypt?.close(); crypt = null; protectedReceivers = new WeakSet();
   const connection = peer; peer = null; connection?.close();
   callMic?.stop(); callMic = null;
   media.local?.getTracks().forEach((track) => track.stop());
   media.remote?.getTracks().forEach((track) => track.stop());
   media = { local: null, remote: null, connected: false }; emit();
 }
-export function callAction(action: "accept" | "reject" | "end") {
+export async function callAction(action: "accept" | "reject" | "end") {
   const entry = getState().directCall;
   if (!entry) return;
-  if (action === "accept") leaveVoice();
-  gatewayFor(entry.accountId)?.send({ op: "call", deviceId: callDeviceId, callId: entry.call.id, action });
+  const encrypted = entry.call.protection === "sframe";
+  if (action === "accept") {
+    if (encrypted && !callEncryptionSupported()) return toast("Esta chamada é criptografada de ponta a ponta e precisa do aplicativo Annoy para desktop.");
+    if (!encrypted && !(await confirmAction("Esta chamada não tem criptografia de ponta a ponta: um servidor de sinalização comprometido poderia interceptar a mídia. Atender assim mesmo?"))) return;
+    if (getState().directCall?.call.id !== entry.call.id) return;
+    leaveVoice();
+  }
+  gatewayFor(entry.accountId)?.send({ op: "call", deviceId: callDeviceId, callId: entry.call.id, action, protection: encrypted ? "sframe" : "transport_only_acknowledged" });
   if (action !== "accept") { cleanup(); setState((s) => { s.directCall = null; }); }
 }
 export async function startDirectCall(accountId: string, userId: string, video: boolean) {
   if (getState().instances[accountId]?.status !== "ready") return toast("Sem conexão com o servidor para iniciar a chamada.");
   if (!getState().instances[accountId]?.instance?.directCalls) return toast("Esta instância precisa ser atualizada para chamadas privadas.");
   if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
-  try { leaveVoice(); await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId }); }
+  const consent = () => confirmAction("Esta chamada não terá criptografia de ponta a ponta: um servidor de sinalização comprometido poderia interceptar a mídia. Continuar?");
+  let encrypted = callEncryptionSupported();
+  if (!encrypted && !(await consent())) return;
+  try {
+    leaveVoice();
+    let call: DirectCall;
+    try { call = await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId, protection: encrypted ? "sframe" : "transport_only_acknowledged" }); }
+    catch (error) {
+      // Servers before SFrame refuse the encrypted request: ask before calling without it.
+      if (!encrypted || !/SFrame|E2EE/.test((error as Error).message) || !(await consent())) throw error;
+      encrypted = false;
+      call = await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId, protection: "transport_only_acknowledged" });
+    }
+    // A server that ignored the request would ring without E2EE: never continue silently.
+    if (encrypted && call.protection !== "sframe" && !(await consent())) {
+      gatewayFor(accountId)?.send({ op: "call", deviceId: callDeviceId, callId: call.id, action: "end" });
+      cleanup(); setState((s) => { s.directCall = null; });
+    }
+  }
   catch (error) { toast((error as Error).message); }
 }
 function sendSignal(accountId: string, call: DirectCall, signal: Extract<ClientOp, { op: "call" }>["signal"]) {
@@ -44,10 +80,13 @@ function sendSignal(accountId: string, call: DirectCall, signal: Extract<ClientO
 function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection> {
   if (sessionId === call.id && preparing) return preparing;
   cleanup(); sessionId = call.id;
-  const connection = new RTCPeerConnection({ iceServers: call.iceServers ?? [] }); peer = connection;
+  const encrypted = call.protection === "sframe";
+  const connection = new RTCPeerConnection({ iceServers: call.iceServers ?? [], ...(encrypted && needsEncodedStreamsFlag && { encodedInsertableStreams: true }) } as RTCConfiguration); peer = connection;
   const remote = new MediaStream(); media = { ...media, remote }; emit();
   connection.ontrack = (event) => {
     if (sessionId !== call.id) return;
+    // Remote descriptions are applied only after `preparing`, so the call key exchange already started.
+    if (encrypted) { if (!crypt) return; protectReceiver(event.receiver, event.track.kind === "video" ? "video" : "audio"); }
     if (!remote.getTracks().some((track) => track.id === event.track.id)) remote.addTrack(event.track);
     // A new stream reference also attaches tracks that arrived after the empty stream was rendered.
     media = { ...media, remote: new MediaStream(remote.getTracks()) }; emit();
@@ -59,6 +98,14 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
     if (connection.connectionState === "connected") { media = { ...media, connected: true }; emit(); }
   };
   preparing = (async () => {
+    if (encrypted) {
+      const account = getState().accounts.find((a) => a.id === accountId), gateway = gatewayFor(accountId);
+      if (!account || !gateway) throw new Error("Conta indisponível para a chamada criptografada");
+      const signaling = { voice: <T,>(method: "mediaCreate" | "mediaPropose" | "mediaCommit", data: Record<string, unknown>) => gateway.voice<T>(method, { ...data, directCall: call.id }) };
+      const started = await CallEncryption.start(signaling, { url: account.url, token: account.token, userId: account.userId }, "call:" + call.id, { callId: null }, (message) => toast(message, 10000));
+      if (sessionId !== call.id) { started.close(); throw new Error("Chamada encerrada"); }
+      crypt = started;
+    }
     const settings = getState().settings;
     const mic = await openMic(settings.inputDeviceId, settings.noiseFilter);
     if (sessionId !== call.id) { mic.stop(); throw new Error("Chamada encerrada"); }
@@ -70,7 +117,17 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
       camera.getVideoTracks().forEach((track) => stream.addTrack(track));
     }
     if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error("Chamada encerrada"); }
-    for (const track of stream.getTracks()) { if (track.kind === "audio") track.enabled = !settings.selfMute && !settings.selfDeaf; connection.addTrack(track, stream); }
+    for (const track of stream.getTracks()) {
+      if (track.kind === "audio") track.enabled = !settings.selfMute && !settings.selfDeaf;
+      const sender = connection.addTrack(track, stream);
+      // Before any offer or answer: no frame of this call leaves without SFrame.
+      if (crypt) {
+        crypt.protectSender(sender, track.kind === "video" ? "camera" : "mic", track.kind === "video" ? "video" : "audio");
+        const transceiver = connection.getTransceivers().find((t) => t.sender === sender);
+        if (transceiver) protectReceiver(transceiver.receiver, track.kind === "video" ? "video" : "audio");
+        if (track.kind === "video") preferVp8(transceiver);
+      }
+    }
     media = { ...media, local: stream }; updateDirectCallMute(); emit(); return connection;
   })();
   return preparing;
@@ -115,6 +172,18 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
     const callId = event.t === "CALL_UPDATE" ? event.d.id : event.d.callId;
     if (getState().directCall?.accountId === accountId && getState().directCall?.call.id === callId) { toast((error as Error).message); callAction("end"); }
   }
+}
+export function handleDirectCallMedia(accountId: string, event: VoiceMediaEvent) {
+  const entry = getState().directCall;
+  if (entry?.accountId === accountId && event.channelId === "call:" + entry.call.id) crypt?.handleEvent(event);
+}
+/** True when the media of the current private call is end-to-end encrypted. */
+export const directCallEncrypted = () => crypt !== null;
+export const directCallStats = () => crypt?.stats() ?? Promise.resolve(null);
+function preferVp8(transceiver: RTCRtpTransceiver | undefined) {
+  const codecs = RTCRtpSender.getCapabilities("video")?.codecs ?? [];
+  const allowed = codecs.filter((c) => /^video\/(vp8|rtx|red|ulpfec)$/i.test(c.mimeType));
+  if (transceiver && allowed.some((c) => /vp8$/i.test(c.mimeType))) transceiver.setCodecPreferences(allowed);
 }
 export function disconnectDirectCall(accountId: string) { if (getState().directCall?.accountId === accountId) { cleanup(); setState((s) => { s.directCall = null; }); } }
 const incomingNotificationNeeded = (call: DirectCall, userId: string | undefined, previousId?: string) => call.status === "ringing" && call.calleeId === userId && previousId !== call.id;

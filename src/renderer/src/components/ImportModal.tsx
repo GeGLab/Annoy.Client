@@ -167,9 +167,9 @@ function SelectStep({
   const [serverId, setServerId] = useState(presetServerId ?? owned[0]?.id ?? "");
   const [roleIds, setRoleIds] = useState(() => new Set(roles.filter((r) => !r.managed).map((r) => r.id)));
   const [channelIds, setChannelIds] = useState(() => new Set(importable.map((c) => c.id)));
-  const [historyIds, setHistoryIds] = useState(() => new Set(textIds));
+  const [historyIds, setHistoryIds] = useState(() => new Set<string>());
   const [limit, setLimit] = useState<number | null>(1000);
-  const [attachments, setAttachments] = useState(true);
+  const [attachments, setAttachments] = useState(false);
   const [overwrites, setOverwrites] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -205,7 +205,7 @@ function SelectStep({
           <label className="check history">
             <Checkbox
               checked={historyIds.has(c.id)}
-              disabled={!on}
+              disabled={true}
               onChange={(e) => setHistoryIds((s) => toggle(s, [c.id], e.target.checked))}
             />
             histórico
@@ -215,7 +215,7 @@ function SelectStep({
     );
   };
 
-  const selectedHistory = [...historyIds].filter((id) => channelIds.has(id));
+  const selectedHistory:string[] = []; // Server-side plaintext history import is incompatible with E2EE.
   const start = async () => {
     setBusy(true);
     const body: ImportRequest = {
@@ -244,6 +244,7 @@ function SelectStep({
 
   return (
     <div className="form import-select">
+      <p role="note">A importação pelo servidor preserva estrutura e permissões. Mensagens e anexos do Discord não são copiados em texto claro. Exporte o histórico no seu cliente Discord e envie o arquivo como anexo cifrado no Annoy; ele continuará identificado como uma cópia de origem legada.</p>
       <section>
         <h3>Destino</h3>
         <RadioGroup
@@ -299,7 +300,7 @@ function SelectStep({
           >
             nenhum
           </button>
-          <button className="link-btn" onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>
+          <button className="link-btn" disabled onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>
             histórico em todos
           </button>
           <button className="link-btn" onClick={() => setHistoryIds(new Set())}>
@@ -344,7 +345,7 @@ function SelectStep({
 
       <section className="grid-2">
         <Field label="Mensagens por canal">
-          <Select value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
+          <Select disabled value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
             {LIMITS.map((l) => (
               <option key={String(l.value)} value={String(l.value)}>
                 {l.label}
@@ -354,7 +355,7 @@ function SelectStep({
         </Field>
         <div className="option-checks">
           <label className="check">
-            <Checkbox checked={attachments} onChange={(e) => setAttachments(e.target.checked)} /> Baixar anexos
+            <Checkbox disabled checked={false} onChange={(e) => setAttachments(e.target.checked)} /> Baixar anexos
           </label>
           <label className="check">
             <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} /> Permissões por canal

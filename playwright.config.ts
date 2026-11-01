@@ -1,4 +1,6 @@
 import { defineConfig } from "@playwright/test";
+import {configureTestDisplay} from './tests/display.ts';
+configureTestDisplay();
 
 export default defineConfig({
   testDir: "tests",

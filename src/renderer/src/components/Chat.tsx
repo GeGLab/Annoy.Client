@@ -1,3 +1,5 @@
+import { SecureAttachment } from "./SecureAttachment.tsx";
+import { CryptoStatus } from "./CryptoStatus.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
@@ -97,7 +99,7 @@ function Attachments({ accountId, message }: { accountId: string; message: Messa
   return (
     <div className="attachments">
       {message.attachments.map((a) =>
-        isImage(a.contentType) ? (
+        (a.url.startsWith("annoy-encrypted:")||a.url.startsWith("/api/uploads/")) ? <SecureAttachment key={a.id} accountId={accountId} message={message} file={a}/> : isImage(a.contentType) ? (
           <button
             key={a.id}
             type="button"
@@ -266,6 +268,7 @@ function MessageRow({
           {formatClock(message.createdAt)}
         </time>
         <div className="message-body">
+          {message.sharedBy&&<small className="muted">Histórico compartilhado por {nameOf(message.sharedBy)??message.sharedBy}. Autoria original declarada por quem compartilhou.</small>}
           {!compact && (
             <div className="message-head">
               <Avatar user={message.author} size={22} />
@@ -311,7 +314,7 @@ function MessageRow({
           <button className="icon-btn tiny" title="Responder" onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
-          {own && (
+          {own && message.protection==='e2ee' && (
             <button
               className="icon-btn tiny"
               title="Editar"
@@ -381,6 +384,7 @@ function Composer({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [expiresIn,setExpiresIn]=useState(0);
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const [query, setQuery] = useState<string | null>(null);
@@ -443,7 +447,7 @@ function Composer({
     if ((!content && files.length === 0) || sending) return;
     setSending(true);
     try {
-      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null);
+      await apiFor(accountId).sendMessage(channelId, content, files, replyTo?.id ?? null, expiresIn?new Date(Date.now()+expiresIn).toISOString():null);
       setText("");
       setFiles([]);
       setPicked([]);
@@ -547,6 +551,9 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
+        <select aria-label="Expiração da mensagem" value={expiresIn} onChange={e=>setExpiresIn(Number(e.target.value))} disabled={sending}>
+          <option value={0}>Permanente</option><option value={3600000}>Expira em 1 hora</option><option value={86400000}>Expira em 1 dia</option><option value={604800000}>Expira em 7 dias</option>
+        </select>
         <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
         <Button
           variant="ghost"
@@ -606,6 +613,9 @@ export function Chat(props: ChatProps) {
     if (!messageLog.current) return;
     const observer = new ResizeObserver(() => {
       const el = scroller.current;
+      // A DOM scroll can precede React's scroll event. Respect the actual
+      // position before a resize callback can pin the reader back to the end.
+      if(el&&el.scrollTop<lastTop.current-1)pinned.current=false;
       if (el && pinned.current && prevHeight.current === null) {
         el.scrollTop = el.scrollHeight;
         lastTop.current = el.scrollTop;
@@ -624,10 +634,12 @@ export function Chat(props: ChatProps) {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
+    if(el.scrollTop<lastTop.current-1)pinned.current=false;
     if (prevHeight.current !== null) {
       el.scrollTop += el.scrollHeight - prevHeight.current;
       prevHeight.current = null;
     } else if (pinned.current) el.scrollTop = el.scrollHeight;
+    lastTop.current=el.scrollTop;
   }, [items, firstId]);
 
   const onScroll = () => {
@@ -671,6 +683,7 @@ export function Chat(props: ChatProps) {
         {props.headerExtra}
       </header>
       <ConnectionNotice accountId={accountId} />
+      <CryptoStatus accountId={accountId} channelId={channelId} />
       <div className="messages" ref={scroller} onScroll={onScroll}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
@@ -712,7 +725,7 @@ export function Chat(props: ChatProps) {
                   nameOf={nameOf}
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
-                  canReact={props.canSend}
+                  canReact={props.canSend&&m.protection==='e2ee'}
                   onReply={setReplyTo}
                 />
               </Fragment>

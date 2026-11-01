@@ -4,14 +4,18 @@ import { probeWindows } from "./windows.ts";
 import { probeLinux } from "./linux.ts";
 import { steamGameIcon } from "./game-icon.ts";
 /** Main-process boundary: local OS details never cross preload. Detection runs only while opted in. */
-export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | null) {
+export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | null, allowed: () => boolean, trusted: (event: Electron.IpcMainInvokeEvent) => boolean) {
   let preferences: ActivityPreferences = { games: false, music: false };
   const supported = process.platform === "win32" || process.platform === "linux";
   let snapshot: DesktopActivitySnapshot = { supported, activities: [], error: null };
   let timer: ReturnType<typeof setTimeout> | null = null,
     generation = 0;
   let controller: AbortController | null = null;
-  const publish = () => window()?.webContents.send("activity:snapshot", snapshot);
+  const publish = () => {
+    const current = window();
+    if (!current || current.isDestroyed() || current.webContents.isDestroyed()) return;
+    current.webContents.send("activity:snapshot", snapshot);
+  };
   const poll = async (version: number) => {
     try {
       controller = new AbortController();
@@ -36,10 +40,10 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     if (version === generation) timer = setTimeout(() => void poll(version), 15_000);
   };
   ipc.handle("activity:configure", (event, input: unknown) => {
-    if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
+    if (!trusted(event) || event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
       throw new Error("Invalid activity sender");
     const values = input as Partial<ActivityPreferences> | null;
-    preferences = { games: values?.games === true, music: values?.music === true, development: values?.development === true };
+    preferences = { games: allowed() && values?.games === true, music: allowed() && values?.music === true, development: allowed() && values?.development === true };
     ++generation;
     controller?.abort();
     if (timer) clearTimeout(timer);
@@ -50,18 +54,20 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     return snapshot;
   });
   ipc.handle("activity:get", (event) => {
-    if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
+    if (!trusted(event) || event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
       throw new Error("Invalid activity sender");
     return snapshot;
   });
   ipc.handle("activity:game-icon", (event, appId: unknown) => {
-    if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
+    if (!trusted(event) || event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
       throw new Error("Invalid activity sender");
-    return typeof appId === "string" ? steamGameIcon(appId) : null;
+    return allowed() && typeof appId === "string" ? steamGameIcon(appId) : null;
   });
   return () => {
     ++generation;
     controller?.abort();
     if (timer) clearTimeout(timer);
+    snapshot = { supported, activities: [], error: null };
+    publish();
   };
 }

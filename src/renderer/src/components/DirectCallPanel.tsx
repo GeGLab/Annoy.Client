@@ -60,11 +60,13 @@ export function DirectCallPanel() {
   const other = friend?.user ?? instance.dms.flatMap((dm) => dm.recipients).find((user) => user.id === otherId);
   const name = friend?.nickname || other?.displayName || "Amigo";
   if (ringing) return <Modal title={incoming ? "Chamada recebida" : "Chamando…"} onClose={() => callAction(incoming ? "reject" : "end")} className="direct-call-invite">
+    <p role="note">Chamada legada: autenticação E2EE de mídia ainda não validada.</p>
     <div className="call-invite-person">{other && <Avatar user={other} size={80} />}<h3>{name}</h3><p className="muted">{incoming ? "Quer conversar com você" : "Aguardando atender"} · {entry.call.video ? "Vídeo e áudio" : "Áudio"}</p></div>
     <div className="call-invite-actions"><Button variant="secondary" onClick={() => callAction(incoming ? "reject" : "end")}><Icon name="hangup" />{incoming ? "Recusar" : "Cancelar"}</Button>{incoming && <Button onClick={() => callAction("accept")}><Icon name={entry.call.video ? "camera" : "phone"} />Atender</Button>}</div>
   </Modal>;
   return <section className="direct-call-panel" aria-label={`Chamada com ${name}`}>
     <header>{other && <Avatar user={other} size={32} />}<div><strong>{name}</strong><small>{media.connected ? "Chamada conectada" : "Conectando mídia…"}</small></div><Icon name={entry.call.video ? "camera" : "phone"} /></header>
+    <p role="note">{entry.call.protection === "sframe" ? <><Icon name="lock" size={12} /> Voz e vídeo cifrados de ponta a ponta (SFrame)</> : "Sem criptografia de ponta a ponta."}</p>
     <UserVolumeControl accountId={entry.accountId} userId={otherId} name={name} />
     <audio ref={audio} autoPlay />
     {entry.call.video && <div className="direct-call-video"><CallVideo stream={media.remote} /><CallVideo stream={media.local} local /></div>}

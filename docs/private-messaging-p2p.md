@@ -1,3 +1,9 @@
+> **Decisão posterior aprovada (2026-10-30):** este documento é histórico.
+> DMs e grupos usarão exclusivamente OpenMLS/RFC 9420. A avaliação de libsignal
+> descrita abaixo foi cancelada; não implementá-la. Autenticação segue o modo
+> exclusivo Global/Local da instância. Transporte P2P permanece experimento e
+> não fornece E2EE de aplicação. Consulte a documentação de segurança do Server.
+
 # DMs independentes das comunidades: proposta e prova de transporte
 
 Pesquisa em 30/10/2026. Estado: proposta, com uma prova local de transporte
@@ -59,7 +65,7 @@ DM. [BEP 5](https://www.bittorrent.org/beps/bep_0005.html).
 A conta local proposta deve existir antes de “Conectar a uma comunidade”.
 Gera suas próprias chaves aleatórias; nome de exibição não é prova de
 identidade. Servidores continuam tendo seus perfis e permissões, com vínculo
-opcional à identidade local. A conta global permanece opcional.
+opcional à identidade local. A conta Annoy permanece opcional.
 
 O convite de contato precisa carregar a chave pública ou um fingerprint
 verificável. A interface deve permitir comparação por QR/código e avisar

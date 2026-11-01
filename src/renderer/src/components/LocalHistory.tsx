@@ -1,0 +1,19 @@
+import {useEffect,useRef,useState} from 'react';
+import type {Message} from '@distopic/protocol';
+import {useStore,toast} from '../store.ts';
+import {Button} from './ui/button.tsx';
+export function LocalHistory(){
+ const accounts=useStore(s=>s.accounts),[accountId,setAccount]=useState(accounts[0]?.id??''),[channels,setChannels]=useState<{id:string;kind:'messages'|'legacy';count:number}[]>([]),[selected,setSelected]=useState(''),[messages,setMessages]=useState<Message[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[more,setMore]=useState(false);
+ const generation=useRef(0);
+ const account=accounts.find(a=>a.id===accountId);
+ useEffect(()=>{let active=true;generation.current++;setLoading(false);setMore(false);setMessages([]);setSelected('');setChannels([]);setError('');if(account&&window.distopic)void window.distopic.crypto.localChannels(account.url,account.userId).then(items=>{if(active)setChannels(items);}).catch(err=>{if(active)setError((err as Error).message);});return()=>{active=false;generation.current++;};},[accountId]);
+ const read=async(value:string,before?:string)=>{if(!account||!window.distopic)return;const revision=++generation.current;setLoading(true);setError('');try{const [kind,channel]=JSON.parse(value) as ['messages'|'legacy',string],items=await window.distopic.crypto.localMessages(account.url,account.userId,channel,kind,before);if(revision!==generation.current)return;setMessages(current=>before?[...items,...current]:items);setMore(items.length===50);}catch(err){if(revision===generation.current)setError((err as Error).message);}finally{if(revision===generation.current)setLoading(false);}};
+ return <section className="local-history" aria-label="Histórico local"><p>Leitura do cofre deste dispositivo. Não depende do Global ou do servidor. O acesso exige o armazenamento do sistema disponível ou o desbloqueio com sua senha local.</p>
+ <label>Conta armazenada <select aria-label="Conta do histórico local" value={accountId} onChange={e=>setAccount(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{a.instanceName} · {a.userId}</option>)}</select></label>
+ <label>Conversa <select aria-label="Conversa do histórico local" value={selected} onChange={e=>{generation.current++;setSelected(e.target.value);setMessages([]);setMore(false);setLoading(false);if(e.target.value)void read(e.target.value);}}><option value="">Escolher conversa</option>{channels.map(c=><option key={JSON.stringify([c.kind,c.id])} value={JSON.stringify([c.kind,c.id])}>{c.id} · {c.kind==='legacy'?'origem legada':'MLS'} · {c.count} mensagens</option>)}</select></label>
+ <Button variant="secondary" onClick={()=>void window.distopic?.crypto.localBackup().then(result=>{if(result.saved)toast('Backup local cifrado salvo');}).catch(err=>toast((err as Error).message))}>Exportar backup local cifrado</Button>
+ {error&&<p role="alert">{error}</p>}{loading&&<p role="status">Abrindo cópias locais…</p>}
+ {more&&messages.length>0&&<Button disabled={loading} onClick={()=>void read(selected,messages[0]!.id)}>Mensagens anteriores</Button>}
+ {messages.map(message=><article key={message.id}><strong>{message.author.displayName}</strong> <time>{new Date(message.createdAt).toLocaleString('pt-BR')}</time><small>{message.protection==='legacy_plaintext'?' Origem legada sem E2EE; cópia local cifrada.':' Cópia local de conversa MLS; integração em validação.'}</small><p style={{whiteSpace:'pre-wrap'}}>{message.content}</p>{message.attachments.map(file=><div key={file.id}>{file.filename} · {Math.ceil(file.size/1024)} KiB {file.url.startsWith('annoy-archive:')&&account?<Button variant="ghost" size="sm" onClick={()=>void window.distopic?.crypto.localFileSave(account.url,account.userId,message.channelId,message.id,file.id).catch(err=>toast((err as Error).message))}>Salvar cópia fora do cofre</Button>:<span> · ciphertext do anexo permanece no servidor</span>}</div>)}</article>)}
+ </section>;
+}

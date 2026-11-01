@@ -15,8 +15,11 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p . && tsc -p packages/protocol",
     "sync:protocol": "node scripts/sync-protocol.mjs",
-    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
-    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
+    "dist:win": "npm run crypto:build && electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:linux": "npm run crypto:build && electron-vite build && electron-builder --linux --publish never",
+    "test:transport": "node --experimental-strip-types --test scripts/tests/transport.test.mjs",
+    "test:updates": "node --experimental-strip-types --test scripts/tests/security-updates.test.mjs scripts/tests/update-signature.test.mjs",
+    "test:accounts": "node --experimental-strip-types --test scripts/tests/app-access.test.mjs && playwright test tests/account-policy.spec.ts",
     "test:activity": "node --experimental-strip-types --test scripts/tests/*-activity.test.mjs",
     "test:servers": "node --experimental-strip-types --test scripts/tests/server-removal.test.mjs",
     "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs",
@@ -26,15 +29,24 @@
     "postinstall": "node scripts/ensure-electron.mjs",
     "predev": "node scripts/ensure-electron.mjs",
     "prestart": "node scripts/ensure-electron.mjs",
-    "test:disconnect": "playwright test tests/disconnect.spec.ts"
+    "test:disconnect": "playwright test tests/disconnect.spec.ts",
+    "crypto:build": "node scripts/build-crypto.mjs",
+    "crypto:benchmark": "node --experimental-strip-types scripts/benchmark-crypto.mjs",
+    "crypto:test": "cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml",
+    "prebuild": "npm run crypto:build",
+    "test:crypto": "node --experimental-strip-types --test scripts/tests/crypto-vault.test.mjs scripts/tests/mls-service.test.mjs scripts/tests/crypto-key-protector.test.mjs"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6",
     "@ghostery/adblocker-electron": "2.20.1",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "jose": "6.2.14",
+    "libsodium-wrappers-sumo": "0.8.4",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@distopic/protocol": "*",
@@ -106,6 +118,12 @@
       "package.json"
     ],
     "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true
+    },
     "afterPack": "./build/after-pack.cjs",
     "publish": [
       {
@@ -125,7 +143,13 @@
         }
       ],
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "native/annoy-crypto/target/release/annoy-crypto.exe",
+          "to": "crypto/annoy-crypto.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": true,
@@ -143,11 +167,18 @@
       ],
       "icon": "build/icon.png",
       "category": "Network;Chat",
-      "artifactName": "Annoy-${arch}.${ext}"
+      "artifactName": "Annoy-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "native/annoy-crypto/target/release/annoy-crypto",
+          "to": "crypto/annoy-crypto"
+        }
+      ]
     }
   },
   "overrides": {
     "@ghostery/adblocker": "2.20.1",
-    "@ghostery/adblocker-electron-preload": "2.20.1"
+    "@ghostery/adblocker-electron-preload": "2.20.1",
+    "dompurify": "3.4.17"
   }
 }

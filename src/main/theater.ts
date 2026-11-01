@@ -71,7 +71,7 @@ export function youtubeEmbed(raw: string): string | null {
 }
 
 async function open(slot: Slot, raw: string, kind: string): Promise<void> {
-  if (!window) return;
+  if (!window || !canOpen()) return;
   let url: URL;
   try {
     url = new URL(kind === "youtube" ? (youtubeEmbed(raw) ?? raw) : raw);
@@ -84,7 +84,7 @@ async function open(slot: Slot, raw: string, kind: string): Promise<void> {
   wanted.set(slot, url.toString());
   const s = theaterSession();
   await loadBlocker(s);
-  if (wanted.get(slot) !== url.toString() || !window) return;
+  if (wanted.get(slot) !== url.toString() || !window || !canOpen()) return;
   let entry = views.get(slot);
   if (!entry) {
     const view = new WebContentsView({
@@ -93,7 +93,8 @@ async function open(slot: Slot, raw: string, kind: string): Promise<void> {
         contextIsolation: true,
         sandbox: true,
         // Players often live in iframes; the sync preload has to reach them.
-        nodeIntegrationInSubFrames: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
         preload: join(import.meta.dirname, "../preload/theater.cjs"),
         backgroundThrottling: false,
         autoplayPolicy: "no-user-gesture-required",
@@ -133,18 +134,24 @@ function close(slot: Slot): void {
 
 const slotOf = (raw: unknown): Slot | null => (raw === "theater" || raw === "music" ? raw : null);
 
+export function closeAllTheater(): void {
+  close("theater");
+  close("music");
+}
+let canOpen = () => false;
 let registered = false;
 
-export function registerTheater(win: BrowserWindow): void {
+export function registerTheater(win: BrowserWindow, allowed: () => boolean): void {
+  canOpen = allowed;
   window = win;
   views.clear();
   if (registered) return;
   registered = true;
-  const fromApp = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => event.sender === window?.webContents;
+  const fromApp = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => event.sender === window?.webContents && event.senderFrame === window?.webContents.mainFrame;
 
   ipcMain.on("theater:open", (event, slot: unknown, url: unknown, kind: unknown) => {
     const s = slotOf(slot);
-    if (fromApp(event) && s && typeof url === "string" && typeof kind === "string") void open(s, url, kind);
+    if (canOpen() && fromApp(event) && s && typeof url === "string" && typeof kind === "string") void open(s, url, kind);
   });
   ipcMain.on("theater:close", (event, slot: unknown) => {
     const s = slotOf(slot);
@@ -180,7 +187,12 @@ export function registerTheater(win: BrowserWindow): void {
   for (const channel of ["theater:status", "theater:user", "theater:ended"]) {
     ipcMain.on(channel, (event, payload: unknown) => {
       const slot = slotOfSender(event.sender);
-      if (slot && payload && typeof payload === "object") window?.webContents.send(channel, slot, payload);
+      if (slot && payload && typeof payload === "object") {
+        const value=payload as Record<string,unknown>;
+        if (typeof value.position!=="number" || !Number.isFinite(value.position) || value.position<0 || value.position>8640000) return;
+        if (channel==="theater:user" && !["play","pause","seek"].includes(String(value.action))) return;
+        window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{})});
+      }
     });
   }
 }

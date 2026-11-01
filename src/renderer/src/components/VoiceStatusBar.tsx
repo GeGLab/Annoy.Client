@@ -18,7 +18,19 @@ export function VoiceStatusBar() {
         <Icon name={voice.status === "connected" ? "radio" : "loader"} size={16} />
       </span>
       <div className="voice-status-copy">
-        <span role="status">{voice.status === "connected" ? "Voz conectada" : "Conectando…"}</span>
+        <span role="status">
+          {voice.status === "connected" ? "Voz conectada" : "Conectando…"}
+          {voice.status === "connected" && (
+            <span
+              className="voice-protection"
+              data-e2ee={voice.e2ee ? "true" : "false"}
+              title={voice.e2ee ? "Voz, câmera e tela cifradas de ponta a ponta (SFrame). O servidor e o SFU não têm as chaves." : "Sem criptografia de ponta a ponta: o servidor de mídia pode acessar o conteúdo."}
+            >
+              {" "}
+              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : "sem E2EE"}
+            </span>
+          )}
+        </span>
         <strong className="truncate">
           {channel?.name ?? "Canal de voz"}
           <span>

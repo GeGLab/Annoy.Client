@@ -149,102 +149,22 @@ export async function signForServer(privateKey: CryptoKey, challenge: string): P
   return b64url(await subtle.sign("Ed25519", privateKey, enc.encode(`annoy-login:${challenge}`)));
 }
 
-// --- Blind tokens (RFC 9474, RSABSSA-SHA384-PSS-Randomized) --------------------
-//
-// Proof that "a valid, unsanctioned global account" is logging in, made so the
-// Global API can't tell which server it's for: it signs a blinded message it
-// can't read, and the server checks the signature offline.
-
-const H_LEN = 48;
-
-const os2ip = (b: Bytes) => b.reduce((n, byte) => (n << 8n) | BigInt(byte), 0n);
-function i2osp(n: bigint, len: number): Bytes {
-  const out = new Uint8Array(len);
-  for (let i = len - 1; i >= 0; i--, n >>= 8n) out[i] = Number(n & 0xffn);
-  return out;
+// --- RFC 9474 blind tokens through Cloudflare's maintained implementation ---
+// RSA-PSS encoding, blinding and finalization are never implemented in Annoy.
+import { RSABSSA } from '@cloudflare/blindrsa-ts';
+const blindSuite = RSABSSA.SHA384.PSS.Randomized();
+export interface IssuerKey {kid:string;n:string;e:string}
+export interface PendingToken {kid:string;message:Bytes;blinded:string;inverse:Uint8Array;publicKey:CryptoKey}
+export const tokenContext=(serverId:string,identityId:string):Bytes=>enc.encode(`annoy-token/v1|${serverId}|${identityId}`);
+export async function blindToken(key:IssuerKey,context:Bytes):Promise<PendingToken>{
+ const publicKey=await subtle.importKey('jwk',{kty:'RSA',n:key.n,e:key.e,alg:'PS384',ext:true},{name:'RSA-PSS',hash:'SHA-384'},true,['verify']);
+ const message=new Uint8Array(blindSuite.prepare(context));
+ const {blindedMsg,inv}=await blindSuite.blind(publicKey,message);
+ return {kid:key.kid,message,blinded:b64url(blindedMsg),inverse:inv,publicKey};
 }
-function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
-  let result = 1n;
-  base %= mod;
-  for (; exp > 0n; exp >>= 1n, base = (base * base) % mod) if (exp & 1n) result = (result * base) % mod;
-  return result;
-}
-function modInverse(a: bigint, m: bigint): bigint {
-  let [r0, r1, s0, s1] = [a % m, m, 1n, 0n];
-  while (r1 !== 0n) {
-    const q = r0 / r1;
-    [r0, r1, s0, s1] = [r1, r0 - q * r1, s1, s0 - q * s1];
-  }
-  if (r0 !== 1n) throw new Error("not invertible");
-  return ((s0 % m) + m) % m;
-}
-const sha384 = async (data: Bytes) => new Uint8Array(await subtle.digest("SHA-384", data));
-
-async function mgf1(seed: Bytes, length: number): Promise<Bytes> {
-  const out = new Uint8Array(length);
-  for (let counter = 0, offset = 0; offset < length; counter++) {
-    const block = await sha384(new Uint8Array([...seed, ...i2osp(BigInt(counter), 4)]));
-    out.set(block.subarray(0, Math.min(block.length, length - offset)), offset);
-    offset += block.length;
-  }
-  return out;
-}
-
-/** EMSA-PSS-ENCODE (RFC 8017 9.1.1) with SHA-384, MGF1-SHA-384 and a 48-byte salt. */
-async function emsaPss(message: Bytes, emBits: number): Promise<Bytes> {
-  const emLen = Math.ceil(emBits / 8);
-  const mHash = await sha384(message);
-  const salt = random(H_LEN);
-  const h = await sha384(new Uint8Array([...new Uint8Array(8), ...mHash, ...salt]));
-  const db = new Uint8Array(emLen - H_LEN - 1);
-  db[db.length - H_LEN - 1] = 0x01;
-  db.set(salt, db.length - H_LEN);
-  const mask = await mgf1(h, db.length);
-  for (let i = 0; i < db.length; i++) db[i]! ^= mask[i]!;
-  db[0]! &= 0xff >> (8 * emLen - emBits);
-  return new Uint8Array([...db, ...h, 0xbc]);
-}
-
-export interface IssuerKey {
-  kid: string;
-  /** RSA modulus and exponent, base64url (from the JWK the API publishes). */
-  n: string;
-  e: string;
-}
-
-export interface PendingToken {
-  kid: string;
-  /** The message the server verifies: 32 random bytes, then the context. */
-  message: Bytes;
-  blinded: string;
-  inverse: bigint;
-  modulus: bigint;
-  exponent: bigint;
-}
-
-/**
- * The context binds a token to one server and one per-server identity, so it
- * is worthless anywhere else. The Global API never sees it.
- */
-export const tokenContext = (serverId: string, identityId: string): Bytes => enc.encode(`annoy-token/v1|${serverId}|${identityId}`) as Bytes;
-
-export async function blindToken(key: IssuerKey, context: Bytes): Promise<PendingToken> {
-  const n = os2ip(fromB64url(key.n));
-  const e = os2ip(fromB64url(key.e));
-  const modBits = n.toString(2).length;
-  const k = Math.ceil(modBits / 8);
-  const message = new Uint8Array([...random(32), ...context]);
-  const m = os2ip(await emsaPss(message, modBits - 1));
-  let r: bigint;
-  do r = os2ip(random(k)) % n;
-  while (r < 2n);
-  const blinded = (m * modPow(r, e, n)) % n;
-  return { kid: key.kid, message, blinded: b64url(i2osp(blinded, k)), inverse: modInverse(r, n), modulus: n, exponent: e };
-}
-
-/** Unblinds the API's answer into an ordinary RSA-PSS signature on `message`. */
-export function finalizeToken(pending: PendingToken, blindSignature: string): { kid: string; message: string; signature: string } {
-  const k = Math.ceil(pending.modulus.toString(2).length / 8);
-  const s = (os2ip(fromB64url(blindSignature)) * pending.inverse) % pending.modulus;
-  return { kid: pending.kid, message: b64url(pending.message), signature: b64url(i2osp(s, k)) };
+export async function finalizeToken(pending:PendingToken,blindSignature:string):Promise<{kid:string;message:string;signature:string}>{
+ try {
+  const signature=await blindSuite.finalize(pending.publicKey,pending.message,fromB64url(blindSignature),pending.inverse);
+  return {kid:pending.kid,message:b64url(pending.message),signature:b64url(signature)};
+ } finally {pending.inverse.fill(0);}
 }

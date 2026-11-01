@@ -109,8 +109,8 @@ export function MandatoryUpdate() {
           </div>
           <h2 id="mandatory-title">Atualização de segurança obrigatória</h2>
           <p>
-            Foi encontrada uma vulnerabilidade crítica na versão {update.currentVersion}. Para proteger você e seus servidores, o Annoy precisa ser
-            atualizado antes de continuar.
+            A versão {update.currentVersion} requer uma atualização crítica de segurança para continuar. O Annoy será atualizado e reiniciado
+            automaticamente assim que o download estiver pronto.
           </p>
           {advisory && (
             <div className="advisory">
@@ -134,11 +134,7 @@ export function MandatoryUpdate() {
               <p className="muted small">Baixando {update.version}: {update.percent}%</p>
             </>
           )}
-          {update.status === "ready" && (
-            <button className="btn" onClick={() => void api?.install()}>
-              Reiniciar e atualizar para {update.version}
-            </button>
-          )}
+          {update.status === "ready" && <p>Instalando {update.version}. O Annoy será reiniciado automaticamente…</p>}
           {update.status === "error" && (
             <>
               <p className="error">Não foi possível baixar a atualização: {update.message}</p>

@@ -87,6 +87,7 @@ export function VoicePanel() {
   const count = server?.voiceStates.filter((s) => s.channelId === voice.channelId).length ?? 0;
   return (
     <div className={`voice-panel${connected ? " connected" : " connecting"}`}>
+      <small role="note">Sem E2EE de mídia: o SFU pode acessar áudio, câmera e tela.</small>
       <div className="voice-panel-heading">
         <Icon name={connected ? "radio" : "loader"} size={22} />
         <button

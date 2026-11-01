@@ -581,7 +581,7 @@ function ServerUnavailable({ accountId }: { accountId: string }) {
           ? "Entre de novo para continuar."
           : "O app continua tentando sozinho. Se você estava numa chamada, ele volta para a sala quando reconectar."}
       </p>
-      <button className="btn" onClick={() => (status === "invalid" ? openModal({ kind: "addAccount" }) : reconnect(accountId))}>
+      <button className="btn" onClick={() => (status === "invalid" ? openModal({ kind: "addAccount", accountId }) : reconnect(accountId))}>
         {status === "invalid" ? "Entrar de novo" : "Tentar agora"}
       </button>
     </div>

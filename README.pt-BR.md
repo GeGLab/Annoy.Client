@@ -65,7 +65,7 @@ Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
 | :---: | :---: |
 | <img src="docs/screenshots/chat-and-voice.png" alt="Chat e voz" width="420"><br>**Chat e voz, com WhatsApp, Telegram e Discord nas abas** | <img src="docs/screenshots/services.png" alt="Nova aba" width="420"><br>**Adicione serviços como abas** |
 | <img src="docs/screenshots/roles.png" alt="Cargos" width="420"><br>**Editor de cargos** | <img src="docs/screenshots/discord-import.png" alt="Importação" width="420"><br>**Importar do Discord escolhendo o que vem** |
-| <img src="docs/screenshots/channel-permissions.png" alt="Permissões" width="420"><br>**Permissões por canal** | <img src="docs/screenshots/sign-in.png" alt="Entrar" width="420"><br>**Entrar com Discord ou conta local** |
+| <img src="docs/screenshots/channel-permissions.png" alt="Permissões" width="420"><br>**Permissões por canal** | <img src="docs/screenshots/sign-in.png" alt="Entrar" width="420"><br>**Conta Annoy por padrão; conta local conforme a instância** |
 
 Mais capturas no [README em inglês](README.md#screenshots).
 
@@ -107,3 +107,14 @@ os servidores e abre o app oficial do TeamSpeak.
 ## Desenvolvimento da interface
 
 Veja [desenvolvimento](docs/development.md) para a preparação automática do Electron, componentes compartilhados e testes isolados. [Busca e atividades privadas](docs/search-activity.md) descreve os módulos e a integração com o servidor.
+
+A conta Annoy é obrigatória por padrão. Contas locais só são oferecidas quando a instância seleciona `ANNOY_ACCOUNT_MODE=local`. A migração mantém o histórico, as permissões e a propriedade dos servidores.
+
+O cliente também exige autenticação para abrir o navegador e os serviços. Ao sair
+da conta Annoy, as páginas nativas abertas são encerradas e a tela de login
+volta imediatamente. A exceção exige uma sessão local válida em uma instância
+com `ANNOY_ACCOUNT_MODE=local`; apenas conhecer o endereço não libera o cliente.
+
+## Implementação de segurança em validação
+
+Este código local integra OpenMLS para mensagens/anexos e exige Rust/Cargo na build. Não foi publicado em release nesta sessão. Histórico legado permanece identificado; envio novo legível é bloqueado. SFrame e validação Windows continuam pendentes. A instalação de updates exige chave pública confiável e manifesto Ed25519; pins de produção ainda não foram configurados. Ver a entrega completa, testes, migrações e riscos em `annoy-server/docs/security/README.md` no workspace irmão. Não classificar o produto como totalmente seguro antes da auditoria independente.

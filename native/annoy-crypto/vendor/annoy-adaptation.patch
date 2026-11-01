@@ -1,0 +1,115 @@
+--- upstream/openmls_rust_crypto/Cargo.toml
++++ annoy/openmls_rust_crypto/Cargo.toml
+@@ -3,7 +3,7 @@
+ authors = ["OpenMLS Authors"]
+ version = "0.6.0"
+ edition = "2021"
+-rust-version.workspace = true
++rust-version = "1.94.0"
+ description = "A crypto backend for OpenMLS implementing openmls_traits using RustCrypto primitives."
+ license = "MIT"
+ documentation = "https://docs.rs/openmls_rust_crypto"
+@@ -11,8 +11,8 @@
+ readme = "README.md"
+ 
+ [dependencies]
+-openmls_traits = { workspace = true }
+-openmls_memory_storage = { workspace = true }
++openmls_traits = { version = "0.6.0" }
++openmls_memory_storage = { version = "0.6.0" }
+ 
+ hpke = { version = "0.8", package = "hpke-rs", default-features = false, features = [
+   "hazmat",
+@@ -32,9 +32,9 @@
+ rand_chacha = { version = "0.10" }
+ hpke-rs-crypto = { version = "0.8" }
+ hpke-rs-rust-crypto = { version = "0.8" }
+-tls_codec = { workspace = true }
++tls_codec = { version = "0.5", features = ["derive", "serde", "mls"] }
+ ml-dsa = { version = "0.1.0", optional = true }
+-thiserror = { workspace = true }
++thiserror = { version = "^2.0" }
+ # FF1-AES128 backing for the virtual-clients-draft reuse-guard PRP.
+ fpe = { version = "0.7", optional = true }
+ aes = { version = "0.9", optional = true }
+--- upstream/basic_credential/Cargo.toml
++++ annoy/basic_credential/Cargo.toml
+@@ -3,7 +3,7 @@
+ version = "0.6.0"
+ authors = ["OpenMLS Authors"]
+ edition = "2021"
+-rust-version.workspace = true
++rust-version = "1.94.0"
+ description = "A Basic Credential implementation for OpenMLS"
+ license = "MIT"
+ documentation = "https://docs.rs/openmls_basic_credential"
+@@ -11,9 +11,9 @@
+ readme = "README.md"
+ 
+ [dependencies]
+-openmls_traits = { workspace = true }
+-tls_codec = { workspace = true }
+-serde = { workspace = true }
++openmls_traits = { version = "0.6.0" }
++tls_codec = { version = "0.5", features = ["derive", "serde", "mls"] }
++serde = { version = "^1.0" }
+ 
+ # Rust Crypto
+ ed25519-dalek = { version = "3.0", features = ["rand_core"] }
+@@ -36,5 +36,5 @@
+ 
+ [dev-dependencies]
+ serde_json = "1.0.149"
+-openmls_rust_crypto = { workspace = true }
+-openmls_libcrux_crypto = { workspace = true }
++openmls_rust_crypto = { version = "0.6.0" }
++openmls_libcrux_crypto = { version = "0.4.0" }
+--- upstream/basic_credential/src/lib.rs
++++ annoy/basic_credential/src/lib.rs
+@@ -283,17 +283,15 @@
+     }
+ 
+     /// Store this signature key pair in the key store.
+-    #[openmls_traits::maybe_async]
+-    pub async fn store<T>(&self, store: &T) -> Result<(), T::Error>
++    pub fn store<T>(&self, store: &T) -> Result<(), T::Error>
+     where
+         T: StorageProvider<CURRENT_VERSION>,
+     {
+-        store.write_signature_key_pair(&self.id(), self).await
++        store.write_signature_key_pair(&self.id(), self)
+     }
+ 
+     /// Read a signature key pair from the key store.
+-    #[openmls_traits::maybe_async]
+-    pub async fn read(
++    pub fn read(
+         store: &impl StorageProvider<CURRENT_VERSION>,
+         public_key: &[u8],
+         signature_scheme: SignatureScheme,
+@@ -302,14 +300,13 @@
+             .signature_key_pair(&StorageId {
+                 value: id(public_key, signature_scheme),
+             })
+-            .await
++            
+             .ok()
+             .flatten()
+     }
+ 
+     /// Delete a signature key pair from the key store.
+-    #[openmls_traits::maybe_async]
+-    pub async fn delete<T: StorageProvider<CURRENT_VERSION>>(
++    pub fn delete<T: StorageProvider<CURRENT_VERSION>>(
+         store: &T,
+         public_key: &[u8],
+         signature_scheme: SignatureScheme,
+@@ -317,7 +314,7 @@
+         let id = StorageId {
+             value: id(public_key, signature_scheme),
+         };
+-        store.delete_signature_key_pair(&id).await
++        store.delete_signature_key_pair(&id)
+     }
+ 
+     /// Get the public key as byte slice.

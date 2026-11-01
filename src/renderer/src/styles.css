@@ -14,3 +14,7 @@
 @import "./styles/channels.css" layer(components);
 @source "./";
 @custom-variant dark (&:where(.dark, .dark *));
+
+.auth-gate { flex: 1; min-height: 0; overflow-y: auto; display: grid; place-items: center; padding: 32px 20px; }
+.auth-gate-card { width: min(100%, 440px); display: flex; flex-direction: column; gap: 16px; padding: 28px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-elev); }
+.auth-gate-card h1, .auth-gate-card p { margin: 0; }

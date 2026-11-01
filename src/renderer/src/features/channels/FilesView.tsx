@@ -1,3 +1,5 @@
+import {SecureAttachment} from "../../components/SecureAttachment.tsx";
+import {CryptoStatus} from "../../components/CryptoStatus.tsx";
 import { has, LIMITS, Permission, type Attachment, type Channel, type Message, type ServerState } from "@distopic/protocol";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { apiFor, loadMessages } from "../../client.ts";
@@ -140,6 +142,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         <span className="chat-topic">{channel.topic || `${files.length} arquivo(s) · ${formatSize(totalSize)}`}</span>
       </header>
 
+      <CryptoStatus accountId={accountId} channelId={channel.id}/>
       <div className="files-toolbar">
         <label className="files-search">
           <Icon name="search" size={16} />
@@ -198,6 +201,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         {files.map((file) => {
           const { attachment, message } = file;
           const mine = message.author.id === me;
+          if(attachment.url.startsWith('annoy-encrypted:')||attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={`Excluir ${attachment.filename}`} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
           return (
             <div key={attachment.id} className="file-row" role="listitem">
               <button className="file-open" onClick={() => open(file)} title={attachment.contentType.startsWith("image/") || /^(audio|video)\//.test(attachment.contentType) ? "Abrir" : "Baixar"}>

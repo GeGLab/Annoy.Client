@@ -24,10 +24,10 @@ import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
-import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
+import { GLOBAL_URL, signInGlobal, signOutGlobal } from "../../global.ts";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
-  { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta global login unificar" },
+  { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta Annoy login unificar" },
   { id: "voice", label: "Voz e vídeo", icon: "mic", search: "microfone áudio câmera ruído sensibilidade teste som" },
   { id: "appearance", label: "Aparência", icon: "palette", search: "tema cores escuro claro" },
   { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
@@ -111,58 +111,9 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const signedInGlobal = useStore((s) => s.global !== null);
-  const self = useStore((s) => s.instances[accountId]?.user);
-  /** This server's Global ID when it takes global accounts and this one doesn't use it yet. */
-  const [linkable, setLinkable] = useState<string | null>(null);
-  const [linking, setLinking] = useState(false);
   useEffect(() => {
-    if (!account) return;
-    void fetchInfo(account.url).then(
-      async (info) => {
-        setDiscord(info.discordLogin);
-        if (!info.globalServerId) return setLinkable(null);
-        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me");
-        setLinkable(me.global ? null : info.globalServerId);
-      },
-      () => undefined,
-    );
-  }, [account?.url, signedInGlobal]);
-  const link = async () => {
-    if (!account || !linkable) return;
-    setLinking(true);
-    try {
-      await linkAccount(account, linkable);
-      setLinkable(null);
-      toast(`Agora você também entra em ${account.instanceName} com a conta global`);
-    } catch (error) {
-      if (error instanceof GlobalError && error.code === "global_in_use") await offerMerge(error.message);
-      else toast((error as Error).message);
-    } finally {
-      setLinking(false);
-    }
-  };
-  /** Item 1.9: two users of the same person on this server become this one. */
-  const offerMerge = async (reason: string) => {
-    if (!account || !linkable) return;
-    const ok = await confirmAction(
-      `${reason}. Unificar com @${self?.username ?? "esta conta"}? Servidores, mensagens, cargos e amigos do outro usuário passam para esta conta, e você entra nela com a conta global ou com a senha. O outro usuário deixa de existir.`,
-      { confirmLabel: "Unificar" },
-    );
-    if (!ok) return;
-    const password = await promptText(`Para confirmar, digite a senha de @${self?.username ?? "esta conta"} em ${account.instanceName}.`, "", { confirmLabel: "Unificar", secret: true });
-    if (password === null) return;
-    try {
-      const removed = await mergeAccount(account, linkable, password);
-      setLinkable(null);
-      // The other user is gone: drop it if this app also had it signed in.
-      const stale = getState().accounts.find((a) => a.url === account.url && a.userId === removed);
-      if (stale) removeAccount(stale.id);
-      toast(`Contas unificadas em ${account.instanceName}`);
-    } catch (error) {
-      toast((error as Error).message);
-    }
-  };
+    if (account) void fetchInfo(account.url).then(info => setDiscord(info.discordLogin), () => undefined);
+  }, [account?.url]);
   const sync = async () => {
     if (!account) return;
     setSyncing(true);
@@ -184,11 +135,6 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       {discord && (
         <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>
           Sincronizar Discord
-        </Button>
-      )}
-      {linkable && signedInGlobal && (
-        <Button variant="secondary" size="sm" disabled={busy} loading={linking} onClick={() => void link()}>
-          Entrar também com a conta global
         </Button>
       )}
       {admin && (
@@ -220,7 +166,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
  * Annoy Global: one account for many servers. Signing in happens here, right
  * away (not on "save"), since it's a login rather than a preference.
  */
-function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
+function GlobalAccountCard() {
   const account = useStore((s) => s.global);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -240,23 +186,20 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
     }
   };
   return (
-    <PreferenceCard icon="shield" title="Conta global" description="Um login para todos os seus servidores Annoy. Ninguém, nem nós, fica sabendo quais são.">
+    <PreferenceCard icon="shield" title="Conta Annoy" description="Cofre cifrado no cliente para sua lista de servidores. Contas com recuperação legada precisam migrar.">
+      {account?.cryptoMigrationRequired && <p className="error">Cofre legado: recuperação por servidor foi removida. <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Migre e gere sua chave de recuperação</a> antes de sincronizar servidores.</p>}
       {account ? (
         <>
           <p>
             Você entrou como <strong>{account.name}</strong> <span className="muted">({account.email})</span>.
           </p>
-          <label className="check">
-            <Checkbox checked={draft.globalDefault} onChange={(event) => update({ globalDefault: event.target.checked })} />
-            Usar como conta padrão
-          </label>
-          <p className="muted small">Servidores novos começam pela conta global, e os servidores dela voltam sozinhos em outro computador.</p>
+          <p className="muted small">A conta Annoy é o padrão. Contas locais só estão disponíveis quando o administrador do servidor escolhe esse modo.</p>
           <div className="row">
             <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">
               Gerenciar conta
             </a>
             <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>
-              Sair da conta global
+              Sair da conta Annoy
             </Button>
           </div>
         </>
@@ -276,7 +219,7 @@ function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch:
               {busy ? "Protegendo sua senha…" : "Entrar"}
             </Button>
             <a href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
-              Criar conta global
+              Criar conta Annoy
             </a>
           </div>
         </form>
@@ -516,7 +459,7 @@ export function UserSettingsModal() {
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
-                <GlobalAccountCard draft={draft} update={update} />
+                <GlobalAccountCard />
                 {accounts.map((account) => {
                   const user = instances[account.id]?.user;
                   return (

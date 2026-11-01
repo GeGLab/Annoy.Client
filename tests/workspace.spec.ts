@@ -1,25 +1,30 @@
-import { test, expect, _electron as electron, type Page } from "@playwright/test";
+import {electron} from './fixtures/electron-launch.ts';
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
+import { test, expect,  type Page } from "@playwright/test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join, dirname, basename } from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const origin = "http://workspace.test";
+const origin = "https://workspace.test";
 const screenshots = resolve(".impeccable/review");
 
 async function launch() {
   const tempRoot = resolve(tmpdir());
   const userData = await mkdtemp(join(tempRoot, "distopic-workspace-"));
-  const env = { ...process.env, DISTOPIC_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+  const auth = await globalAuthFixture();
+  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".welcome")).toBeVisible();
   await mkdir(screenshots, { recursive: true });
   const cleanup = async () => {
     await app.close();
+    await auth.close();
     if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("distopic-workspace-"))
       throw new Error("Unexpected test profile path");
     await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -28,7 +33,7 @@ async function launch() {
 }
 
 async function seed(page: Page) {
-  await page.routeWebSocket("ws://workspace.test/gateway", () => {});
+  await page.routeWebSocket("wss://workspace.test/gateway", () => {});
   await page.route(`${origin}/api/**`, (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
   await page.evaluate(async () => {
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -46,7 +51,7 @@ async function seed(page: Page) {
       overwrites: [],
     });
     const now = new Date().toISOString();
-    addAccount({ id: "workspace", url: "http://workspace.test", token: "synthetic", userId: "me", instanceName: "Instância de teste" });
+    addAccount({ id: "workspace", url: "https://workspace.test", token: "synthetic", userId: "me", instanceName: "Instância de teste" });
     setState((s: any) => {
       const inst = s.instances.workspace;
       inst.status = "ready";
@@ -192,7 +197,7 @@ test("latest messages, personal colors, saved panels, voice and blocking reconne
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Configurações", exact: true }).click({ trial: true, timeout: 300 })).rejects.toThrow();
     await page.screenshot({ path: join(screenshots, "workspace-reconnecting.png") });
-    await page.routeWebSocket("ws://workspace.test/gateway", (ws) =>
+    await page.routeWebSocket("wss://workspace.test/gateway", (ws) =>
       ws.onMessage((raw) => {
         const message = JSON.parse(String(raw));
         if (message.op === "identify")

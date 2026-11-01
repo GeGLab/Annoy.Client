@@ -6,4 +6,12 @@ data/
 .env
 test-results/
 playwright-report/
+tests/display.local.json
 .impeccable/review/
+
+# Native cryptographic service build artifacts
+native/annoy-crypto/target/
+
+# SFrame WebAssembly build artifacts (npm run crypto:build)
+native/annoy-sframe/target/
+src/renderer/src/media-e2ee/generated/

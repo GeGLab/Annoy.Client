@@ -87,7 +87,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
           </Button>
         </div>
         <div className="search-scope">
-          <span>{serverId ? "Canais que você pode acessar" : "Seus canais e mensagens diretas nesta instância"}</span>
+          <span>Busca local no histórico disponível neste dispositivo. O texto da busca permanece no cliente.</span>
           <Button size="sm" variant="ghost" onClick={() => setFilters((v) => !v)} aria-expanded={filters}>
             <SlidersHorizontal size={15} />
             Filtros

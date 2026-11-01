@@ -1,0 +1,112 @@
+name: security-validation
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      server_ref:
+        description: Annoy.Server revision containing the matching security changes
+        default: main
+        required: true
+      global_ref:
+        description: Annoy Global revision containing the matching security changes
+        default: main
+        required: true
+permissions:
+  contents: read
+jobs:
+  validation:
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      ANNOY_REQUIRE_NATIVE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: annoy-client
+      - uses: actions/checkout@v4
+        with:
+          repository: GeGLab/Annoy.Server
+          ref: ${{ inputs.server_ref || 'main' }}
+          path: annoy-server
+      - uses: actions/checkout@v4
+        with:
+          repository: GeGLab/annoy-api-global
+          ref: ${{ inputs.global_ref || 'main' }}
+          path: annoy-api-global
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+        working-directory: annoy-client
+      - run: npm ci
+        working-directory: annoy-server
+      - run: npm ci
+        working-directory: annoy-api-global
+      - run: cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml
+        working-directory: annoy-client
+      - run: npm run typecheck
+        working-directory: annoy-client
+      - run: npm run typecheck
+        working-directory: annoy-server
+      - run: npm run test:transport
+        working-directory: annoy-client
+      - run: npm run test:updates
+        working-directory: annoy-client
+      - run: npm run test:crypto
+        working-directory: annoy-client
+      - run: npm run test:activity
+        working-directory: annoy-client
+      - run: node --experimental-strip-types --test scripts/tests/app-access.test.mjs scripts/tests/server-removal.test.mjs scripts/tests/user-volume.test.mjs
+        working-directory: annoy-client
+      - run: npm run test:security
+        working-directory: annoy-server
+      - run: npm test
+        working-directory: annoy-api-global
+      - run: npm run build
+        working-directory: annoy-client
+      - name: Package Linux locally without publishing
+        if: runner.os == 'Linux'
+        run: npx electron-builder --linux --x64 --dir --publish never --config.npmRebuild=false --config.directories.output=dist/security-package
+        working-directory: annoy-client
+      - name: Verify packaged code, crypto runtime and executable fuses
+        if: runner.os == 'Linux'
+        run: node scripts/verify-native-package.mjs dist/security-package/linux-unpacked
+        working-directory: annoy-client
+      - name: Exercise the bundled Linux MLS process
+        if: runner.os == 'Linux'
+        env:
+          ANNOY_CRYPTO_BINARY: ${{ github.workspace }}/annoy-client/dist/security-package/linux-unpacked/resources/crypto/annoy-crypto
+        run: npm run test:crypto
+        working-directory: annoy-client
+      - run: npx playwright install --with-deps chromium
+        working-directory: annoy-client
+      - name: Window manager for the disposable Linux display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openbox
+      - name: Desktop suite and real Electron clients on Linux
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run --auto-servernum dbus-run-session -- bash -euc '
+            openbox >"$RUNNER_TEMP/annoy-window-manager.log" 2>&1 &
+            annoy_test_wm_pid=$!
+            trap "kill $annoy_test_wm_pid 2>/dev/null || true" EXIT
+            npx playwright test
+          '
+        working-directory: annoy-client
+      - name: Desktop suite and real Electron clients on Windows
+        if: runner.os == 'Windows'
+        run: npx playwright test
+        working-directory: annoy-client
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: synthetic-test-failures-${{ matrix.os }}
+          path: annoy-client/test-results
+          retention-days: 7

@@ -1,6 +1,7 @@
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";
+import {secureHttpUrl} from '../../shared/transport.ts';
 
 const HEARTBEAT_MS = 5_000;
 const ACK_TIMEOUT_MS = 10_000;
@@ -34,16 +35,22 @@ export class Gateway {
 
   connect(): void {
     if (this.socket) return;
+    let endpoint:URL;
+    try{endpoint=secureHttpUrl(this.url);endpoint.protocol=endpoint.protocol==='https:'?'wss:':'ws:';endpoint.pathname='/gateway';endpoint.search='';endpoint.hash='';}
+    catch{this.closed=true;this.onStatus('offline');return;}
     this.closed = false;
     this.ready = false;
     this.onStatus("connecting");
-    const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
+    const socket = new WebSocket(endpoint.toString());
     this.socket = socket;
     this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
-    socket.onopen = () => {
+    socket.onopen = async () => {
       if (this.socket !== socket) return;
       this.onReachable?.();
-      this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
+      let dpop:string|null=null;
+      try{dpop=await window.distopic?.crypto?.proof(this.url,this.token,'GET','/gateway')??null;}catch{socket.close(4004,'Desbloqueie o cofre local');return;}
+      if(this.socket!==socket)return;
+      this.send({ op: "identify", ...(dpop?{dpop}:{}), token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls"] });
     };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;

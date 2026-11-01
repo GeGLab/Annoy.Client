@@ -1,3 +1,4 @@
+import {secureFetch} from "./secure-fetch.ts";
 // Annoy Global in the app: one account for many servers. The password and the
 // account keys never leave this device; Global keeps the server list only
 // encrypted, and never learns which servers this account signs in to
@@ -8,7 +9,7 @@ import { fetchInfo } from "./api.ts";
 import { getState, setState, type Account, type GlobalAccount } from "./store.ts";
 
 /** Development and tests can point elsewhere with localStorage "distopic.globalUrl". */
-export const GLOBAL_URL = (() => {
+export let GLOBAL_URL = (() => {
   try {
     return localStorage.getItem("distopic.globalUrl") || "https://global.geg.dev.br";
   } catch {
@@ -33,7 +34,7 @@ export class GlobalError extends Error {
 async function request<T>(base: string, path: string, init: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(base + path, {
+    res = await secureFetch(base + path, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers: { ...(init.body !== undefined && { "content-type": "application/json" }), ...(init.token && { authorization: `Bearer ${init.token}` }) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -65,47 +66,65 @@ async function persist(user: GlobalAccount | null): Promise<void> {
 function setAccount(user: GlobalAccount | null): void {
   setState((s) => {
     s.global = user;
-    if (!user) s.settings.globalDefault = false;
   });
 }
 
-/** At startup: the account kept by the OS keychain, if any, then the server list. */
-export async function initGlobal(): Promise<void> {
-  const raw = await window.distopic?.secrets.get("global").catch(() => null);
-  if (!raw) return;
-  try {
-    const saved = JSON.parse(raw) as Saved;
-    session = saved.session;
-    keys = kdf.fromEscrow(saved.keys);
-    setAccount(saved.user);
-    const me = await global<GlobalAccount>("/v1/me");
-    setAccount({ id: me.id, name: me.name, email: me.email });
-    void syncVault();
-  } catch (err) {
-    // An ended session (password changed elsewhere, sanction): sign in again.
-    if (err instanceof GlobalError && err.status === 401) await signOutGlobal(false);
-  }
+let initializing: Promise<void> | null = null;
+async function globalUrl(): Promise<void> {
+  if (window.distopic?.auth) GLOBAL_URL = await window.distopic.auth.globalUrl();
+}
+
+/** Saved profile data does not unlock the app: validate its session first. */
+export function initGlobal(): Promise<void> {
+  return initializing ??= (async () => {
+    await globalUrl();
+    const raw = await window.distopic?.secrets.get("global").catch(() => null);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as Saved;
+      const restored = kdf.fromEscrow(saved.keys);
+      const me = window.distopic?.auth ? await window.distopic.auth.global(saved.session)
+        : await request<GlobalAccount>(GLOBAL_URL, "/v1/me", { token: saved.session });
+      session = saved.session; keys = restored;
+      setAccount({ id: me.id, name: me.name, email: me.email,cryptoMigrationRequired:me.cryptoMigrationRequired });
+      if (!window.distopic) setState(s => { s.access = { allowed: true, global: true, localAccounts: [] }; });
+      void syncVault();
+    } catch {
+      session = null; keys = null; setAccount(null);
+    }
+  })();
 }
 
 export async function signInGlobal(email: string, password: string): Promise<GlobalAccount> {
+  await globalUrl();
   const pre = await request<{ salt: string; iterations: number }>(GLOBAL_URL, "/v1/auth/prelogin", { body: { email } });
   const pk = await kdf.derivePasswordKeys(password, pre.salt, pre.iterations);
   const res = await request<{ token: string; wrappedKeys: string; user: GlobalAccount }>(GLOBAL_URL, "/v1/auth/login", { body: { email, authKey: pk.authKey } });
-  session = res.token;
-  keys = await kdf.unwrapKeys(pk.wrapKey, res.wrappedKeys);
-  const user = { id: res.user.id, name: res.user.name, email: res.user.email };
+  const unlocked = await kdf.unwrapKeys(pk.wrapKey, res.wrappedKeys);
+  const me = window.distopic?.auth ? await window.distopic.auth.global(res.token) : res.user;
+  session = res.token; keys = unlocked;
+  const user = { id: me.id, name: me.name, email: me.email,cryptoMigrationRequired:me.cryptoMigrationRequired??res.user.cryptoMigrationRequired };
   setAccount(user);
+  if (!window.distopic) setState(s => { s.access = { allowed: true, global: true, localAccounts: [] }; });
   await persist(user);
   void syncVault();
   return user;
 }
 
-export async function signOutGlobal(callApi = true): Promise<void> {
-  if (callApi && session) await global("/v1/auth/logout", { body: {} }).catch(() => undefined);
-  session = null;
-  keys = null;
-  setAccount(null);
-  await persist(null);
+let signingOut: Promise<void> | null = null;
+export function signOutGlobal(callApi = true): Promise<void> {
+  return signingOut ??= (async () => {
+    const previous = session;
+    session = null; keys = null; tokenKeys = null; setAccount(null);
+    // Revoke native access before waiting on any network request.
+    if (window.distopic?.auth) await window.distopic.auth.logoutGlobal();
+    else setState(s => { s.access = { allowed: false, global: false, localAccounts: [] }; });
+    const client = await import("./client.ts");
+    const local = new Set(getState().access.localAccounts);
+    for (const account of [...getState().accounts]) if (!local.has(account.id)) client.removeAccount(account.id, false);
+    await persist(null);
+    if (callApi && previous) await request(GLOBAL_URL, "/v1/auth/logout", { body: {}, token: previous }).catch(() => undefined);
+  })().finally(() => { signingOut = null; });
 }
 
 // --- Vault: the encrypted list of this account's servers ------------------------------
@@ -125,6 +144,7 @@ async function readVault(): Promise<{ version: number; servers: VaultEntry[] }> 
 /** Read, change, write; on a conflict another device saved first, so start over from its copy. */
 async function updateVault(change: (servers: VaultEntry[]) => VaultEntry[] | null): Promise<void> {
   if (!keys || !session) return;
+  if(getState().global?.cryptoMigrationRequired)throw new Error("Migre o cofre legado antes de sincronizar novos servidores");
   for (let attempt = 0; attempt < 3; attempt++) {
     const { version, servers } = await readVault();
     const next = change(servers);
@@ -149,7 +169,7 @@ export const forgetServer = (url: string) =>
  * (a new device, or a server added elsewhere).
  */
 export async function syncVault(): Promise<void> {
-  if (!keys || !session) return;
+  if (!keys || !session || getState().global?.cryptoMigrationRequired) return;
   const { addAccountQuietly } = await import("./client.ts");
   const { servers } = await readVault().catch(() => ({ servers: [] as VaultEntry[] }));
   const known = new Set(getState().accounts.map((a) => a.url));
@@ -184,18 +204,20 @@ let tokenKeys: { at: number; keys: kdf.IssuerKey[]; issueWith: string } | null =
  * Global sees neither the server nor the identity.
  */
 async function proofFor(url: string, serverId: string) {
-  if (!keys || !session) throw new GlobalError(401, "signed_out", "Entre na sua conta global primeiro");
+  const info = await fetchInfo(url);
+  if (info.accountMode === "local" || info.globalServerId !== serverId) throw new GlobalError(403, "account_mode", "Este servidor não aceita esta identidade global");
+  if (!keys || !session) throw new GlobalError(401, "signed_out", "Entre na sua conta Annoy primeiro");
   if (!tokenKeys || Date.now() - tokenKeys.at > 3_600_000) tokenKeys = { at: Date.now(), ...(await global<{ keys: kdf.IssuerKey[]; issueWith: string }>("/v1/tokens/keys")) };
   const identity = await kdf.serverIdentity(keys, serverId);
   const { challenge } = await request<{ challenge: string }>(url, "/api/auth/global/challenge", { body: {} });
   const key = tokenKeys.keys.find((k) => k.kid === tokenKeys!.issueWith)!;
   const pending = await kdf.blindToken(key, kdf.tokenContext(serverId, identity.id));
   const issued = await global<{ signatures: string[] }>("/v1/tokens", { body: { kid: tokenKeys.issueWith, blinded: [pending.blinded] } });
-  return { identity: identity.id, challenge, signature: await kdf.signForServer(identity.privateKey, challenge), token: kdf.finalizeToken(pending, issued.signatures[0]!) };
+  return { identity: identity.id, challenge, signature: await kdf.signForServer(identity.privateKey, challenge), token: await kdf.finalizeToken(pending, issued.signatures[0]!) };
 }
 
 /**
- * Signs in to a server with the global account. The first time there the
+ * Signs in to a server with the Annoy account. The first time there the
  * server answers "global_new_account": call again with a username.
  */
 export async function signInServer(url: string, serverId: string, first?: Pick<GlobalLogin, "username" | "displayName" | "inviteCode">): Promise<AuthResponse> {
@@ -205,22 +227,20 @@ export async function signInServer(url: string, serverId: string, first?: Pick<G
   return auth;
 }
 
-/**
- * Item 1.9: the global account already has its own user on this server. The
- * local user (confirmed by its password) takes everything of the other one.
- * Returns the removed user's id, so the app can drop that account.
- */
-export async function mergeAccount(account: Account, serverId: string, password: string): Promise<string | null> {
-  const res = await request<{ removedUserId: string | null }>(account.url, "/api/users/@me/global/merge", {
-    body: { ...(await proofFor(account.url, serverId)), password },
-    token: account.token,
+/** Ownership proof upgrades only this server's account; it cannot be used for normal login. */
+export async function migrateServer(url: string, info: InstanceInfo, credentials: {
+  username: string; password?: string; recoveryCode?: string; newPassword?: string;
+}, previousSession?: string): Promise<AuthResponse> {
+  const local = info.accountMode === "local";
+  if (!local && !info.globalServerId) throw new GlobalError(503, "global_unavailable", "Login da conta Annoy indisponível");
+  const auth = await request<AuthResponse & { removedUserId?: string | null }>(url, `/api/auth/migrate/${local ? "local" : "global"}`, {
+    token: previousSession, body: { ...credentials, ...(!local ? await proofFor(url, info.globalServerId!) : {}) },
   });
-  void rememberServer({ url: account.url, serverId });
-  return res.removedUserId;
-}
-
-/** Items 1.7/1.9: a local account starts signing in with the global one too. */
-export async function linkAccount(account: Account, serverId: string): Promise<void> {
-  await request(account.url, "/api/users/@me/global", { body: await proofFor(account.url, serverId), token: account.token });
-  void rememberServer({ url: account.url, serverId });
+  if (auth.removedUserId) {
+    const stale = getState().accounts.find(a => a.url === url && a.userId === auth.removedUserId);
+    if (stale) (await import("./client.ts")).removeAccount(stale.id, false);
+    setState(s => { s.rememberedAccounts = s.rememberedAccounts.filter(a => a.url !== url || a.userId !== auth.removedUserId); });
+  }
+  if (!local) void rememberServer({ url, serverId: info.globalServerId! });
+  return auth;
 }

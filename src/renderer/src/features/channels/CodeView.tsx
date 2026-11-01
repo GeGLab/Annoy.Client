@@ -65,6 +65,7 @@ function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Ch
     <form className="code-link form" onSubmit={submit}>
       <Icon name="branch" size={36} />
       <h2>Vincular um repositório</h2>
+      <p role="note">Este editor não usa E2EE: o servidor pode ler o código e recebe o token Git durante a operação. Para conteúdo confidencial, use Git local e envie um arquivo cifrado em uma conversa MLS.</p>
       <p className="muted">
         O canal trabalha sobre um repositório Git externo (GitHub, GitLab, Gitea…). O servidor clona o projeto e todos editam juntos; commits e push vão para o
         repositório de origem.
@@ -461,6 +462,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   return (
     <section className="chat code-room">
+      <p className="connection-notice">Editor sem E2EE: código e operações Git são visíveis ao servidor. Alternativa: editar localmente e compartilhar um arquivo pela conversa MLS.</p>
       <header className="chat-header">
         <Icon name="code" size={20} />
         <h1 className="truncate">{channel.name}</h1>

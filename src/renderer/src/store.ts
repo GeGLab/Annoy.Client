@@ -11,6 +11,7 @@ import type {
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
+import { LOCKED_ACCESS, type AppAccessState } from "../../shared/app-access.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
 import { useSyncExternalStore } from "react";
@@ -62,7 +63,7 @@ export type View =
 export type CreatableChannel = "text" | "voice" | "category" | "files" | "code" | "theater" | "song";
 
 export type Modal =
-  | { kind: "addAccount"; rememberedId?: string }
+  | { kind: "addAccount"; rememberedId?: string; accountId?: string }
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId: string }
@@ -84,6 +85,8 @@ export interface VoiceUi {
   channelId: string;
   status: "connecting" | "connected";
   canStream: boolean;
+  /** Every frame of this call is end-to-end encrypted with SFrame. */
+  e2ee?: boolean;
   camera: boolean;
   screen: boolean;
 }
@@ -117,8 +120,6 @@ export interface Settings {
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
-  /** "Usar como conta padrão" (Annoy Global): new servers sign in with it first. */
-  globalDefault: boolean;
   shareActivity: boolean;
   showVoiceBar: boolean;
   voiceBarMode: "external" | "always";
@@ -130,6 +131,7 @@ export interface Settings {
 }
 
 export interface AppState {
+  access: AppAccessState;
   directCall: { accountId: string; call: import("@distopic/protocol").DirectCall } | null;
   rememberedAccounts: RememberedAccount[];
   recentMessages: Record<string, { own: boolean; at: number }>;
@@ -151,11 +153,12 @@ export interface AppState {
   chatNavigation: number;
   messageFocus: { accountId: string; channelId: string; messageId: string } | null;
   desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
-  /** The signed-in Annoy Global account, if any (keys stay in global.ts, never in the store). */
+  /** The signed-in Annoy account, if any (keys stay in global.ts, never in the store). */
   global: GlobalAccount | null;
 }
 
 export interface GlobalAccount {
+  cryptoMigrationRequired?: boolean;
   id: string;
   name: string;
   email: string;
@@ -193,7 +196,6 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
-  globalDefault: false,
   shareActivity: true,
   showVoiceBar: true,
   voiceBarMode: "external",
@@ -263,6 +265,7 @@ function initialView(): View {
 }
 
 let state: AppState = {
+  access: LOCKED_ACCESS,
   directCall: null,
   rememberedAccounts: loadArray<RememberedAccount>("distopic.rememberedAccounts"),
   recentMessages: {},
@@ -283,6 +286,23 @@ let state: AppState = {
   global: null,
 };
 
+
+let savedAccountWrite:Promise<unknown>=Promise.resolve();
+function persistAccounts(accounts:Account[]):void {
+  // Connection metadata may persist in localStorage; bearer credentials never do.
+  localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(accounts.map(a=>({...a,token:""}))));
+  const value=JSON.stringify(accounts);
+  savedAccountWrite=savedAccountWrite.catch(()=>{}).then(()=>window.distopic?.secrets.set('accounts',value)).catch(()=>false);
+}
+export async function restoreSavedAccounts():Promise<void>{
+  const legacy=state.accounts;
+  const saved=await window.distopic?.secrets.get('accounts').catch(()=>null);
+  let restored=legacy;
+  if(saved){try{const value=JSON.parse(saved);if(Array.isArray(value))restored=value;}catch{}}
+  state=produce(state,s=>{s.accounts=restored;});
+  persistAccounts(restored);
+  for(const listener of listeners)listener();
+}
 const listeners = new Set<() => void>();
 
 export const getState = () => state;
@@ -291,7 +311,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   const prev = state;
   state = produce(state, recipe);
   if (state === prev) return;
-  if (state.accounts !== prev.accounts) localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(state.accounts));
+  if (state.accounts !== prev.accounts) persistAccounts(state.accounts);
   if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
   if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
