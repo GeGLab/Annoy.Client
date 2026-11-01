@@ -2,7 +2,7 @@ import type { GatewayEventOf } from "@distopic/protocol";
 
 // Gateway events only the open room cares about: they skip the global store.
 
-type RoomEvent = GatewayEventOf<"PLAYBACK_UPDATE"> | GatewayEventOf<"CODE_UPDATE">;
+type RoomEvent = GatewayEventOf<"PLAYBACK_UPDATE"> | GatewayEventOf<"CODE_UPDATE"> | GatewayEventOf<"MESSAGE_CREATE"> | GatewayEventOf<"MESSAGE_UPDATE"> | GatewayEventOf<"MESSAGE_DELETE">;
 type Listener = (event: RoomEvent) => void;
 
 const listeners = new Map<string, Set<Listener>>();

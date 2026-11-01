@@ -36,6 +36,7 @@ export function useDesktopActivity() {
   useEffect(() => {
     void window.distopic?.activity?.configure({ games: sharing, music: sharing, development: sharing });
   }, [sharing]);
+  const screenSharing=useStore(s=>s.voice?.screen?s.voice.accountId:null);
   const snapshot = useStore((s) => s.desktopActivity);
   useEffect(() => {
     const controller = new AbortController();
@@ -48,11 +49,12 @@ export function useDesktopActivity() {
       const visible = s.settings.shareActivity && s.settings.manualPresence !== "offline";
       const local = visible ? (s.desktopActivity?.activities ?? []) : [];
       const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(id) : undefined;
-      const activities = withSteamFallback(local, remote);
+      const activities:UserActivity[] = [...withSteamFallback(local, remote)];
+      if(visible&&s.voice?.accountId===id&&s.voice.screen&&instance.instance?.extendedActivity)activities.push({kind:"video",provider:"annoy-screen",name:"Compartilhando tela"});
       gatewayFor(id)?.send({
         op: "activity",
         // Older instances validate activity strictly: don't disconnect their users with a new field.
-        activities: activities.filter((activity) => activity.kind !== "development" || instance.instance?.developmentActivity).map((activity) => {
+        activities: activities.filter((activity) => (activity.kind !== "development" || instance.instance?.developmentActivity) && (!["video","generic"].includes(activity.kind) || instance.instance?.extendedActivity)).map((activity) => {
           if (instance.instance?.activityArtwork) return activity;
           const { artwork: _artwork, ...legacy } = activity;
           return legacy;
@@ -82,5 +84,5 @@ export function useDesktopActivity() {
     publish();
     const timer = setInterval(publish, 25_000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [snapshot, ready, sharing, invisible, connectionsVersion]);
+  }, [snapshot, ready, sharing, invisible, connectionsVersion, screenSharing]);
 }

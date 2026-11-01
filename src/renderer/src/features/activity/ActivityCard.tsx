@@ -1,4 +1,4 @@
-import { Gamepad2, Headphones, ExternalLink } from "lucide-react";
+import { Gamepad2, Headphones, ExternalLink,Monitor,Activity } from "lucide-react";
 import type { UserActivity } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
 import { ProviderIcon } from "./ProviderIcon.tsx";
@@ -17,6 +17,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   const elapsed = `${Math.floor(seconds / 3600) ? `${Math.floor(seconds / 3600)}:` : ""}${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const game = activity.kind === "game";
   const development = activity.kind === "development";
+  const video=activity.kind==="video",generic=activity.kind==="generic";
   const [failedArtwork, setFailedArtwork] = useState<string | null>(null);
   const artwork = activity.artwork ?? (game && activity.provider === "steam" && /^\d{1,10}$/.test(activity.appId ?? "")
     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${activity.appId}/header.jpg` : undefined);
@@ -25,10 +26,10 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
     <div className={`activity-card activity-${activity.kind}${compact ? " compact" : ""}`}>
       <span className={`activity-artwork${image ? "" : " no-artwork"}`}>
         {development ? <DevelopmentIcon name={activity.file ? activity.language ?? "code" : activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? `Capa de ${activity.name}` : `Capa do álbum ${activity.album || activity.name}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
-          : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : <Headphones size={compact ? 20 : 28} aria-hidden />}
+          : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : video?<Monitor size={compact?20:28} aria-hidden/>:generic?<Activity size={compact?20:28} aria-hidden/>:<Headphones size={compact ? 20 : 28} aria-hidden />}
       </span>
       <div>
-        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? `Programando · ${{ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": "Visual Studio" }[activity.provider as "vscode"] ?? activity.provider}` : game ? "Jogando" : `Ouvindo no ${activity.provider === "spotify" ? "Spotify" : "Apple Music"}`}</small>
+        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? `Programando · ${{ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": "Visual Studio" }[activity.provider as "vscode"] ?? activity.provider}` : game ? "Jogando" : video?"Vídeo / compartilhamento":generic?"Em atividade":`Ouvindo no ${activity.provider === "spotify" ? "Spotify" : "Apple Music"}`}</small>
         <strong title={activity.name}>{activity.name}</strong>
         {activity.startedAt != null && Number.isFinite(activity.startedAt) && <span className="activity-elapsed" aria-label={`Tempo na atividade: ${elapsed}`}>{elapsed} decorridos</span>}
         {activity.artist && <span title={activity.artist}>{activity.artist}</span>}
@@ -77,6 +78,7 @@ export function ActivityStack({ activities, compact = false }: { activities: rea
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [signature, compact]);
   if (!activities.length) return null;
+  if(compact)return <div className="activity-summary"><button className="activity-summary-toggle" aria-expanded={intent===true} aria-label={`${activities[0]!.name}${activities.length>1?` e mais ${activities.length-1} atividades`:""}. Ver detalhes`} onClick={()=>setIntent(intent!==true)}><ProviderIcon provider={activities[0]!.provider} size={14}/><span>{activities[0]!.name}</span>{activities.length>1&&<strong>+{activities.length-1}</strong>}</button>{intent===true&&<div className="activity-summary-details">{activities.map(activity=><ActivityCard key={`${activity.kind}:${activity.provider}`} activity={activity} compact/>)}</div>}</div>;
   return <div className={`activity-stack${activities.length > 1 ? " multiple" : ""}${open ? " expanded" : ""}`} onMouseEnter={() => { setHovered(true); setIntent(null); }} onMouseLeave={() => setHovered(false)} onFocusCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIntent(null); setFocused(true); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     {activities.length > 1 && <button className="activity-stack-toggle" aria-expanded={open} onClick={() => setIntent(!open)}>{activities.length} atividades <span>{open ? "Recolher" : "Expandir"}</span></button>}
     <div className="activity-stack-cards" ref={cards}>{activities.map((activity, index) => <div className="activity-stack-item" key={`${activity.kind}:${activity.provider}:${activity.appId ?? activity.name}`} style={{ zIndex: activities.length - index, marginTop: index && !open && heights[index] ? -heights[index]! + 14 : 0 }}><ActivityCard activity={activity} compact={compact} /></div>)}</div>

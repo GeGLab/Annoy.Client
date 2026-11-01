@@ -1,6 +1,7 @@
+import {normalizeProfileField} from "@distopic/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
-import { confirmAction, promptText } from "../ui/action-dialog.tsx";
+import { confirmAction } from "../ui/action-dialog.tsx";
 import type { DiscordLoginBegin, User } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
@@ -19,16 +20,20 @@ import { RadioGroup } from "../ui/radio-group.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { UpdateSettings } from "../Updates.tsx";
+import { MediaLibrarySettings } from "../../features/expression/MediaLibrarySettings.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
 import { SecuritySettings } from "../crypto/SecuritySettings.tsx";
-import { GLOBAL_URL, signInGlobal, signOutGlobal } from "../../global.ts";
+import { GLOBAL_URL, signOutGlobal } from "../../global.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 
 const SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   { id: "profile", label: "Meu perfil e contas", icon: "users", search: "nome foto avatar instância conta Annoy login unificar" },
+  { id: "expressions", label: "Emojis e mídia", icon: "smile", search: "reações GIFs figurinhas emojis pacotes biblioteca loja GIPHY importar exportar" },
   { id: "voice", label: "Voz e vídeo", icon: "mic", search: "microfone áudio câmera ruído sensibilidade teste som" },
   { id: "appearance", label: "Aparência", icon: "palette", search: "tema cores escuro claro" },
   { id: "tabs", label: "Barra e abas", icon: "sliders", search: "chamada serviços posição" },
@@ -109,24 +114,32 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
 }
 
 function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
+  const requests = useRequestOwner(accountId);
   const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
   useEffect(() => {
-    if (account) void fetchInfo(account.url).then(info => setDiscord(info.discordLogin), () => undefined);
+    if (!account) return;
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, requests.signal]);
+    void fetchInfo(account.url, signal).then((info) => { signal.throwIfAborted(); setDiscord(info.discordLogin); })
+      .catch((error) => { if (!isCancellation(error)) setDiscord(false); });
+    return () => controller.abort();
   }, [account?.url]);
   const sync = async () => {
-    if (!account) return;
+    if (!account || syncing) return;
+    const signal = requests.signal;
     setSyncing(true);
     try {
       await discordLogin(
         account.url,
-        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }),
-        new AbortController().signal,
+        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }, signal),
+        signal,
       );
+      signal.throwIfAborted();
       toast("Perfil do Discord sincronizado");
     } catch (error) {
-      toast((error as Error).message);
+      if (!isCancellation(error)) toast((error as Error).message);
     } finally {
       setSyncing(false);
     }
@@ -160,6 +173,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
 
 
 export function UserSettingsModal() {
+  const requests = useRequestOwner("user-settings");
   const [page, setPage] = useState(() => {
     const modal = getState().modal;
     return modal?.kind === "userSettings" ? modal.section ?? "profile" : "profile";
@@ -192,7 +206,7 @@ export function UserSettingsModal() {
   const dirtyProfiles = accounts.filter((account) => {
     const change = profiles[account.id],
       user = instances[account.id]?.user;
-    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? ""));
+    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? "") || change.details !== undefined);
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0;
   const update = (patch: Partial<Settings>) => setDraft((current) => ({ ...current, ...patch }));
@@ -264,6 +278,7 @@ export function UserSettingsModal() {
     if (saving) return false;
     setSaving(true);
     setError(null);
+    const signal = requests.signal;
     try {
       for (const account of dirtyProfiles) {
         const change = profiles[account.id]!,
@@ -272,20 +287,24 @@ export function UserSettingsModal() {
         const name = change.displayName.trim();
         if (!name) throw new Error("Informe um nome de exibição.");
         const api = apiFor(account.id);
+        const profileDetails=change.details?{fields:change.details.fields.map(field=>({...field,value:normalizeProfileField(field.kind,field.value)})).filter(field=>field.value),historyEnabled:change.details.historyEnabled}:undefined;
+        if(profileDetails&&!getState().instances[account.id]?.instance?.profileDetails)throw new Error("Atualize o Annoy.Server para editar contatos e privacidade.");
         const bioChanged = change.bio !== undefined && change.bio !== (user.bio ?? "");
         if (bioChanged && !getState().instances[account.id]?.instance?.socialProfiles) throw new Error("Atualize esta instância para salvar biografias.");
         if (name !== user.displayName || bioChanged) {
-          const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) });
+          const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) }, signal);
+          signal.throwIfAborted();
           applyUserUpdate(account.id, updated);
         }
+        if(profileDetails){await api.patch("/users/@me/profile",profileDetails,signal);signal.throwIfAborted();setState(s=>{const inst=s.instances[account.id];if(inst)inst.profileRevision=(inst.profileRevision??0)+1;});}
         if (change.avatar !== undefined) {
           const updated =
-            change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }) : await api.uploadAvatar<User>(change.avatar);
+            change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }, signal) : await api.uploadAvatar<User>(change.avatar, signal);
+          signal.throwIfAborted();
           // Old servers may ignore an unknown avatar field. Never claim success.
           if (change.avatar === null && updated.avatarUrl !== null)
             throw new Error("Esta instância precisa ser atualizada para remover fotos.");
           applyUserUpdate(account.id, updated);
-          setProfiles((current) => ({ ...current, [account.id]: { displayName: name } }));
         }
       }
       setState((s) => {
@@ -296,7 +315,7 @@ export function UserSettingsModal() {
       toast("Alterações salvas");
       return true;
     } catch (error) {
-      setError((error as Error).message || "Não foi possível salvar. Suas alterações continuam aqui.");
+      if (!isCancellation(error)) setError((error as Error).message || "Não foi possível salvar. Suas alterações continuam aqui.");
       return false;
     } finally {
       setSaving(false);
@@ -395,6 +414,7 @@ export function UserSettingsModal() {
                 <AppearanceSettings settings={draft} update={update} />
               </section>
             )}
+            {page === "expressions" && <MediaLibrarySettings />}
             {page === "profile" && (
               <section className="settings-section">
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>

@@ -1,14 +1,13 @@
 import {secureFetch} from "./secure-fetch.ts";
-import type { ApiError, AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@distopic/protocol";
+import type { AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@distopic/protocol";
+import { abortableDelay, cancelled, fetchJson, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, setRequestTransport, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../shared/requests.ts";
+export { RequestError } from "../../shared/requests.ts";
+// Every renderer request goes through HTTPS/WSS checks, device proofs (DPoP) and refused redirects.
+setRequestTransport(secureFetch);
 
-export class RequestError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+const publicRequests = new RequestScope();
+const publicJson = <T>(url: string, init: RequestInit = {}, signal?: AbortSignal, timeoutMs = init.method === "POST" ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS) =>
+  publicRequests.run((active) => fetchJson<T>(url, init, active), { signal, timeoutMs, key: !init.method || init.method === "GET" ? url : undefined }).then((result) => result.data);
 
 export const DEFAULT_PORT = 8787;
 
@@ -28,45 +27,37 @@ export function candidateUrls(input: string): string[] {
 }
 
 /** Finds the Annoy server behind what the user typed, trying each candidate address in turn. */
-export async function findInstance(input: string): Promise<{ url: string; info: InstanceInfo }> {
+export async function findInstance(input: string, signal?: AbortSignal): Promise<{ url: string; info: InstanceInfo }> {
   const urls = candidateUrls(input);
   let lastError: unknown;
   for (const url of urls) {
     try {
       // A host that drops HTTPS silently must not stall the fallback.
-      const res = await secureFetch(`${url}/api/info`, { signal: AbortSignal.timeout(urls.length > 1 ? 5000 : 15000) });
-      const info = await parse<InstanceInfo>(res);
+      const info = await publicJson<InstanceInfo>(`${url}/api/info`, {}, signal, urls.length > 1 ? 5000 : READ_TIMEOUT_MS);
       if (typeof info?.name === "string") return { url, info };
     } catch (err) {
+      if (isCancellation(err)) throw err;
       lastError = err;
     }
   }
   throw lastError instanceof RequestError ? lastError : new TypeError("unreachable");
 }
 
-async function parse<T>(res: Response): Promise<T> {
-  const text = await res.text();
-  const body: unknown = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new RequestError(res.status, (body as Partial<ApiError>).message ?? `HTTP ${res.status}`);
-  return body as T;
-}
-
-export async function fetchInfo(url: string): Promise<InstanceInfo> {
-  return parse(await secureFetch(`${url}/api/info`));
+export async function fetchInfo(url: string, signal?: AbortSignal): Promise<InstanceInfo> {
+  return publicJson(`${url}/api/info`, {}, signal);
 }
 
 export async function authenticate(
   url: string,
   mode: "login" | "register",
   body: { username: string; password: string; displayName?: string; inviteCode?: string },
+  signal?: AbortSignal,
 ): Promise<AuthResponse> {
-  return parse(
-    await secureFetch(`${url}/api/auth/${mode}`, {
+  return publicJson(`${url}/api/auth/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-    }),
-  );
+    }, signal);
 }
 
 const POLL_MS = 1500;
@@ -78,48 +69,77 @@ const POLL_TIMEOUT_MS = 10 * 60_000;
  * `begin` is the (optionally authenticated) call that starts the login.
  */
 export async function discordLogin(url: string, begin: () => Promise<DiscordLoginBegin>, signal: AbortSignal): Promise<Extract<DiscordLoginPoll, { status: "done" }>> {
+  signal.throwIfAborted();
   const { url: authorizeUrl, handoff } = await begin();
+  signal.throwIfAborted();
   window.open(authorizeUrl, "_blank");
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, POLL_MS));
-    if (signal.aborted) throw new Error("Cancelado");
-    const result = await parse<DiscordLoginPoll>(
-      await secureFetch(`${url}/api/auth/discord/poll`, {
+    await abortableDelay(POLL_MS, signal);
+    const result = await publicJson<DiscordLoginPoll>(`${url}/api/auth/discord/poll`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ handoff }),
-        signal,
-      }),
-    );
+      }, signal, Math.min(WRITE_TIMEOUT_MS, deadline - Date.now()));
     if (result.status === "done") return result;
     if (result.status === "error") throw new Error(result.message);
   }
   throw new Error("Tempo esgotado esperando o Discord");
 }
 
-export async function beginDiscordLogin(url: string, inviteCode?: string): Promise<DiscordLoginBegin> {
-  return parse(
-    await secureFetch(`${url}/api/auth/discord/begin`, {
+export async function beginDiscordLogin(url: string, inviteCode?: string, signal?: AbortSignal): Promise<DiscordLoginBegin> {
+  return publicJson(`${url}/api/auth/discord/begin`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(inviteCode ? { inviteCode } : {}),
-    }),
-  );
+    }, signal);
 }
 
 export class Api {
-  constructor(
-    readonly baseUrl: string,
-    private readonly token: string,
-    private readonly canWrite: () => boolean = () => true,
-    private readonly userId:string="",
-  ) {}
+  private readonly scope = new RequestScope();
+
+  readonly baseUrl: string;
+  private readonly token: string;
+  private readonly canWrite: () => boolean;
+  private readonly observed?: (result: number | RequestError) => void;
+  private readonly userId: string;
+
+  constructor(baseUrl: string, token: string, canWrite: () => boolean = () => true, observed?: (result: number | RequestError) => void, userId = "") {
+    this.baseUrl = baseUrl;
+    this.token = token;
+    this.canWrite = canWrite;
+    this.observed = observed;
+    this.userId = userId;
+  }
 
   private async nativeCrypto(){
     if(!window.distopic?.crypto||!this.userId)throw new Error('Identidade local e serviço criptográfico são necessários');
     await window.distopic.crypto.guard(this.baseUrl,this.token,'identity',this.userId);return window.distopic.crypto;
   }
+
+  get generation(): number { return this.scope.generation; }
+  cancelPending(): void { this.scope.invalidate(); }
+  dispose(): void { this.scope.dispose(); }
+
+  private observe<T>(promise: Promise<{ data: T; status: number }>, mutation = false): Promise<T> {
+    const generation = this.scope.generation;
+    return promise.then((result) => {
+      if (generation !== this.scope.generation) throw cancelled();
+      this.observed?.(result.status);
+      return result.data;
+    }, (error: unknown) => {
+      if (generation !== this.scope.generation) throw cancelled();
+      if (mutation && error instanceof RequestError && error.kind === "timeout")
+        error = new RequestError(0, "Não foi possível confirmar a operação. Verifique o resultado antes de tentar novamente.", "timeout");
+      if (error instanceof RequestError) this.observed?.(error);
+      throw error;
+    });
+  }
+
+  private fetch<T>(path: string, init: RequestInit, signal: AbortSignal | undefined, timeoutMs: number, key?: string): Promise<T> {
+    return this.observe(this.scope.run((active) => fetchJson<T>(`${this.baseUrl}/api${path}`, init, active), { signal, timeoutMs, key }), init.method !== "GET" && init.method !== "HEAD");
+  }
+
   private requireConnection(): void {
     if (!this.canWrite()) throw new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar.");
   }
@@ -167,34 +187,32 @@ export class Api {
         }
       }
     }
-    const res = await secureFetch(`${this.baseUrl}/api${path}`, {
-      signal,
+    return this.fetch<T>(path, {
       method,
       headers: {
         authorization: `Bearer ${this.token}`,
         ...(body !== undefined && { "content-type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return parse<T>(res);
+    }, signal, method === "GET" || method === "HEAD" ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS, method === "GET" ? `${method}:${path}` : undefined);
   }
 
-  get = <T>(path: string) => this.request<T>("GET", path);
-  post = <T>(path: string, body: unknown = {}) => this.request<T>("POST", path, body);
-  patch = <T>(path: string, body: unknown) => this.request<T>("PATCH", path, body);
-  put = <T>(path: string, body: unknown = {}) => this.request<T>("PUT", path, body);
-  del = <T>(path: string) => this.request<T>("DELETE", path);
+  get = <T>(path: string, signal?: AbortSignal) => this.request<T>("GET", path, undefined, signal);
+  post = <T>(path: string, body: unknown = {}, signal?: AbortSignal) => this.request<T>("POST", path, body, signal);
+  patch = <T>(path: string, body: unknown, signal?: AbortSignal) => this.request<T>("PATCH", path, body, signal);
+  put = <T>(path: string, body: unknown = {}, signal?: AbortSignal) => this.request<T>("PUT", path, body, signal);
+  del = <T>(path: string, signal?: AbortSignal) => this.request<T>("DELETE", path, undefined, signal);
 
-  async uploadServerIcon<T>(serverId: string, photo: Blob): Promise<T> {
+  async uploadServerIcon<T>(serverId: string, photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("icon", photo, "icon");
-    return parse<T>(await secureFetch(`${this.baseUrl}/api/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
+    return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
-  async uploadAvatar<T>(photo: Blob): Promise<T> {
+  async uploadAvatar<T>(photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");
-    return parse<T>(await secureFetch(`${this.baseUrl}/api/users/@me/avatar`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body, signal: AbortSignal.timeout(20_000) }));
+    return this.fetch("/users/@me/avatar", { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null, expiresAt:string|null=null,signal?:AbortSignal): Promise<T> {
@@ -226,7 +244,7 @@ export class Api {
   async cryptoStatus(channel:string) {return (await this.nativeCrypto()).status(this.baseUrl,this.token,channel);}
   async cryptoCode(channel:string,userId:string) {return (await this.nativeCrypto()).code(this.baseUrl,this.token,channel,userId);}
   async verifyCryptoCode(channel:string,userId:string,code:string) {return (await this.nativeCrypto()).verify(this.baseUrl,this.token,channel,userId,code);}
-  async legacyMessages<T>(channel:string,before?:string):Promise<T>{return parse(await secureFetch(`${this.baseUrl}/api/channels/${encodeURIComponent(channel)}/legacy/messages?limit=50${before?'&before='+encodeURIComponent(before):''}`,{headers:{authorization:`Bearer ${this.token}`}}));}
+  async legacyMessages<T>(channel:string,before?:string):Promise<T>{return parseResponse<T>(await secureFetch(`${this.baseUrl}/api/channels/${encodeURIComponent(channel)}/legacy/messages?limit=50${before?'&before='+encodeURIComponent(before):''}`,{headers:{authorization:`Bearer ${this.token}`}}));}
 
   /** Like sendMessage with files, reporting upload progress from 0 to 1. */
   uploadMessage<T>(channelId: string, content: string, files: File[], onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {

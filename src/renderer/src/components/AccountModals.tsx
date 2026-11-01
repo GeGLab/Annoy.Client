@@ -11,9 +11,12 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, globalSignedIn, migrateServer, signInServer, signOutGlobal, syncVault, toAccount } from "../global.ts";
+import { GlobalError, globalSignedIn, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
+import { useRequestOwner } from "../lib/use-request-owner.ts";
+import { isCancellation } from "../../../shared/requests.ts";
 
 export function AddAccountModal() {
+  const requests = useRequestOwner();
   const modal = getState().modal;
   const remembered = modal?.kind === "addAccount" ? getState().rememberedAccounts.find(a => a.id === modal.rememberedId) : undefined;
   const saved = modal?.kind === "addAccount" ? getState().accounts.find(a => a.id === modal.accountId) : undefined;
@@ -77,14 +80,18 @@ export function AddAccountModal() {
   }
   async function withGlobal(e?: FormEvent) {
     e?.preventDefault();
-    if (!info?.info.globalServerId) return;
+    const signal = requests.signal;
+    if (!info?.info.globalServerId || busy) return;
     setError(null); setBusy(true);
     try {
+      const first = globalFirst ? { username, ...(displayName && { displayName }), ...(inviteCode.trim() && { inviteCode: inviteCode.trim() }) } : undefined;
       const auth = migration
         ? await migrateServer(info.url, info.info, { username, password, recoveryCode }, saved?.token)
-        : await signInServer(info.url, info.info.globalServerId, globalFirst ? { username, ...(displayName && { displayName }), ...(inviteCode && { inviteCode }) } : undefined);
+        : await signInServer(info.url, info.info.globalServerId, first, signal);
+      signal.throwIfAborted();
       addAccount(toAccount(info.url, info.info, auth));
     } catch (err) {
+      if (isCancellation(err)) return;
       if (err instanceof GlobalError && err.code === "global_new_account") {
         setGlobalFirst(true);
         if (!username && globalAccount) setUsername(globalAccount.name.toLowerCase().replace(/[^a-z0-9_.]/g, "").slice(0, 32));
@@ -92,24 +99,29 @@ export function AddAccountModal() {
     } finally { setBusy(false); }
   }
   async function submitLocal(e: FormEvent) {
-    e.preventDefault(); if (!info) return;
+    e.preventDefault();
+    const signal = requests.signal;
+    if (!info || busy) return;
     setError(null); setBusy(true);
     try {
       const auth: AuthResponse = migration
         ? await migrateServer(info.url, info.info, { username, recoveryCode, newPassword }, saved?.token)
-        : await authenticate(info.url, mode, { username, password, ...(mode === "register" && { displayName: displayName || username, inviteCode }) });
+        : await authenticate(info.url, mode, { username, password, ...(mode === "register" && { displayName: displayName || username, ...(inviteCode.trim() && { inviteCode: inviteCode.trim() }) }) }, signal);
+      signal.throwIfAborted();
       addAccount(toAccount(info.url, info.info, auth));
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) { if (!isCancellation(err)) setError((err as Error).message); }
     finally { setBusy(false); }
   }
   async function withDiscord() {
-    if (!info || !localMode) return;
+    if (!info || !localMode || busy) return;
     const abort = new AbortController(); discordAbort.current = abort;
+    const active = AbortSignal.any([abort.signal, requests.signal]);
     setBusy(true); setError(null);
     try {
-      const { auth } = await discordLogin(info.url, () => beginDiscordLogin(info.url, inviteCode || undefined), abort.signal);
+      const { auth } = await discordLogin(info.url, () => beginDiscordLogin(info.url, inviteCode.trim() || undefined, active), active);
+      active.throwIfAborted();
       if (auth) addAccount(toAccount(info.url, info.info, auth));
-    } catch (err) { if (!abort.signal.aborted) setError((err as Error).message); }
+    } catch (err) { if (!active.aborted) setError((err as Error).message); }
     finally { setBusy(false); discordAbort.current = null; }
   }
   const ownershipFields = <>
@@ -178,9 +190,11 @@ export function SwitchAccountModal() {
 /** Invite codes may be pasted bare or as part of a link. */
 const inviteCodeOf = (input: string) => input.trim().split(/[/\s]/).filter(Boolean).pop() ?? "";
 
-export function CreateServerModal({ accountId: initialAccount }: { accountId: string }) {
+export function CreateServerModal({ accountId: initialAccount, initialMode = "create" }: { accountId?: string; initialMode?: "create" | "join" }) {
   const accounts = useStore((s) => s.accounts);
-  const [accountId, setAccountId] = useState(initialAccount);
+  const [accountId, setAccountId] = useState(accounts.length === 1 ? initialAccount ?? accounts[0]!.id : initialAccount ?? "");
+  const [mode, setMode] = useState<"create" | "join">(initialMode);
+  const requests = useRequestOwner(accountId);
   const [name, setName] = useState("");
   const [invite, setInvite] = useState("");
   const [preview, setPreview] = useState<Invite | null>(null);
@@ -188,13 +202,16 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
 
   async function create(e: FormEvent) {
     e.preventDefault();
+    const signal = requests.signal;
+    if (busy || !accountId) return;
     setBusy(true);
     try {
-      const server = await apiFor(accountId).post<ServerSummary>("/servers", { name });
+      const server = await apiFor(accountId).post<ServerSummary>("/servers", { name }, signal);
+      signal.throwIfAborted();
       closeModal();
       void openServer(accountId, server.id);
     } catch (err) {
-      toast((err as Error).message);
+      if (!isCancellation(err)) toast((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -202,28 +219,34 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
 
   async function join(e: FormEvent) {
     e.preventDefault();
+    const signal = requests.signal;
+    if (busy || !accountId) return;
     setBusy(true);
     try {
       const code = inviteCodeOf(invite);
       if (!preview) {
-        setPreview(await apiFor(accountId).get<Invite>(`/invites/${code}`));
+        const invite = await apiFor(accountId).get<Invite>(`/invites/${code}`, signal);
+        signal.throwIfAborted();
+        setPreview(invite);
         return;
       }
-      const server = await apiFor(accountId).post<ServerSummary>(`/invites/${code}`);
+      const server = await apiFor(accountId).post<ServerSummary>(`/invites/${code}`, {}, signal);
+      signal.throwIfAborted();
       closeModal();
       void openServer(accountId, server.id);
     } catch (err) {
-      toast((err as Error).message);
+      if (!isCancellation(err)) toast((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal title="Adicionar servidor">
+    <Modal title={mode === "create" ? "Criar uma comunidade" : "Entrar com convite"}>
       {accounts.length > 1 && (
-        <Field label="Instância">
-          <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+        <Field label="Escolha a instância de destino">
+          <Select value={accountId} disabled={busy} onChange={(e) => { setAccountId(e.target.value); setPreview(null); }}>
+            <option value="">Escolha uma instância…</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.instanceName} ({a.url})
@@ -232,20 +255,24 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
           </Select>
         </Field>
       )}
-      <form onSubmit={create} className="form">
-        <h3>Criar um servidor</h3>
+      {accounts.length === 0 && <div className="empty-action"><p className="muted">Conecte uma instância Annoy antes de criar ou entrar numa comunidade.</p><Button onClick={() => openModal({ kind: "addAccount" })}>Conectar instância</Button></div>}
+      {accounts.length > 0 && <div className="tabs" role="tablist" aria-label="Ação de comunidade">
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "create"} className={mode === "create" ? "tab active" : "tab"} onClick={() => { setMode("create"); setPreview(null); }}>Criar</Button>
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "join"} className={mode === "join" ? "tab active" : "tab"} onClick={() => { setMode("join"); setPreview(null); }}>Entrar com convite</Button>
+      </div>}
+      {mode === "create" && accounts.length > 0 && <form onSubmit={create} className="form">
+        <h3>Nova comunidade</h3>
         <Field label="Nome do servidor">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meu servidor" required maxLength={100} />
         </Field>
         <div className="form-actions">
-          <Button type="submit" loading={busy} disabled={!name.trim()}>
-            Criar
+          <Button type="submit" loading={busy} disabled={!accountId || !name.trim()}>
+            Criar comunidade
           </Button>
         </div>
-      </form>
-      <hr />
-      <form onSubmit={join} className="form">
-        <h3>Entrar com um convite</h3>
+      </form>}
+      {mode === "join" && accounts.length > 0 && <form onSubmit={join} className="form">
+        <h3>Convite da comunidade</h3>
         <Field label="Código do convite">
           <Input
             value={invite}
@@ -263,11 +290,11 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
           </p>
         )}
         <div className="form-actions">
-          <Button type="submit" loading={busy} disabled={!invite.trim()}>
+          <Button type="submit" loading={busy} disabled={!accountId || !invite.trim()}>
             {preview ? "Entrar no servidor" : "Verificar convite"}
           </Button>
         </div>
-      </form>
+      </form>}
       <hr />
       <div className="form">
         <h3>Trazer do Discord</h3>
@@ -277,9 +304,10 @@ export function CreateServerModal({ accountId: initialAccount }: { accountId: st
             variant="secondary"
             onClick={() =>
               setState((s) => {
-                s.modal = { kind: "importDiscord", accountId, serverId: null };
+                if (accountId) s.modal = { kind: "importDiscord", accountId, serverId: null };
               })
             }
+            disabled={!accountId}
           >
             Importar do Discord…
           </Button>

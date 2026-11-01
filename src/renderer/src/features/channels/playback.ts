@@ -3,11 +3,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { toast, useStore } from "../../store.ts";
 import { onRoomEvent } from "./events.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 
 // One theater or song room's shared playback, and the loop that keeps this device on it.
 
 export interface Playback {
   state: PlaybackState | null;
+  loading: boolean;
+  error: string | null;
+  retry: () => void;
   /** Server clock minus ours, in ms. */
   offset: number;
   send: (action: PlaybackAction) => Promise<void>;
@@ -17,24 +21,36 @@ export function usePlayback(accountId: string, channelId: string): Playback {
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const [state, setState] = useState<PlaybackState | null>(null);
   const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const apply = useCallback((next: PlaybackState) => {
     setOffset(next.serverTime - Date.now());
     setState(next);
   }, []);
 
   useEffect(() => {
-    if (!connected) { setState(null); return; }
+    if (!connected) { setState(null); setLoading(false); setError(null); return; }
     let live = true;
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
     void apiFor(accountId)
-      .get<PlaybackState>(`/channels/${channelId}/playback`)
-      .then((s) => live && apply(s))
-      .catch((err: Error) => toast(err.message));
-    const off = onRoomEvent(accountId, channelId, (event) => event.t === "PLAYBACK_UPDATE" && apply(event.d));
+      .get<PlaybackState>(`/channels/${channelId}/playback`, controller.signal)
+      .then((s) => { if (live) apply(s); })
+      .catch((err: Error) => { if (live && !isCancellation(err)) setError(err.message); })
+      .finally(() => { if (live) setLoading(false); });
+    const off = onRoomEvent(accountId, channelId, (event) => {
+      if (event.t === "PLAYBACK_UPDATE") { setError(null); setLoading(false); apply(event.d); }
+    });
     return () => {
       live = false;
+      controller.abort();
       off();
     };
-  }, [accountId, channelId, apply, connected]);
+  }, [accountId, channelId, apply, connected, attempt]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   const send = useCallback(
     async (action: PlaybackAction) => {
@@ -47,7 +63,7 @@ export function usePlayback(accountId: string, channelId: string): Playback {
     [accountId, channelId, apply],
   );
 
-  return { state: connected ? state : null, offset, send };
+  return { state: connected ? state : null, offset, send, loading: connected && loading, error: connected ? error : null, retry };
 }
 
 export const currentItem = (state: PlaybackState | null): PlaybackItem | null =>

@@ -22,6 +22,9 @@
     "test:accounts": "node --experimental-strip-types --test scripts/tests/app-access.test.mjs && playwright test tests/account-policy.spec.ts",
     "test:activity": "node --experimental-strip-types --test scripts/tests/*-activity.test.mjs",
     "test:servers": "node --experimental-strip-types --test scripts/tests/server-removal.test.mjs",
+    "test:connectivity": "node --experimental-strip-types --test scripts/tests/connectivity.test.mjs",
+    "test:chat-state": "node --experimental-strip-types --test scripts/tests/chat-state.test.mjs",
+    "test:requests": "node --experimental-strip-types --test scripts/tests/requests.test.mjs",
     "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs",
     "test:desktop": "npm run build && playwright test",
     "brand:icons": "node scripts/generate-icons.mjs",
@@ -34,7 +37,8 @@
     "crypto:benchmark": "node --experimental-strip-types scripts/benchmark-crypto.mjs",
     "crypto:test": "cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml",
     "prebuild": "npm run crypto:build",
-    "test:crypto": "node --experimental-strip-types --test scripts/tests/crypto-vault.test.mjs scripts/tests/mls-service.test.mjs scripts/tests/crypto-key-protector.test.mjs"
+    "test:crypto": "node --experimental-strip-types --test scripts/tests/crypto-vault.test.mjs scripts/tests/mls-service.test.mjs scripts/tests/crypto-key-protector.test.mjs",
+    "test:history": "node --experimental-strip-types --test scripts/tests/message-window.test.mjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -65,6 +69,7 @@
     "@radix-ui/react-tooltip": "^1.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-virtual": "^3.14.24",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -108,7 +113,7 @@
   "build": {
     "appId": "br.dev.geg.distopic",
     "productName": "Annoy",
-    "copyright": "Copyright © 2026 Gustavo Cruz",
+    "copyright": "Copyright \u00c2\u00a9 2026 Gustavo Cruz",
     "directories": {
       "output": "dist",
       "buildResources": "build"

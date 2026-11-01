@@ -274,7 +274,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
       </ResizablePanel>
       {dm && other && me ? (
         <div className="dm-conversation"><Chat
-          key={dm.id}
+          key={JSON.stringify([accountId, dm.id])}
           accountId={accountId}
           channelId={dm.id}
           title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}
@@ -283,6 +283,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           canSend
           canAttach
           canModerate={false}
+          canPin
           nameOf={(id) => (id === me.id ? me.displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || dm.recipients.find((r) => r.id === id)?.displayName)}
           mentionables={dm.recipients.map((r) => ({ id: r.id, name: r.displayName, username: r.username }))}
         />{settings.dmProfileOpen && <DmProfile key={other.id} user={other} accountId={accountId} />}</div>

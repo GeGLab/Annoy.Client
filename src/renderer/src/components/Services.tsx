@@ -1,7 +1,7 @@
 import { ServiceLogo } from "./ServiceLogo.tsx";
 import { useState, type FormEvent } from "react";
 import { CATALOG, catalogEntry, teamspeakLink, type CatalogEntry, type Service, type TabDisplay, type TabPlacement, type TeamSpeakServer } from "../../../shared/services.ts";
-import { addService, navigate, removeService, setServiceHidden, updateService } from "../client.ts";
+import { addService, navigate, openServer, removeService, setServiceHidden, updateService } from "../client.ts";
 import { initials } from "../format.tsx";
 import { getState, useStore, type Settings } from "../store.ts";
 import { closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
@@ -95,7 +95,10 @@ function ServiceCard({ entry }: { entry: CatalogEntry }) {
 /** What the tab bar's "+" offers: Annoy communities first, then browser services. */
 export function AddTabModal() {
   const accounts = useStore((s) => s.accounts);
+  const instances = useStore((s) => s.instances);
   const hasHidden = useStore((s) => s.services.some((sv) => sv.hidden));
+  const [section, setSection] = useState<"communities" | "services">("communities");
+  const [showAllServices, setShowAllServices] = useState(false);
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -108,62 +111,56 @@ export function AddTabModal() {
     } catch {
       return setError("Endereço inválido");
     }
-    if (parsed.protocol !== "https:") return setError("Só sites com https");
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) return setError("Use um endereço https válido, sem credenciais na URL.");
+    if (parsed.toString().length > 2048) return setError("O endereço é longo demais.");
     addService({ id: newId(), kind: "web", name: freeName(name.trim() || parsed.hostname.replace(/^www\./, "")), url: parsed.toString() });
   };
 
   return (
     <Modal title="Nova aba" wide>
-      <div className="form">
-        <h3>Comunidades Annoy</h3>
-        <div className="form-actions start">
-          <button className="btn" onClick={() => openModal({ kind: "addAccount" })}>
-            Conectar a um servidor Annoy
-          </button>
-          {accounts[0] && (
-            <button className="btn btn-ghost" onClick={() => openModal({ kind: "createServer", accountId: accounts[0]!.id })}>
-              Criar ou entrar em um servidor
-            </button>
-          )}
-        </div>
+      <div className="new-tab-sections" role="tablist" aria-label="O que adicionar">
+        <button role="tab" aria-selected={section === "communities"} className={section === "communities" ? "active" : ""} onClick={() => setSection("communities")}>
+          Comunidades Annoy
+        </button>
+        <button role="tab" aria-selected={section === "services"} className={section === "services" ? "active" : ""} onClick={() => setSection("services")}>
+          Serviços e sites
+        </button>
       </div>
-      <hr />
-      <div className="form">
-        <h3>Serviços</h3>
-        <p className="muted small">Cada serviço abre numa aba própria, com o login guardado só nele.</p>
-        <div className="service-grid">
-          {CATALOG.map((entry) => (
-            <ServiceCard key={entry.kind} entry={entry} />
+      {section === "communities" ? <section className="new-tab-community" aria-labelledby="new-tab-community-title">
+        <header className="new-tab-heading"><div><h3 id="new-tab-community-title">Suas comunidades</h3><p className="muted small">Abra uma comunidade conhecida ou conecte outra instância Annoy.</p></div>
+          <button className="btn" onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" size={16} />Conectar instância</button>
+        </header>
+        {accounts.length > 0 && <ul className="new-tab-communities">
+          {accounts.flatMap((account) => (instances[account.id]?.servers ?? []).slice(0, 5).map((server) => ({ account, server }))).slice(0, 10).map(({ account, server }) => (
+            <li key={JSON.stringify([account.id, server.id])}><button className="new-tab-community-row" onClick={() => { closeModal(); void openServer(account.id, server.id); }}>
+              <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
+              <span><strong>{server.name}</strong><small>{account.instanceName}</small></span><Icon name="right" size={16} />
+            </button></li>
           ))}
+        </ul>}
+        {accounts.length > 0 && !accounts.some((account) => (instances[account.id]?.servers.length ?? 0) > 0) && <p className="new-tab-empty muted">Nenhuma comunidade conhecida ainda. Conecte uma instância ou entre com um convite.</p>}
+        {accounts.length > 0 && <div className="new-tab-secondary-actions">
+          <button className="btn btn-ghost" onClick={() => openModal({ kind: "createServer", accountId: accounts.length === 1 ? accounts[0]!.id : undefined, initialMode: "create" })}><Icon name="plus" size={16} />Criar comunidade</button>
+          <button className="btn btn-ghost" onClick={() => openModal({ kind: "createServer", accountId: accounts.length === 1 ? accounts[0]!.id : undefined, initialMode: "join" })}><Icon name="userPlus" size={16} />Entrar com convite</button>
+          <button className="btn btn-ghost" onClick={() => { closeModal(); navigate({ kind: "servers" }); }}>Ver todas as comunidades</button>
+        </div>}
+      </section> : <section className="new-tab-services" aria-labelledby="new-tab-services-title">
+        <header className="new-tab-heading"><div><h3 id="new-tab-services-title">Seus serviços</h3><p className="muted small">Cada serviço mantém seu login isolado numa aba própria.</p></div></header>
+        <div className="service-grid">
+          {(showAllServices ? CATALOG : CATALOG.slice(0, 3)).map((entry) => <ServiceCard key={entry.kind} entry={entry} />)}
         </div>
-      </div>
-      {hasHidden && (
-        <>
-          <hr />
-          <div className="form">
-            <h3>Abas ocultas</h3>
-            <HiddenServices />
+        {!showAllServices && <button className="btn btn-ghost" onClick={() => setShowAllServices(true)}>Ver todos os serviços ({CATALOG.length})</button>}
+        {showAllServices && <form className="form" onSubmit={addWeb}>
+          <h3>Adicionar outro site</h3>
+          <div className="grid-2">
+            <Field label="Endereço"><input type="url" value={url} onChange={(e) => (setUrl(e.target.value), setError(null))} placeholder="https://chat.exemplo.com" maxLength={2048} /></Field>
+            <Field label="Nome da aba"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Opcional" maxLength={100} /></Field>
           </div>
-        </>
-      )}
-      <hr />
-      <form className="form" onSubmit={addWeb}>
-        <h3>Outro site</h3>
-        <div className="grid-2">
-          <Field label="Endereço">
-            <input value={url} onChange={(e) => (setUrl(e.target.value), setError(null))} placeholder="chat.exemplo.com" />
-          </Field>
-          <Field label="Nome da aba">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Opcional" />
-          </Field>
-        </div>
-        {error && <p className="error">{error}</p>}
-        <div className="form-actions">
-          <button className="btn btn-ghost" disabled={!url.trim()}>
-            Adicionar site
-          </button>
-        </div>
-      </form>
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="form-actions"><button className="btn btn-ghost" disabled={!url.trim()}>Adicionar site</button></div>
+        </form>}
+      </section>}
+      {hasHidden && <section className="new-tab-hidden"><h3>Abas ocultas</h3><HiddenServices /></section>}
     </Modal>
   );
 }

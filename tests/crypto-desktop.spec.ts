@@ -51,7 +51,7 @@ test('real Electron clients exchange MLS, attachments and edits; external IPC ca
   await pages[0]!.route(info.url+'/api/channels/legacy/crypto',route=>route.fulfill({contentType:'application/json',body:'{"channel":null}'}));
   await pages[0]!.route(info.url+'/api/channels/legacy/messages**',route=>{plaintextMutations++;return route.fulfill({contentType:'application/json',body:'{}'});});
   const rejected=await pages[0]!.evaluate(async({url,token})=>{
-   const {Api}=await import(location.origin+'/src/api.ts');const api=new Api(url,token,()=>true,'alice'),errors=[];
+   const {Api}=await import(location.origin+'/src/api.ts');const api=new Api(url,token,()=>true,undefined,'alice'),errors=[];
    for(const operation of [()=>api.post('/channels/legacy/messages',{content:'must never reach server in plaintext'}),()=>api.patch('/channels/legacy/messages/old',{content:'must never reach server in plaintext'}),()=>api.put('/channels/legacy/messages/old/reactions/👍',{})]){
     try{await operation();errors.push('BYPASS');}catch(error){errors.push((error as Error).message);}
    }return errors;

@@ -36,6 +36,8 @@ import { Brand } from "./Brand.tsx";
 import { ColorPicker } from "./ui/color-picker.tsx";
 import { useSettingsDraft } from "./settings/SettingsGuard.tsx";
 import { requestNavigation } from "../lib/navigation-guard.ts";
+import { useRequestOwner } from "../lib/use-request-owner.ts";
+import { isCancellation } from "../../../shared/requests.ts";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
 const TEXT_PERMS: PermissionName[] = ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_MESSAGES", "ATTACH_FILES", "MENTION_EVERYONE"];
@@ -52,7 +54,7 @@ export { UserSettingsModal } from "./settings/UserSettingsModal.tsx";
 
 // Server settings --------------------------------------------------------
 
-function RoleEditor({ accountId, state, role, me }: { accountId: string; state: ServerState; role: Role; me: string }) {
+function RoleEditor({ accountId, state, role, me, signal }: { accountId: string; state: ServerState; role: Role; me: string; signal: AbortSignal }) {
   const isEveryone = role.id === state.server.id;
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color ?? "#99aab5");
@@ -74,7 +76,7 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
   const saveRole = async () => {
     if (!editable) return false;
     const body = isEveryone ? { permissions: perms } : { name, color: useColor ? color : null, permissions: perms };
-    const ok = await act(api.patch(path, body), "Cargo salvo");
+    const ok = await act(api.patch(path, body, signal), "Cargo salvo");
     if (ok) setBaseline(values);
     return ok;
   };
@@ -127,7 +129,7 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
               type="button"
               className="btn btn-ghost"
               title="Subir na hierarquia"
-              onClick={() => void act(api.patch(path, { position: role.position + 1 }))}
+              onClick={() => void act(api.patch(path, { position: role.position + 1 }, signal))}
             >
               ↑ Subir
             </button>
@@ -135,14 +137,14 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
               type="button"
               className="btn btn-ghost"
               disabled={role.position <= 1}
-              onClick={() => void act(api.patch(path, { position: role.position - 1 }))}
+              onClick={() => void act(api.patch(path, { position: role.position - 1 }, signal))}
             >
               ↓ Descer
             </button>
             <button
               type="button"
               className="btn btn-danger"
-              onClick={async () => (await confirmAction(`Excluir o cargo ${role.name}?`)) && void act(api.del(path))}
+              onClick={async () => (await confirmAction(`Excluir o cargo ${role.name}?`)) && !signal.aborted && void act(api.del(path, signal))}
             >
               Excluir
             </button>
@@ -157,11 +159,13 @@ function RoleEditor({ accountId, state, role, me }: { accountId: string; state: 
 }
 
 function Bans({ accountId, serverId }: { accountId: string; serverId: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, "bans"]));
+  const signal = requests.signal;
   const [bans, setBans] = useState<Ban[] | null>(null);
   const load = () =>
     void apiFor(accountId)
-      .get<Ban[]>(`/servers/${serverId}/bans`)
-      .then(setBans, (e: Error) => toast(e.message));
+      .get<Ban[]>(`/servers/${serverId}/bans`, signal)
+      .then((value) => { if (!signal.aborted) setBans(value); }, (e: Error) => { if (!isCancellation(e) && !signal.aborted) toast(e.message); });
   useEffect(load, [accountId, serverId]);
   if (!bans) return <p className="muted">Carregando…</p>;
   if (bans.length === 0) return <p className="muted">Ninguém foi banido.</p>;
@@ -175,7 +179,7 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
           </span>
           <button
             className="btn btn-ghost"
-            onClick={() => void act(apiFor(accountId).del(`/servers/${serverId}/bans/${b.user.id}`)).then(load)}
+            onClick={() => void act(apiFor(accountId).del(`/servers/${serverId}/bans/${b.user.id}`, signal)).then((ok) => ok && !signal.aborted && load())}
           >
             Revogar
           </button>
@@ -186,6 +190,8 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
 }
 
 export function ServerSettingsModal({ accountId, serverId }: { accountId: string; serverId: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, "server-settings"]));
+  const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
   const [tab, setTab] = useState<"overview" | "roles" | "bans" | "advanced">("overview");
   const [roleId, setRoleId] = useState<string | null>(null);
@@ -207,8 +213,10 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
     setSavingServer(true);
     try {
       const api = apiFor(accountId);
-      let server = await api.patch<ServerSummary>(`/servers/${serverId}`, { name: name.trim(), ...(icon === null && { iconUrl: null }) });
-      if (icon) server = await api.uploadServerIcon<ServerSummary>(serverId, icon);
+      let server = await api.patch<ServerSummary>(`/servers/${serverId}`, { name: name.trim(), ...(icon === null && { iconUrl: null }) }, signal);
+      signal.throwIfAborted();
+      if (icon) server = await api.uploadServerIcon<ServerSummary>(serverId, icon, signal);
+      signal.throwIfAborted();
       setState((s) => {
         const instance = s.instances[accountId];
         if (instance?.serverStates[serverId]) instance.serverStates[serverId]!.server = server;
@@ -217,7 +225,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       });
       setName(server.name); setBaselineName(server.name); setIcon(undefined); toast("Servidor atualizado");
       return true;
-    } catch (error) { toast((error as Error).message); return false; }
+    } catch (error) { if (!isCancellation(error)) toast((error as Error).message); return false; }
     finally { setSavingServer(false); }
   };
   useSettingsDraft("server-name", !!state && (name !== baselineName || icon !== undefined), saveName, () => {
@@ -239,14 +247,16 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
     if (!await confirmAction(
       `Transferir ${state.server.name} para ${displayNameOf(target)}? Você deixará de ser o dono do servidor.`,
       { title: `Transferir "${state.server.name}"`, confirmLabel: "Transferir propriedade" },
-    )) return;
+    ) || signal.aborted) return;
     setTransferring(true);
     try {
-      await api.post(`/servers/${serverId}/ownership`, { userId: target.user.id });
-      await ensureServer(accountId, serverId, true);
+      await api.post(`/servers/${serverId}/ownership`, { userId: target.user.id }, signal);
+      signal.throwIfAborted();
+      await ensureServer(accountId, serverId, true, signal);
+      signal.throwIfAborted();
       toast("Propriedade transferida.");
       closeModal();
-    } catch (error) { toast((error as Error).message); }
+    } catch (error) { if (!isCancellation(error)) toast((error as Error).message); }
     finally { setTransferring(false); }
   };
 
@@ -361,7 +371,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
           </div>
           <div className="roles-editor">
             {role ? (
-              <RoleEditor key={role.id} accountId={accountId} state={state} role={role} me={me} />
+                    <RoleEditor key={role.id} accountId={accountId} state={state} role={role} me={me} signal={signal} />
             ) : (
               <p className="muted">Escolha um cargo para editar.</p>
             )}
@@ -393,7 +403,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
 
 // Channel settings -------------------------------------------------------
 
-function OverwriteEditor({ accountId, state, channel, me }: { accountId: string; state: ServerState; channel: Channel; me: string }) {
+function OverwriteEditor({ accountId, state, channel, me, signal }: { accountId: string; state: ServerState; channel: Channel; me: string; signal: AbortSignal }) {
   const targets = useMemo(
     () => [
       ...state.roles.map((r) => ({ id: r.id, type: "role" as const, label: r.name })),
@@ -428,7 +438,7 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
   const save = async () => {
     if (!target || !canEdit) return false;
     const body: Overwrite & { targetType: "role" | "member" } = { targetId, targetType: target.type, allow, deny };
-    const ok = await act(api.put(`/channels/${channel.id}/overwrites/${targetId}`, body), "Permissões salvas");
+    const ok = await act(api.put(`/channels/${channel.id}/overwrites/${targetId}`, body, signal), "Permissões salvas");
     if (ok) setBaseline(`${allow}:${deny}`);
     return ok;
   };
@@ -482,7 +492,7 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
             className="btn btn-ghost"
             disabled={!canEdit}
             onClick={() =>
-              void act(api.del(`/channels/${channel.id}/overwrites/${targetId}`), "Sobrescrita removida").then((ok) => {
+              void act(api.del(`/channels/${channel.id}/overwrites/${targetId}`, signal), "Sobrescrita removida").then((ok) => {
                 if (ok) {
                   setAllow(0);
                   setDeny(0);
@@ -503,6 +513,8 @@ function OverwriteEditor({ accountId, state, channel, me }: { accountId: string;
 }
 
 export function ChannelSettingsModal({ accountId, serverId, channelId }: { accountId: string; serverId: string; channelId: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, channelId, "channel-settings"]));
+  const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
   const channel = state?.channels.find((c) => c.id === channelId);
   const [tab, setTab] = useState<"overview" | "perms">("overview");
@@ -520,7 +532,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
         topic,
         ...(channel.type !== "category" && { parentId: parentId || null }),
         ...(channel.type === "text" && { messageTtlMs: Number(ttl) || null }),
-      }),
+      }, signal),
       "Canal salvo",
     );
     if (ok) setBaseline(values);
@@ -591,7 +603,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
               className="btn btn-danger"
               onClick={async () =>
                 (await confirmAction(`Excluir ${channel.name}? Mensagens serão apagadas.`)) &&
-                void act(api.del(`/channels/${channel.id}`)).then((ok) => ok && closeModal())
+                !signal.aborted && void act(api.del(`/channels/${channel.id}`, signal)).then((ok) => ok && !signal.aborted && closeModal())
               }
             >
               Excluir
@@ -600,7 +612,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
           </div>
         </form>
       ) : (
-        <OverwriteEditor accountId={accountId} state={state} channel={channel} me={me} />
+        <OverwriteEditor accountId={accountId} state={state} channel={channel} me={me} signal={signal} />
       )}
     </Modal>
   );
@@ -628,24 +640,32 @@ export function CreateChannelModal({
   parentId: string | null;
   type: CreatableChannel;
 }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, "create-channel"]));
+  const signal = requests.signal;
   const { state } = useServer(accountId, serverId);
   const [type, setType] = useState(initialType);
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState(initialParent ?? "");
+  const [creating, setCreating] = useState(false);
   const categories = state?.channels.filter((c) => c.type === "category") ?? [];
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (creating) return;
+    setCreating(true);
     try {
       const channel = await apiFor(accountId).post<Channel>(`/servers/${serverId}/channels`, {
         name,
         type,
         parentId: type === "category" ? null : parentId || null,
-      });
+      }, signal);
+      signal.throwIfAborted();
       closeModal();
       if (channel.type !== "category" && channel.type !== "voice" && channel.type !== "theater") openChannel(accountId, serverId, channel.id);
     } catch (err) {
-      toast((err as Error).message);
+      if (!isCancellation(err)) toast((err as Error).message);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -698,8 +718,8 @@ export function CreateChannelModal({
           <button type="button" className="btn btn-ghost" onClick={closeModal}>
             Cancelar
           </button>
-          <button className="btn" disabled={!name.trim()}>
-            Criar
+          <button className="btn" disabled={!name.trim() || creating}>
+            {creating ? "Criando…" : "Criar"}
           </button>
         </div>
       </form>
@@ -708,21 +728,30 @@ export function CreateChannelModal({
 }
 
 export function InviteModal({ accountId, serverId }: { accountId: string; serverId: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, "invite"]));
+  const signal = requests.signal;
   const { state } = useServer(accountId, serverId);
   const account = getState().accounts.find((a) => a.id === accountId);
   const [expires, setExpires] = useState<string>("168");
   const [maxUses, setMaxUses] = useState<string>("");
   const [invite, setInvite] = useState<Invite | null>(null);
-
-  const create = () =>
-    void apiFor(accountId)
-      .post<Invite>(`/servers/${serverId}/invites`, {
+  const [creating, setCreating] = useState(false);
+  const create = async () => {
+    if (creating || signal.aborted) return;
+    setCreating(true);
+    try {
+      const value = await apiFor(accountId).post<Invite>(`/servers/${serverId}/invites`, {
         expiresInHours: expires ? Number(expires) : null,
         maxUses: maxUses ? Number(maxUses) : null,
-      })
-      .then(setInvite, (e: Error) => toast(e.message));
-
-  useEffect(create, [accountId, serverId]);
+      }, signal);
+      signal.throwIfAborted();
+      setInvite(value);
+    } catch (error) {
+      if (!isCancellation(error) && !signal.aborted) toast((error as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const address = account?.url.replace(/^https?:\/\//, "") ?? "";
   const shareText = invite ? `Entre no ${state?.server.name ?? "servidor"} no Annoy\nEndereço: ${address}\nConvite: ${invite.code}` : "";
@@ -737,7 +766,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
         </div>
         <div>
           <span className="section-label">Convite</span>
-          <code className="invite-code">{invite?.code ?? "…"}</code>
+          <code className="invite-code">{invite?.code ?? "Gere um convite para compartilhar"}</code>
         </div>
         <button
           className="btn"
@@ -749,7 +778,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
       </div>
       <div className="grid-2">
         <Field label="Expira em">
-          <Select value={expires} onChange={(e) => setExpires(e.target.value)}>
+          <Select value={expires} disabled={creating} onChange={(e) => setExpires(e.target.value)}>
             <option value="1">1 hora</option>
             <option value="24">1 dia</option>
             <option value="168">7 dias</option>
@@ -757,7 +786,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
           </Select>
         </Field>
         <Field label="Máximo de usos">
-          <Select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
+          <Select value={maxUses} disabled={creating} onChange={(e) => setMaxUses(e.target.value)}>
             <option value="">Sem limite</option>
             <option value="1">1 uso</option>
             <option value="5">5 usos</option>
@@ -766,8 +795,8 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
         </Field>
       </div>
       <div className="form-actions">
-        <button className="btn btn-ghost" onClick={create}>
-          Gerar novo convite
+        <button className="btn btn-ghost" disabled={creating} onClick={() => void create()}>
+          {creating ? "Gerando…" : invite ? "Gerar outro convite" : "Gerar convite"}
         </button>
       </div>
     </Modal>
