@@ -173,6 +173,22 @@ const ACCOUNTS_KEY = "distopic.accounts";
 export const EMPTY_ACTIVITIES: readonly import("@distopic/protocol").UserActivity[] = [];
 const SETTINGS_KEY = "distopic.settings";
 const VIEW_KEY = "distopic.view";
+/** The identity in use survives views without an account (services, news) and restarts. */
+const ACTIVE_KEY = "annoy.activeAccount";
+
+/**
+ * Accounts of the identity in use. Switching user switches servers: an identity never
+ * shows another identity's servers or conversations. The Annoy account is one identity
+ * with all the server accounts that sign in through it; every local account is its own.
+ */
+export function identityAccountIds(s: AppState): string[] {
+  let id: string | null | undefined = "accountId" in s.view ? s.view.accountId : undefined;
+  if (id === undefined) { try { id = JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? "null"); } catch { id = null; } }
+  const account = s.accounts.find((a) => a.id === id);
+  if (account) return account.annoy && s.global ? s.accounts.filter((a) => a.annoy).map((a) => a.id) : [account.id];
+  if (s.global) return s.accounts.filter((a) => a.annoy).map((a) => a.id);
+  return s.accounts.slice(0, 1).map((a) => a.id);
+}
 const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -319,7 +335,10 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   if (state.accounts !== prev.accounts) persistAccounts(state.accounts);
   if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
-  if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
+  if (state.view !== prev.view) {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
+    if ("accountId" in state.view) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.view.accountId));
+  }
   if (state.services !== prev.services) localStorage.setItem(SERVICES_KEY, JSON.stringify(state.services));
   for (const l of listeners) l();
 }

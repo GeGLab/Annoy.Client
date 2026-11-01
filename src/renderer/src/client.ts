@@ -216,7 +216,8 @@ export function removeAccount(accountId: string, forget = true, keepInVault = fa
   setState((s) => {
     s.accounts = s.accounts.filter((a) => a.id !== accountId);
     delete s.instances[accountId];
-    if ("accountId" in s.view && s.view.accountId === accountId) s.view = { kind: "home", accountId: null, dmId: null };
+    // Removing the account in use moves to the next one, never to an empty identity.
+    if ("accountId" in s.view && s.view.accountId === accountId) s.view = { kind: "home", accountId: s.accounts[0]?.id ?? null, dmId: null };
   });
 }
 
@@ -637,12 +638,20 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
     case "READY": {
       const account = getState().accounts.find(a => a.id === accountId);
       if (account) {
-        if (window.distopic?.auth) void window.distopic.auth.local(account).then(
-          // A new session lives only minutes until it is bound to this device's key (DPoP).
-          () => window.distopic?.crypto?.bind(account.url, account.token, account.userId),
-        ).catch((error: Error) => toast(`Não foi possível proteger a sessão neste dispositivo: ${error.message}. Desbloqueie o armazenamento em Configurações → Privacidade e segurança.`, 10000));
+        // An Annoy account on this server: access comes from the Annoy sign-in, never from local credentials.
+        const annoyUser = event.d.user.global === true;
+        if (annoyUser && !account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = true; });
+        if (window.distopic?.auth) {
+          const bind = () => window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
+            // A new session lives only minutes until it is bound to this device's key (DPoP).
+            // Servers without MLS (older versions) have no device-bound sessions to set up.
+            if (!/MLS/.test(error.message)) toast(`Não foi possível vincular a sessão a este dispositivo: ${error.message}`, 10000);
+          });
+          if (annoyUser) void bind();
+          else void window.distopic.auth.local(account).then(bind, () => undefined);
+        }
         else void fetchInfo(account.url).then(async info => {
-          if (info.accountMode !== "local") return;
+          if (info.accountMode === "global") return;
           const me = await apiFor(accountId).get<User>("/users/@me");
           if (getState().instances[accountId]?.status === "ready" && me.id === account.userId) setState(s => {
             s.access.localAccounts = [...new Set([...s.access.localAccounts, accountId])]; s.access.allowed = true;

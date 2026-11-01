@@ -274,9 +274,8 @@ function UsersTab({ accountId }: { accountId: string }) {
     if (reason !== null) void act(api.post(`/admin/users/${u.user.id}/ban`, { reason }), "Conta suspensa").then(load);
   };
   const remove = async (u: AdminUser) => {
-    if (!await confirmAction(`Excluir a conta de ${u.user.displayName}? Os dados pessoais são apagados.`)) return;
-    const messages = await confirmAction("Apagar também todas as mensagens dessa pessoa? Você pode mantê-las como “Usuário excluído”.", {confirmLabel:"Apagar mensagens",cancelLabel:"Manter mensagens"});
-    void act(api.del(`/admin/users/${u.user.id}?deleteMessages=${messages ? 1 : 0}`), "Conta excluída").then(load);
+    if (!await confirmAction(`Excluir a conta de ${u.user.displayName}? Tudo dessa conta é apagado: mensagens, arquivos, conversas diretas e dispositivos. Não dá para desfazer.`)) return;
+    void act(api.del(`/admin/users/${u.user.id}`), "Conta excluída").then(load);
   };
   return (
     <div className="form">
@@ -397,12 +396,11 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
   const user = useStore((s) => s.instances[accountId]?.user);
   const [confirmText, setConfirmText] = useState("");
   const [password, setPassword] = useState("");
-  const [deleteMessages, setDeleteMessages] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!user) return null;
   const submit = async () => {
     setBusy(true);
-    const ok = await act(apiFor(accountId).request("DELETE", "/users/@me", { confirm: confirmText, password: password || undefined, deleteMessages }));
+    const ok = await act(apiFor(accountId).request("DELETE", "/users/@me", { confirm: confirmText, password: password || undefined }));
     setBusy(false);
     if (ok) {
       closeModal();
@@ -414,13 +412,8 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
     <Modal title="Excluir minha conta">
       <div className="form">
         <p className="warning">
-          Isto apaga sua conta nesta instância: nome, foto, vínculo com o Discord, amizades e participação nos servidores. Não dá para desfazer.
+          Isto apaga sua conta nesta instância e tudo dela: mensagens, arquivos, conversas diretas, amizades, dispositivos, foto e participação nos servidores. Não dá para desfazer.
         </p>
-        <label className="check">
-          <Checkbox  checked={deleteMessages} onChange={(e) => setDeleteMessages(e.target.checked)} />
-          Apagar também todas as minhas mensagens e anexos
-        </label>
-        <p className="muted small">Sem marcar, suas mensagens continuam aparecendo como "Usuário excluído".</p>
         <Field label={`Digite @${user.username} para confirmar`}>
           <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={user.username} />
         </Field>

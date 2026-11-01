@@ -23,8 +23,8 @@ test('global logout revokes access synchronously and a delayed login cannot rest
   complete(response(profile)); await assert.rejects(pending);
   assert.equal(access.getState().allowed,false);
 });
-test('only an explicitly local host with a valid matching account grants the exception',async()=>{
-  for(const [mode,status,id] of [['global',200,'u'],[undefined,200,'u'],['local',401,'u'],['local',200,'wrong']]){
+test('a local or pre-account-mode host with a valid matching account grants the exception',async()=>{
+  for(const [mode,status,id] of [['global',200,'u'],['local',401,'u'],['local',200,'wrong']]){
     const access=createAppAccess('https://global.test',()=>{},async url=>url.endsWith('/info')?response({accountMode:mode}):response({id},status));
     await assert.rejects(access.verifyLocal(local)); assert.equal(access.getState().allowed,false);
   }
@@ -32,6 +32,9 @@ test('only an explicitly local host with a valid matching account grants the exc
   await access.verifyLocal(local); assert.equal(access.getState().allowed,true);
   access.revokeGlobal(); assert.equal(access.getState().allowed,true);
   access.revokeLocal('a'); assert.equal(access.getState().allowed,false);
+  // Servers from before account modes (no accountMode) keep local accounts.
+  const legacy=createAppAccess('https://global.test',()=>{},async url=>url.endsWith('/info')?response({}):response({id:'u',global:false}));
+  await legacy.verifyLocal(local); assert.equal(legacy.getState().allowed,true);
 });
 test('removing a local account during validation cancels any late access grant',async()=>{
   let complete;

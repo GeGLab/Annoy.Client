@@ -572,6 +572,8 @@ test("old server connections have a context menu and require a single named conf
       setState((s: any) => {
         s.accounts.push({ ...s.accounts[0], id: "old", url: "https://old-server.test", instanceName: "Conexão antiga", offlineSince: Date.now() - 7 * 24 * 60 * 60_000 });
         s.instances.old = old;
+        // The rail only shows the servers of the account in use.
+        s.view = { kind: "home", accountId: "old", dmId: null };
       });
     });
     // An unrelated offline instance must not block the connected community.

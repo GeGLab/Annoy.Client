@@ -2,7 +2,7 @@ import type { ServerSummary } from "@distopic/protocol";
 import * as Popover from "@radix-ui/react-popover";
 import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
 import { initials } from "../format.tsx";
-import { setState, useStore, type Account, type InstanceState } from "../store.ts";
+import { identityAccountIds, setState, useStore, type Account, type InstanceState } from "../store.ts";
 import { Avatar, Icon, openModal } from "./ui.tsx";
 import { ServiceTab, tabLayout } from "./Services.tsx";
 import { Brand } from "./Brand.tsx";
@@ -53,7 +53,10 @@ export function UserPanel() {
   const settings = useStore((s) => s.settings);
   const view = useStore((s) => s.view);
   const accounts = useStore((s) => s.accounts);
-  const accountId = "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
+  const annoy = useStore((s) => s.global);
+  // The Annoy account selected in the switcher: the panel shows it, not a server account.
+  const annoyMode = "accountId" in view && view.accountId === null && !!annoy;
+  const accountId = annoyMode ? undefined : "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
   const manualSupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
@@ -74,18 +77,18 @@ export function UserPanel() {
         <Popover.Root>
           <Popover.Trigger asChild>
           <button className="user-identity" aria-label="Abrir meu perfil">
-            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : <Brand size={32} />}
+            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={32} /> : <Brand size={32} />}
             <span className="user-identity-text">
-              <strong className="truncate">{user?.displayName ?? "Seu espaço"}</strong>
-              <span>{user ? `@${user.username}` : "Vamos conversar?"}</span>
+              <strong className="truncate">{user?.displayName ?? (annoyMode ? annoy!.name : "Seu espaço")}</strong>
+              <span>{user ? `@${user.username}` : annoyMode ? "Conta Annoy" : "Vamos conversar?"}</span>
             </span>
           </button>
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label="Meu perfil">
               <div className="member-card-head">
-                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : <Brand size={48} />}
-                <div><strong className="member-card-name">{user?.displayName ?? "Seu espaço"}</strong>{user && <div className="muted">@{user.username}</div>}</div>
+                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={56} /> : <Brand size={48} />}
+                <div><strong className="member-card-name">{user?.displayName ?? (annoyMode ? annoy!.name : "Seu espaço")}</strong>{user ? <div className="muted">@{user.username}</div> : annoyMode && <div className="muted">Conta Annoy · {annoy!.email}</div>}</div>
               </div>
               {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
               <label className="profile-status-choice">Meu status
@@ -144,7 +147,10 @@ export function UserPanel() {
 
 /** Community bar, down the side or across the top: home, browser services and every server of every connected instance. */
 export function TopBar() {
-  const accounts = useStore((s) => s.accounts);
+  // Only the identity in use: another user's servers and conversations never show here.
+  const identity = useStore((s) => identityAccountIds(s).join("\n"));
+  const allAccounts = useStore((s) => s.accounts);
+  const accounts = allAccounts.filter((account) => identity.split("\n").includes(account.id));
   const instances = useStore((s) => s.instances);
   const view = useStore((s) => s.view);
   const services = useStore((s) => s.services);

@@ -168,9 +168,16 @@ export function UserSettingsModal() {
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
   // "Editar perfil" opens on the account it was clicked from; the others follow.
-  const [focusId] = useState(() => { const modal = getState().modal; return modal?.kind === "userSettings" ? modal.accountId : undefined; });
-  const ordered = [...accounts].sort((a, b) => Number(b.id === focusId) - Number(a.id === focusId));
-  const profileUser = ordered[0] ? instances[ordered[0].id]?.user : undefined;
+  // Settings belong to the selected account only: never another account's profile.
+  const [selected] = useState(() => {
+    const state = getState(), modal = state.modal;
+    const id = (modal?.kind === "userSettings" ? modal.accountId : undefined) ?? ("accountId" in state.view ? state.view.accountId : undefined);
+    return id ?? (state.global ? null : state.accounts[0]?.id ?? null);
+  });
+  const annoy = useStore((s) => s.global);
+  const annoyMode = selected === null && !!annoy;
+  const shownAccounts = accounts.filter((account) => account.id === selected);
+  const profileUser = annoyMode ? { id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null } : shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
   const filteredPages = SETTINGS_PAGES.filter((item) => normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
   const desktopActivity = useStore((s) => s.desktopActivity);
@@ -393,7 +400,17 @@ export function UserSettingsModal() {
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
-                {(focusId ? ordered.filter((account) => account.id === focusId) : ordered).map((account) => {
+                {annoyMode && (
+                  <div className="settings-account annoy-profile">
+                    <span className="account-badge"><Icon name="check" size={12} />Conta Annoy</span>
+                    <p><strong>{annoy!.name}</strong> <span className="muted">{annoy!.email}</span></p>
+                    <div className="account-actions">
+                      <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Gerenciar conta</a>
+                      <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>Sair da conta Annoy</Button>
+                    </div>
+                  </div>
+                )}
+                {shownAccounts.map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
@@ -496,7 +513,7 @@ export function UserSettingsModal() {
             {page === "security" && (
               <section className="settings-section">
                 <h3><Icon name="lock" size={24} />Privacidade e segurança</h3>
-                <SecuritySettings />
+                <SecuritySettings accountId={selected} />
               </section>
             )}
             {page === "updates" && (
@@ -580,7 +597,7 @@ export function UserSettingsModal() {
                   <p className="muted">A detecção local está disponível no Windows e Linux. As atividades compatíveis dependem das integrações disponíveis no sistema.</p>
                 )}
                 {accounts.some((account) => instances[account.id]?.instance?.steamConnection) && <h4>Plataformas conectadas</h4>}
-                {accounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
+                {shownAccounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
               </section>
             )}
             {page === "notifications" && (

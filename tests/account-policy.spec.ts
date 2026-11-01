@@ -73,6 +73,17 @@ async function invalidateSaved(page: Page, mode: "global" | "local") {
   });
 }
 
+test("servers from before account modes (no accountMode) keep the local sign-in", async () => {
+  const { page, close } = await launch();
+  try {
+    const { accountMode: _omitted, ...legacy } = info("local");
+    await page.route(`${origin}/api/info`, route => route.fulfill({ json: { ...legacy, globalServerId: "Slegacy" } }));
+    await open(page);
+    await expect(page.getByLabel("Senha local", { exact: true })).toBeVisible();
+    await expect(page.getByText("este servidor exige uma conta Annoy", { exact: false })).toHaveCount(0);
+  } finally { await close(); }
+});
+
 test("existing local users automatically receive the global migration popup", async () => {
   const { page, close } = await launch();
   try {

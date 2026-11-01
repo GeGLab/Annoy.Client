@@ -43,7 +43,8 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
     try {
       const url = secureHttpUrl(credential.url);
       const info = await json(`${url.origin}/api/info`);
-      if (info.accountMode !== "local") throw new Error("Este servidor exige conta Annoy");
+      // Servers before account modes have no accountMode field and keep local accounts.
+      if (info.accountMode === "global") throw new Error("Este servidor exige conta Annoy");
       const me = await json(`${url.origin}/api/users/@me`, credential.token);
       if (started !== epoch || version !== versions.get(credential.id)) throw new Error("Autenticação cancelada");
       if (me.id !== credential.userId || me.global === true) throw new Error("Conta local inválida");
