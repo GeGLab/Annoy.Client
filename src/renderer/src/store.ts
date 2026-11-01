@@ -23,6 +23,8 @@ export interface Account {
   token: string;
   userId: string;
   instanceName: string;
+  /** Signed in through the Annoy account (never true for a server's local account). */
+  annoy?: boolean;
   /** First observed connection failure; cleared as soon as the server responds. */
   offlineSince?: number;
 }

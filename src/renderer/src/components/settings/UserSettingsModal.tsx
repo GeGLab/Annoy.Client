@@ -110,7 +110,6 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
 
 function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
   const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
-  const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
   useEffect(() => {
@@ -139,11 +138,6 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
           Sincronizar Discord
         </Button>
       )}
-      {admin && (
-        <Button variant="secondary" size="sm" disabled={busy} onClick={() => openModal({ kind: "instanceAdmin", accountId })}>
-          Administrar instância
-        </Button>
-      )}
       <Button
         variant="ghost"
         size="sm"
@@ -164,65 +158,6 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
   );
 }
 
-/**
- * Annoy Global: one account for many servers. Signing in happens here, right
- * away (not on "save"), since it's a login rather than a preference.
- */
-function GlobalAccountCard() {
-  const account = useStore((s) => s.global);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await signInGlobal(email, password);
-      setPassword("");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (account) {
-    return (
-      <div className="annoy-account-row">
-        {/* Account badges: "Conta Annoy" for every Annoy account; paid plans will add their own. */}
-        <span className="account-badge" title={account.email}><Icon name="check" size={12} />Conta Annoy</span>
-        <strong>{account.name}</strong>
-        <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">Gerenciar</a>
-        <button type="button" className="link-button" aria-label="Sair da conta Annoy" onClick={() => void signOutGlobal()}>Sair</button>
-        {account.cryptoMigrationRequired && <p className="error small">Cofre antigo: <a href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">migre e gere sua chave de recuperação</a> antes de sincronizar servidores.</p>}
-      </div>
-    );
-  }
-  return (
-    <PreferenceCard icon="shield" title="Conta Annoy" description="Entre para sincronizar sua lista de servidores, cifrada neste dispositivo.">
-      <form className="form" onSubmit={(event) => void submit(event)}>
-          <div className="grid-2">
-            <Field label="E-mail">
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
-            </Field>
-            <Field label="Senha">
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
-            </Field>
-          </div>
-          {error && <p className="error small">{error}</p>}
-          <div className="row">
-            <Button type="submit" size="sm" loading={busy}>
-              {busy ? "Protegendo sua senha…" : "Entrar"}
-            </Button>
-            <a href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">
-              Criar conta Annoy
-            </a>
-          </div>
-        </form>
-    </PreferenceCard>
-  );
-}
 
 export function UserSettingsModal() {
   const [page, setPage] = useState(() => {
@@ -458,12 +393,12 @@ export function UserSettingsModal() {
                 <h3><Icon name="users" size={24} />Meu perfil e contas</h3>
                 <p className="muted">Sua identidade em cada instância. As alterações de perfil só são enviadas ao salvar.</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />Trocar de conta</Button>
-                <GlobalAccountCard />
-                {ordered.map((account) => {
+                {(focusId ? ordered.filter((account) => account.id === focusId) : ordered).map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
                       <div className="settings-account" key={account.id}>
+                        {account.annoy && <span className="account-badge" title="Entra com a conta Annoy"><Icon name="check" size={12} />Conta Annoy</span>}
                         <ProfileEditor
                           account={account}
                           user={user}

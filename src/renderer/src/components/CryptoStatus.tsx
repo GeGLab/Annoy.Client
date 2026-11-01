@@ -5,7 +5,10 @@ import {getState,toast,setState} from '../store.ts';
  * encryption settings live in the server and user settings. A failure is reported once as a notice. */
 export function CryptoStatus({accountId,channelId}:{accountId:string;channelId:string}) {
  const reported=useRef('');
- const setError=(message:string)=>{if(message&&message!==reported.current)toast('Envio seguro indisponível: '+message+'. Veja Configurações → Privacidade e segurança.',8000);reported.current=message;};
+ const setError=(message:string)=>{
+  // Lost connectivity is shown by the connection indicators, not as an encryption problem.
+  if(/net::|fetch|network|Conta desconectada|timed out|tempo esgotado/i.test(message)||getState().instances[accountId]?.status!=='ready')return;
+  if(message&&message!==reported.current)toast('Envio seguro indisponível: '+message+'. Veja Configurações → Privacidade e segurança.',8000);reported.current=message;};
  useEffect(()=>{
   let active=true,running=false;
   const poll=async()=>{

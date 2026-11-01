@@ -10,7 +10,7 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
+import { GlobalError, migrateServer, signInServer, signOutGlobal, syncVault, toAccount } from "../global.ts";
 
 export function AddAccountModal() {
   const modal = getState().modal;
@@ -153,8 +153,13 @@ export function AddAccountModal() {
 
 export function SwitchAccountModal() {
   const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
+  const annoy = useStore((s) => s.global);
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
-  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="annoy-account-row switcher-annoy">{annoy
+    ? <><span className="account-badge"><Icon name="check" size={12} />Conta Annoy</span><strong>{annoy.name}</strong><span className="muted">{annoy.email}</span><button type="button" className="link-button" aria-label="Sair da conta Annoy" onClick={() => void signOutGlobal()}>Sair</button></>
+    : <><span className="muted">Sem conta Annoy conectada.</span><button type="button" className="link-button" onClick={() => openModal({ kind: "addAccount" })}>Entrar com a conta Annoy</button></>}
+  </div><div className="saved-accounts">
+    {accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
     {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.instanceName} · Conectada</small></span><Icon name="check" /></button><Tooltip content="Sair desta conta"><button className="icon-btn" aria-label={`Sair de ${name}`} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
     {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
   </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;

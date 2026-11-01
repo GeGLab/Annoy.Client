@@ -28,6 +28,7 @@ import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings }
 import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type CreatableChannel, type Settings } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, openModal, type IconName } from "./ui.tsx";
+import { Button } from "./ui/button.tsx";
 import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../noise.ts";
 import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
@@ -227,6 +228,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const canRoles = has(state.permissions, Permission.MANAGE_ROLES);
   const canBans = has(state.permissions, Permission.BAN_MEMBERS);
   const canServer = has(state.permissions, Permission.MANAGE_SERVER);
+  const instanceAdmin = !!getState().instances[accountId]?.instance?.isAdmin;
   const api = apiFor(accountId);
   const role = state.roles.find((r) => r.id === roleId) ?? null;
   const alone = state.members.length === 1 && state.members[0]?.user.id === me;
@@ -264,7 +266,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             Banimentos
           </button>
         )}
-        {window.distopic?.crypto && (
+        {(window.distopic?.crypto || instanceAdmin) && (
           <button className={tab === "advanced" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("advanced"))}>
             Avançado
           </button>
@@ -370,12 +372,19 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
       {tab === "advanced" && (
         <div className="form">
-          <h3>Criptografia de ponta a ponta</h3>
-          <ChannelEncryption
+          {instanceAdmin && (
+            <>
+              <h3>Instância</h3>
+              <p className="muted">Usuários, cadastro, atualizações e contas desta instância inteira, não só deste servidor.</p>
+              <Button variant="secondary" onClick={() => openModal({ kind: "instanceAdmin", accountId })}>Administrar instância</Button>
+            </>
+          )}
+          {window.distopic?.crypto && <h3>Criptografia de ponta a ponta</h3>}
+          {window.distopic?.crypto && <ChannelEncryption
             accountId={accountId}
             channels={state.channels.filter((c) => c.type === "text").map((c) => ({ id: c.id, name: "#" + c.name }))}
             members={state.members.filter((m) => m.user.id !== me).map((m) => ({ id: m.user.id, name: displayNameOf(m) }))}
-          />
+          />}
         </div>
       )}
     </Modal>

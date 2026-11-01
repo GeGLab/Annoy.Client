@@ -135,7 +135,8 @@ test("global logout closes an active browser and blocks reopening it immediately
     });
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(1);
     await page.getByRole("button", { name: "Mensagens diretas", exact: true }).click();
-    await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    // The Annoy account is managed in the account switcher, apart from every server account.
+    await page.evaluate(async () => { const { setState } = await import(`${location.origin}/src/store.ts`); setState((s: any) => { s.modal = { kind: "switchAccount" }; }); });
     await page.getByRole("button", { name: "Sair da conta Annoy", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
     await page.evaluate(async () => {
