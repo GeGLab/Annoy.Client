@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {randomBytes,createPrivateKey,createPublicKey,sign,verify} from 'node:crypto';
 import {MlsService,type MlsMember} from './mls-service.ts';
 
@@ -26,7 +27,7 @@ const group=(c:Pick<Call,'instance'>,callId:string)=>'annoy/media/v1/'+c.instanc
 export class MediaCalls {
  private calls=new Map<string,Call>();private purged=false;
  constructor(private readonly host:MediaHost){}
- private call(handle:string):Call{const call=this.calls.get(handle);if(!call)throw new Error('Chamada criptografada encerrada');return call;}
+ private call(handle:string):Call{const call=this.calls.get(handle);if(!call)throw new Error(translate("common.400aa6c88ff6"));return call;}
  private serial<T>(call:Call,work:()=>Promise<T>):Promise<T>{const task=call.tail.catch(()=>{}).then(work);call.tail=task;return task;}
 
  async open(url:string,token:string,channel:string):Promise<string>{
@@ -40,8 +41,8 @@ export class MediaCalls {
  attach(handle:string,sink:MediaKeySink):void{const call=this.call(handle);call.sink?.close();call.sink=sink;}
 
  private async engineFor(call:Call,callId:string):Promise<{engine:MlsService;binding:MediaBinding}>{
-  if(!CALL_ID.test(callId))throw new Error('Identificador de chamada inválido');
-  if(call.engine)throw new Error('Esta chamada já tem um grupo de mídia');
+  if(!CALL_ID.test(callId))throw new Error(translate("common.2ad86e29d4fe"));
+  if(call.engine)throw new Error(translate("common.c1b93872c1aa"));
   const id='media:'+randomBytes(16).toString('hex');
   const engine=this.host.engine(id,identityOf(call,callId,{userId:call.userId,deviceId:call.deviceId}));
   const {key}=await engine.command<{key:string}>({op:'public_key'});
@@ -66,15 +67,15 @@ export class MediaCalls {
 
  /** Verifies a device binding with the user's pinned directory; a failure blocks the commit. */
  private async verified(call:Call,callId:string,binding:MediaBinding,cache:Map<string,{id:string;public_key:string}[]>):Promise<MlsMember>{
-  if(!binding||typeof binding.userId!=='string'||typeof binding.deviceId!=='string'||typeof binding.mediaKey!=='string'||typeof binding.signature!=='string')throw new Error('Vínculo de mídia inválido');
+  if(!binding||typeof binding.userId!=='string'||typeof binding.deviceId!=='string'||typeof binding.mediaKey!=='string'||typeof binding.signature!=='string')throw new Error(translate("common.f8f11955e56e"));
   let devices=cache.get(binding.userId);if(!devices){devices=await this.host.directory(call.url,call.token,binding.userId);cache.set(binding.userId,devices);}
-  const device=devices.find(d=>d.id===binding.deviceId);if(!device)throw new Error('Dispositivo da chamada não é confiável');
+  const device=devices.find(d=>d.id===binding.deviceId);if(!device)throw new Error(translate("common.5b087a39daf6"));
   let valid=false;try{valid=verify(null,statement(call,callId,binding),createPublicKey({key:{kty:'OKP',crv:'Ed25519',x:device.public_key},format:'jwk'}),Buffer.from(binding.signature,'base64url'));}catch{valid=false;}
-  if(!valid)throw new Error('Assinatura do dispositivo da chamada inválida; mídia bloqueada');
+  if(!valid)throw new Error(translate("common.7f2df5e880ee"));
   return {index:0,identity:identityOf(call,callId,binding),signature_key:binding.mediaKey};
  }
  private async trusted(call:Call,bindings:MediaBinding[]):Promise<MlsMember[]>{
-  if(!Array.isArray(bindings)||bindings.length>256)throw new Error('Lista de participantes inválida');
+  if(!Array.isArray(bindings)||bindings.length>256)throw new Error(translate("common.9c638524dab9"));
   const cache=new Map<string,{id:string;public_key:string}[]>(),members:MlsMember[]=[];
   for(const binding of bindings){members.push(await this.verified(call,call.callId!,binding,cache));call.roster.set(binding.deviceId,binding);}
   for(const id of [...call.roster.keys()])if(!bindings.some(b=>b.deviceId===id))call.roster.delete(id);
@@ -129,7 +130,7 @@ export class MediaCalls {
  private async publish(call:Call,epoch:string):Promise<void>{
   const engine=call.engine!;
   const key=await engine.mediaKey(group(call,call.callId!),epoch);
-  try{call.epoch=epoch;if(!call.sink)throw new Error('Worker de mídia ausente');call.sink.post(key.epoch,key.senderIndex,key.key);}finally{key.key.fill(0);}
+  try{call.epoch=epoch;if(!call.sink)throw new Error(translate("common.0a1ed9797eef"));call.sink.post(key.epoch,key.senderIndex,key.key);}finally{key.key.fill(0);}
  }
  private async retire(call:Call):Promise<void>{const engine=call.engine;call.engine=null;call.engineId=null;call.epoch=null;call.pending=null;call.pendingEpoch=null;if(engine)await engine.retireMedia();}
  /** Leaving: the engine record with every snapshot of this call is deleted. */

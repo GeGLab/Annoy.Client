@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { version } from "../../../../package.json";
 import { compareVersions } from "../../../shared/update.ts";
 import type { InstanceInfo } from "@distopic/protocol";
@@ -10,4 +11,4 @@ export const clientAccepted = (info: Pick<InstanceInfo, "minClientVersion">): bo
   !info.minClientVersion || compareVersions(CLIENT_VERSION, info.minClientVersion) >= 0;
 
 export const updateRequired = (info: Pick<InstanceInfo, "minClientVersion">): string =>
-  `Atualize o Annoy: este servidor exige a versão ${info.minClientVersion} ou mais nova (você tem a ${CLIENT_VERSION}).`;
+  translate("common.b7fc2e9eddb1",{p0:(info.minClientVersion),p1:(CLIENT_VERSION)});

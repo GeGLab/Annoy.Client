@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {z} from 'zod';
 import {LIMITS} from '@distopic/protocol';
 const id=z.string().min(1).max(100);
@@ -14,5 +15,5 @@ const schema=z.discriminatedUnion('kind',[
 export type AppPayload=z.infer<typeof schema>;
 export function parsePayload(text:string):AppPayload {
  try{const result=schema.safeParse(JSON.parse(text));if(result.success)return result.data;}catch{}
- throw new Error('Conteúdo de mensagem inválido');
+ throw new Error(translate("common.6c0a3c027d5d"));
 }

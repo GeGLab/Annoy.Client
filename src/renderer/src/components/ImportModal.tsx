@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
 import { Select } from "./ui/select.tsx";
@@ -10,11 +12,11 @@ import { setState, toast, useStore } from "../store.ts";
 import { closeModal, Field, Icon, Modal } from "./ui.tsx";
 
 const DEV_PORTAL = "https://discord.com/developers/applications";
-const LIMITS = [
-  { label: "Últimas 100", value: 100 },
-  { label: "Últimas 1.000", value: 1000 },
-  { label: "Últimas 10.000", value: 10_000 },
-  { label: "Histórico completo", value: null },
+let LIMITS = [
+  { label: translate("common.5c24ea45a646"), value: 100 },
+  { label: translate("common.c0d281264e64"), value: 1000 },
+  { label: translate("common.ce53e49d1947"), value: 10_000 },
+  { label: translate("common.311c2f32bdb4"), value: null },
 ] as const;
 
 type Step =
@@ -39,40 +41,27 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
   };
   return (
     <form className="form" onSubmit={submit}>
-      <p className="muted">
-        A importação usa um bot pela API oficial do Discord. Sua conta não é usada, então não há risco de banimento. Para preparar o bot:
-      </p>
+      <p className="muted">{translate("common.d2cccc3bfc19")}</p>
       <ol className="steps">
-        <li>
-          No{" "}
-          <a href={DEV_PORTAL} target="_blank" rel="noreferrer">
-            portal de desenvolvedores
-          </a>
-          , crie uma aplicação (<strong>New Application</strong>).
-        </li>
-        <li>
-          Na aba <strong>Bot</strong>, ative <strong>Message Content Intent</strong> (sem ela as mensagens chegam vazias) e copie o token em{" "}
-          <strong>Reset Token</strong>.
-        </li>
-        <li>Cole o token abaixo; no próximo passo você adiciona o bot ao seu servidor com um link pronto.</li>
+        <li>{rich("common.78076469b576",{p0:(<a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>),p1:(<strong>{translate("common.6386dc360341")}</strong>)})}</li>
+        <li>{rich("common.29602d85caaf",{p0:(<strong>{translate("common.41e35ba1a1fd")}</strong>),p1:(<strong>{translate("common.e24b44ae6f40")}</strong>),p2:(<strong>{translate("common.74b3ca264e52")}</strong>)})}</li>
+        <li>{translate("common.607cd4cd05aa")}</li>
       </ol>
-      <Field label="Token do bot" hint="Usado só durante a importação; o Annoy não salva o token">
+      <Field label={translate("common.973157512cfd")} hint={translate("common.ed96d8977e3f")}>
         <Input
           type="password"
           autoFocus
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder="MTIz…"
+          placeholder={translate("common.02555581b0aa")}
           autoComplete="off"
           required
         />
       </Field>
       <div className="form-actions">
-        <button type="button" className="btn btn-ghost" onClick={closeModal}>
-          Cancelar
-        </button>
+        <button type="button" className="btn btn-ghost" onClick={closeModal}>{translate("common.bb9dbb406dcb")}</button>
         <button className="btn" disabled={busy || token.trim().length < 30}>
-          {busy ? "Verificando…" : "Continuar"}
+          {busy ? translate("update.checking") : translate("common.63e2bbaf1c92")}
         </button>
       </div>
     </form>
@@ -116,27 +105,20 @@ function GuildStep({
   };
   return (
     <div className="form">
-      <p className="muted">
-        Bot conectado: <strong>{list.bot.username}</strong>. Ele só vê os servidores em que foi adicionado. Adicionar exige a permissão
-        "Gerenciar servidor" no Discord.
-      </p>
+      <p className="muted">{rich("common.1b4c81917852",{p0:(<strong>{list.bot.username}</strong>)})}</p>
       <div className="guild-grid">
         {list.guilds.map((g) => (
           <button key={g.id} className="guild-card" onClick={() => void pick(g)} disabled={busy !== null}>
             {g.iconUrl ? <img src={g.iconUrl} alt="" /> : <span className="guild-initials">{initials(g.name)}</span>}
             <span className="truncate">{g.name}</span>
-            {busy === g.id && <span className="muted small">lendo…</span>}
+            {busy === g.id && <span className="muted small">{translate("common.1cd2b46670dc")}</span>}
           </button>
         ))}
-        {list.guilds.length === 0 && <p className="muted">O bot ainda não está em nenhum servidor.</p>}
+        {list.guilds.length === 0 && <p className="muted">{translate("common.2fcbda924218")}</p>}
       </div>
       <div className="form-actions">
-        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">
-          <Icon name="userPlus" size={16} /> Adicionar o bot a um servidor
-        </a>
-        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>
-          <Icon name="refresh" size={16} /> Atualizar lista
-        </button>
+        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">{rich("common.74e527cc852e",{p0:(<Icon name="userPlus" size={16} />)})}</a>
+        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>{rich("common.ea6b1b832c3c",{p0:(<Icon name="refresh" size={16} />)})}</button>
       </div>
     </div>
   );
@@ -199,7 +181,7 @@ function SelectStep({
           <Icon name={c.kind === "voice" ? "speaker" : "hash"} size={14} />
           <span className="truncate">{c.name}</span>
           {c.label !== "texto" && c.label !== "voz" && <span className="tag">{c.label}</span>}
-          {!supported && <span className="muted small">sem equivalente</span>}
+          {!supported && <span className="muted small">{translate("common.87a20d260545")}</span>}
         </label>
         {c.kind === "text" && (
           <label className="check history">
@@ -207,9 +189,7 @@ function SelectStep({
               checked={historyIds.has(c.id)}
               disabled={true}
               onChange={(e) => setHistoryIds((s) => toggle(s, [c.id], e.target.checked))}
-            />
-            histórico
-          </label>
+            />{translate("common.c91b5726e58e")}</label>
         )}
       </div>
     );
@@ -244,25 +224,25 @@ function SelectStep({
 
   return (
     <div className="form import-select">
-      <p role="note">A importação pelo servidor preserva estrutura e permissões. Mensagens e anexos do Discord não são copiados em texto claro. Exporte o histórico no seu cliente Discord e envie o arquivo como anexo cifrado no Annoy; ele continuará identificado como uma cópia de origem legada.</p>
+      <p role="note">{translate("common.d2c4dee4495b")}</p>
       <section>
-        <h3>Destino</h3>
+        <h3>{translate("common.8e7290e44546")}</h3>
         <RadioGroup
-          label="Destino da importação"
+          label={translate("common.6a81e1948fc5")}
           value={target}
           onValueChange={(value) => setTarget(value as "new" | "existing")}
           options={[
-            { value: "new", label: "Novo servidor" },
+            { value: "new", label: translate("common.29cbaeccd1bd") },
             {
               value: "existing",
-              label: "Servidor existente",
+              label: translate("common.56d5a50ea724"),
               disabled: owned.length === 0,
-              hint: owned.length === 0 ? "Você não é dono de nenhum servidor nesta instância" : undefined,
+              hint: owned.length === 0 ? translate("common.288ccc873114") : undefined,
             },
           ]}
         />
         {target === "new" ? (
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Nome do servidor" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder={translate("common.87f8ee74878a")} />
         ) : (
           <Select value={serverId} onChange={(e) => setServerId(e.target.value)}>
             {owned.map((s) => (
@@ -276,7 +256,7 @@ function SelectStep({
 
       <section>
         <div className="section-head">
-          <h3>Canais</h3>
+          <h3>{translate("common.dacf0de78182")}</h3>
           <span className="spacer" />
           <button
             className="link-btn"
@@ -286,9 +266,7 @@ function SelectStep({
                 true,
               )
             }
-          >
-            todos
-          </button>
+          >{translate("common.c8f7ce276036")}</button>
           <button
             className="link-btn"
             onClick={() =>
@@ -297,15 +275,9 @@ function SelectStep({
                 false,
               )
             }
-          >
-            nenhum
-          </button>
-          <button className="link-btn" disabled onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>
-            histórico em todos
-          </button>
-          <button className="link-btn" onClick={() => setHistoryIds(new Set())}>
-            sem histórico
-          </button>
+          >{translate("common.76e1824b75a3")}</button>
+          <button className="link-btn" disabled onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>{translate("common.04bb71a57546")}</button>
+          <button className="link-btn" onClick={() => setHistoryIds(new Set())}>{translate("common.af1c241e6792")}</button>
         </div>
         <div className="import-tree">
           {tree.loose.map((c) => row(c, false))}
@@ -330,21 +302,21 @@ function SelectStep({
       </section>
 
       <section>
-        <h3>Cargos</h3>
+        <h3>{translate("common.0ca317ead9f6")}</h3>
         <div className="role-picks">
           {roles.map((r) => (
             <label key={r.id} className="check role-pick">
               <Checkbox checked={roleIds.has(r.id)} onChange={(e) => setRoleIds((s) => toggle(s, [r.id], e.target.checked))} />
               <span className="role-dot" style={{ background: r.color ?? "var(--text-muted)" }} />
-              {r.id === guild.id ? "Permissões de @everyone" : r.name}
-              {r.managed && <span className="tag">bot</span>}
+              {r.id === guild.id ? translate("common.d77d29cd893a") : r.name}
+              {r.managed && <span className="tag">{translate("common.9d74932bdb6f")}</span>}
             </label>
           ))}
         </div>
       </section>
 
       <section className="grid-2">
-        <Field label="Mensagens por canal">
+        <Field label={translate("common.c628a0bcecba")}>
           <Select disabled value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
             {LIMITS.map((l) => (
               <option key={String(l.value)} value={String(l.value)}>
@@ -355,42 +327,37 @@ function SelectStep({
         </Field>
         <div className="option-checks">
           <label className="check">
-            <Checkbox disabled checked={false} onChange={(e) => setAttachments(e.target.checked)} /> Baixar anexos
-          </label>
+            <Checkbox disabled checked={false} onChange={(e) => setAttachments(e.target.checked)} />{translate("common.58a57c789eca")}</label>
           <label className="check">
-            <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} /> Permissões por canal
-          </label>
+            <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} />{translate("common.fe60feaa1250")}</label>
         </div>
       </section>
 
-      <p className="muted small">
-        {channelIds.size} canais/categorias · {selectedHistory.length} com histórico · {[...roleIds].filter((id) => id !== guild.id).length}{" "}
-        cargos. Os autores das mensagens viram perfis importados (sem login); membros do Discord não viram contas aqui.
-      </p>
+      <p className="muted small">{rich("common.96e9752d1c77",{p0:(channelIds.size),p1:(selectedHistory.length),p2:([...roleIds].filter((id) => id !== guild.id).length)})}</p>
       <div className="form-actions">
         <button
           className="btn"
           onClick={() => void start()}
           disabled={busy || channelIds.size === 0 || (target === "existing" && !serverId)}
         >
-          {busy ? "Iniciando…" : "Importar"}
+          {busy ? translate("common.d86987681ea3") : translate("common.e7f0e6d956c1")}
         </button>
       </div>
     </div>
   );
 }
 
-const PHASE_LABEL: Record<ImportJob["phase"], string> = {
+let PHASE_LABEL: Record<ImportJob["phase"], string> = {
   structure: "Criando cargos e canais…",
-  messages: "Copiando histórico…",
-  done: "Importação concluída",
-  failed: "Importação falhou",
-  cancelled: "Importação cancelada",
+  messages: translate("common.17212671aa2e"),
+  done: translate("common.db003659b843"),
+  failed: translate("common.5d8a36ef7254"),
+  cancelled: translate("common.bb9811b14ec4"),
 };
 
 function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }) {
   const job = useStore((s) => s.instances[accountId]?.imports[jobId]);
-  if (!job) return <p className="muted">Aguardando o servidor…</p>;
+  if (!job) return <p className="muted">{translate("common.fbe9f251d052")}</p>;
   const running = job.phase === "structure" || job.phase === "messages";
   const pct = job.channelsTotal ? Math.round((job.channelsDone / job.channelsTotal) * 100) : job.phase === "done" ? 100 : 0;
   return (
@@ -399,18 +366,14 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       <div className="progress">
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small">
-        {job.channelsDone}/{job.channelsTotal} canais · {job.messagesImported.toLocaleString("pt-BR")} mensagens · {job.attachmentsImported}{" "}
-        anexos
-        {job.currentChannel && running ? ` · agora em #${job.currentChannel}` : ""}
-      </p>
+      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? translate("common.405beaea7ce4",{p0:job.currentChannel}) : "")})}</p>
       {job.error && <p className="error">{job.error}</p>}
       {(job.phase === "cancelled" || job.phase === "failed") && job.serverId && (
-        <p className="muted small">O que já foi importado continua no servidor; exclua-o nas configurações se quiser recomeçar.</p>
+        <p className="muted small">{translate("common.ea9c5c602d8b")}</p>
       )}
       {job.warnings.length > 0 && (
         <details className="warnings" open={!running}>
-          <summary>{job.warnings.length} aviso(s)</summary>
+          <summary>{rich("common.0046ab6cd135",{p0:(job.warnings.length)})}</summary>
           <ul>
             {job.warnings.map((w) => (
               <li key={w}>{w}</li>
@@ -427,9 +390,7 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
                 .post(`/import/jobs/${job.id}/cancel`)
                 .catch((e: Error) => toast(e.message))
             }
-          >
-            Cancelar
-          </button>
+          >{translate("common.bb9dbb406dcb")}</button>
         )}
         {job.serverId && (
           <button
@@ -439,7 +400,7 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
               void openServer(accountId, job.serverId!);
             }}
           >
-            {running ? "Abrir enquanto importa" : "Abrir servidor"}
+            {running ? translate("common.09f2077bd172") : translate("common.11a2ff46627c")}
           </button>
         )}
       </div>
@@ -452,12 +413,12 @@ export function ImportDiscordModal({ accountId, serverId }: { accountId: string;
   const [token, setToken] = useState("");
   const title =
     step.kind === "token"
-      ? "Importar do Discord"
+      ? translate("common.022e40704be5")
       : step.kind === "guild"
-        ? "Escolha o servidor do Discord"
+        ? translate("common.0755cbf85063")
         : step.kind === "select"
-          ? `Importar ${step.structure.guild.name}`
-          : "Importando";
+          ? translate("common.f99829a56b4a",{p0:(step.structure.guild.name)})
+          : translate("common.8ff2229fb5e9");
 
   return (
     <Modal title={title} wide={step.kind === "select"}>
@@ -481,9 +442,7 @@ export function ImportDiscordModal({ accountId, serverId }: { accountId: string;
       )}
       {step.kind === "select" && (
         <>
-          <button className="link-btn back" onClick={() => setStep({ kind: "guild", list: step.list })}>
-            ← outro servidor
-          </button>
+          <button className="link-btn back" onClick={() => setStep({ kind: "guild", list: step.list })}>{translate("common.77668da99fa8")}</button>
           <SelectStep
             accountId={accountId}
             token={token}
@@ -497,3 +456,17 @@ export function ImportDiscordModal({ accountId, serverId }: { accountId: string;
     </Modal>
   );
 }
+
+onLocalizationChange(()=>{LIMITS=[
+  { label: translate("common.5c24ea45a646"), value: 100 },
+  { label: translate("common.c0d281264e64"), value: 1000 },
+  { label: translate("common.ce53e49d1947"), value: 10_000 },
+  { label: translate("common.311c2f32bdb4"), value: null },
+] as const;});
+onLocalizationChange(()=>{PHASE_LABEL={
+  structure: "Criando cargos e canais…",
+  messages: translate("common.17212671aa2e"),
+  done: translate("common.db003659b843"),
+  failed: translate("common.5d8a36ef7254"),
+  cancelled: translate("common.bb9811b14ec4"),
+};});

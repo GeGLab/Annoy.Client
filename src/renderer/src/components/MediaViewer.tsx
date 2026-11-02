@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import { Slider } from "./ui/slider.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
@@ -54,7 +56,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
       try {
         await element.play();
       } catch {
-        setError("Não foi possível reproduzir este arquivo. O formato pode não ser compatível ou a conexão foi interrompida.");
+        setError(translate("common.b474ebbad082"));
       }
   };
   const events = {
@@ -71,7 +73,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
     onCanPlay: () => setLoading(false),
     onError: () => {
       setLoading(false);
-      setError("Não foi possível carregar a mídia. Verifique a conexão ou tente um arquivo MP4, WebM, MP3, OGG ou WAV compatível.");
+      setError(translate("common.5f3f3112fdb1"));
     },
   };
   return (
@@ -81,9 +83,9 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
           <Icon name={video ? "film" : "music"} size={22} />
           <div className="viewer-file-info">
             <DialogTitle className="truncate">{media.filename}</DialogTitle>
-            <span className="muted small">{video ? "Vídeo" : "Áudio"} · Player Annoy</span>
+            <span className="muted small">{rich("common.f8a2ed698698",{p0:(video ? translate("common.bc10c86c24b5") : translate("common.195c60bb2325"))})}</span>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar player">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={translate("common.6efb3d8ad1c1")}>
             <Icon name="x" />
           </Button>
         </header>
@@ -102,15 +104,12 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
               <audio ref={player as React.RefObject<HTMLAudioElement>} src={media.url} preload="metadata" {...events} />
               <div className={`audio-artwork${playing ? " playing" : ""}`}>
                 <Icon name="music" size={52} />
-                <span>Seu som, no seu espaço.</span>
+                <span>{translate("common.4e162c749db1")}</span>
               </div>
             </>
           )}
           {loading && !error && (
-            <span className="media-buffering" role="status">
-              <Icon name="loader" />
-              Carregando mídia…
-            </span>
+            <span className="media-buffering" role="status">{rich("common.0493f0fee73c",{p0:(<Icon name="loader" />)})}</span>
           )}
           {error && (
             <div className="media-error" role="alert">
@@ -123,15 +122,13 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
                   setLoading(true);
                   player.current?.load();
                 }}
-              >
-                Tentar novamente
-              </Button>
+              >{translate("common.b9e10688be01")}</Button>
             </div>
           )}
         </div>
         <div className="media-controls">
           <label className="media-seek">
-            <span className="sr-only">Posição da reprodução</span>
+            <span className="sr-only">{translate("common.85a9df80b812")}</span>
             <Slider
               min={0}
               max={Number.isFinite(duration) && duration > 0 ? duration : 1}
@@ -151,7 +148,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
               variant="ghost"
               onClick={() => void toggle()}
               disabled={!!error}
-              aria-label={playing ? "Pausar" : "Reproduzir"}
+              aria-label={playing ? translate("common.cd25ee5b1db8") : translate("common.13e746eb73b0")}
             >
               <Icon name={playing ? "pause" : "play"} size={23} />
             </Button>
@@ -161,7 +158,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
             <Button
               variant="ghost"
               size="icon"
-              aria-label={volume ? "Silenciar mídia" : "Ativar som da mídia"}
+              aria-label={volume ? translate("common.1a726285b9ed") : translate("common.5aa4dbf226f1")}
               onClick={() => {
                 const next = volume ? 0 : 1;
                 setVolume(next);
@@ -172,7 +169,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
             </Button>
             <Slider
               className="media-volume"
-              aria-label="Volume da mídia"
+              aria-label={translate("common.1947d055ccdd")}
 
               min={0}
               max={1}
@@ -187,7 +184,7 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
             <span className="spacer" />
             <Select
               portalContainer={fullscreenRoot instanceof HTMLElement ? fullscreenRoot : undefined}
-              aria-label="Velocidade de reprodução"
+              aria-label={translate("common.f25ef86617d0")}
               className="media-speed"
               value={speed}
               onChange={(e) => {
@@ -205,11 +202,11 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Vídeo em tela cheia"
+                aria-label={translate("common.c4f93dbaf44f")}
                 onClick={() => {
                   if (document.fullscreenElement) void document.exitFullscreen();
                   else if (container.current?.parentElement?.requestFullscreen)
-                    void container.current.parentElement.requestFullscreen().catch(() => setError("Não foi possível abrir em tela cheia."));
+                    void container.current.parentElement.requestFullscreen().catch(() => setError(translate("common.2de9dc35cfe3")));
                 }}
               >
                 <Icon name="maximize" />
@@ -218,12 +215,14 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
           </div>
         </div>
         <footer className="media-footer">
-          <span>Esc para fechar</span>
-          <a href={media.url} target="_blank" rel="noreferrer">
-            Abrir arquivo original <Icon name="external" size={13} />
-          </a>
+          <span>{translate("common.a092c0f470be")}</span>
+          <a href={media.url} target="_blank" rel="noreferrer">{rich("common.7dbf0da46b54",{p0:(<Icon name="external" size={13} />)})}</a>
         </footer>
       </DialogContent>
     </Dialog>
   );
 }
+
+
+
+

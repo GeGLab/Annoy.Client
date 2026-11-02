@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
@@ -40,8 +41,8 @@ export async function callAction(action: "accept" | "reject" | "end") {
   if (!entry) return;
   const encrypted = entry.call.protection === "sframe";
   if (action === "accept") {
-    if (encrypted && !callEncryptionSupported()) return toast("Esta chamada é criptografada de ponta a ponta e precisa do aplicativo Annoy para desktop.");
-    if (!encrypted) toast("Esta chamada não tem criptografia de ponta a ponta.", 6000);
+    if (encrypted && !callEncryptionSupported()) return toast(translate("common.924656d6c0c5"));
+    if (!encrypted) toast(translate("common.c8095a61e755"), 6000);
     if (getState().directCall?.call.id !== entry.call.id) return;
     leaveVoice();
   }
@@ -49,11 +50,11 @@ export async function callAction(action: "accept" | "reject" | "end") {
   if (action !== "accept") { cleanup(); setState((s) => { s.directCall = null; }); }
 }
 export async function startDirectCall(accountId: string, userId: string, video: boolean) {
-  if (getState().instances[accountId]?.status !== "ready") return toast("Sem conexão com o servidor para iniciar a chamada.");
-  if (!getState().instances[accountId]?.instance?.directCalls) return toast("Esta instância precisa ser atualizada para chamadas privadas.");
-  if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
+  if (getState().instances[accountId]?.status !== "ready") return toast(translate("common.94c2e2f7ad46"));
+  if (!getState().instances[accountId]?.instance?.directCalls) return toast(translate("common.15fbe9001510"));
+  if (getState().directCall) return toast(translate("common.f56448863241"));
   let encrypted = callEncryptionSupported();
-  if (!encrypted) toast("Esta chamada não terá criptografia de ponta a ponta.", 6000);
+  if (!encrypted) toast(translate("common.c8d9842c8940"), 6000);
   try {
     leaveVoice();
     let call: DirectCall;
@@ -61,12 +62,12 @@ export async function startDirectCall(accountId: string, userId: string, video: 
     catch (error) {
       // Servers before SFrame refuse the encrypted request: ask before calling without it.
       if (!encrypted || !/SFrame|E2EE/.test((error as Error).message)) throw error;
-      toast("Este servidor ainda não oferece chamadas com criptografia de ponta a ponta.", 6000);
+      toast(translate("common.17d86edbb3bf"), 6000);
       encrypted = false;
       call = await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId, protection: "transport_only_acknowledged" });
     }
     // A server that ignored the request rings without E2EE: say so instead of continuing silently.
-    if (encrypted && call.protection !== "sframe") toast("Este servidor ainda não oferece chamadas com criptografia de ponta a ponta.", 6000);
+    if (encrypted && call.protection !== "sframe") toast(translate("common.17d86edbb3bf"), 6000);
   }
   catch (error) { toast((error as Error).message); }
 }
@@ -90,29 +91,29 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
   connection.onicecandidate = (event) => { if (event.candidate && sessionId === call.id) sendSignal(accountId, call, { candidate: { ...event.candidate.toJSON(), candidate: event.candidate.candidate } }); };
   connection.onconnectionstatechange = () => {
     if (sessionId !== call.id) return;
-    if (connection.connectionState === "failed") { toast("A conexão da chamada falhou. Confira a rede ou a configuração TURN da instância."); callAction("end"); }
+    if (connection.connectionState === "failed") { toast(translate("common.51b873d7167c")); callAction("end"); }
     if (connection.connectionState === "connected") { media = { ...media, connected: true }; emit(); }
   };
   preparing = (async () => {
     if (encrypted) {
       const account = getState().accounts.find((a) => a.id === accountId), gateway = gatewayFor(accountId);
-      if (!account || !gateway) throw new Error("Conta indisponível para a chamada criptografada");
+      if (!account || !gateway) throw new Error(translate("common.d767ea00e698"));
       const signaling = { voice: <T,>(method: "mediaCreate" | "mediaPropose" | "mediaCommit", data: Record<string, unknown>) => gateway.voice<T>(method, { ...data, directCall: call.id }) };
       const started = await CallEncryption.start(signaling, { url: account.url, token: account.token, userId: account.userId }, "call:" + call.id, { callId: null }, (message) => toast(message, 10000));
-      if (sessionId !== call.id) { started.close(); throw new Error("Chamada encerrada"); }
+      if (sessionId !== call.id) { started.close(); throw new Error(translate("common.b868f5fbf270")); }
       crypt = started;
     }
     const settings = getState().settings;
     const mic = await openMic(settings.inputDeviceId, settings.noiseFilter);
-    if (sessionId !== call.id) { mic.stop(); throw new Error("Chamada encerrada"); }
+    if (sessionId !== call.id) { mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
     callMic = mic;
     const stream = new MediaStream([mic.track]);
     if (call.video) {
       const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } });
-      if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error("Chamada encerrada"); }
+      if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
       camera.getVideoTracks().forEach((track) => stream.addTrack(track));
     }
-    if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error("Chamada encerrada"); }
+    if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error(translate("common.b868f5fbf270")); }
     for (const track of stream.getTracks()) {
       if (track.kind === "audio") track.enabled = !settings.selfMute && !settings.selfDeaf;
       const sender = connection.addTrack(track, stream);
@@ -144,7 +145,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       const existed = getState().directCall?.call;
       if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
         window.distopic?.flashWindow();
-        if (!document.hasFocus()) try { const notification = new Notification("Chamada recebida", { body: `${getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? "Um amigo"} está chamando você.`, silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
+        if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: translate("common.beceda3adc2f",{p0:(getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? translate("common.9980aa129514"))}), silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }
       setState((s) => { s.directCall = { accountId, call }; });
       if (call.status === "active" && existed?.status !== "active") {

@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import type { BrowserWindow, IpcMain } from "electron";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../../shared/activity.ts";
 import { probeWindows } from "./windows.ts";
@@ -33,7 +34,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
       snapshot = {
         supported: true,
         activities: [],
-        error: "Não foi possível ler a atividade. A leitura será tentada novamente.",
+        error: translate("desktop.fa615e37dc00"),
       };
     }
     publish();

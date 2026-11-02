@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { MediaSource, VoiceMediaEvent } from "@distopic/protocol";
 import type { FrameStats, StreamKind, TransformOptions } from "./sframe-worker.ts";
 
@@ -24,7 +25,7 @@ function awaitPort(handle: Promise<{ handle: string }>): Promise<{ handle: strin
   return new Promise((resolve, reject) => {
     let wanted: string | null = null;
     const early = new Map<string, MessagePort>();
-    const timer = setTimeout(() => finish(new Error("O canal de chaves da chamada não abriu")), 10_000);
+    const timer = setTimeout(() => finish(new Error(translate("common.ac5b18335e3f"))), 10_000);
     const listener = (event: MessageEvent) => {
       const id = (event.data as { annoyMediaPort?: unknown })?.annoyMediaPort;
       if (event.source !== window || typeof id !== "string" || !event.ports[0]) return;
@@ -34,7 +35,7 @@ function awaitPort(handle: Promise<{ handle: string }>): Promise<{ handle: strin
     const finish = (error: Error | null, port?: MessagePort) => {
       clearTimeout(timer);
       window.removeEventListener("message", listener);
-      if (error || !port) reject(error ?? new Error("Canal de chaves ausente"));
+      if (error || !port) reject(error ?? new Error(translate("common.13d000d62f13")));
       else resolve({ handle: wanted!, port });
     };
     window.addEventListener("message", listener);
@@ -72,11 +73,11 @@ export class CallEncryption {
 
   static async start(signaling: Signaling, account: { url: string; token: string; userId: string }, channelId: string, media: { callId: string | null }, onError: (message: string) => void): Promise<CallEncryption> {
     const bridge = window.distopic?.media;
-    if (!bridge) throw new Error("Este aplicativo não tem o serviço de chamadas criptografadas");
+    if (!bridge) throw new Error(translate("common.e40b5e791434"));
     const worker = new Worker(new URL("./sframe-worker.ts", import.meta.url), { type: "module", name: "annoy-sframe" });
     const call = new CallEncryption(bridge, worker, signaling, account, channelId, onError);
     worker.addEventListener("message", (event) => {
-      if ((event.data as { type?: string })?.type === "failed") call.onError("O módulo SFrame não carregou; a mídia não será enviada.");
+      if ((event.data as { type?: string })?.type === "failed") call.onError(translate("common.f91891cd6292"));
     });
     try {
       await call.begin(media.callId);
@@ -158,7 +159,7 @@ export class CallEncryption {
       }
     } else if (event.kind === "commit") {
       const { removed } = await this.bridge.accept(handle, event);
-      if (removed) this.onError("Você foi removido da chamada criptografada.");
+      if (removed) this.onError(translate("common.71cf220b99c3"));
     } else if (event.kind === "welcome") {
       await this.bridge.welcome(handle, event);
       this.resolveKeyed();

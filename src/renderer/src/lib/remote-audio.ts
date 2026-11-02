@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { normalizeUserVolume } from "../../../shared/user-volume.ts";
 
 export interface AmplifiedAudio {
@@ -27,7 +28,7 @@ export class RemoteAudioMixer {
   }
 
   connect(stream: MediaStream, percent: number, audio: HTMLAudioElement): AmplifiedAudio {
-    if (this.closed) throw new Error("Audio session is closed");
+    if (this.closed) throw new Error(translate("common.31f6d3eadb69"));
     audio.srcObject = stream;
     let closed = false, value = 100, revision = 0;
     let graph: { source: MediaStreamAudioSourceNode; gain: GainNode; destination: MediaStreamAudioDestinationNode; pull: HTMLAudioElement } | null = null;
@@ -100,3 +101,5 @@ export class RemoteAudioMixer {
     this.context = null;
   }
 }
+
+

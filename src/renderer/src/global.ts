@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {secureFetch} from "./secure-fetch.ts";
 // Annoy Global in the app: one account for many servers. The password and the
 // account keys never leave this device; Global keeps the server list only
@@ -185,7 +186,7 @@ async function readVault(): Promise<{ version: number; servers: VaultEntry[] }> 
 /** Read, change, write; on a conflict another device saved first, so start over from its copy. */
 async function updateVault(change: (servers: VaultEntry[]) => VaultEntry[] | null): Promise<void> {
   if (!keys || !session) return;
-  if (getState().global?.cryptoMigrationRequired) throw new Error("Migre o cofre legado antes de sincronizar novos servidores");
+  if (getState().global?.cryptoMigrationRequired) throw new Error(translate("common.02bd1a1ee971"));
   const generation = sessionGeneration, unlocked = keys;
   for (let attempt = 0; attempt < 3; attempt++) {
     const { version, servers } = await readVault();
@@ -269,7 +270,7 @@ let tokenKeys: { at: number; keys: kdf.IssuerKey[]; issueWith: string } | null =
  */
 async function proofFor(url: string, serverId: string, signal?: AbortSignal) {
   const info = await fetchInfo(url, signal);
-  if (info.accountMode === "local" || info.globalServerId !== serverId) throw new GlobalError(403, "account_mode", "Este servidor não aceita esta identidade global");
+  if (info.accountMode === "local" || info.globalServerId !== serverId) throw new GlobalError(403, "account_mode", translate("common.b26cbaab546f"));
   if (!keys || !session) throw new GlobalError(401, "signed_out", "Entre na sua conta Annoy primeiro");
   const generation = sessionGeneration, unlocked = keys;
   const identity = await kdf.serverIdentity(unlocked, serverId);
@@ -323,7 +324,7 @@ export async function migrateServer(url: string, info: InstanceInfo, credentials
   username: string; password?: string; recoveryCode?: string; newPassword?: string;
 }, previousSession?: string): Promise<AuthResponse> {
   const local = info.accountMode === "local";
-  if (!local && !info.globalServerId) throw new GlobalError(503, "global_unavailable", "Login da conta Annoy indisponível");
+  if (!local && !info.globalServerId) throw new GlobalError(503, "global_unavailable", translate("common.df9f30310ead"));
   const generation = sessionGeneration;
   const auth = await request<AuthResponse & { removedUserId?: string | null }>(url, `/api/auth/migrate/${local ? "local" : "global"}`, {
     token: previousSession, body: { ...credentials, ...(!local ? await proofFor(url, info.globalServerId!) : {}) },

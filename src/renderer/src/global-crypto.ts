@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 // Client side of the account crypto (DESIGN.md). Runs in the Annoy app and on
 // the account website through WebCrypto; this API never runs it, it only
 // tests it. Copy it as is: every side must derive the same bytes.
@@ -77,7 +78,7 @@ async function aesSeal(key: CryptoKey, plain: Bytes, label: string): Promise<str
 
 async function aesOpen(key: CryptoKey, sealed: string, label: string): Promise<Bytes> {
   const bytes = fromB64url(sealed);
-  if (bytes[0] !== 1) throw new Error("Unknown format version");
+  if (bytes[0] !== 1) throw new Error(translate("common.7d12e7f43bcd"));
   return new Uint8Array(await subtle.decrypt({ name: "AES-GCM", iv: bytes.subarray(1, 13), additionalData: enc.encode(label) }, key, bytes.subarray(13)));
 }
 
@@ -100,7 +101,7 @@ export function newRecoveryKey(): string {
 
 async function recoveryWrapKey(recoveryKey: string): Promise<CryptoKey> {
   const normalized = recoveryKey.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-  if (normalized.length !== 25) throw new Error("A chave de recuperação tem 25 caracteres");
+  if (normalized.length !== 25) throw new Error(translate("common.2eaea5eda99a"));
   return subtle.deriveKey(hkdfInfo("recovery"), await hkdfKey(enc.encode(normalized)), { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 
@@ -168,3 +169,5 @@ export async function finalizeToken(pending:PendingToken,blindSignature:string):
   return {kid:pending.kid,message:b64url(pending.message),signature:b64url(signature)};
  } finally {pending.inverse.fill(0);}
 }
+
+

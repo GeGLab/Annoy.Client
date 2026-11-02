@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as Popover from "@radix-ui/react-popover";
 import { Command } from "cmdk";
 import { Check, ChevronsUpDown, Search, Shield, UserRound } from "lucide-react";
@@ -18,7 +19,7 @@ export function EntityPicker({
   value,
   onValueChange,
   label,
-  placeholder = "Selecionar…",
+  placeholder = translate("common.bc47be7b044e"),
   disabled = false,
 }: {
   items: PickerEntity[];
@@ -49,7 +50,7 @@ export function EntityPicker({
             {selected && (
               <small>
                 {selected.group}
-                {selected.customized ? " · Permissões personalizadas" : ""}
+                {selected.customized ? translate("common.45df187237ae") : ""}
               </small>
             )}
           </span>
@@ -61,10 +62,10 @@ export function EntityPicker({
           <Command label={label} loop>
             <div className="entity-search">
               <Search size={17} />
-              <Command.Input placeholder="Buscar por nome ou usuário…" />
+              <Command.Input placeholder={translate("common.2c24a3132570")} />
             </div>
             <Command.List>
-              <Command.Empty>Nenhum resultado. Tente outro nome.</Command.Empty>
+              <Command.Empty>{translate("common.015e09c6b5f9")}</Command.Empty>
               {groups.map((group) => (
                 <Command.Group key={group} heading={group}>
                   {items
@@ -83,7 +84,7 @@ export function EntityPicker({
                           <strong>{item.label}</strong>
                           {item.description && <small>{item.description}</small>}
                         </span>
-                        {item.customized && <span className="entity-custom">Personalizado</span>}
+                        {item.customized && <span className="entity-custom">{translate("common.4290938ed5e6")}</span>}
                         {value === item.id && <Check size={16} />}
                       </Command.Item>
                     ))}
@@ -91,9 +92,11 @@ export function EntityPicker({
               ))}
             </Command.List>
           </Command>
-          <p className="entity-hint">Escolha quem terá as permissões abaixo.</p>
+          <p className="entity-hint">{translate("common.f06a1c19b424")}</p>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
+
+

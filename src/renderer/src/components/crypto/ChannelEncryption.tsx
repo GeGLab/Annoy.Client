@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { Field } from "../ui.tsx";
@@ -22,34 +23,34 @@ export function ChannelEncryption({ accountId, channels, members }: { accountId:
     apiFor(accountId).cryptoStatus(channelId).then((status) => current && setActive(status.active), () => current && setActive(false));
     return () => { current = false; };
   }, [accountId, channelId]);
-  if (!channels.length) return <p className="muted">Nenhuma conversa de texto.</p>;
+  if (!channels.length) return <p className="muted">{translate("common.ef6dc37dbbd7")}</p>;
   return (
     <>
-      <Field label="Conversa">
-        <Select value={channelId} onChange={(event) => setChannelId(event.target.value)} aria-label="Conversa">
+      <Field label={translate("common.2377f109281b")}>
+        <Select value={channelId} onChange={(event) => setChannelId(event.target.value)} aria-label={translate("common.2377f109281b")}>
           {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}</option>)}
         </Select>
       </Field>
-      <p className="muted">{active === null ? "Verificando…" : active ? "Mensagens novas cifradas de ponta a ponta (OpenMLS)." : "Ainda sem grupo cifrado: a primeira mensagem segura cria o grupo."}</p>
-      <PreferenceCard icon="users" title="Participantes" description="Confirme quem entra no grupo cifrado. A administração do servidor não recebe chaves.">
-        <Button variant="secondary" onClick={() => void authorizeMembers(accountId, channelId)}>Revisar e autorizar participantes</Button>
+      <p className="muted">{active === null ? translate("update.checking") : active ? translate("common.2d2922c321a0") : translate("common.0b47963a3ffe")}</p>
+      <PreferenceCard icon="users" title={translate("common.aff4a93487ce")} description={translate("common.ed93093cef1e")}>
+        <Button variant="secondary" onClick={() => void authorizeMembers(accountId, channelId)}>{translate("common.929575d76c04")}</Button>
       </PreferenceCard>
-      <PreferenceCard icon="clock" title="Histórico para quem entra" description="Só o administrador criptográfico do canal pode mudar. Mensagens temporárias nunca são compartilhadas.">
-        <RadioGroup label="Histórico para quem entra" value={history} onValueChange={(value) => setHistory(value as typeof history)} options={[
-          { value: "since_join", label: "A partir da entrada" },
-          { value: "share_permanent", label: "Compartilhar mensagens permanentes" },
+      <PreferenceCard icon="clock" title={translate("common.7483ffa24285")} description={translate("common.ae7f8b09878a")}>
+        <RadioGroup label={translate("common.7483ffa24285")} value={history} onValueChange={(value) => setHistory(value as typeof history)} options={[
+          { value: "since_join", label: translate("common.9cf705e80ca6") },
+          { value: "share_permanent", label: translate("common.008095b07de9") },
         ]} />
-        <Field label="Transferir administração criptográfica">
-          <Select value={owner} onChange={(event) => setOwner(event.target.value)} aria-label="Transferir administração criptográfica">
-            <option value="">Manter atual</option>
+        <Field label={translate("common.e913f4e81170")}>
+          <Select value={owner} onChange={(event) => setOwner(event.target.value)} aria-label={translate("common.e913f4e81170")}>
+            <option value="">{translate("common.6258628a7ecb")}</option>
             {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </Select>
         </Field>
-        <Button variant="secondary" onClick={() => void historyPolicy(accountId, channelId, history, owner || null)}>Salvar política</Button>
+        <Button variant="secondary" onClick={() => void historyPolicy(accountId, channelId, history, owner || null)}>{translate("common.46f4d24b9641")}</Button>
       </PreferenceCard>
-      <PreferenceCard icon="download" title="Histórico antigo" description="Mensagens de antes do E2EE ficam separadas e identificadas. Copie-as para o armazenamento local cifrado.">
-        <Button variant="secondary" onClick={() => void importLegacy(accountId, channelId)}>Copiar para o armazenamento local</Button>
-        {active && <Button variant="ghost" onClick={() => setArchive(true)}>Ver histórico antigo</Button>}
+      <PreferenceCard icon="download" title={translate("common.261efb77c20f")} description={translate("common.1509c544b2fe")}>
+        <Button variant="secondary" onClick={() => void importLegacy(accountId, channelId)}>{translate("common.ad88105b7f15")}</Button>
+        {active && <Button variant="ghost" onClick={() => setArchive(true)}>{translate("common.ac8f631399c0")}</Button>}
       </PreferenceCard>
       {archive && <Suspense fallback={null}><LegacyArchive accountId={accountId} channelId={channelId} onClose={() => setArchive(false)} /></Suspense>}
     </>

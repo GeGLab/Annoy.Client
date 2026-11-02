@@ -1,3 +1,7 @@
+import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
+import {requestNavigation} from "./lib/navigation-guard.ts";
+import {flushChatState} from "./chat-state.ts";
+import {t as translate} from "../../shared/localization/index.ts";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { SongDock } from "./features/channels/PlaybackRooms.tsx";
 import { LazyMotion, MotionConfig } from "framer-motion";
@@ -107,6 +111,9 @@ function WorkspaceActivity() {
 const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
+  useEffect(()=>window.distopic?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.distopic?.desktop?.quit().catch(()=>{});})),[]);
+  const localization=useLocalization();
+  useEffect(()=>applyTextPreferences(localization),[localization]);
   const access = useStore(s => s.access.allowed);
   const view = useStore((s) => s.view);
   const service = useStore((s) => (s.view.kind === "service" ? s.services.find((sv) => sv.id === (s.view as { serviceId: string }).serviceId) : undefined));
@@ -243,7 +250,7 @@ export function App() {
       </div>
       </div>
       </>}
-      <Suspense fallback={<div className="overlay-loading" role="status">Abrindo…</div>}><AccountPolicyNotice /><Modals /></Suspense>
+      <Suspense fallback={<div className="overlay-loading" role="status">{translate("common.0911dfa616da")}</div>}><AccountPolicyNotice /><Modals /></Suspense>
       <MandatoryUpdate />
       <ActionDialogHost />
       {access && <DirectCallPanel />}

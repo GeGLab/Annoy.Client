@@ -1,3 +1,4 @@
+import {t as translate} from "../shared/localization/index.ts";
 import { LOCKED_ACCESS, type AppAccessState } from "../shared/app-access.ts";
 import {secureHttpUrl} from '../shared/transport.ts';
 
@@ -16,16 +17,16 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
   async function json(url: string, token?: string): Promise<Record<string, unknown>> {
     secureHttpUrl(url);
     const res = await request(url, { headers: token ? { authorization: `Bearer ${token}` } : {}, redirect: "error", signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) throw new Error("Sessão inválida. Entre novamente.");
+    if (!res.ok) throw new Error(translate("common.e6f8f72dc126"));
     return await res.json() as Record<string, unknown>;
   }
   async function verifyGlobal(token: unknown): Promise<GlobalUser> {
-    if (typeof token !== "string" || !token || token.length > 4096) throw new Error("Credencial inválida");
+    if (typeof token !== "string" || !token || token.length > 4096) throw new Error(translate("common.527237896617"));
     const version = ++globalVersion;
     try {
       const user = await json(`${globalUrl}/v1/me`, token);
-      if (version !== globalVersion) throw new Error("Autenticação cancelada");
-      if (typeof user.id !== "string" || !user.id || typeof user.name !== "string" || typeof user.email !== "string") throw new Error("Conta Annoy inválida");
+      if (version !== globalVersion) throw new Error(translate("common.459edfa35541"));
+      if (typeof user.id !== "string" || !user.id || typeof user.name !== "string" || typeof user.email !== "string") throw new Error(translate("common.a449c449c31a"));
       globalToken = token; publish();
       return { id: user.id, name: user.name, email: user.email, ...(user.cryptoMigrationRequired===true?{cryptoMigrationRequired:true}:{}) };
     } catch (err) {
@@ -35,7 +36,7 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
   }
   async function verifyLocal(raw: unknown): Promise<void> {
     const account = raw as Partial<LocalCredential> | null;
-    if (!account || typeof account.id !== "string" || typeof account.url !== "string" || typeof account.token !== "string" || typeof account.userId !== "string" || !account.token || account.token.length > 4096) throw new Error("Credencial local inválida");
+    if (!account || typeof account.id !== "string" || typeof account.url !== "string" || typeof account.token !== "string" || typeof account.userId !== "string" || !account.token || account.token.length > 4096) throw new Error(translate("common.2587fca90678"));
     const credential = account as LocalCredential;
     const version = (versions.get(credential.id) ?? 0) + 1;
     versions.set(credential.id, version);
@@ -44,10 +45,10 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
       const url = secureHttpUrl(credential.url);
       const info = await json(`${url.origin}/api/info`);
       // Servers before account modes have no accountMode field and keep local accounts.
-      if (info.accountMode === "global") throw new Error("Este servidor exige conta Annoy");
+      if (info.accountMode === "global") throw new Error(translate("common.5c70ad1c4b31"));
       const me = await json(`${url.origin}/api/users/@me`, credential.token);
-      if (started !== epoch || version !== versions.get(credential.id)) throw new Error("Autenticação cancelada");
-      if (me.id !== credential.userId || me.global === true) throw new Error("Conta local inválida");
+      if (started !== epoch || version !== versions.get(credential.id)) throw new Error(translate("common.459edfa35541"));
+      if (me.id !== credential.userId || me.global === true) throw new Error(translate("common.a407c7cac9f6"));
       locals.set(credential.id, credential); publish();
     } catch (err) {
       if (started === epoch && version === versions.get(credential.id)) { locals.delete(credential.id); publish(); }

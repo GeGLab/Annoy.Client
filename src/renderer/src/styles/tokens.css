@@ -33,7 +33,7 @@
   --shadow-overlay: 0 20px 64px #0006;
   color-scheme: dark;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 1rem;
   color: var(--text);
   background: var(--bg-rail);
   accent-color: var(--accent);

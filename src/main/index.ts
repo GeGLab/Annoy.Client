@@ -1,10 +1,14 @@
+import {onLocalizationChange} from "../shared/localization/index.ts";
+import {desktopController,supportsTray} from "./desktop.ts";
+import {registerLocalization} from "./localization.ts";
+import {t as translate} from "../shared/localization/index.ts";
 import {trustedRenderer} from './trusted-renderer.ts';
 import {secureHttpUrl} from '../shared/transport.ts';
 import {nativeApiFetch} from './native-api-fetch.ts';
 import {registerPrivateDownload} from './private-download.ts';
 import { registerCrypto } from "./crypto/ipc.ts";
-import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { join,isAbsolute } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
@@ -16,6 +20,9 @@ const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", 
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let trayCapable=false;
+const selectedProfile=app.commandLine.getSwitchValue("user-data-dir");
+if(selectedProfile){if(!isAbsolute(selectedProfile)||selectedProfile.includes("\0"))throw new Error("Invalid profile path");mkdirSync(selectedProfile,{recursive:true});app.setPath("userData",selectedProfile);}
 let quitting = false;
 app.on("before-quit", () => { quitting = true; });
 function restoreWindow(): void {
@@ -25,18 +32,21 @@ function restoreWindow(): void {
   win.focus();
 }
 function createTray(): void {
-  if (process.platform !== "win32") return;
-  tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));
+  if (!trayCapable || !desktop.preferences().closeToTray) {
+    tray?.destroy();tray=null;
+    if(win&&!win.isVisible())restoreWindow();
+    return;
+  }
+  if(!tray){try{tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Abrir Annoy", click: restoreWindow },
+    { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
     { type: "separator" },
-    { label: "Sair do Annoy", click: () => app.quit() },
+    { label: translate("desktop.b08423738547"), click: () => {restoreWindow();if(!win||win.webContents.isCrashed()||win.webContents.isLoadingMainFrame())app.quit();else win.webContents.send("desktop:quit-requested");} },
   ]));
-  tray.on("double-click", restoreWindow);
 }
 const stopActivity = registerActivity(ipcMain, () => win, () => appAccess.getState().allowed, event => trustedRenderer(event, win));
-app.on("before-quit", stopActivity);
+app.on("will-quit", stopActivity);
 /** One sandboxed view per browser service, created on first open and kept alive. */
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
@@ -81,7 +91,7 @@ let serviceArea = { x: 0, y: 0, width: 0, height: 0 };
 
 // 0.3 renamed the app from Distopic to Annoy; keep the existing profile (accounts, Discord login).
 const legacyProfile = join(app.getPath("appData"), "Distopic");
-if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
+if (!selectedProfile&&!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
   try {
     renameSync(legacyProfile, app.getPath("userData"));
   } catch {
@@ -89,6 +99,9 @@ if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
   }
 }
 
+registerLocalization(ipcMain,()=>win);
+const desktop=desktopController(()=>win,createTray,()=>!!tray&&!tray.isDestroyed(),()=>trayCapable,()=>{trayCapable=supportsTray();createTray();});
+onLocalizationChange(()=>{if(tray)createTray();});
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
 // Chromium picks the keychain by desktop name and falls back to no encryption
 // on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
@@ -260,32 +273,32 @@ function showNativeMenu(params: Electron.ContextMenuParams): void {
   const image = params.mediaType === "image" && /^(https?|blob|data):/.test(params.srcURL);
   if (image) {
     items.push(
-      { label: "Copiar imagem", click: () => wc.copyImageAt(params.x, params.y) },
-      { label: "Salvar imagem como…", click: () => wc.downloadURL(params.srcURL) },
+      { label: translate("desktop.6605544f120f"), click: () => wc.copyImageAt(params.x, params.y) },
+      { label: translate("desktop.e7ff7c72cedc"), click: () => wc.downloadURL(params.srcURL) },
     );
     if (/^https?:/.test(params.srcURL)) {
       items.push(
-        { label: "Copiar endereço da imagem", click: () => clipboard.writeText(params.srcURL) },
-        { label: "Abrir original", click: () => openExternal(params.srcURL) },
+        { label: translate("desktop.c727fdb5fd76"), click: () => clipboard.writeText(params.srcURL) },
+        { label: translate("desktop.dd9bdbdc3f1f"), click: () => openExternal(params.srcURL) },
       );
     }
   }
   if (params.linkURL && /^https?:/.test(params.linkURL) && params.linkURL !== params.srcURL) {
     if (items.length) items.push({ type: "separator" });
-    items.push({ label: "Copiar link", click: () => clipboard.writeText(params.linkURL) });
+    items.push({ label: translate("desktop.c19488a05564"), click: () => clipboard.writeText(params.linkURL) });
   }
   if (params.isEditable) {
     if (items.length) items.push({ type: "separator" });
     items.push(
-      { label: "Recortar", role: "cut", enabled: params.editFlags.canCut },
-      { label: "Copiar", role: "copy", enabled: params.editFlags.canCopy },
-      { label: "Colar", role: "paste", enabled: params.editFlags.canPaste },
+      { label: translate("desktop.b659da7fa50d"), role: "cut", enabled: params.editFlags.canCut },
+      { label: translate("desktop.39dcf1cbeb5a"), role: "copy", enabled: params.editFlags.canCopy },
+      { label: translate("desktop.83229f4fb36b"), role: "paste", enabled: params.editFlags.canPaste },
       { type: "separator" },
-      { label: "Selecionar tudo", role: "selectAll" },
+      { label: translate("desktop.6dc56b9dcaea"), role: "selectAll" },
     );
   } else if (params.selectionText.trim()) {
     if (items.length) items.push({ type: "separator" });
-    items.push({ label: "Copiar", role: "copy" });
+    items.push({ label: translate("desktop.39dcf1cbeb5a"), role: "copy" });
   }
   if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
 }
@@ -297,8 +310,9 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
+    show:false,
     backgroundColor: "#171621",
-    title: "Annoy",
+    title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
     icon: join(import.meta.dirname, "../renderer/icon.png"),
@@ -342,7 +356,7 @@ function createWindow(): void {
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
   win.on("close", (event) => {
-    if (process.platform === "win32" && tray && !quitting) {
+    if (desktop.preferences().closeToTray&&tray&&!tray.isDestroyed() && !quitting) {
       event.preventDefault();
       win?.hide();
     }
@@ -353,6 +367,7 @@ function createWindow(): void {
     shownService = null;
   });
 
+  win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
   if (!app.isPackaged&&process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
@@ -470,6 +485,7 @@ ipcMain.on("window:flash", event => {
 });
 
 app.whenReady().then(() => {
+  trayCapable=supportsTray();
   createWindow();
   const crypto=registerCrypto(() => win, () => appAccess.getState().allowed);
   stopCrypto = crypto; proofCrypto=crypto.proof;

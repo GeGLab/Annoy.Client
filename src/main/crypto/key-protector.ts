@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {randomBytes} from 'node:crypto';
 import sodium from 'libsodium-wrappers-sumo';
 import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ export class VaultKeyProtector implements KeyProtector {
  constructor(directory:string,os:OsStorage){this.directory=directory;this.os=os;}
  available(){return this.os.available()||!!this.passwordKey;}
  async unlockPassword(password:string):Promise<void>{
-  if(password.length<12 || password.length>256)throw new Error('Use uma senha local de 12 a 256 caracteres');
+  if(password.length<12 || password.length>256)throw new Error(translate("common.be3b54435a0e"));
   mkdirSync(this.directory,{recursive:true,mode:0o700});const path=join(this.directory,'password-kdf.json');
   let salt:Buffer;
   if(existsSync(path)){
@@ -33,7 +34,7 @@ export class VaultKeyProtector implements KeyProtector {
   const saved=JSON.parse(sealed.toString('utf8')) as {v:number;mode:string;data:string};
   if(saved.v!==1 || typeof saved.data!=='string')throw new Error('Invalid local key format');
   if(saved.mode==='os'){
-   if(!this.os.available())throw new Error('Chave protegida pelo sistema operacional indisponível; restaure seu backup');
+   if(!this.os.available())throw new Error(translate("common.ec437ffc4604"));
    return Buffer.from(this.os.decrypt(Buffer.from(saved.data,'base64')),'base64');
   }
   if(saved.mode!=='password' || !this.passwordKey)throw new Error('Desbloqueie o armazenamento com uma senha local');

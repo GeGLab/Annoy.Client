@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import { Input } from "./ui/input.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
@@ -29,32 +31,32 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
       <Avatar user={rel.user} size={36} presence={presence} />
       <div className="friend-names">
         <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || rel.user.displayName}</strong></UserProfile>
-        {rel.nicknameByOther && <small className="muted">Te chama de {rel.nicknameByOther}</small>}
+        {rel.nicknameByOther && <small className="muted">{rich("common.a07757ccb70f",{p0:(rel.nicknameByOther)})}</small>}
         <span className="muted">
-          {!connected ? "Sem conexão" : rel.status === "incoming" ? "Pedido recebido" : rel.status === "outgoing" ? "Pedido enviado" : presence === "idle" ? "Ausente" : presence === "dnd" ? "Não incomodar" : online ? "Online" : "Offline"}
+          {!connected ? translate("common.b13c69621e91") : rel.status === "incoming" ? translate("common.13954746d501") : rel.status === "outgoing" ? translate("common.5407d7530e44") : presence === "idle" ? translate("common.fd7f0836e8ad") : presence === "dnd" ? translate("common.976685dd88bf") : online ? translate("common.0d21bd52022c") : translate("common.a1794783aab7")}
         </span>
         {rel.status === "friend" && <ActivityStack activities={activities} compact />}
       </div>
       <span className="spacer" />
       {rel.status === "friend" && (
-        <><button className="icon-btn" disabled={!connected || !online} aria-label={`Ligar para ${rel.user.displayName}`} onClick={() => void startDirectCall(accountId, rel.user.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={!connected || !online} aria-label={`Chamada de vídeo com ${rel.user.displayName}`} onClick={() => void startDirectCall(accountId, rel.user.id, true)}><Icon name="camera" /></button></>
+        <><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.2fbb31f3ee73",{p0:(rel.user.displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.87b78cdc3e7c",{p0:(rel.user.displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, true)}><Icon name="camera" /></button></>
       )}
       {rel.status === "friend" && (
-        <button className="icon-btn" title="Mensagem" onClick={() => void openDm(accountId, rel.user.id)}>
+        <button className="icon-btn" title={translate("common.322085898310")} onClick={() => void openDm(accountId, rel.user.id)}>
           <Icon name="message" />
         </button>
       )}
       {rel.status === "incoming" && (
-        <button className="icon-btn ok" disabled={!connected} title="Aceitar" onClick={() => void act(api.put(`/relationships/${rel.user.id}`))}>
+        <button className="icon-btn ok" disabled={!connected} title={translate("common.aea17ec1a6c8")} onClick={() => void act(api.put(`/relationships/${rel.user.id}`))}>
           <Icon name="check" />
         </button>
       )}
       <button
         className="icon-btn danger"
         disabled={!connected}
-        title={rel.status === "friend" ? "Desfazer amizade" : "Recusar/cancelar"}
+        title={rel.status === "friend" ? translate("common.517ae8f44afa") : translate("common.b3a927e0711a")}
         onClick={async () =>
-          (rel.status !== "friend" || (await confirmAction(`Desfazer amizade com ${rel.user.displayName}?`))) &&
+          (rel.status !== "friend" || (await confirmAction(translate("common.b51f90451a7a",{p0:(rel.user.displayName)})))) &&
           void act(api.del(`/relationships/${rel.user.id}`))
         }
       >
@@ -81,59 +83,53 @@ function Friends({ accountId }: { accountId: string }) {
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (await act(apiFor(accountId).post("/relationships", { username: username.trim() }), "Pedido de amizade enviado")) setUsername("");
+    if (await act(apiFor(accountId).post("/relationships", { username: username.trim() }), translate("common.64b2715b87ba"))) setUsername("");
   };
 
   return (
     <section className="chat">
       <header className="chat-header">
         <Icon name="users" size={20} />
-        <h1>Amigos</h1>
+        <h1>{translate("common.bead8677698a")}</h1>
         <div className="tabs inline">
           {(["online", "all", "pending"] as const).map((t) => (
             <button key={t} className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
-              {t === "online" ? "Online" : t === "all" ? "Todos" : "Pendentes"}
+              {t === "online" ? translate("common.0d21bd52022c") : t === "all" ? translate("common.bd02b9a7d71d") : translate("common.7c091a838d93")}
               {t === "pending" && pending.some((r) => r.status === "incoming") && (
                 <span className="badge">{pending.filter((r) => r.status === "incoming").length}</span>
               )}
             </button>
           ))}
-          <button className={tab === "add" ? "tab tab-add active" : "tab tab-add"} onClick={() => setTab("add")}>
-            Adicionar amigo
-          </button>
+          <button className={tab === "add" ? "tab tab-add active" : "tab tab-add"} onClick={() => setTab("add")}>{translate("common.fcaaf1906cc6")}</button>
         </div>
       </header>
       <ConnectionNotice accountId={accountId} />
       <div className="friends">
         {tab === "add" ? (
           <form className="add-friend" onSubmit={add}>
-            <h3>Adicionar amigo</h3>
-            <p className="muted">
-              Digite o nome de usuário de alguém nesta instância ({inst?.user ? `você é @${inst.user.username}` : ""}).
-            </p>
+            <h3>{translate("common.fcaaf1906cc6")}</h3>
+            <p className="muted">{rich("common.d8fb0d17b12f",{p0:(inst?.user ? translate("common.430070640a70",{p0:(inst.user.username)}) : "")})}</p>
             <div className="add-friend-row">
-              <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} placeholder="nome_de_usuario" />
-              <button className="btn" disabled={!connected || !username.trim()}>
-                Enviar pedido
-              </button>
+              <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} placeholder={translate("common.b1d54957d065")} />
+              <button className="btn" disabled={!connected || !username.trim()}>{translate("common.10b4a1190405")}</button>
             </div>
           </form>
         ) : list.length === 0 ? (
           <div className="friends-empty">
             <Icon name={tab === "pending" ? "check" : "users"} size={40} />
             <h2>
-              {!connected && tab === "online" ? "Status dos amigos indisponível" : tab === "pending" ? "Tudo em dia por aqui" : tab === "online" ? "O papo começa com um olá" : "Boas conversas começam aqui"}
+              {!connected && tab === "online" ? translate("common.a38eecf04315") : tab === "pending" ? translate("common.1c3301711470") : tab === "online" ? translate("common.5059c8b7a052") : translate("common.a671510c139f")}
             </h2>
             <p>
               {tab === "pending"
-                ? "Seus próximos pedidos de amizade aparecem aqui."
+                ? translate("common.72090cda25e6")
                 : tab === "online"
-                  ? "Seus amigos aparecerão aqui quando estiverem online."
-                  : "Adicione alguém da sua instância para começar uma conversa."}
+                  ? translate("common.d381efd71e93")
+                  : translate("common.18f8c84ef96b")}
             </p>
             {tab !== "pending" && (
               <Button variant="secondary" onClick={() => setTab(tab === "online" ? "all" : "add")}>
-                {tab === "online" ? "Ver todos os amigos" : "Adicionar amigo"}
+                {tab === "online" ? translate("common.25a348d78e7c") : translate("common.fcaaf1906cc6")}
               </Button>
             )}
           </div>
@@ -156,28 +152,26 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
       <div className="server-view">
         <ResizablePanel panel="channels">
           <header className="channels-header static">
-            <span>Seu espaço</span>
+            <span>{translate("common.0d6cbcd9b64d")}</span>
             <Icon name="message" size={18} />
           </header>
           <div className="channel-scroll first-run-sidebar">
             <button className="channel active" aria-current="page">
               <Icon name="home" />
-              <span>Início</span>
+              <span>{translate("common.325dfc37c9ba")}</span>
             </button>
             <div className="sidebar-section-heading">
-              <span>Mensagens diretas</span>
-              <button className="icon-btn tiny" aria-label="Conectar para conversar" onClick={() => openModal({ kind: "addAccount" })}>
+              <span>{translate("common.53c413d8aae2")}</span>
+              <button className="icon-btn tiny" aria-label={translate("common.a7c2a45641bd")} onClick={() => openModal({ kind: "addAccount" })}>
                 <Icon name="plus" size={14} />
               </button>
             </div>
-            <p className="sidebar-empty">Suas conversas vão encontrar um lugar aqui.</p>
+            <p className="sidebar-empty">{translate("common.8198b77811bb")}</p>
             <div className="sidebar-connect">
               <Icon name="message" size={22} />
-              <strong>Traga sua comunidade.</strong>
-              <p>Conecte uma instância e encontre seus canais, amigos e chamadas.</p>
-              <button onClick={() => openModal({ kind: "addAccount" })}>
-                Conectar instância <Icon name="right" size={14} />
-              </button>
+              <strong>{translate("common.f531309c8728")}</strong>
+              <p>{translate("common.bc8f421d3cee")}</p>
+              <button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.8acbd14c1e73",{p0:(<Icon name="right" size={14} />)})}</button>
             </div>
           </div>
           <UserPanel />
@@ -185,34 +179,23 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
         <div className="empty-main welcome">
           <header className="welcome-topline">
             <Icon name="home" size={18} />
-            <span>Início</span>
+            <span>{translate("common.325dfc37c9ba")}</span>
           </header>
           <div className="welcome-content">
             <Brand size={72} />
-            <h1>
-              Suas comunidades.
-              <br />
-              <span>Num lugar só.</span>
+            <h1>{translate("common.34bf61529596")}<br />
+              <span>{translate("common.673020374935")}</span>
             </h1>
-            <p>
-              Servidores Annoy e os serviços que você já usa,
-              <br className="desktop-break" /> como Discord, WhatsApp e TeamSpeak, cada um na sua aba.
-            </p>
+            <p>{translate("common.020ed05cc372")}<br className="desktop-break" />{translate("common.1e77d0e3ad33")}</p>
             <div className="welcome-actions">
-              <Button onClick={() => openModal({ kind: "addAccount" })}>
-                <Icon name="plus" size={17} />
-                Conectar a um servidor Annoy
-              </Button>
-              <Button variant="secondary" onClick={() => openModal({ kind: "addTab" })}>
-                Adicionar serviço
-                <Icon name="right" size={16} />
-              </Button>
+              <Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.6e8f75b248c6",{p0:(<Icon name="plus" size={17} />)})}</Button>
+              <Button variant="secondary" onClick={() => openModal({ kind: "addTab" })}>{rich("common.0de9ed8c15d7",{p0:(<Icon name="right" size={16} />)})}</Button>
             </div>
-            <span className="welcome-hint">Tem um endereço de servidor? É tudo de que você precisa.</span>
+            <span className="welcome-hint">{translate("common.ec9153e20787")}</span>
           </div>
           <footer className="welcome-footer">
             <Brand size={20} wordmark />
-            <span>Comunidades independentes. Conversas próximas.</span>
+            <span>{translate("common.86b60c356e3d")}</span>
           </footer>
         </div>
       </div>
@@ -247,10 +230,10 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           <li>
             <div className={`channel${!dmId ? " active" : ""}`} onClick={() => navigate({ kind: "home", accountId, dmId: null })}>
               <Icon name="users" size={18} />
-              <span className="channel-name">Amigos</span>
+              <span className="channel-name">{translate("common.bead8677698a")}</span>
             </div>
           </li>
-          <li className="section-label padded">Mensagens diretas</li>
+          <li className="section-label padded">{translate("common.53c413d8aae2")}</li>
           {inst.dms.map((d) => {
             const r = d.recipients[0];
             if (!r) return null;
@@ -268,7 +251,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
               </li>
             );
           })}
-          {inst.dms.length === 0 && <li className="muted padded small">Abra uma DM pela lista de amigos ou de membros.</li>}
+          {inst.dms.length === 0 && <li className="muted padded small">{translate("common.e9f2e2e8bfda")}</li>}
         </ul>
         <UserPanel />
       </ResizablePanel>
@@ -278,7 +261,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           accountId={accountId}
           channelId={dm.id}
           title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}
-          headerExtra={<><button className="icon-btn" aria-label={settings.dmProfileOpen ? "Ocultar perfil do amigo" : "Mostrar perfil do amigo"} aria-pressed={settings.dmProfileOpen} onClick={() => setState((s) => { s.settings.dmProfileOpen = !s.settings.dmProfileOpen; })}><Icon name="users" /></button><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" disabled={inst.status !== "ready"} aria-label="Ligar para este amigo" onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={inst.status !== "ready"} aria-label="Chamada de vídeo com este amigo" onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "Ativar notificações da conversa" : "Silenciar conversa"} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
+          headerExtra={<><button className="icon-btn" aria-label={settings.dmProfileOpen ? translate("common.5319bf1ddaab") : translate("common.37ce919497c5")} aria-pressed={settings.dmProfileOpen} onClick={() => setState((s) => { s.settings.dmProfileOpen = !s.settings.dmProfileOpen; })}><Icon name="users" /></button><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" disabled={inst.status !== "ready"} aria-label={translate("common.8db31db870ec")} onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={inst.status !== "ready"} aria-label={translate("common.eef68657b73c")} onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? translate("common.edc1c54b69d1") : translate("common.30278e825ac4")} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
           icon={null}
           canSend
           canAttach
@@ -293,3 +276,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
     </div>
   );
 }
+
+
+
+

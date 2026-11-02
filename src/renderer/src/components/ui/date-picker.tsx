@@ -1,6 +1,8 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as Popover from "@radix-ui/react-popover";
 import { DayPicker } from "react-day-picker";
-import { ptBR } from "react-day-picker/locale";
+import { ptBR,enUS,es,fr,it,ja,zhCN } from "react-day-picker/locale";
+import {date,localizationPreferences} from "../../../../shared/localization/index.ts";
 import { CalendarDays } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -12,7 +14,7 @@ export function DatePicker({ value, onValueChange, label }: { value: string; onV
       <Popover.Trigger asChild>
         <button type="button" className="date-trigger" aria-label={label}>
           <CalendarDays size={16} />
-          {value ? format(parseISO(value), "dd/MM/yyyy") : "Selecionar data"}
+          {value ? date(parseISO(value)) : translate("common.9fc6d9e12bf9")}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -25,7 +27,8 @@ export function DatePicker({ value, onValueChange, label }: { value: string; onV
         >
           <DayPicker
             mode="single"
-            locale={ptBR}
+            locale={{"pt-BR":ptBR,en:enUS,es,fr,it,ja,"zh-Hans":zhCN}[localizationPreferences().language]}
+            labels={{labelNext:()=>translate("calendar.next"),labelPrevious:()=>translate("calendar.previous"),labelMonthDropdown:()=>translate("calendar.month"),labelYearDropdown:()=>translate("calendar.year"),labelDayButton:d=>date(d,{dateStyle:"full"}),labelWeekday:d=>date(d,{weekday:"long"}),labelNav:()=>translate("calendar.navigation")}}
             selected={value ? parseISO(value) : undefined}
             onSelect={(date) => {
               onValueChange(date ? format(date, "yyyy-MM-dd") : "");
@@ -39,11 +42,11 @@ export function DatePicker({ value, onValueChange, label }: { value: string; onV
               onValueChange("");
               setOpen(false);
             }}
-          >
-            Limpar data
-          </Button>
+          >{translate("common.39a564e644f9")}</Button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
+
+

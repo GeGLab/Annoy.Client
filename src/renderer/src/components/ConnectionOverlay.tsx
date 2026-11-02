@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate,time} from "../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
 import { navigate, reconnect, removeAccount } from "../client.ts";
 import { getState, setState, useStore } from "../store.ts";
@@ -52,7 +54,7 @@ export function ConnectionNotice({ accountId }: { accountId: string }) {
   if (status === "ready") return null;
   return <div className="connection-notice" role="status">
     <Icon name="wifiOff" size={18} />
-    <span>{status === "invalid" ? "Sessão expirada" : `Sem conexão com ${name}`}. Mensagens e chamadas estão indisponíveis. O status dos amigos será atualizado após a reconexão.</span>
+    <span>{rich("common.beda4b70d735",{p0:(status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)}))})}</span>
   </div>;
 }
 
@@ -85,37 +87,33 @@ export function ConnectionOverlay({ accountId, onContinue }: { accountId: string
           {!invalid && <><span className="reconnect-wave" /><span className="reconnect-wave" /></>}
           <Brand size={48} />
         </div>
-        <h2 id="connection-title">{invalid ? "Sessão expirada" : "Reconectando ao seu espaço"}</h2>
+        <h2 id="connection-title">{invalid ? translate("common.69883ff8a543") : translate("common.7206ed75f933")}</h2>
         <p id="connection-description">
-          {invalid ? "Entre novamente nesta instância para continuar."
-            : "Esta área aguarda a conexão. Você pode abrir outra comunidade ou serviço pela barra de navegação."}
+          {invalid ? translate("common.50bf63860d2a")
+            : translate("common.2ea6624432c1")}
         </p>
         <div className="connection-accounts">
           <div className="connection-account">
             <Icon name={invalid ? "lock" : "wifiOff"} size={18} />
             <span><strong>{account.instanceName}</strong><small role="status">
-              {invalid ? "Sua sessão expirou" : offline ? "O sistema informou que está offline; as tentativas serão retomadas quando voltar" : connection?.cause === "timeout" ? "A tentativa expirou; a próxima será automática" : connection?.cause === "service" ? "A instância anunciou uma reinicialização" : connection?.cause === "network" ? "A conexão com esta instância foi interrompida" : "Tentando restabelecer a conexão…"}
+              {invalid ? translate("common.b0ef0926c4cc") : offline ? translate("common.85768fafe0c1") : connection?.cause === "timeout" ? translate("common.66c86befdfa0") : connection?.cause === "service" ? translate("common.66814f9cb3c3") : connection?.cause === "network" ? translate("common.167698bbafb4") : translate("common.8350fad7c6cc")}
             </small></span>
           </div>
           {!invalid && <div className="connection-diagnostics" aria-live="polite">
-            <span>Tentativa {connection?.attempt ?? 0}</span>
-            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>Atualizado às {new Intl.DateTimeFormat("pt-BR", { timeStyle: "medium" }).format(connection.observedAt)}</span>}
-            {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>Próxima tentativa em {Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000))} s</span>}
-            {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>Esta tela irá para a lista de servidores em {Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000))} s</span>}
+            <span>{rich("common.4261b35ba05e",{p0:(connection?.attempt ?? 0)})}</span>
+            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>{rich("common.e78f7b755e30",{p0:time(connection.observedAt,{timeStyle:"medium"})})}</span>}
+            {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>{rich("common.bfa16702b965",{p0:(Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000)))})}</span>}
+            {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>{rich("common.eb694674cce5",{p0:(Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000)))})}</span>}
           </div>}
         </div>
         <div className="form-actions center">
-          {invalid ? <Button variant="secondary" onClick={() => setState((s) => { s.modal = { kind: "addAccount", accountId }; })}>
-            Entrar novamente
-          </Button> : <Button variant="secondary" onClick={() => reconnect(accountId)}>
-            <Icon name="refresh" size={16} />Tentar agora
-          </Button>}
+          {invalid ? <Button variant="secondary" onClick={() => setState((s) => { s.modal = { kind: "addAccount", accountId }; })}>{translate("common.05d410b61f11")}</Button> : <Button variant="secondary" onClick={() => reconnect(accountId)}>{rich("common.3237985e8c9b",{p0:(<Icon name="refresh" size={16} />)})}</Button>}
           <Button variant="ghost" onClick={async () => {
-            if (await confirmAction(`Desconectar a conta de ${account.instanceName} deste cliente? Você poderá adicioná-la novamente.`)) removeAccount(accountId, "signOut");
-          }}>Desconectar conta</Button>
-          <Button variant="ghost" onClick={onContinue}>Ver conteúdo salvo</Button>
+            if (await confirmAction(translate("common.49bfbc7a4bca",{p0:(account.instanceName)}))) removeAccount(accountId, "signOut");
+          }}>{translate("common.c7bb27862498")}</Button>
+          <Button variant="ghost" onClick={onContinue}>{translate("common.ab4ed7a4199c")}</Button>
         </div>
-        {!invalid && <span className="muted small">A reconexão automática continua para esta instância.</span>}
+        {!invalid && <span className="muted small">{translate("common.ed8092fd38d6")}</span>}
       </section>
     </div>
   );

@@ -1,6 +1,6 @@
 # Annoy — progresso da modernização
 
-Atualizado em 30/10/2026. Referências: [especificação](annoy-product-spec.md) e
+Atualizado em 02/11/2026. Referências: [especificação](annoy-product-spec.md) e
 [plano técnico](annoy-implementation-plan.md).
 
 ## Como retomar o trabalho
@@ -24,9 +24,9 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | M1 — conectividade | concluído | M1.1–M1.5 implementados e validados. R01, R02 e R04 passaram; auditoria de R03 continua nos marcos de domínio. |
 | M2 — navegação/canais | concluído | R05–R06 implementados; cliente e Annoy.Server validados abaixo. |
 | M3 — mensagens/leitura/pins | concluído | Histórico indexado/virtualizado, cursor privado persistido e pins autorizados; validação com um milhão de mensagens e duas sessões. |
-| M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. Próximo: M5. |
-| M5 — idiomas/acessibilidade | pendente | Completa migração de textos e adaptação das superfícies anteriores. |
-| M6 — desktop/updates | pendente | Requer validação de pacotes Windows/Linux. |
+| M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. |
+| M5 — idiomas/acessibilidade | concluído | Sete catálogos locais, preferências independentes, prévia/save/discard, Intl e escala 16–24 px integrados à main 0.9.3. Regressão, teclado e zoom 200% aprovados; limites abaixo. |
+| M6 — desktop/updates | concluído | Preferências main, autostart, bandeja e atualizador assinado integrados à main 0.9.3. Pacotes Windows/Linux, regressão e recuperação aprovados; limites abaixo. |
 | M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
 
 ## Status por requisito
@@ -46,13 +46,13 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | R11 | Redes sociais | concluído em M4 | Sete plataformas/site, validação compartilhada HTTPS/host, editor com prévia/save/discard e audiência por campo. | M4 |
 | R12 | Perfil completo | concluído em M4 | Modal com estados distintos e retorno de foco; histórico consentido, três sessões/30 dias, duração incompleta, exclusão e revogação. | M4 |
 | R13 | Contatos e privacidade | concluído em M4 | E-mail/telefone/site privados inicialmente, audiências verificadas no servidor, sem alteração de credenciais e sem dados privados em User/eventos. | M4 |
-| R14 | Idioma/região/hora | pendente | Formatação fixa em pt-BR; preferências e desfazer pendentes. | M5 |
-| R15 | Sete línguas | pendente | Sem camada central de catálogos. | M5 |
-| R16 | Fonte/links/prévia | pendente | Base 14px e medidas fixas; escala/acessibilidade pendentes. | M5 |
-| R17 | Aceleração | pendente | Sem controle persistido antes de ready. | M6 |
-| R18 | Inicialização/bandeja | pendente | Fechar oculta na bandeja Windows; faltam opções e matriz de suporte. | M6 |
+| R14 | Idioma/região/hora | concluído em M5 | Preferências independentes, pt-BR em instalações existentes, sugestão regional, aviso e restauração. | M5 |
+| R15 | Sete línguas | concluído em M5 | 2.162 chaves tipadas em sete catálogos, slots React seguros e formatos Intl; revisão dos fluxos principais e paridade aprovadas. | M5 |
+| R16 | Fonte/links/prévia | concluído em M5 | Base 16px, escala até 24px, sublinhado independente, prévia/discard; cenário Electron com zoom 200%, teclado/foco e regressão aprovados. | M5 |
+| R17 | Aceleração | concluído em M6 | Preferência main aplicada antes de ready, estado salvo/aplicado e reinício com guarda de edições. Pacotes Windows/Linux testados nos dois modos. | M6 |
+| R18 | Inicialização/bandeja | concluído em M6 | Autostart Windows/XDG, detecção SNI, opções independentes, saída com guarda, restauração e segunda instância. | M6 |
 | R19 | Fixações | concluído em M3 | Pins idempotentes/persistidos, paginação, contexto fora do cache, autorização e convergência por eventos. | M3 |
-| R20 | Atualizações | pendente | Checagem inicial/6h e fluxo existente; completar recuperação/notificação/validação. | M6 |
+| R20 | Atualizações | concluído em M6 | Checagens coalescidas, notificação configurável por versão/sessão, recuperação e integridade/assinatura independentes. Política crítica 0.9.3 preservada. | M6 |
 
 ## Decisões registradas
 
@@ -469,5 +469,86 @@ Estado: **concluído e validado localmente**.
 
 ## Próxima tarefa recomendada
 
-Iniciar **M5 — localização e acessibilidade** (R14–R16), na ordem do plano.
-Não iniciar M5 nesta execução autorizada para M3/M4.
+M5/M6 concluídos com as evidências e os limites registrados abaixo. O próximo
+marco de implementação é **M7 — catálogo licenciado** (R07), somente em outra
+execução autorizada.
+
+## M5 e M6 — 01/11/2026
+
+- Implementação de M5 em `fbe9b0b`, com correção de transporte em `91762ca`:
+  sete catálogos locais, prévia/save/discard, região/hora independentes, fonte
+  16–24px, links e calendários. Tradução externa autorizada somente dos textos
+  estáticos públicos; marcas, fluxos principais e slots revisados. Nenhum conteúdo
+  do usuário foi enviado. Revisão profissional por falantes nativos continua útil.
+- M6 implementa preferências JSON versionadas/atômicas no main, IPC restrita ao
+  frame principal local, aceleração antes de ready, salvo/aplicado/reinício,
+  autostart Windows/XDG, início minimizado, bandeja com detecção SNI no Linux,
+  notificações persistidas e checagens coalescidas. Reinícios passam pela guarda
+  de edições e preservam o estado recuperável de conversa.
+- Validação da branch baseada em 0.8.0: typecheck/build, **69 unitários e 77
+  Playwright aprovados**. Dois defeitos de geometria introduzidos na adaptação
+  foram corrigidos (calendário e modal na janela mínima). A regressão completa
+  passou após as correções. Detector executado; avisos mecânicos corrigidos.
+- Pacote NSIS Windows gerado sem publicação. Executável empacotado testado com
+  perfis temporários, GPU ligada/desligada, vídeo sintético, captura e persistência.
+  Feed HTTP local exercita atualização opcional/crítica, erro/retry, notificação
+  única e checksum inválido; instaladores de teste nunca são executados.
+- Linux unpacked/ELF/asar gerado e inspecionado; AppImage falhou com `EPERM` na
+  criação de symlink neste Windows. Sem runtime Linux disponível localmente.
+  Workflow de validação de pacotes Windows/Linux preparado, sem publicação.
+- A PR #7 foi fechada; a main incorporou seu conteúdo manualmente e avançou para
+  0.9.3 com alterações de segurança. Essa base foi integrada em `6e53584`,
+  preservando criptografia, autenticação e política de segurança. A entrega
+  continua na [PR #8](https://github.com/GeGLab/Annoy.Client/pull/8).
+
+### Integração e validação na base 0.9.3 — 02/11/2026
+
+- Commits adicionais: `d4b395f` adapta os fixtures à autenticação real;
+  `2ff4f34` completa os textos dos fluxos atuais, frases com slots, marcas e
+  diagnósticos conhecidos na fronteira da UI; `6bc81f8` protege a saída pela
+  bandeja, mantém guardas empilhadas e coordena checagens manuais/periódicas
+  com as consultas de política de segurança. As etapas M5/M6 têm commits próprios.
+- Typecheck, build e **106 testes unitários aprovados, sem skips**. Os testes
+  nativos usam o executável compilado em CI a partir do mesmo código Rust,
+  com hash conferido e `ANNOY_REQUIRE_NATIVE=1`. Não há Rust instalado neste
+  ambiente local; o build de Rust/WASM foi executado na matriz CI.
+- [Desktop CI 41387333797](https://github.com/GeGLab/Annoy.Client/actions/runs/41387333797)
+  aprovado nos dois sistemas: NSIS Windows e AppImage Linux gerados sem publicar,
+  typecheck, unitários, renderização, vídeo sintético, captura e persistência
+  com aceleração ligada/desligada. Linux verifica também código empacotado,
+  runtime criptográfico e fuses. O teste usa somente CDP do renderer; o inspector
+  do main continua desabilitado. Xvfb/Openbox exercitam o caminho X11 no Linux.
+- Feed HTTP local valida coalescência, falha de rede/retry, preferência de
+  notificação e rejeição de checksum e manifesto não autenticado. Na base 0.9.3,
+  checksum válido sozinho não autoriza instalação: a assinatura independente
+  continua obrigatória. Atualização opcional pede ação; atualização crítica
+  mantém download/reinício automáticos da política existente.
+- A primeira regressão 0.9.3 executou os 91 cenários: 86 passaram, quatro
+  falharam e um foi ignorado. Duas falhas da entrega foram corrigidas: espaço
+  clicável do controle de voz e contagem do feed que incluía a consulta inicial.
+  A repetição direcionada dos oito cenários afetados passou, incluindo saída
+  cancelada, restauração, sete línguas, 24px e zoom 200%.
+- A regressão final limpa passou em **88 cenários**, com **um ignorado** por
+  ausência das credenciais Cloudflare. Os dois cenários SFrame preexistentes,
+  reproduzidos na main isolada, foram excluídos dessa repetição. Depois dos
+  últimos ajustes de formatação regional e redação de backup, typecheck/build,
+  os 106 unitários e os dois cenários de localização e MLS/anexos passaram
+  novamente. Avisos de chunks grandes e ResizeObserver continuam presentes.
+- As outras duas falhas são de decodificação de vídeo SFrame (P2P e mediasoup).
+  Ambas foram reproduzidas em checkout isolado da **main `64d10af`, sem M5/M6**,
+  usando o mesmo Server `e5bb7ff`, binário e WASM. Os testes chegam à proteção
+  SFrame, mas não recebem vídeo decodificado. Não foi alterado o algoritmo
+  criptográfico para contornar essas falhas. O cenário Cloudflare real exige
+  credenciais ausentes e permanece ignorado.
+- O [workflow de segurança existente](https://github.com/GeGLab/Annoy.Client/actions/runs/41387333778)
+  falha no checkout de `GeGLab/annoy-api-global`, antes dos testes, nos dois
+  sistemas. Seu token não acessa essa dependência privada; os testes de segurança
+  integrados desse workflow não podem ser declarados aprovados. O teste local
+  com dois clientes reais de MLS/anexos/edições e bloqueio de IPC externo passou.
+- Limites da validação: captura Linux em X11, sem validação de portal Wayland;
+  sem login real do sistema, leitor de tela do SO ou dispositivos físicos.
+  Autostart tem testes dos adaptadores/rollback e estado nativo, sem registrar
+  a conta pessoal no login. Menus internos do Monaco permanecem em inglês;
+  os controles próprios e a fonte do editor seguem as preferências. Os catálogos
+  foram revisados nos fluxos principais; não houve revisão profissional de
+  todos os textos por falantes nativos. Nenhum dado de usuário foi traduzido.

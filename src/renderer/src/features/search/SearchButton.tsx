@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { Search } from "lucide-react";
 import { useEffect } from "react";
 import { useStore } from "../../store.ts";
@@ -22,10 +23,12 @@ export function SearchButton({ placement = "titlebar" }: { placement?: "titlebar
     return () => window.removeEventListener("keydown", key);
   }, [accountId, view, modal, placement]);
   return accountId && view.kind !== "service" && (placement === "members" ? view.kind === "server" : view.kind !== "server") ? (
-    <button className="titlebar-search" onClick={open} aria-label="Buscar mensagens (Ctrl+K)">
+    <button className="titlebar-search" onClick={open} aria-label={translate("common.fd3cfa0ab6b4")}>
       <Search size={14} />
-      <span>{view.kind === "server" ? "Buscar no servidor" : "Buscar mensagens"}</span>
-      <kbd>Ctrl K</kbd>
+      <span>{view.kind === "server" ? translate("common.f995fa5ca4fd") : translate("common.a85a80ba87f5")}</span>
+      <kbd>{translate("common.854f7b248f9d")}</kbd>
     </button>
   ) : null;
 }
+
+

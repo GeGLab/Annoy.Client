@@ -1,0 +1,69 @@
+name: desktop-validation
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win --x64
+            executable: dist/win-unpacked/Annoy.exe
+            native: native/annoy-crypto/target/release/annoy-crypto.exe
+          - os: ubuntu-latest
+            target: --linux --x64
+            executable: dist/Annoy-x86_64.AppImage
+            native: native/annoy-crypto/target/release/annoy-crypto
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb openbox libgbm1 libnss3 libasound2t64
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        id: bindgen-cache
+        with:
+          path: ~/.cargo/bin/wasm-bindgen*
+          key: ${{ runner.os }}-wasm-bindgen-0.2.130
+      - if: steps.bindgen-cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version 0.2.130 --locked
+      - run: npm run typecheck
+      - run: npm run crypto:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ runner.os }}
+          path: |
+            native/annoy-crypto/target/release/annoy-crypto*
+            src/renderer/src/media-e2ee/generated/annoy_sframe.wasm
+          retention-days: 3
+      - name: Unit tests
+        shell: bash
+        env:
+          ANNOY_REQUIRE_NATIVE: "1"
+          ANNOY_CRYPTO_BINARY: ${{ matrix.native }}
+        run: node --experimental-transform-types --test scripts/tests/*.test.mjs
+      - run: npm run build
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - if: runner.os == 'Linux'
+        run: node scripts/verify-native-package.mjs dist/linux-unpacked
+      - name: Validate packaged application
+        shell: bash
+        env:
+          ANNOY_PACKAGED_EXECUTABLE: ${{ matrix.executable }}
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a -s '-screen 0 1920x1080x24' bash -c 'openbox >/tmp/annoy-test-window-manager.log 2>&1 & node scripts/validate-packaged.mjs'
+          else
+            node scripts/validate-packaged.mjs
+          fi

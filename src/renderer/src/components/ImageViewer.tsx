@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import { m } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { formatSize } from "../format.tsx";
@@ -57,16 +59,18 @@ export default function ImageViewer({ images, initialIndex, onClose }: { images:
     if (event.key === "+" || event.key === "=") { event.preventDefault(); setZoom(z => Math.min(4, z + .5)); }
     if (event.key === "-") { event.preventDefault(); setZoom(z => Math.max(1, z - .5)); }
   }}>
-    <header className="viewer-header"><span className="viewer-file-icon"><Icon name="image" size={22} /></span><div className="viewer-file-info"><DialogTitle className="truncate">{current.filename}</DialogTitle><span className="muted small">{formatSize(current.size)}{natural.width > 0 && ` · ${natural.width} × ${natural.height}`}</span></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar visualizador"><Icon name="x" /></Button></header>
+    <header className="viewer-header"><span className="viewer-file-icon"><Icon name="image" size={22} /></span><div className="viewer-file-info"><DialogTitle className="truncate">{current.filename}</DialogTitle><span className="muted small">{formatSize(current.size)}{natural.width > 0 && translate("common.6d4ae0e6e37d",{p0:(natural.width),p1:(natural.height)})}</span></div><Button variant="ghost" size="icon" onClick={onClose} aria-label={translate("common.b974b441c683")}><Icon name="x" /></Button></header>
     <div className="viewer-viewport" ref={setViewport}>
-      {loading && <div className="viewer-status" role="status"><Icon name="loader" size={24} /><span>Carregando imagem…</span></div>}
-      {failed ? <div className="viewer-status" role="alert"><Icon name="image" size={40} /><h2>Não foi possível carregar a imagem</h2><p className="muted">Verifique sua conexão e tente novamente.</p><Button variant="secondary" onClick={() => { setFailed(false); setAttempt(a => a + 1); }}>Tentar novamente</Button></div> : <m.div className="viewer-canvas" initial={{ opacity: .65 }} animate={{ opacity: 1 }} transition={{ duration: .18 }} key={current.id}>
+      {loading && <div className="viewer-status" role="status"><Icon name="loader" size={24} /><span>{translate("common.c7ad73ae4ace")}</span></div>}
+      {failed ? <div className="viewer-status" role="alert"><Icon name="image" size={40} /><h2>{translate("common.5ac3515bb187")}</h2><p className="muted">{translate("common.ec3fe65bf481")}</p><Button variant="secondary" onClick={() => { setFailed(false); setAttempt(a => a + 1); }}>{translate("common.b9e10688be01")}</Button></div> : <m.div className="viewer-canvas" initial={{ opacity: .65 }} animate={{ opacity: 1 }} transition={{ duration: .18 }} key={current.id}>
         <img key={`${current.id}-${attempt}`} src={current.url} alt={current.filename} draggable={false} onLoad={e => setNatural({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} onError={() => setFailed(true)} style={natural.width ? { width: Math.max(1, natural.width * fit * zoom), height: Math.max(1, natural.height * fit * zoom) } : { visibility: "hidden" }} />
       </m.div>}
     </div>
-    <footer className="viewer-footer"><span className="viewer-count" aria-live="polite">{index + 1} de {images.length}</span><div className="viewer-tools">
-      {images.length > 1 && <><Button variant="ghost" size="icon" disabled={index === 0} onClick={() => move(-1)} aria-label="Imagem anterior"><Icon name="left" /></Button><Button variant="ghost" size="icon" disabled={index === images.length - 1} onClick={() => move(1)} aria-label="Próxima imagem"><Icon name="right" /></Button><span className="viewer-tool-divider" /></>}
-      <Button variant="ghost" size="icon" disabled={zoom <= 1 || loading || failed} onClick={() => setZoom(z => Math.max(1, z - .5))} aria-label="Diminuir imagem"><Icon name="zoomOut" /></Button><Button variant="ghost" className="viewer-zoom" disabled={loading || failed} onClick={() => setZoom(1)} aria-label="Ajustar imagem à janela">{Math.round(zoom * 100)}%</Button><Button variant="ghost" size="icon" disabled={zoom >= 4 || loading || failed} onClick={() => setZoom(z => Math.min(4, z + .5))} aria-label="Ampliar imagem"><Icon name="zoomIn" /></Button>
-    </div><a className="viewer-original" href={current.url} target="_blank" rel="noreferrer">Abrir original <Icon name="external" size={14} /></a></footer>
+    <footer className="viewer-footer"><span className="viewer-count" aria-live="polite">{rich("common.aed1f8f95cfc",{p0:(index + 1),p1:(images.length)})}</span><div className="viewer-tools">
+      {images.length > 1 && <><Button variant="ghost" size="icon" disabled={index === 0} onClick={() => move(-1)} aria-label={translate("common.3f4837fc17cc")}><Icon name="left" /></Button><Button variant="ghost" size="icon" disabled={index === images.length - 1} onClick={() => move(1)} aria-label={translate("common.36f99970853d")}><Icon name="right" /></Button><span className="viewer-tool-divider" /></>}
+      <Button variant="ghost" size="icon" disabled={zoom <= 1 || loading || failed} onClick={() => setZoom(z => Math.max(1, z - .5))} aria-label={translate("common.1ef7f35020ad")}><Icon name="zoomOut" /></Button><Button variant="ghost" className="viewer-zoom" disabled={loading || failed} onClick={() => setZoom(1)} aria-label={translate("common.c3a949106aa5")}>{Math.round(zoom * 100)}%</Button><Button variant="ghost" size="icon" disabled={zoom >= 4 || loading || failed} onClick={() => setZoom(z => Math.min(4, z + .5))} aria-label={translate("common.d24683d859c9")}><Icon name="zoomIn" /></Button>
+    </div><a className="viewer-original" href={current.url} target="_blank" rel="noreferrer">{rich("common.4ddcf8bb20b2",{p0:(<Icon name="external" size={14} />)})}</a></footer>
   </DialogContent></Dialog>;
 }
+
+

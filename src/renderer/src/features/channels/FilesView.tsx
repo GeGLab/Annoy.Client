@@ -1,3 +1,5 @@
+import {rich} from "../../lib/localization.ts";
+import {t as translate} from "../../../../shared/localization/index.ts";
 import {SecureAttachment} from "../../components/SecureAttachment.tsx";
 import {CryptoStatus} from "../../components/CryptoStatus.tsx";
 import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
@@ -84,7 +86,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       setTotal(page.total);
     } catch (error) {
       if (!signal.aborted && !isCancellation(error)) setFilesError(error instanceof RequestError && error.status === 404
-        ? "Esta instância ainda não oferece busca paginada de arquivos. Atualize o servidor para pesquisar e ordenar o acervo completo."
+        ? translate("common.7d9ae16d6722")
         : (error as Error).message);
     } finally {
       if (!signal.aborted && fileRequest.current === controller) setLoadingFiles(false);
@@ -115,7 +117,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
   const totalSize = files.reduce((sum, f) => sum + f.attachment.size, 0);
 
   const upload = async (list: File[]) => {
-    if (!canUpload) return toast("Sem permissão para enviar arquivos aqui");
+    if (!canUpload) return toast(translate("common.205f4adf1eb2"));
     const description = note.trim();
     let allSucceeded = true;
     // The server takes a limited number of files per message.
@@ -154,8 +156,8 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
   const remove = async (file: SharedFile) => {
     const others = file.message.attachments.length - 1;
     const ok = await confirmAction(
-      others > 0 ? `Este envio tem mais ${others} arquivo(s), que também serão excluídos.` : `"${file.attachment.filename}" será excluído para todos.`,
-      { title: "Excluir arquivo", confirmLabel: "Excluir" },
+      others > 0 ? translate("common.6a7f80b8fbf9",{p0:(others)}) : translate("common.e730d803a5f6",{p0:(file.attachment.filename)}),
+      { title: translate("common.69d1de66e857"), confirmLabel: translate("common.8b19518ff49b") },
     );
     if (ok) void act(api.del(`/channels/${channel.id}/messages/${file.message.id}`)).then((done) => { if (done) void fetchFiles(); });
   };
@@ -183,27 +185,24 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       <header className="chat-header">
         <Icon name="folder" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{channel.topic || `${files.length} de ${total} arquivo(s) · ${formatSize(totalSize)} carregados`}</span>
+        <span className="chat-topic">{channel.topic || translate("common.ef5ff5de05d9",{p0:(files.length),p1:(total),p2:(formatSize(totalSize))})}</span>
       </header>
 
       <CryptoStatus accountId={accountId} channelId={channel.id}/>
       <div className="files-toolbar">
         <label className="files-search">
           <Icon name="search" size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nome, descrição ou pessoa" aria-label="Buscar arquivos" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={translate("common.a3f828ff909b")} aria-label={translate("common.0acf6d51b685")} />
         </label>
-        <Select className="files-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">
-          <option value="recent">Mais recentes</option>
-          <option value="name">Nome</option>
-          <option value="size">Tamanho</option>
+        <Select className="files-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={translate("common.39f93451ee48")}>
+          <option value="recent">{translate("common.ade822bf50f9")}</option>
+          <option value="name">{translate("common.5086900635fe")}</option>
+          <option value="size">{translate("common.21bed0eaf1e5")}</option>
         </Select>
         {canUpload && (
           <>
-            <input className="files-note" value={note} onChange={(e) => { setNote(e.target.value); writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: e.target.value, replyToId: null, attachmentCount: 0 }); }} placeholder="Descrição (opcional)" maxLength={LIMITS.messageMax} />
-            <button className="btn" onClick={() => input.current?.click()}>
-              <Icon name="upload" size={16} />
-              Enviar arquivos
-            </button>
+            <input className="files-note" value={note} onChange={(e) => { setNote(e.target.value); writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: e.target.value, replyToId: null, attachmentCount: 0 }); }} placeholder={translate("common.3c26d4a09e8d")} maxLength={LIMITS.messageMax} />
+            <button className="btn" onClick={() => input.current?.click()}>{rich("common.0c07ad3a6d42",{p0:(<Icon name="upload" size={16} />)})}</button>
             <input
               ref={input}
               type="file"
@@ -226,7 +225,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
               <Icon name={u.error ? "x" : "upload"} size={16} />
               <span className="truncate">{u.names}</span>
               {u.error ? <span className="danger-text">{u.error}</span> : <progress value={u.progress} max={1} />}
-              <button className="icon-btn tiny" aria-label={u.error ? "Dispensar" : "Cancelar envio"} onClick={() => (u.error ? setUploads((x) => x.filter((y) => y.id !== u.id)) : u.abort.abort())}>
+              <button className="icon-btn tiny" aria-label={u.error ? translate("common.0a2fe40efa3c") : translate("common.f51ecbdbd18a")} onClick={() => (u.error ? setUploads((x) => x.filter((y) => y.id !== u.id)) : u.abort.abort())}>
                 <Icon name="x" size={14} />
               </button>
             </li>
@@ -236,21 +235,21 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
 
       <div className="files-list" role="list">
         {loadingFiles && files.length === 0 && !filesError && <div className="files-loading" role="status"><span /><span /><span /><span /><span /></div>}
-        {filesError && <div className="files-load-error" role="alert"><Icon name="wifiOff" size={22} /><strong>Não foi possível carregar os arquivos</strong><span>{filesError}</span><button className="btn btn-ghost" onClick={() => void fetchFiles()}>Tentar novamente</button></div>}
+        {filesError && <div className="files-load-error" role="alert"><Icon name="wifiOff" size={22} /><strong>{translate("common.ae7fc2d05b5a")}</strong><span>{filesError}</span><button className="btn btn-ghost" onClick={() => void fetchFiles()}>{translate("common.b9e10688be01")}</button></div>}
         {files.length === 0 && !loadingFiles && !filesError && (
           <div className="files-empty">
             <Icon name="folderOpen" size={40} />
-            <h2>{query ? "Nada encontrado" : "Nenhum arquivo ainda"}</h2>
-            <p className="muted">{query ? "Nenhum arquivo do canal corresponde à busca. Experimente outros termos." : canUpload ? "Arraste arquivos para cá ou use Enviar arquivos." : "Quando alguém compartilhar, os arquivos aparecem aqui."}</p>
+            <h2>{query ? translate("common.ec58f70ee770") : translate("common.b46cf68777c9")}</h2>
+            <p className="muted">{query ? translate("common.ee16d8e09c42") : canUpload ? translate("common.b9d4b2dfdbec") : translate("common.346bd9f389c1")}</p>
           </div>
         )}
         {files.map((file) => {
           const { attachment, message } = file;
           const mine = message.author.id === me;
-          if(attachment.url.startsWith('annoy-encrypted:')||attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={`Excluir ${attachment.filename}`} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
+          if(attachment.url.startsWith('annoy-encrypted:')||attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={translate("common.58727ecc46f1",{p0:(attachment.filename)})} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
           return (
             <div key={attachment.id} className="file-row" role="listitem">
-              <button className="file-open" onClick={() => open(file)} title={attachment.contentType.startsWith("image/") || /^(audio|video)\//.test(attachment.contentType) ? "Abrir" : "Baixar"}>
+              <button className="file-open" onClick={() => open(file)} title={attachment.contentType.startsWith("image/") || /^(audio|video)\//.test(attachment.contentType) ? translate("common.a01a5fce396e") : translate("expression.b45ae836a031")}>
                 {attachment.contentType.startsWith("image/") ? (
                   <img className="file-thumb" src={api.resolve(attachment.url)} alt="" loading="lazy" decoding="async" />
                 ) : (
@@ -267,19 +266,19 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
                 </span>
               </button>
               <span className="row-actions">
-                <button className="icon-btn" title="Baixar" aria-label={`Baixar ${attachment.filename}`} onClick={() => window.distopic?.download(api.resolve(attachment.url))}>
+                <button className="icon-btn" title={translate("expression.b45ae836a031")} aria-label={translate("common.f1fe7aee5e4f",{p0:(attachment.filename)})} onClick={() => window.distopic?.download(api.resolve(attachment.url))}>
                   <Icon name="download" size={16} />
                 </button>
                 <button
                   className="icon-btn"
-                  title="Copiar link"
-                  aria-label={`Copiar link de ${attachment.filename}`}
-                  onClick={() => void navigator.clipboard.writeText(api.resolve(attachment.url)).then(() => toast("Link copiado"))}
+                  title={translate("desktop.c19488a05564")}
+                  aria-label={translate("common.1eff1239da35",{p0:(attachment.filename)})}
+                  onClick={() => void navigator.clipboard.writeText(api.resolve(attachment.url)).then(() => toast(translate("common.18695c70c605")))}
                 >
                   <Icon name="link" size={16} />
                 </button>
                 {(mine || canModerate) && (
-                  <button className="icon-btn danger" title="Excluir" aria-label={`Excluir ${attachment.filename}`} onClick={() => void remove(file)}>
+                  <button className="icon-btn danger" title={translate("common.8b19518ff49b")} aria-label={translate("common.58727ecc46f1",{p0:(attachment.filename)})} onClick={() => void remove(file)}>
                     <Icon name="trash" size={16} />
                   </button>
                 )}
@@ -289,7 +288,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         })}
         {nextOffset !== null && (
           <button className="btn btn-ghost files-more" disabled={loadingFiles} onClick={() => void fetchFiles(nextOffset, true)}>
-            {loadingFiles ? "Carregando…" : `Carregar mais arquivos (${Math.max(0, total - files.length)} restantes)`}
+            {loadingFiles ? translate("common.6cc1bbba0f84") : translate("common.4c0eb21a3854",{p0:(Math.max(0, total - files.length))})}
           </button>
         )}
       </div>
@@ -297,7 +296,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       {dragging && (
         <div className="files-drop" aria-hidden>
           <Icon name="upload" size={36} />
-          <strong>Solte para compartilhar em #{channel.name}</strong>
+          <strong>{rich("common.c58ba7385539",{p0:(channel.name)})}</strong>
         </div>
       )}
       {image !== null && image >= 0 && (

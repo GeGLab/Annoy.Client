@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api, fetchInfo } from "./api.ts";
@@ -64,7 +65,7 @@ const navigationSignal = (accountId: string, channelId: string) => {
 
 export function apiFor(accountId: string): Api {
   const entry = live.get(accountId);
-  if (!entry) throw new Error("Conta desconectada");
+  if (!entry) throw new Error(translate("common.0f0cb8fbffc1"));
   return entry.api;
 }
 
@@ -332,7 +333,7 @@ export function canRemoveServerConnection(accountId: string): boolean {
 
 export function removeServerConnection(accountId: string): void {
   if (!canRemoveServerConnection(accountId)) {
-    toast("Transfira a propriedade ou esteja sozinho para remover. Se o servidor estiver offline, aguarde 7 dias.");
+    toast(translate("common.15c6425dd1d2"));
     return;
   }
   removeAccount(accountId, "remove");
@@ -395,7 +396,7 @@ export async function resumeRecoveredView(accountId: string): Promise<void> {
   const visit = navigationGeneration;
   const server = await ensureServer(accountId, destination.serverId);
   if (!server || visit !== navigationGeneration || getState().view.kind !== "servers") {
-    if (!server && getState().view.kind === "servers") toast("Não foi possível reabrir a comunidade. Tente novamente pela lista.");
+    if (!server && getState().view.kind === "servers") toast(translate("common.bd8d13c69531"));
     return;
   }
   const channel = destination.channelId && server.channels.some((item) => item.id === destination.channelId)
@@ -507,8 +508,8 @@ export async function ensureServer(accountId: string, serverId: string, force = 
   } catch (err) {
     if (!isCancellation(err)) {
       const message = err instanceof RequestError && err.status === 403
-        ? "Sua conta não tem mais acesso a esta comunidade. Atualize a lista de servidores."
-        : (err as Error).message || "Não foi possível carregar esta comunidade.";
+        ? translate("common.c1c47f629bfa")
+        : (err as Error).message || translate("common.202c2503ac81");
       patchInstance(accountId, (inst) => { inst.serverLoadErrors[serverId] = message; });
     }
     return undefined;
@@ -613,7 +614,7 @@ export async function jumpToMessage(accountId:string,channelId:string,messageId:
   const window=await fetchMessageWindow(accountId,channelId,`around=${encodeURIComponent(messageId)}`,active);
   if (active.aborted || navigation !== navigationGeneration || !currentApi(accountId, api, generation)) throw cancelled();
   window.items=reconcileMessageWindow(window.items,pendingMutations(accountId,channelId),sequence,!window.hasMoreAfter);
-  if(!window.items.some(message=>message.id===messageId))throw new RequestError(404,"A mensagem foi removida.","http");
+  if(!window.items.some(message=>message.id===messageId))throw new RequestError(404,translate("common.5121cfab4e9c"),"http");
   messageReads.get(messageKey(accountId, channelId))?.abort();
   messageReads.delete(messageKey(accountId, channelId));
   navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
@@ -671,11 +672,11 @@ export function sendTyping(accountId: string, channelId: string): void {
 const NO_CALL_E2EE = /apenas a criptografia de transporte|SFrame ainda não foi implementado|não suportada neste servidor/;
 
 export async function joinVoice(accountId: string, serverId: string, channelId: string, transportOnly = false): Promise<void> {
-  if (getState().instances[accountId]?.status !== "ready") return void toast("Sem conexão com o servidor. Conecte novamente para entrar na voz.");
+  if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
   const account = getState().accounts.find((a) => a.id === accountId);
   // Voice, camera and screen are sealed with SFrame by default; otherwise the call goes ahead with a visible "sem E2EE" notice.
   const e2ee = !transportOnly && account && callEncryptionSupported() ? { url: account.url, token: account.token, userId: account.userId } : null;
-  if (!e2ee) toast("Esta chamada não terá criptografia de ponta a ponta neste servidor.", 6000);
+  if (!e2ee) toast(translate("common.5f4379372fc3"), 6000);
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
@@ -693,7 +694,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
     }),
     () =>
       toast(
-        "Sem áudio: o app não alcançou a porta de voz do servidor. Quem hospeda deve conferir ANNOY_ANNOUNCED_IP e liberar a porta 40000 (UDP e TCP).",
+        translate("common.ac0a92bac0cd"),
         12000,
       ),
     accountId,
@@ -714,11 +715,11 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
       }
     });
     playCallFeedback("join");
-    if (!session.canSpeak) toast("Você está conectado sem permissão para falar");
+    if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
     if (voice?.session === session) leaveVoice();
     if (e2ee && NO_CALL_E2EE.test((err as Error).message)) return joinVoice(accountId, serverId, channelId, true);
-    toast(`Voz: ${(err as Error).message}`);
+    toast(translate("common.5ece26b7ec6d",{p0:((err as Error).message)}));
   }
 }
 
@@ -770,7 +771,7 @@ export async function toggleCamera(): Promise<void> {
     if (session.isSharing("camera")) await session.stopVideo("camera");
     else await session.startVideo("camera", getState().settings.cameraDeviceId);
   } catch (err) {
-    toast(`Câmera: ${(err as Error).message}`);
+    toast(translate("common.c88e21593233",{p0:((err as Error).message)}));
   }
 }
 
@@ -800,7 +801,7 @@ export async function startScreenShare(sourceId: string | null): Promise<void> {
     updateVoiceSettings();
   } catch (err) {
     // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
-    if ((err as DOMException).name !== "NotAllowedError") toast(`Tela: ${(err as Error).message}`);
+    if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
   }
 }
 
@@ -830,7 +831,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
       return member ? displayNameOf(member) : (dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null))?.displayName;
     };
     const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
-    const body = message.protection === "e2ee" ? "Nova mensagem protegida no Annoy" : previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
+    const body = message.protection === "e2ee" ? translate("common.e8cfd559e42e") : previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
     const n = new Notification(message.protection === "e2ee" ? "Annoy" : message.author.displayName, { body, silent: true });
     n.onclick = () => window.focus();
   }
@@ -876,7 +877,7 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
           const bind = () => window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
             // A new session lives only minutes until it is bound to this device's key (DPoP).
             // Servers without MLS (older versions) have no device-bound sessions to set up.
-            if (!/MLS/.test(error.message)) toast(`Não foi possível vincular a sessão a este dispositivo: ${error.message}`, 10000);
+            if (!/MLS/.test(error.message)) toast(translate("common.5f0ce6405685",{p0:(error.message)}), 10000);
           });
           if (annoyUser) void bind();
           else void window.distopic.auth.local(account).then(bind, () => undefined);
@@ -950,7 +951,7 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
       });
       if (s.view.kind === "server" && s.view.accountId === accountId && s.view.serverId === serverId) {
         navigate({ kind: "home", accountId, dmId: null });
-        toast("Você não faz mais parte deste servidor");
+        toast(translate("common.50060f0f8930"));
       }
       return;
     }
@@ -1108,7 +1109,7 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
       emitRoomEvent(accountId, event);
       return;
     case "INVALID_SESSION":
-      toast(`Sessão expirada em ${getState().accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor"}; entre novamente`);
+      toast(translate("common.a63365b69dc0",{p0:(getState().accounts.find((a) => a.id === accountId)?.instanceName ?? "servidor")}));
       return;
     case "HEARTBEAT_ACK":
     case "VOICE_NEW_PRODUCER":

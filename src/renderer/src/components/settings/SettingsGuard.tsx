@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { registerNavigationGuard } from "../../lib/navigation-guard.ts";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
@@ -82,7 +83,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
     try {
       for (const value of drafts.current.values()) {
         if (value.current.dirty && !(await value.current.save())) {
-          setError("Não foi possível salvar todas as alterações. Confira os campos e tente novamente.");
+          setError(translate("settings.fc9f977413ea"));
           return false;
         }
       }
@@ -97,13 +98,9 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
   };
   const footer = dirty ? (
     <div className="settings-savebar">
-      <span>{error ?? "Você tem alterações não salvas."}</span>
-      <Button variant="ghost" disabled={saving} onClick={reset}>
-        Redefinir
-      </Button>
-      <Button loading={saving} onClick={() => void save()}>
-        Salvar alterações
-      </Button>
+      <span>{error ?? translate("settings.32789d800cdf")}</span>
+      <Button variant="ghost" disabled={saving} onClick={reset}>{translate("settings.c54fabd99e62")}</Button>
+      <Button loading={saving} onClick={() => void save()}>{translate("settings.7368658c96c4")}</Button>
     </div>
   ) : null;
   const value = useMemo(() => ({ register, changed, leave, footer, saving }), [register, changed, leave, footer, saving]);
@@ -114,19 +111,15 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
         <Dialog open onOpenChange={(open) => !open && !saving && setPending(null)}>
           <DialogContent className="modal unsaved-dialog" aria-describedby="settings-unsaved-description" showClose={false}>
             <div className="modal-body">
-              <DialogTitle>Salvar suas alterações?</DialogTitle>
-              <p id="settings-unsaved-description" className="muted">
-                Há mudanças não salvas nestas configurações.
-              </p>
+              <DialogTitle>{translate("settings.e0cf65f22d9a")}</DialogTitle>
+              <p id="settings-unsaved-description" className="muted">{translate("settings.4785c3efd52f")}</p>
               {error && (
                 <p className="error" role="alert">
                   {error}
                 </p>
               )}
               <div className="form-actions">
-                <Button variant="ghost" disabled={saving} onClick={() => setPending(null)}>
-                  Continuar editando
-                </Button>
+                <Button variant="ghost" disabled={saving} onClick={() => setPending(null)}>{translate("settings.a226aabb5545")}</Button>
                 <Button
                   variant="secondary"
                   disabled={saving}
@@ -136,9 +129,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
                     setPending(null);
                     queueMicrotask(action);
                   }}
-                >
-                  Descartar alterações
-                </Button>
+                >{translate("settings.534c4da81431")}</Button>
                 <Button
                   loading={saving}
                   onClick={() =>
@@ -150,9 +141,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
                       }
                     })
                   }
-                >
-                  Salvar e continuar
-                </Button>
+                >{translate("settings.af2b1a24f03c")}</Button>
               </div>
             </div>
           </DialogContent>
@@ -161,3 +150,5 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
     </Context.Provider>
   );
 }
+
+

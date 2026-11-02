@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import { createCipheriv, createDecipheriv, createHash,hkdfSync, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join,dirname } from 'node:path';
@@ -185,7 +186,7 @@ export class EncryptedVault {
     if(recoveryKey.length!==32) throw new Error('Recovery key must have 256 bits');
     const records:Record<string,string>={};let bytesUsed=0;
     for(const [id,e] of this.entries) if(e.backup && e.expiresAt===null && !id.startsWith('protocol:')&&!id.startsWith('protocol-expiry:')) {
-      const plain=this.get(id)!;try{bytesUsed+=plain.length;if(bytesUsed>40*1024*1024)throw new Error('Use backup em diretório para históricos grandes');records[id]=plain.toString('base64');}finally{plain.fill(0);}
+      const plain=this.get(id)!;try{bytesUsed+=plain.length;if(bytesUsed>40*1024*1024)throw new Error(translate("common.b3a9faea1112"));records[id]=plain.toString('base64');}finally{plain.fill(0);}
     }
     const plain=Buffer.from(JSON.stringify({version:1,records}));
     try{return seal(recoveryKey,plain,'backup');}finally{plain.fill(0);}

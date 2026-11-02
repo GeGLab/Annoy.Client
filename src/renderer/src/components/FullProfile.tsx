@@ -1,3 +1,6 @@
+import {localizationPreferences} from "../../../shared/localization/index.ts";
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { User } from "@distopic/protocol";
 import { useState } from "react";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";
@@ -29,10 +32,7 @@ export function FullProfileButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="secondary" size="sm">
-          <Icon name="users" size={16} />
-          Ver perfil completo
-        </Button>
+        <Button variant="secondary" size="sm">{rich("common.91debd26f145",{p0:(<Icon name="users" size={16} />)})}</Button>
       </DialogTrigger>
       {open && <FullProfile accountId={accountId} user={user} />}
     </Dialog>
@@ -55,12 +55,8 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
       className="modal full-profile"
       overlayClassName="full-profile-overlay"
     >
-      <DialogTitle className="full-profile-title">
-        Perfil de {relationship?.nickname || identity.displayName}
-      </DialogTitle>
-      <DialogDescription className="muted small">
-        Informações compartilhadas nesta instância.
-      </DialogDescription>
+      <DialogTitle className="full-profile-title">{rich("common.bb51fa235d84",{p0:(relationship?.nickname || identity.displayName)})}</DialogTitle>
+      <DialogDescription className="muted small">{translate("common.ba7fca20614f")}</DialogDescription>
       <div className="full-profile-identity">
         <Avatar user={identity} presence={presence} size={72} />
         <div>
@@ -68,52 +64,45 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
           <p className="muted">@{identity.username}</p>
           <span>
             {presence === "online"
-              ? "Online"
+              ? translate("common.0d21bd52022c")
               : presence === "idle"
-                ? "Ausente"
+                ? translate("common.fd7f0836e8ad")
                 : presence === "dnd"
-                  ? "Não incomodar"
-                  : "Offline"}
+                  ? translate("common.976685dd88bf")
+                  : translate("common.a1794783aab7")}
           </span>
         </div>
       </div>
       {identity.bio && (
         <section>
-          <h3>Sobre mim</h3>
+          <h3>{translate("common.4cadb7f9efaa")}</h3>
           <p className="full-profile-bio">{identity.bio}</p>
         </section>
       )}
       {activities.length > 0 && (
         <section>
-          <h3>Agora</h3>
+          <h3>{translate("common.60e8f5cb5d84")}</h3>
           <ActivityStack activities={activities} />
         </section>
       )}
       {!connected ? (
-        <p role="status">
-          Sem conexão. Reconecte para consultar os detalhes atuais.
-        </p>
+        <p role="status">{translate("common.56732ab52c86")}</p>
       ) : !supported ? (
-        <p role="status">
-          Atualize o Annoy.Server e reconecte para consultar contatos e
-          histórico.
-        </p>
+        <p role="status">{translate("common.e2e3ff4c83da")}</p>
       ) : loading ? (
-        <p role="status">Carregando detalhes do perfil…</p>
+        <p role="status">{translate("common.bff791e5857b")}</p>
       ) : unavailable ? (
-        <p role="status">Este perfil não está mais disponível.</p>
+        <p role="status">{translate("common.665820c474ff")}</p>
       ) : error ? (
         <div role="alert">
           <p>{error}</p>
-          <Button variant="secondary" onClick={retry}>
-            Tentar novamente
-          </Button>
+          <Button variant="secondary" onClick={retry}>{translate("common.b9e10688be01")}</Button>
         </div>
       ) : (
         details && (
           <>
             <section>
-              <h3>Redes e contatos</h3>
+              <h3>{translate("common.547c01840a7c")}</h3>
               {details.fields.length > 0 ? (
                 <ul className="profile-contact-list">
                   {details.fields.map((field) => (
@@ -125,9 +114,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
                           <span>
                             {field.value}
                             {field.kind === "email" && (
-                              <small className="muted">
-                                Contato não verificado
-                              </small>
+                              <small className="muted">{translate("common.1ec451c7a3ae")}</small>
                             )}
                           </span>
                         ) : (
@@ -147,48 +134,38 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
               ) : (
                 <p className="muted">
                   {details.hasPrivateFields
-                    ? "Os contatos deste perfil são privados para você."
-                    : "Nenhum contato ou rede adicionado."}
+                    ? translate("common.d116552ef4a2")
+                    : translate("common.7bcba8a97e24")}
                 </p>
               )}
               {details.hasPrivateFields && details.fields.length > 0 && (
-                <p className="muted small">
-                  Outros campos são privados para você.
-                </p>
+                <p className="muted small">{translate("common.a887eaea4bd8")}</p>
               )}
             </section>
             <section>
-              <h3>Histórico de atividades</h3>
+              <h3>{translate("common.83549f764bc9")}</h3>
               {details.history.visibility === "disabled" ? (
-                <p className="muted">O histórico está desativado.</p>
+                <p className="muted">{translate("common.de467c13fba1")}</p>
               ) : details.history.visibility === "private" ? (
-                <p className="muted">
-                  Histórico disponível apenas para amigos e membros de
-                  comunidades em comum.
-                </p>
+                <p className="muted">{translate("common.283b77b659d0")}</p>
               ) : details.history.entries.length === 0 ? (
-                <p className="muted">
-                  Nenhuma sessão encerrada nos últimos 30 dias.
-                </p>
+                <p className="muted">{translate("common.72531dedf740")}</p>
               ) : (
                 <ol className="activity-history-list">
                   {details.history.entries.map((entry) => (
                     <li key={entry.id}>
                       <strong>{entry.name}</strong>
                       <span className="muted">
-                        {new Date(entry.startedAt).toLocaleString()} ·{" "}
+                        {new Date(entry.startedAt).toLocaleString(localizationPreferences().region,{...({hourCycle:localizationPreferences().hourCycle}),hourCycle:localizationPreferences().hourCycle})} ·{" "}
                         {entry.endedAt
-                          ? `${Math.max(0, Math.floor((Date.parse(entry.endedAt) - Date.parse(entry.startedAt)) / 60_000))} min observados`
-                          : "Duração indisponível; encerramento não confirmado"}
+                          ? translate("common.c4e0a84b834b",{p0:(Math.max(0, Math.floor((Date.parse(entry.endedAt) - Date.parse(entry.startedAt)) / 60_000)))})
+                          : translate("common.9b57f20158cc")}
                       </span>
                     </li>
                   ))}
                 </ol>
               )}
-              <p className="muted small">
-                Até três sessões encerradas, por até 30 dias. O registro começa
-                somente após consentimento.
-              </p>
+              <p className="muted small">{translate("common.b48ab29de390")}</p>
             </section>
           </>
         )
@@ -196,3 +173,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
     </DialogContent>
   );
 }
+
+
+
+

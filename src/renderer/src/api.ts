@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {secureFetch} from "./secure-fetch.ts";
 import type { AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@distopic/protocol";
 import { abortableDelay, cancelled, fetchJson, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, setRequestTransport, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../shared/requests.ts";
@@ -84,7 +85,7 @@ export async function discordLogin(url: string, begin: () => Promise<DiscordLogi
     if (result.status === "done") return result;
     if (result.status === "error") throw new Error(result.message);
   }
-  throw new Error("Tempo esgotado esperando o Discord");
+  throw new Error(translate("common.5af56b62db97"));
 }
 
 export async function beginDiscordLogin(url: string, inviteCode?: string, signal?: AbortSignal): Promise<DiscordLoginBegin> {
@@ -113,7 +114,7 @@ export class Api {
   }
 
   private async nativeCrypto(){
-    if(!window.distopic?.crypto||!this.userId)throw new Error('Identidade local e serviço criptográfico são necessários');
+    if(!window.distopic?.crypto||!this.userId)throw new Error(translate("common.db97ff1ce961"));
     await window.distopic.crypto.guard(this.baseUrl,this.token,'identity',this.userId);return window.distopic.crypto;
   }
 
@@ -130,7 +131,7 @@ export class Api {
     }, (error: unknown) => {
       if (generation !== this.scope.generation) throw cancelled();
       if (mutation && error instanceof RequestError && error.kind === "timeout")
-        error = new RequestError(0, "Não foi possível confirmar a operação. Verifique o resultado antes de tentar novamente.", "timeout");
+        error = new RequestError(0, translate("common.c5a5bb09c7e0"), "timeout");
       if (error instanceof RequestError) this.observed?.(error);
       throw error;
     });
@@ -141,14 +142,14 @@ export class Api {
   }
 
   private requireConnection(): void {
-    if (!this.canWrite()) throw new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar.");
+    if (!this.canWrite()) throw new Error(translate("common.2ff92506e4aa"));
   }
 
   async request<T = unknown>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     if (method !== "GET" && method !== "HEAD") this.requireConnection();
-    if(method==='POST'&&/^\/channels\/[^/]+\/messages(?:\?|$)/.test(path))throw new Error('Novas mensagens exigem o serviço MLS; envio direto em texto claro bloqueado.');
+    if(method==='POST'&&/^\/channels\/[^/]+\/messages(?:\?|$)/.test(path))throw new Error(translate("common.dfd2b2c1f6bb"));
     if(method==='GET'&&path.startsWith('/search/messages?')){
-      if(!window.distopic?.crypto)throw new Error('Busca local exige o serviço criptográfico');
+      if(!window.distopic?.crypto)throw new Error(translate("common.7b6d22cd8c9d"));
       return await (await this.nativeCrypto()).search(this.baseUrl,this.token,Object.fromEntries(new URLSearchParams(path.split('?')[1]))) as T;
     }
     const mutation=/^\/channels\/([^/]+)\/messages\/([^/]+)(?:\/reactions\/([^/?]+))?$/.exec(path);
@@ -158,9 +159,9 @@ export class Api {
       window.dispatchEvent(new CustomEvent('annoy:crypto-begin',{detail:marker}));
       const pinned=this.userId&&window.distopic?.crypto?await window.distopic.crypto.guard(this.baseUrl,this.token,channel,this.userId):false;
       const response=await secureFetch(`${this.baseUrl}/api/channels/${encodeURIComponent(channel)}/crypto`,{headers:{authorization:`Bearer ${this.token}`}});
-      if(!response.ok&&pinned)throw new Error('Canal E2EE indisponível');
+      if(!response.ok&&pinned)throw new Error(translate("common.f9b11ecc7f99"));
       if(pinned||(response.ok&&(await response.json() as {channel:unknown}).channel)){
-        if(!window.distopic?.crypto)throw new Error('Serviço criptográfico indisponível');
+        if(!window.distopic?.crypto)throw new Error(translate("common.46de7729741c"));
         const kind=mutation[3]?'reaction':method==='PATCH'?'edit':'delete';
         const result=await window.distopic.crypto.action(this.baseUrl,this.token,channel,kind,decodeURIComponent(mutation[2]!),mutation[3]?decodeURIComponent(mutation[3]):(body as {content?:string}|undefined)?.content??'',method!=='DELETE');
         window.dispatchEvent(new CustomEvent('annoy:crypto-change',{detail:{...marker,message:result}}));
@@ -169,19 +170,19 @@ export class Api {
       // Never send a new edit or reaction in plaintext, even when there is no
       // active group yet. Only deletion of the explicitly legacy source may
       // use its existing administrative endpoint.
-      if(method==='PATCH'||mutation[3])throw new Error('Histórico legado é somente leitura para edições e reações. Use uma conversa MLS para novo conteúdo.');
+      if(method==='PATCH'||mutation[3])throw new Error(translate("common.673027275f39"));
     }
     const messagePath = /^\/channels\/([^/]+)\/messages(?:\?(.*))?$/.exec(path);
     if (method === "GET" && messagePath) {
       const channel = decodeURIComponent(messagePath[1]!);
       const response = await secureFetch(`${this.baseUrl}/api/channels/${encodeURIComponent(channel)}/crypto`, { headers: { authorization: `Bearer ${this.token}` } });
       const pinned=window.distopic?.crypto&&this.userId?await window.distopic.crypto.guard(this.baseUrl,this.token,channel,this.userId):false;
-      if(!response.ok&&pinned)throw new Error("Tentativa de downgrade: o canal já utilizava E2EE");
+      if(!response.ok&&pinned)throw new Error(translate("common.7dbf1fd8ddb2"));
       if (response.ok) {
         const status = await response.json() as { channel: unknown };
-        if(!status.channel&&pinned)throw new Error("Tentativa de downgrade: o canal já utilizava E2EE");
+        if(!status.channel&&pinned)throw new Error(translate("common.7dbf1fd8ddb2"));
         if (status.channel) {
-          if (!window.distopic?.crypto) throw new Error("Abra o cliente desktop para ler mensagens E2EE");
+          if (!window.distopic?.crypto) throw new Error(translate("common.9432125c40ba"));
           const query=new URLSearchParams(messagePath[2]??"");const before=query.get("before");
           return await window.distopic.crypto.sync(this.baseUrl,this.token,channel,before??undefined) as T;
         }
@@ -217,7 +218,7 @@ export class Api {
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null, expiresAt:string|null=null,signal?:AbortSignal): Promise<T> {
     this.requireConnection();
-    if (!window.distopic?.crypto) throw new Error("O envio exige o serviço criptográfico do cliente desktop");
+    if (!window.distopic?.crypto) throw new Error(translate("common.5c61e5b8b4dc"));
     const encryptedFiles=await Promise.all(files.map(async file=>({name:file.name,type:file.type,bytes:await file.arrayBuffer()})));
     const id=crypto.randomUUID(),cancel=()=>{void window.distopic!.crypto.cancel(id).catch(()=>{});};
     try{
@@ -229,15 +230,15 @@ export class Api {
     }finally{signal?.removeEventListener('abort',cancel);for(const file of encryptedFiles)new Uint8Array(file.bytes).fill(0);}
   }
   async attachment(channel:string,messageId:string,id:string){return (await this.nativeCrypto()).attachment(this.baseUrl,this.token,channel,messageId,id);}
-  downloadLegacy(file:import('@distopic/protocol').Attachment){if(!window.distopic)throw new Error('Abra o cliente desktop');return window.distopic.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
+  downloadLegacy(file:import('@distopic/protocol').Attachment){if(!window.distopic)throw new Error(translate("common.3968f81630af"));return window.distopic.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
   async legacyAttachment(file:import('@distopic/protocol').Attachment):Promise<{bytes:ArrayBuffer;type:string;name:string}>{
     const url=new URL(file.url,this.baseUrl);
-    if(url.origin!==new URL(this.baseUrl).origin||!/^\/api\/uploads\/[a-f0-9]{32}\//.test(url.pathname))throw new Error('Endereço de anexo inválido');
-    if(file.size>64*1024*1024)throw new Error('Prévia limitada a 64 MiB; use o download autenticado para arquivos maiores');
+    if(url.origin!==new URL(this.baseUrl).origin||!/^\/api\/uploads\/[a-f0-9]{32}\//.test(url.pathname))throw new Error(translate("common.c26cf0c38f84"));
+    if(file.size>64*1024*1024)throw new Error(translate("common.47ada758ced5"));
     const response=await secureFetch(url.toString(),{headers:{authorization:`Bearer ${this.token}`},cache:'no-store',redirect:'error'});
-    if(!response.ok||!response.body)throw new Error('Anexo legado indisponível');
+    if(!response.ok||!response.body)throw new Error(translate("common.044b8ff4fe80"));
     let size=0;const chunks:Uint8Array[]=[];
-    for await(const chunk of response.body as unknown as AsyncIterable<Uint8Array>){size+=chunk.length;if(size>64*1024*1024)throw new Error('Limite de prévia atingido');chunks.push(chunk);}
+    for await(const chunk of response.body as unknown as AsyncIterable<Uint8Array>){size+=chunk.length;if(size>64*1024*1024)throw new Error(translate("common.005a9caa5c5e"));chunks.push(chunk);}
     const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;chunk.fill(0);}
     return {bytes:bytes.buffer,type:file.contentType,name:file.filename};
   }
@@ -248,7 +249,7 @@ export class Api {
 
   /** Like sendMessage with files, reporting upload progress from 0 to 1. */
   uploadMessage<T>(channelId: string, content: string, files: File[], onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
-    if (!this.canWrite()) return Promise.reject(new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar."));
+    if (!this.canWrite()) return Promise.reject(new Error(translate("common.2ff92506e4aa")));
     if(signal?.aborted)return Promise.reject(new DOMException("Envio cancelado","AbortError"));
     onProgress(0);
     return this.sendMessage<T>(channelId,content,files,null,null,signal).then(message=>{onProgress(1);return message;});

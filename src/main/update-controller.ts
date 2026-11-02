@@ -8,6 +8,7 @@ interface UpdateIO {
   downloadUpdate(): Promise<unknown>;
   install(): void | Promise<void>;
   publish(state: UpdateState): void;
+  formatError?(error:unknown):string;
 }
 
 /** Platform-independent state machine; electron-updater owns file verification/install. */
@@ -22,7 +23,7 @@ export function createUpdateController(io: UpdateIO) {
   const mandatory = () => advisory !== null;
   function error(err: unknown) {
     installing = false;
-    publish({ status: "error", currentVersion: io.currentVersion, message: err instanceof Error ? err.message : String(err), mandatory: mandatory(), advisory, releaseUrl: RELEASES_URL });
+    publish({ status: "error", currentVersion: io.currentVersion, message: io.formatError?.(err)??(err instanceof Error ? err.message : String(err)), mandatory: mandatory(), advisory, releaseUrl: RELEASES_URL });
   }
   async function download() {
     if (!pendingVersion || state.status === "downloading" || state.status === "ready") return;
@@ -30,15 +31,16 @@ export function createUpdateController(io: UpdateIO) {
     publish({ status: "downloading", currentVersion: io.currentVersion, version: pendingVersion, mandatory: mandatory(), advisory, percent: 0, releaseUrl: releaseUrl(pendingVersion) });
     try { await io.downloadUpdate(); } catch (err) { error(err); }
   }
-  async function check() {
+  async function check(options:{policyOnly?:boolean}={}) {
     if (!io.updatable()) return publish({ status: "disabled", currentVersion: io.currentVersion });
     if (checking || installing) return;
     checking = true;
     // Keep a known critical advisory through network outages and retries.
-    if (!advisory && state.status !== "downloading" && state.status !== "ready") publish({ status: "checking", currentVersion: io.currentVersion });
+    if (!options.policyOnly&&!advisory && state.status !== "downloading" && state.status !== "ready") publish({ status: "checking", currentVersion: io.currentVersion });
     try {
       const loaded = await io.loadAdvisory();
       if (loaded && (!advisory || compareVersions(loaded.fixedIn, advisory.fixedIn) >= 0)) advisory = loaded;
+      if(options.policyOnly&&!advisory)return;
       // Block as soon as the advisory is known, even while the feed is slow.
       if (advisory && state.status !== "ready" && state.status !== "downloading") {
         publish({ status: "blocked", currentVersion: io.currentVersion, advisory, releaseUrl: RELEASES_URL });

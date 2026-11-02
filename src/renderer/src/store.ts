@@ -1,3 +1,4 @@
+import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
 import type {
   ChannelReadState,
   DmChannel,
@@ -115,7 +116,7 @@ export interface VoiceUi {
   screen: boolean;
 }
 
-export interface Settings {
+export interface Settings extends LocalizationPreferences {
   theme: "dark" | "light" | "system";
   accentColor: string | null;
   surfaceColor: string | null;
@@ -213,6 +214,7 @@ export function identityAccountIds(s: AppState): string[] {
 const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
+  ...defaultLocalization(navigator.language),
   theme: "dark",
   accentColor: null,
   surfaceColor: null,
@@ -257,7 +259,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? normalizeLocalization(saved,navigator.language) : {}) } as T;
   } catch {
     return fallback;
   }
@@ -353,6 +355,7 @@ export async function restoreSavedAccounts():Promise<void>{
 const listeners = new Set<() => void>();
 
 export const getState = () => state;
+configureLocalization(state.settings);
 
 export function setState(recipe: (draft: Draft<AppState>) => void): void {
   const prev = state;
@@ -361,6 +364,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   if (state.accounts !== prev.accounts) persistAccounts(state.accounts);
   if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  if(JSON.stringify(normalizeLocalization(state.settings))!==JSON.stringify(normalizeLocalization(prev.settings)))configureLocalization(state.settings);
   if (state.view !== prev.view) {
     localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
     if ("accountId" in state.view) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.view.accountId));

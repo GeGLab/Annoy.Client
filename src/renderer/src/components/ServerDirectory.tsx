@@ -1,3 +1,6 @@
+import {rich} from "../lib/localization.ts";
+import {localizationPreferences} from "../../../shared/localization/index.ts";
+import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useMemo, useState } from "react";
 import type { ServerSummary, ServerSummaryPage } from "@distopic/protocol";
 import { apiFor, navigate, openServer, reconnect, resumeRecoveredView } from "../client.ts";
@@ -10,8 +13,8 @@ import { Icon, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Select } from "./ui/select.tsx";
 
-const checkedLabel = (at: number | null) => at === null ? "horário indisponível"
-  : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(at);
+const checkedLabel = (at: number | null) => at === null ? translate("common.88bad3263261")
+  : new Intl.DateTimeFormat(localizationPreferences().region, { dateStyle: "short", timeStyle: "short",hourCycle:localizationPreferences().hourCycle }).format(at);
 type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: number; loading: boolean; error: string | null; cached: boolean };
 
 export function ServerDirectory() {
@@ -20,7 +23,7 @@ export function ServerDirectory() {
   const [query, setQuery] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [pages, setPages] = useState<Record<string, DirectoryPage>>({});
-  const normalized = query.trim().toLocaleLowerCase("pt-BR");
+  const normalized = query.trim().toLocaleLowerCase(localizationPreferences().region);
   const connectionSignature = accounts.map((account) => `${account.id}:${instances[account.id]?.status ?? "none"}`).join("|");
   const summarySignature = accounts.map((account) => `${account.id}:${(instances[account.id]?.servers ?? []).map((server) => `${server.id}/${server.name}`).join(",")}`).join("|");
   useEffect(() => { document.getElementById("server-directory-title")?.focus(); }, []);
@@ -31,25 +34,25 @@ export function ServerDirectory() {
     setPages(Object.fromEntries(candidates.map((account) => [account.id, { servers: [], cursor: null, total: 0, loading: true, error: null, cached: false }])));
     void Promise.all(candidates.map(async (account) => {
       const instance = instances[account.id];
-      const accountMatches = account.instanceName.toLocaleLowerCase("pt-BR").includes(normalized);
+      const accountMatches = account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized);
       const term = normalized && !accountMatches ? normalized : "";
       if (instance?.status === "ready") {
         const params = new URLSearchParams({ limit: "50", q: term });
         try {
           const page = await apiFor(account.id).get<ServerSummaryPage>(`/servers?${params}`, controller.signal);
-          if (!Array.isArray(page?.servers) || typeof page.total !== "number") throw new Error("A instância não retornou uma página de servidores válida.");
+          if (!Array.isArray(page?.servers) || typeof page.total !== "number") throw new Error(translate("common.eab1543a1723"));
           if (!controller.signal.aborted) setPages((current) => ({ ...current, [account.id]: { servers: page.servers, cursor: page.nextCursor, total: page.total, loading: false, error: null, cached: false } }));
           return;
         } catch (reason) {
           if (controller.signal.aborted || isCancellation(reason)) return;
           if (!(reason instanceof RequestError) || reason.status !== 404) {
-            const cached = instance.servers.filter((server) => !term || server.name.toLocaleLowerCase("pt-BR").includes(term));
+            const cached = instance.servers.filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
             setPages((current) => ({ ...current, [account.id]: { servers: cached.slice(0, 50), cursor: cached.length > 50 ? "50" : null, total: cached.length, loading: false, error: (reason as Error).message, cached: true } }));
             return;
           }
         }
       }
-      const cached = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase("pt-BR").includes(term));
+      const cached = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
       if (!controller.signal.aborted) setPages((current) => ({ ...current, [account.id]: { servers: cached.slice(0, 50), cursor: cached.length > 50 ? "50" : null, total: cached.length, loading: false, error: null, cached: true } }));
     }));
     return () => controller.abort();
@@ -58,7 +61,7 @@ export function ServerDirectory() {
   const groups = useMemo(() => accounts
     .filter((account) => accountFilter === "all" || account.id === accountFilter)
     .map((account) => ({ account, instance: instances[account.id], page: pages[account.id], recoveryReturn: readRecoveryReturn(account.id) }))
-    .filter(({ account, page, recoveryReturn }) => account.instanceName.toLocaleLowerCase("pt-BR").includes(normalized) || (page?.servers.length ?? 0) > 0 || page?.loading || !!recoveryReturn),
+    .filter(({ account, page, recoveryReturn }) => account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized) || (page?.servers.length ?? 0) > 0 || page?.loading || !!recoveryReturn),
   [accounts, instances, pages, accountFilter, normalized]);
   const knownCount = groups.reduce((count, group) => count + (group.page?.total ?? 0), 0);
 
@@ -71,12 +74,12 @@ export function ServerDirectory() {
     setPages((value) => ({ ...value, [accountId]: { ...current, loading: true, error: null } }));
     try {
       if (instance?.status === "ready" && !current.cached) {
-        const params = new URLSearchParams({ limit: "50", after: current.cursor, q: normalized && !account.instanceName.toLocaleLowerCase("pt-BR").includes(normalized) ? normalized : "" });
+        const params = new URLSearchParams({ limit: "50", after: current.cursor, q: normalized && !account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized) ? normalized : "" });
         const next = await apiFor(accountId).get<ServerSummaryPage>(`/servers?${params}`);
         setPages((value) => ({ ...value, [accountId]: { servers: [...(value[accountId]?.servers ?? []), ...next.servers], cursor: next.nextCursor, total: next.total, loading: false, error: null, cached: false } }));
       } else {
-        const term = normalized && !account.instanceName.toLocaleLowerCase("pt-BR").includes(normalized) ? normalized : "";
-        const all = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase("pt-BR").includes(term));
+        const term = normalized && !account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized) ? normalized : "";
+        const all = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
         const offset = Number(current.cursor);
         const next = all.slice(offset, offset + 50);
         const nextOffset = offset + next.length;
@@ -89,32 +92,29 @@ export function ServerDirectory() {
 
   return <section className="server-directory" aria-labelledby="server-directory-title">
     <header className="server-directory-header">
-      <div><span className="eyebrow">Suas comunidades</span><h1 id="server-directory-title" tabIndex={-1}>Servidores</h1>
-        <p>Comunidades disponíveis nas suas instâncias Annoy.</p></div>
-      <Button variant="secondary" onClick={() => navigate({ kind: "home", accountId: accounts[0]?.id ?? null, dmId: null })}>
-        <Icon name="home" size={16} />Mensagens diretas
-      </Button>
+      <div><span className="eyebrow">{translate("common.1471b88bbb29")}</span><h1 id="server-directory-title" tabIndex={-1}>{translate("common.c1158df03518")}</h1>
+        <p>{translate("common.0e457eca5933")}</p></div>
+      <Button variant="secondary" onClick={() => navigate({ kind: "home", accountId: accounts[0]?.id ?? null, dmId: null })}>{rich("common.81f329048e3d",{p0:(<Icon name="home" size={16} />)})}</Button>
     </header>
     <div className="server-directory-tools">
-      <label className="server-directory-search"><Icon name="search" size={17} /><span className="sr-only">Buscar servidor ou instância</span>
-        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores ou instâncias" />
+      <label className="server-directory-search"><Icon name="search" size={17} /><span className="sr-only">{translate("common.b408dd0fad7b")}</span>
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.f9b06fce2da3")} />
       </label>
-      <label className="server-directory-account">Instância
-        <Select aria-label="Filtrar por instância" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
-          <option value="all">Todas as instâncias</option>
+      <label className="server-directory-account">{translate("common.c641bdc857f2")}<Select aria-label={translate("common.de7db69257b7")} value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+          <option value="all">{translate("common.3a97741f2fef")}</option>
           {accounts.map((account) => <option key={account.id} value={account.id}>{account.instanceName}</option>)}
         </Select>
       </label>
-      <span className="muted small" aria-live="polite">{knownCount} {knownCount === 1 ? "servidor" : "servidores"}</span>
+      <span className="muted small" aria-live="polite">{counted(knownCount,"counts.server.one","counts.server.other")}</span>
     </div>
     {!accounts.length ? <div className="server-directory-empty">
-      <Icon name="users" size={26} /><h2>Nenhuma instância conectada</h2>
-      <p>Adicione uma conta Annoy para ver as comunidades disponíveis.</p>
-      <Button onClick={() => openModal({ kind: "addAccount" })}>Adicionar conta</Button>
+      <Icon name="users" size={26} /><h2>{translate("common.71e2f935e297")}</h2>
+      <p>{translate("common.443b1939fc84")}</p>
+      <Button onClick={() => openModal({ kind: "addAccount" })}>{translate("common.11cf7643fb7e")}</Button>
     </div> : groups.length === 0 || (groups.every(({ page }) => !page?.loading) && knownCount === 0) ? (
       <div className="server-directory-empty"><Icon name="search" size={26} />
-        <h2>{normalized ? "Nenhum resultado" : "Nenhum servidor disponível"}</h2>
-        <p>{normalized ? "Tente outro nome de servidor ou instância." : "As instâncias conectadas não disponibilizaram comunidades para estas contas."}</p>
+        <h2>{normalized ? translate("expression.4410f3299961") : translate("common.c136e23df880")}</h2>
+        <p>{normalized ? translate("common.2159c612d6b0") : translate("common.45242c572011")}</p>
       </div>
     ) : <div className="server-directory-groups">
       {groups.map(({ account, instance, page, recoveryReturn }) => {
@@ -127,28 +127,32 @@ export function ServerDirectory() {
         return <section className="server-directory-group" key={account.id} aria-labelledby={`server-account-${account.id}`}>
           <header><div className="server-directory-instance-icon" aria-hidden="true">{initials(account.instanceName)}</div>
             <div className="server-directory-instance-copy"><h2 id={`server-account-${account.id}`}>{account.instanceName}</h2>
-              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? "Conectado" : invalid ? "Sessão expirada" : "Desconectado"}</span>
+              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? translate("common.7444e37ea660") : invalid ? translate("common.69883ff8a543") : translate("common.879b012449c1")}</span>
             </div>
             {!ready && (invalid
-              ? <Button variant="secondary" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}>Entrar novamente</Button>
-              : <Button variant="secondary" onClick={() => reconnect(account.id)}><Icon name="refresh" size={16} />Reconectar</Button>)}
-            {ready && recoveryReturn && <Button variant="secondary" onClick={() => void resumeRecoveredView(account.id)}><Icon name="left" size={16} />Voltar{resumeServer ? ` a ${resumeServer.name}` : recoveryReturn.kind === "home" ? " à conversa" : " ao espaço"}</Button>}
+              ? <Button variant="secondary" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}>{translate("common.05d410b61f11")}</Button>
+              : <Button variant="secondary" onClick={() => reconnect(account.id)}>{rich("common.7c87f7d3a1c8",{p0:(<Icon name="refresh" size={16} />)})}</Button>)}
+            {ready && recoveryReturn && <Button variant="secondary" onClick={() => void resumeRecoveredView(account.id)}>{rich("common.dcb5610cefb3",{p0:(<Icon name="left" size={16} />),p1:(resumeServer ? ` a ${resumeServer.name}` : recoveryReturn.kind === "home" ? translate("common.6f9369b08e82") : translate("common.c4e831d91b82"))})}</Button>}
           </header>
           {resumeError && <p className="server-directory-no-results" role="alert">{resumeError}</p>}
-          {page?.error && <p className="server-directory-no-results" role="alert">Não foi possível atualizar a lista: {page.error}</p>}
+          {page?.error && <p className="server-directory-no-results" role="alert">{rich("common.4fde0860898a",{p0:(page.error)})}</p>}
           <p className="server-directory-freshness"><Icon name={ready ? "check" : "clock"} size={14} />
-            {ready && !page?.cached ? `Verificado ${checkedLabel(instance?.serversObservedAt ?? null)}` : `Última informação conhecida · ${checkedLabel(instance?.serversObservedAt ?? null)}`}
-            {page?.cached ? " · cache local" : ""}
+            {ready && !page?.cached ? translate("common.5433ece37ba2",{p0:(checkedLabel(instance?.serversObservedAt ?? null))}) : translate("common.120413bc8326",{p0:(checkedLabel(instance?.serversObservedAt ?? null))})}
+            {page?.cached ? translate("common.a5d5aede1a0c") : ""}
           </p>
-          {awaiting ? <div className="server-directory-skeleton" role="status" aria-label="Carregando servidores"><span /><span /><span /></div> :
+          {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
             servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
               <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
-              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? "Disponibilidade confirmada" : "Disponibilidade não confirmada"}</small></span><Icon name="right" size={17} />
+              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</small></span><Icon name="right" size={17} />
             </button>)}</div>
-            {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? "Carregando…" : `Carregar mais (${Math.max(0, page.total - servers.length)} restantes)`}</Button>}</>
-              : <p className="server-directory-no-results">Nenhum servidor nesta instância corresponde à busca.</p>}
+            {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
+              : <p className="server-directory-no-results">{translate("common.e0365f8a1ebe")}</p>}
         </section>;
       })}
     </div>}
   </section>;
 }
+
+
+
+

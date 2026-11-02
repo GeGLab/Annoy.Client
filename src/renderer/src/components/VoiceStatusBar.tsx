@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { leaveVoice, openChannel } from "../client.ts";
 import { useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
@@ -19,31 +20,29 @@ export function VoiceStatusBar() {
       </span>
       <div className="voice-status-copy">
         <span role="status">
-          {voice.status === "connected" ? "Voz conectada" : "Conectando…"}
+          {voice.status === "connected" ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}
           {voice.status === "connected" && (
             <span
               className="voice-protection"
               data-e2ee={voice.e2ee ? "true" : "false"}
-              title={voice.e2ee ? "Voz, câmera e tela cifradas de ponta a ponta (SFrame). O servidor e o SFU não têm as chaves." : "Sem criptografia de ponta a ponta: o servidor de mídia pode acessar o conteúdo."}
+              title={voice.e2ee ? translate("common.8b4213cd6fe0") : translate("common.4e56a0bc7800")}
             >
               {" "}
-              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : "sem E2EE"}
+              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : translate("common.fd5d785ecbef")}
             </span>
           )}
         </span>
         <strong className="truncate">
-          {channel?.name ?? "Canal de voz"}
+          {channel?.name ?? translate("common.b9bd50cb65eb")}
           <span>
             {" "}
-            · {state?.server.name ?? "Servidor"}
-            {count > 0 && ` · ${count} na sala`}
+            · {state?.server.name ?? translate("common.05e427a291c2")}
+            {count > 0 && translate("common.f175b180fb81",{p0:(count)})}
           </span>
         </strong>
       </div>
-      <Button variant="ghost" size="sm" onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}>
-        Ver chamada
-      </Button>
-      <Button variant="ghost" size="icon" aria-label="Sair da chamada de voz" title="Sair da chamada" onClick={() => leaveVoice()}>
+      <Button variant="ghost" size="sm" onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}>{translate("common.22615e437db8")}</Button>
+      <Button variant="ghost" size="icon" aria-label={translate("common.4e054f9afb78")} title={translate("common.df851ef5297e")} onClick={() => leaveVoice()}>
         <Icon name="hangup" />
       </Button>
     </div>

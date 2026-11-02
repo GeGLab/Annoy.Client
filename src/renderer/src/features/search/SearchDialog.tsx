@@ -1,3 +1,5 @@
+import {localizationPreferences} from "../../../../shared/localization/index.ts";
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { useRef, useState } from "react";
 import { Search, SlidersHorizontal, FileSearch, ArrowUpRight } from "lucide-react";
 import type { MessageSearchPage } from "@distopic/protocol";
@@ -61,7 +63,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
       if (current === generation.current && !isCancellation(error))
         setError(
           (error as { status?: number }).status === 404
-            ? "Atualize esta instância para habilitar a busca de mensagens."
+            ? translate("common.74a55d863a39")
             : (error as Error).message,
         );
     } finally {
@@ -70,7 +72,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
   };
   return (
     <Modal
-      title={serverId ? `Buscar em ${instance?.serverStates[serverId]?.server.name ?? "servidor"}` : "Buscar mensagens"}
+      title={serverId ? translate("common.340ea158fc1e",{p0:(instance?.serverStates[serverId]?.server.name ?? "servidor")}) : translate("common.a85a80ba87f5")}
       wide
       className="search-modal"
     >
@@ -83,30 +85,26 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
         <div className="search-query">
           <Search size={20} />
           <Input
-            aria-label="Buscar mensagens"
+            aria-label={translate("common.a85a80ba87f5")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="O que você quer encontrar?"
+            placeholder={translate("common.e10ecc49312e")}
             autoFocus
             maxLength={200}
           />
-          <Button loading={loading} type="submit">
-            Buscar
-          </Button>
+          <Button loading={loading} type="submit">{translate("common.5f55edf90089")}</Button>
         </div>
         <div className="search-scope">
-          <span>Busca local no histórico disponível neste dispositivo. O texto da busca permanece no cliente.</span>
+          <span>{translate("common.7306ee64b7d1")}</span>
           <Button size="sm" variant="ghost" onClick={() => setFilters((v) => !v)} aria-expanded={filters}>
-            <SlidersHorizontal size={15} />
-            Filtros
-          </Button>
+            <SlidersHorizontal size={15} />{translate("common.57ac13ce3d5b")}</Button>
         </div>
         {filters && (
           <div className="search-filters">
             {channels.length > 0 && (
-              <Field label="No canal">
+              <Field label={translate("common.d876b20446cd")}>
                 <Select value={channel} onChange={(e) => setChannel(e.target.value)}>
-                  <option value="">Todos os canais</option>
+                  <option value="">{translate("common.4884e99d548f")}</option>
                   {channels.map((c) => (
                     <option value={c.id} key={c.id}>
                       #{c.name}
@@ -115,9 +113,9 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
                 </Select>
               </Field>
             )}
-            <Field label="Enviada por">
+            <Field label={translate("common.ac80fe826ae7")}>
               <Select value={author} onChange={(e) => setAuthor(e.target.value)}>
-                <option value="">Qualquer pessoa</option>
+                <option value="">{translate("common.b014ff0d6f76")}</option>
                 {members.map((u) => (
                   <option value={u.id} key={u.id}>
                     {u.displayName} (@{u.username})
@@ -125,14 +123,14 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
                 ))}
               </Select>
             </Field>
-            <Field label="Contém">
+            <Field label={translate("common.cb15a21f8bf0")}>
               <Select value={has} onChange={(e) => setHas(e.target.value)}>
-                <option value="">Qualquer conteúdo</option>
+                <option value="">{translate("common.ffca3a3b6927")}</option>
                 {[
-                  ["image", "Imagem"],
-                  ["video", "Vídeo"],
-                  ["audio", "Áudio"],
-                  ["file", "Anexo"],
+                  ["image", translate("common.8fc6b8b69804")],
+                  ["video", translate("common.bc10c86c24b5")],
+                  ["audio", translate("common.195c60bb2325")],
+                  ["file", translate("common.e186297c35aa")],
                   ["link", "Link"],
                 ].map(([v, l]) => (
                   <option key={v} value={v}>
@@ -141,11 +139,11 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
                 ))}
               </Select>
             </Field>
-            <Field label="Depois de">
-              <DatePicker label="Depois de" value={after} onValueChange={setAfter} />
+            <Field label={translate("common.bb25b5d057fd")}>
+              <DatePicker label={translate("common.bb25b5d057fd")} value={after} onValueChange={setAfter} />
             </Field>
-            <Field label="Antes de">
-              <DatePicker label="Antes de" value={before} onValueChange={setBefore} />
+            <Field label={translate("common.aefae3d43e0e")}>
+              <DatePicker label={translate("common.aefae3d43e0e")} value={before} onValueChange={setBefore} />
             </Field>
           </div>
         )}
@@ -174,40 +172,36 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             <div>
               <header>
                 <strong>{message.author.displayName}</strong>
-                <time>{new Date(message.createdAt).toLocaleString("pt-BR")}</time>
+                <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time>
               </header>
-              <p>{message.content || `${message.attachments.length} anexo(s)`}</p>
+              <p>{message.content || translate("common.36c4a07428f6",{p0:(message.attachments.length)})}</p>
               <small>
-                {resultServer ? `#${channelName}` : "Mensagem direta"}
-                {message.attachments.length > 0 ? ` · ${message.attachments.length} anexo(s)` : ""}
+                {resultServer ? `#${channelName}` : translate("common.4e19907ae2f0")}
+                {message.attachments.length > 0 ? translate("common.97098c55fd0c",{p0:(message.attachments.length)}) : ""}
               </small>
             </div>
             <ArrowUpRight size={17} />
           </button>
         ))}
         {loading && (
-          <p role="status" className="muted">
-            Buscando mensagens…
-          </p>
+          <p role="status" className="muted">{translate("common.da38e754b6a0")}</p>
         )}
         {results?.items.length === 0 && !loading && (
           <div className="search-empty">
             <FileSearch size={32} />
-            <h3>Nenhuma mensagem encontrada</h3>
-            <p>Tente outra palavra ou amplie os filtros.</p>
+            <h3>{translate("common.f801bb344f03")}</h3>
+            <p>{translate("common.3fdb98af4ef5")}</p>
           </div>
         )}
         {!results && !loading && !error && (
           <div className="search-empty">
             <Search size={32} />
-            <h3>Encontre o trecho da conversa</h3>
-            <p>Busque por palavras ou use filtros de pessoa, canal, data e anexos.</p>
+            <h3>{translate("common.25e9968c2028")}</h3>
+            <p>{translate("common.494f0bf3842a")}</p>
           </div>
         )}
         {results?.nextCursor && (
-          <Button variant="secondary" loading={loading} onClick={() => void search(true)}>
-            Mais resultados
-          </Button>
+          <Button variant="secondary" loading={loading} onClick={() => void search(true)}>{translate("common.6135f0879f8c")}</Button>
         )}
       </div>
     </Modal>

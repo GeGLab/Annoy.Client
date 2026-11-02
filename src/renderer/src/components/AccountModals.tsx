@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { GlobalSignIn } from "./GlobalSignIn.tsx";
 import { clientAccepted, updateRequired } from "../lib/client-version.ts";
 import { Select } from "./ui/select.tsx";
@@ -75,7 +77,7 @@ export function AddAccountModal() {
       if (!clientAccepted(found.info)) { setError(updateRequired(found.info)); return; }
       setInfo(found);
     }
-    catch (err) { setError(err instanceof TypeError ? "Não foi possível alcançar o servidor" : (err as Error).message); }
+    catch (err) { setError(err instanceof TypeError ? translate("common.8ad698582e04") : (err as Error).message); }
     finally { setBusy(false); }
   }
   async function withGlobal(e?: FormEvent) {
@@ -125,10 +127,10 @@ export function AddAccountModal() {
     finally { setBusy(false); discordAbort.current = null; }
   }
   const ownershipFields = <>
-    <Field label="Usuário anterior neste servidor"><Input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
-    {!localMode && <Field label="Senha local anterior"><Input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></Field>}
-    <Field label="Código de recuperação" hint="Se não tiver a senha anterior, peça um código ao administrador do servidor."><Input value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} autoComplete="off" /></Field>
-    {saved && <p className="muted small">A sessão salva comprova sua conta anterior. Senha ou código só são necessários se ela não for mais válida.</p>}
+    <Field label={translate("common.9ee3734e990d")}><Input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
+    {!localMode && <Field label={translate("common.5e211fa604a6")}><Input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></Field>}
+    <Field label={translate("common.9682a3205283")} hint={translate("common.ab75db8fb0e5")}><Input value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} autoComplete="off" /></Field>
+    {saved && <p className="muted small">{translate("common.93de37b1bcc5")}</p>}
   </>;
   async function afterAnnoySignIn() {
     // Signing in selects the Annoy account and lists every server of it; those that fail show as disconnected.
@@ -137,40 +139,40 @@ export function AddAccountModal() {
     navigate({ kind: "home", accountId: linked?.id ?? null, dmId: null });
     closeModal();
   }
-  return <Modal title={info ? migration ? "Migrar sua conta" : localMode ? "Conta local deste servidor" : "Entrar com conta Annoy" : "Adicionar conta"} className="auth-modal" busy={busy}>
-    <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : "Entre com a conta Annoy para trazer seus servidores, ou conecte um servidor pelo endereço."}</p></div>
-    {!info && !saved && !address && <GlobalSignIn intro="Entre com a conta Annoy: seus servidores são conectados automaticamente." onSignedIn={() => void afterAnnoySignIn()} />}
-    {!info && !saved && <p className="muted small auth-divider">ou conecte um servidor pelo endereço (porta padrão {DEFAULT_PORT})</p>}
+  return <Modal title={info ? migration ? translate("common.ae9b6499529e") : localMode ? translate("common.5e77147cf065") : translate("common.939b100daa64") : translate("common.11cf7643fb7e")} className="auth-modal" busy={busy}>
+    <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? info.info.name : translate("common.cada4e4201a8")}</p></div>
+    {!info && !saved && !address && <GlobalSignIn intro={translate("common.6cae7aca7c95")} onSignedIn={() => void afterAnnoySignIn()} />}
+    {!info && !saved && <p className="muted small auth-divider">{rich("common.d7503c4419d6",{p0:String(DEFAULT_PORT)})}</p>}
     {!info ? <form onSubmit={probe} className="form">
-      <Field label="Endereço"><Input autoFocus value={address} onChange={e => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required /></Field>
+      <Field label={translate("common.ef5e7e12bdac")}><Input autoFocus value={address} onChange={e => setAddress(e.target.value)} placeholder={translate("common.7a85f966dd7d")} required /></Field>
       {error && <p className="error">{error}</p>}
-      <Button type="submit" loading={busy}>Continuar</Button>
+      <Button type="submit" loading={busy}>{translate("common.63e2bbaf1c92")}</Button>
     </form> : <>
-      {!localMode && <p role={migration ? "alert" : undefined}>Atualização de segurança: este servidor exige uma conta Annoy. Contas locais existentes devem cadastrar ou acessar uma conta Annoy e concluir a migração para preservar seu histórico e permissões.</p>}
-      {localMode && <p>{info.info.accountMode === "local" ? "O administrador escolheu contas locais. Este servidor não se comunica com o serviço de contas Annoy." : "Este servidor usa uma versão anterior do Annoy. Entre com a sua conta local."}{migration && " Defina uma senha local para continuar com sua conta."}</p>}
+      {!localMode && <p role={migration ? "alert" : undefined}>{translate("common.3c6e57294ab7")}</p>}
+      {localMode && <p>{info.info.accountMode === "local" ? translate("common.b58caef0b088") : translate("common.bb61831cf63a")}{migration && translate("common.da0bf384ca28")}</p>}
       {!localMode && needsCredentials ? <GlobalSignIn email={remembered?.annoyEmail} onSignedIn={() => { setReauthenticated(true); if (remembered?.annoy) void withGlobal(); }} /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
         {migration ? ownershipFields : (localMode || globalFirst) && <>
-          {localMode && <div className="tabs"><Button type="button" variant="ghost" onClick={() => setMode("login")}>Entrar</Button><Button type="button" variant="ghost" disabled={!info.info.registrationOpen} onClick={() => setMode("register")}>Criar conta local</Button></div>}
-          <Field label="Usuário neste servidor"><Input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
+          {localMode && <div className="tabs"><Button type="button" variant="ghost" onClick={() => setMode("login")}>{translate("common.4105811890ae")}</Button><Button type="button" variant="ghost" disabled={!info.info.registrationOpen} onClick={() => setMode("register")}>{translate("common.391f1af9142d")}</Button></div>}
+          <Field label={translate("common.47644adea672")}><Input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
           {(globalFirst || mode === "register") && <>
-            <Field label="Nome de exibição"><Input value={displayName} onChange={e => setDisplayName(e.target.value)} /></Field>
-            {needsInvite && <Field label="Convite de cadastro"><Input value={inviteCode} onChange={e => setInviteCode(e.target.value)} required /></Field>}
+            <Field label={translate("common.80d20f1ebbc0")}><Input value={displayName} onChange={e => setDisplayName(e.target.value)} /></Field>
+            {needsInvite && <Field label={translate("common.3dba7a6e77c4")}><Input value={inviteCode} onChange={e => setInviteCode(e.target.value)} required /></Field>}
           </>}
         </>}
-        {localMode && <Field label={migration ? "Nova senha local" : "Senha local"}><Input type="password" value={migration ? newPassword : password} onChange={e => migration ? setNewPassword(e.target.value) : setPassword(e.target.value)} autoComplete={migration || mode === "register" ? "new-password" : "current-password"} minLength={migration || mode === "register" ? 8 : undefined} required /></Field>}
-        {migration && !localMode && <p className="muted small">Sua conta anterior passará a usar somente o login da conta Annoy. Se essa conta Annoy já tiver um usuário aqui, os históricos serão unificados.</p>}
+        {localMode && <Field label={migration ? translate("common.af1264c3f0e8") : translate("common.b87fd0b63102")}><Input type="password" value={migration ? newPassword : password} onChange={e => migration ? setNewPassword(e.target.value) : setPassword(e.target.value)} autoComplete={migration || mode === "register" ? "new-password" : "current-password"} minLength={migration || mode === "register" ? 8 : undefined} required /></Field>}
+        {migration && !localMode && <p className="muted small">{translate("common.45588c91e750")}</p>}
         {!localMode && !info.info.globalServerId && <>
-          <p className="error">Login da conta Annoy temporariamente indisponível.</p>
-          <Button type="button" variant="secondary" onClick={() => void findInstance(info.url).then(setInfo, err => setError((err as Error).message))}>Tentar novamente</Button>
+          <p className="error">{translate("common.b6326ea2c6c6")}</p>
+          <Button type="button" variant="secondary" onClick={() => void findInstance(info.url).then(setInfo, err => setError((err as Error).message))}>{translate("common.b9e10688be01")}</Button>
         </>}
         {error && <p className="error">{error}</p>}
-        <Button type="submit" loading={busy} disabled={!localMode && !info.info.globalServerId}>{migration ? "Concluir migração" : localMode ? mode === "register" ? "Criar conta local" : "Entrar" : `Continuar com ${globalAccount?.name ?? "conta Annoy"}`}</Button>
+        <Button type="submit" loading={busy} disabled={!localMode && !info.info.globalServerId}>{migration ? translate("common.680f2192f2f7") : localMode ? mode === "register" ? translate("common.391f1af9142d") : translate("common.4105811890ae") : translate("common.e32748582627",{p0:(globalAccount?.name ?? "conta Annoy")})}</Button>
       </form>}
-      {localMode && info.info.discordLogin && !migration && <Button type="button" variant="outline" loading={busy} onClick={() => void withDiscord()}>Entrar com Discord</Button>}
-      {discordAbort.current && <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>Cancelar autorização</Button>}
+      {localMode && info.info.discordLogin && !migration && <Button type="button" variant="outline" loading={busy} onClick={() => void withDiscord()}>{translate("common.d1a81cb724d8")}</Button>}
+      {discordAbort.current && <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>{translate("common.2a2c8450b1c9")}</Button>}
       <div className="form-actions">
-        <Button type="button" variant="ghost" onClick={() => { setMigration(!migration); setGlobalFirst(false); setError(null); }}>{migration ? "Voltar ao login" : "Migrar uma conta existente"}</Button>
-        <Button type="button" variant="secondary" onClick={closeModal}>Fechar</Button>
+        <Button type="button" variant="ghost" onClick={() => { setMigration(!migration); setGlobalFirst(false); setError(null); }}>{migration ? translate("common.0fe6598d4da8") : translate("common.37278013d5ed")}</Button>
+        <Button type="button" variant="secondary" onClick={closeModal}>{translate("common.0f2bd88ef0ac")}</Button>
       </div>
     </>}
   </Modal>;
@@ -180,11 +182,11 @@ export function SwitchAccountModal() {
   const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
   const current = useStore((s) => ("accountId" in s.view ? s.view.accountId : null));
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
-  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">
+  return <Modal title={translate("common.cd405060935b")} className="account-switcher"><p className="muted">{translate("common.7cad3bbb5598")}</p><div className="saved-accounts">
     {accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className={account.id === current ? "saved-account active" : "saved-account"} aria-current={account.id === current ? "true" : undefined} onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
-    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.annoy ? "Conta Annoy" : "Conta local"} · {account.instanceName} · {account.pending || instances[account.id]?.status === "offline" || instances[account.id]?.status === "invalid" ? "Desconectada" : account.id === current ? "Em uso" : "Conectada"}</small></span>{account.id === current && <Icon name="check" />}</button><Tooltip content="Sair desta conta"><button className="icon-btn" aria-label={`Sair de ${name}`} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
-    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.annoy ? "Conta Annoy" : "Conta local"} · {account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
-  </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;
+    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.annoy ? translate("common.21c5709ca7b8") : translate("common.8e8a58b4d1d5")} · {account.instanceName} · {account.pending || instances[account.id]?.status === "offline" || instances[account.id]?.status === "invalid" ? translate("common.c1f272b304da") : account.id === current ? translate("common.256189f0291c") : translate("common.79c5eb4810e5")}</small></span>{account.id === current && <Icon name="check" />}</button><Tooltip content={translate("common.bff9a330986f")}><button className="icon-btn" aria-label={translate("common.ece23c8b325f",{p0:(name)})} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
+    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{rich("common.99f91f6f1e05",{p0:(account.annoy ? translate("common.21c5709ca7b8") : translate("common.8e8a58b4d1d5")),p1:(account.instanceName)})}</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={translate("common.cb11afce3a10",{p0:(account.displayName)})} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
+  </div><Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.f058dba0348d",{p0:(<Icon name="plus" />)})}</Button></Modal>;
 }
 
 /** Invite codes may be pasted bare or as part of a link. */
@@ -242,11 +244,11 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
   }
 
   return (
-    <Modal title={mode === "create" ? "Criar uma comunidade" : "Entrar com convite"}>
+    <Modal title={mode === "create" ? translate("common.7f49e3ac1fc1") : translate("common.fec758322645")}>
       {accounts.length > 1 && (
-        <Field label="Escolha a instância de destino">
+        <Field label={translate("common.328353ea53eb")}>
           <Select value={accountId} disabled={busy} onChange={(e) => { setAccountId(e.target.value); setPreview(null); }}>
-            <option value="">Escolha uma instância…</option>
+            <option value="">{translate("common.9e5b48e0e8cc")}</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.instanceName} ({a.url})
@@ -255,50 +257,48 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
           </Select>
         </Field>
       )}
-      {accounts.length === 0 && <div className="empty-action"><p className="muted">Conecte uma instância Annoy antes de criar ou entrar numa comunidade.</p><Button onClick={() => openModal({ kind: "addAccount" })}>Conectar instância</Button></div>}
-      {accounts.length > 0 && <div className="tabs" role="tablist" aria-label="Ação de comunidade">
-        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "create"} className={mode === "create" ? "tab active" : "tab"} onClick={() => { setMode("create"); setPreview(null); }}>Criar</Button>
-        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "join"} className={mode === "join" ? "tab active" : "tab"} onClick={() => { setMode("join"); setPreview(null); }}>Entrar com convite</Button>
+      {accounts.length === 0 && <div className="empty-action"><p className="muted">{translate("common.32620c152c2e")}</p><Button onClick={() => openModal({ kind: "addAccount" })}>{translate("common.d9d7919adc16")}</Button></div>}
+      {accounts.length > 0 && <div className="tabs" role="tablist" aria-label={translate("common.30b932877e7d")}>
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "create"} className={mode === "create" ? "tab active" : "tab"} onClick={() => { setMode("create"); setPreview(null); }}>{translate("common.49ba5d18d8c4")}</Button>
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "join"} className={mode === "join" ? "tab active" : "tab"} onClick={() => { setMode("join"); setPreview(null); }}>{translate("common.fec758322645")}</Button>
       </div>}
       {mode === "create" && accounts.length > 0 && <form onSubmit={create} className="form">
-        <h3>Nova comunidade</h3>
-        <Field label="Nome do servidor">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meu servidor" required maxLength={100} />
+        <h3>{translate("common.d825f5d935e9")}</h3>
+        <Field label={translate("common.87f8ee74878a")}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={translate("common.94a0c36fb1ea")} required maxLength={100} />
         </Field>
         <div className="form-actions">
-          <Button type="submit" loading={busy} disabled={!accountId || !name.trim()}>
-            Criar comunidade
-          </Button>
+          <Button type="submit" loading={busy} disabled={!accountId || !name.trim()}>{translate("common.985f18314d9a")}</Button>
         </div>
       </form>}
       {mode === "join" && accounts.length > 0 && <form onSubmit={join} className="form">
-        <h3>Convite da comunidade</h3>
-        <Field label="Código do convite">
+        <h3>{translate("common.3d44c76a75cd")}</h3>
+        <Field label={translate("common.bf7d8d4c951b")}>
           <Input
             value={invite}
             onChange={(e) => {
               setInvite(e.target.value);
               setPreview(null);
             }}
-            placeholder="aB3dE5gH"
+            placeholder={translate("common.fb6e4a9111bb")}
             required
           />
         </Field>
         {preview && (
           <p className="invite-preview">
-            <strong>{preview.server.name}</strong> · {preview.memberCount} membro{preview.memberCount === 1 ? "" : "s"}
+            <strong>{preview.server.name}</strong> · {counted(preview.memberCount,"counts.member.one","counts.member.other")}
           </p>
         )}
         <div className="form-actions">
           <Button type="submit" loading={busy} disabled={!accountId || !invite.trim()}>
-            {preview ? "Entrar no servidor" : "Verificar convite"}
+            {preview ? translate("common.6c371b23031d") : translate("common.f60e5c5c2f25")}
           </Button>
         </div>
       </form>}
       <hr />
       <div className="form">
-        <h3>Trazer do Discord</h3>
-        <p className="muted small">Copie canais, cargos, permissões e o histórico de um servidor do Discord, escolhendo o que entra.</p>
+        <h3>{translate("common.d92359f0e940")}</h3>
+        <p className="muted small">{translate("common.9390c74f16b6")}</p>
         <div className="form-actions start">
           <Button
             variant="secondary"
@@ -308,9 +308,7 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
               })
             }
             disabled={!accountId}
-          >
-            Importar do Discord…
-          </Button>
+          >{translate("common.2ac009991644")}</Button>
         </div>
       </div>
       <hr />
@@ -322,9 +320,7 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
               s.modal = { kind: "addAccount" };
             })
           }
-        >
-          Conectar a outra instância Annoy…
-        </Button>
+        >{translate("common.84de157494fd")}</Button>
       </div>
     </Modal>
   );

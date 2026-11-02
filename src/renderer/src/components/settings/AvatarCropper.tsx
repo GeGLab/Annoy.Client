@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { Slider } from "../ui/slider.tsx";
 import Cropper, { type Area } from "react-easy-crop";
 import { useEffect, useState } from "react";
@@ -12,10 +13,10 @@ export async function cropAvatar(source: string, area: Area): Promise<Blob> {
   canvas.width = 512;
   canvas.height = 512;
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("Não foi possível preparar a foto.");
+  if (!context) throw new Error(translate("settings.556c573b176f"));
   context.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, 512, 512);
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Não foi possível recortar a foto."))), "image/webp", 0.9),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(translate("settings.d6dba62342f0")))), "image/webp", 0.9),
   );
 }
 export default function AvatarCropper({ file, onApply, onClose }: { file: File; onApply: (blob: Blob) => void; onClose: () => void }) {
@@ -45,10 +46,8 @@ export default function AvatarCropper({ file, onApply, onClose }: { file: File; 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="avatar-crop-dialog" showClose={false} aria-describedby="crop-description">
-        <DialogTitle>Encontre o melhor enquadramento</DialogTitle>
-        <p id="crop-description" className="muted">
-          Arraste a foto e ajuste o zoom. A área destacada é o que aparece no seu perfil.
-        </p>
+        <DialogTitle>{translate("settings.05ab2300e061")}</DialogTitle>
+        <p id="crop-description" className="muted">{translate("settings.0ae8f9f2f527")}</p>
         <div className="avatar-crop-stage">
           {source && (
             <Cropper
@@ -62,14 +61,14 @@ export default function AvatarCropper({ file, onApply, onClose }: { file: File; 
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={(_, pixels) => setArea(pixels)}
-              mediaProps={{ onError: () => setError("Esta imagem não pôde ser aberta.") }}
+              mediaProps={{ onError: () => setError(translate("settings.bbc2362ddf99")) }}
             />
           )}
         </div>
         <label className="field">
-          <span>Zoom da foto</span>
+          <span>{translate("settings.ecfce5342c3b")}</span>
           <Slider
-            aria-label="Zoom da foto"
+            aria-label={translate("settings.ecfce5342c3b")}
 
             min={1}
             max={3}
@@ -78,21 +77,19 @@ export default function AvatarCropper({ file, onApply, onClose }: { file: File; 
             onChange={(e) => setZoom(Number(e.target.value))}
           />
         </label>
-        <p className="muted small">O recorte quadrado também é preservado para os avatares com cantos arredondados do Annoy.</p>
+        <p className="muted small">{translate("settings.34d353e6315d")}</p>
         {error && (
           <p className="error" role="alert">
             {error}
           </p>
         )}
         <div className="form-actions">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button loading={busy} disabled={!area || !!error} onClick={() => void apply()}>
-            Usar este recorte
-          </Button>
+          <Button variant="secondary" disabled={busy} onClick={onClose}>{translate("common.bb9dbb406dcb")}</Button>
+          <Button loading={busy} disabled={!area || !!error} onClick={() => void apply()}>{translate("settings.66ad416065d5")}</Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+

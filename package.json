@@ -104,6 +104,7 @@
     "esbuild@0.28.2": true
   },
   "productName": "Annoy",
+  "desktopName": "br.dev.geg.distopic.desktop",
   "author": "Gustavo Cruz",
   "homepage": "https://annoy.geg.dev.br",
   "repository": {
@@ -167,6 +168,7 @@
       "artifactName": "Annoy-Setup-x64.${ext}"
     },
     "linux": {
+      "syncDesktopName": true,
       "target": [
         "AppImage"
       ],

@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as Menu from "@radix-ui/react-menu";
 import { Slot } from "@radix-ui/react-slot";
 import { createContext, useContext, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
@@ -12,7 +13,7 @@ type ContextState = {
 const Context = createContext<ContextState | null>(null);
 const useMenu = () => {
   const context = useContext(Context);
-  if (!context) throw new Error("Context menu components require ContextMenu");
+  if (!context) throw new Error(translate("common.3622cb81ce99"));
   return context;
 };
 
@@ -71,3 +72,5 @@ export function ContextMenuItem({ className, destructive, ...props }: ComponentP
 }
 export function ContextMenuSeparator() { return <Menu.Separator className="ui-dropdown-separator" />; }
 export function ContextMenuLabel({ children }: { children: ReactNode }) { return <Menu.Label className="ui-menu-label">{children}</Menu.Label>; }
+
+

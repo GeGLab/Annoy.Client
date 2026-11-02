@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { useStore } from "../../store.ts";
 import { Button } from "../ui/button.tsx";
 import { PreferenceCard } from "../settings/PreferenceCard.tsx";
@@ -7,28 +8,28 @@ import { ChannelEncryption } from "./ChannelEncryption.tsx";
 /** Settings → Privacy and security: this device's keys and the direct messages of each account. */
 export function SecuritySettings({ accountId }: { accountId: string | null }) {
   const instance = useStore((s) => (accountId ? s.instances[accountId] : undefined));
-  if (!window.distopic?.crypto) return <p className="muted">A criptografia de ponta a ponta exige o aplicativo Annoy para desktop.</p>;
-  if (!accountId) return <p className="muted">A criptografia vale por servidor. Selecione uma conta de servidor em Trocar de conta.</p>;
+  if (!window.distopic?.crypto) return <p className="muted">{translate("common.51e52ae737b8")}</p>;
+  if (!accountId) return <p className="muted">{translate("common.05bd39d16a8d")}</p>;
   const me = instance?.user?.id;
   const dms = (instance?.dms ?? []).map((dm) => ({ id: dm.id, name: dm.recipients.filter((r) => r.id !== me).map((r) => r.displayName).join(", ") || "Mensagem direta" }));
   const people = [...new Map((instance?.dms ?? []).flatMap((dm) => dm.recipients).filter((r) => r.id !== me).map((r) => [r.id, { id: r.id, name: r.displayName }])).values()];
   return (
     <>
 
-      <PreferenceCard icon="lock" title="Armazenamento local" description="Guarda as chaves e o histórico cifrados neste computador. Sem o chaveiro do sistema, use uma senha.">
-        <Button variant="secondary" onClick={() => void unlockVault()}>Desbloquear com senha</Button>
+      <PreferenceCard icon="lock" title={translate("common.5727114d4cbc")} description={translate("common.9f3193e4aff4")}>
+        <Button variant="secondary" onClick={() => void unlockVault()}>{translate("common.2dc3806a9b9a")}</Button>
       </PreferenceCard>
-      <PreferenceCard icon="shield" title="Verificar identidade" description="Compare códigos de segurança com outra pessoa por um canal externo para confirmar as chaves dela.">
-        <Button variant="secondary" onClick={() => void verifyIdentity(accountId)}>Comparar códigos</Button>
+      <PreferenceCard icon="shield" title={translate("common.edad75dbb2d8")} description={translate("common.181fc1939780")}>
+        <Button variant="secondary" onClick={() => void verifyIdentity(accountId)}>{translate("common.79af1df48af2")}</Button>
       </PreferenceCard>
-      <PreferenceCard icon="save" title="Backup cifrado" description="Inclui o histórico permanente. Sem a chave de recuperação, perder os dispositivos pode apagar os dados de vez.">
-        <Button variant="secondary" onClick={() => void backup(accountId)}>Criar backup</Button>
-        <Button variant="ghost" onClick={() => void restore(accountId)}>Restaurar</Button>
+      <PreferenceCard icon="save" title={translate("common.84bc59832c10")} description={translate("common.f40210b716ab")}>
+        <Button variant="secondary" onClick={() => void backup(accountId)}>{translate("common.bede320142c8")}</Button>
+        <Button variant="ghost" onClick={() => void restore(accountId)}>{translate("common.eda02893d340")}</Button>
       </PreferenceCard>
-      <PreferenceCard icon="monitor" title="Dispositivos" description="Veja os dispositivos com acesso às suas conversas cifradas e revogue os que não usa.">
-        <Button variant="secondary" onClick={() => void devices(accountId)}>Gerenciar dispositivos</Button>
+      <PreferenceCard icon="monitor" title={translate("settings.a70a1e628334")} description={translate("common.9c1fd0da6bc2")}>
+        <Button variant="secondary" onClick={() => void devices(accountId)}>{translate("common.59edfed69e15")}</Button>
       </PreferenceCard>
-      <h4>Mensagens diretas</h4>
+      <h4>{translate("common.53c413d8aae2")}</h4>
       <ChannelEncryption key={accountId} accountId={accountId} channels={dms} members={people} />
     </>
   );

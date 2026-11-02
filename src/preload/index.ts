@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type {DesktopPreferences,DesktopSnapshot} from "../shared/desktop.ts";
 import type { Service } from "../shared/services.ts";
 import type { AppAccessState } from "../shared/app-access.ts";
 import type { UpdateState } from "../shared/update.ts";
@@ -23,6 +24,17 @@ ipcRenderer.on("media:port", (event, data: { handle?: unknown }) => {
 });
 type MediaBinding = import("@distopic/protocol").VoiceMediaBinding;
 const bridge = {
+  desktop: {
+    get:()=>ipcRenderer.invoke("desktop:get") as Promise<DesktopSnapshot>,
+    set:(values:DesktopPreferences)=>ipcRenderer.invoke("desktop:set",values) as Promise<DesktopSnapshot>,
+    restart:()=>ipcRenderer.invoke("desktop:restart") as Promise<void>,
+    quit:()=>ipcRenderer.invoke("desktop:quit") as Promise<void>,
+    onQuitRequested(listener:()=>void):()=>void{const handler=()=>listener();ipcRenderer.on("desktop:quit-requested",handler);return()=>{ipcRenderer.off("desktop:quit-requested",handler);};},
+  },
+  localization: {
+    get: () => ipcRenderer.invoke("localization:get") as Promise<{saved:LocalizationPreferences;systemLocale:string}>,
+    set: (values:LocalizationPreferences) => ipcRenderer.invoke("localization:set",values) as Promise<LocalizationPreferences>,
+  },
   platform: process.platform,
   media: {
     open: (url: string, token: string, channel: string, userId: string) => cryptoInvoke("media:open", { url, token, channel, userId }) as Promise<{ handle: string }>,
@@ -146,6 +158,7 @@ const bridge = {
     choose: (id: string) => ipcRenderer.send("screen:choose", id),
   },
   updates: {
+    configure:(values:{notifications:boolean})=>ipcRenderer.invoke("update:configure",values) as Promise<void>,
     get: () => ipcRenderer.invoke("update:get") as Promise<UpdateState>,
     check: () => ipcRenderer.invoke("update:check") as Promise<void>,
     download: () => ipcRenderer.invoke("update:download") as Promise<void>,
@@ -161,3 +174,4 @@ const bridge = {
 export type DistopicBridge = typeof bridge;
 
 contextBridge.exposeInMainWorld("distopic", bridge);
+import type {LocalizationPreferences} from "../shared/localization/preferences.ts";

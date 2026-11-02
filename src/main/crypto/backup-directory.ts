@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import {lstat,mkdir,open as openFile,readFile,rm,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomBytes} from 'node:crypto';
@@ -7,8 +8,8 @@ interface BackupRecord {id:string;key:string;file:string;digest:string;size:numb
 const digest=(value:Buffer)=>createHash('sha256').update(value).digest('hex');
 const allowed=(id:string)=>!!id&&id.length<=2048&&!/^(protocol|protocol-expiry|device|session|creation|packages|cursor|refresh|cancel-result|restore-authorization):/.test(id);
 async function readCipher(directory:string,record:BackupRecord):Promise<Buffer>{
- const path=join(directory,record.file),stat=await lstat(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==record.size||stat.size>64*1024*1024+29)throw new Error('Arquivo de backup inválido');
- const bytes=await readFile(path);if(digest(bytes)!==record.digest)throw new Error('Integridade do backup inválida');return bytes;
+ const path=join(directory,record.file),stat=await lstat(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==record.size||stat.size>64*1024*1024+29)throw new Error(translate("common.c74786f3d831"));
+ const bytes=await readFile(path);if(digest(bytes)!==record.digest)throw new Error(translate("common.684f1cfad99d"));return bytes;
 }
 /** Versioned container; each copied record retains its original standard AEAD.
  * Only the authenticated manifest exposes record keys, under the user's key. */
@@ -18,8 +19,8 @@ export async function writeBackupDirectory(directory:string,records:BackupSource
  try{
   const manifest:BackupRecord[]=[];let total=0;
   for(const record of records){
-   signal?.throwIfAborted();if(!allowed(record.id))throw new Error('Estado privado de sessão não pode entrar no backup');
-   const stat=await lstat(record.path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024+29)throw new Error('Registro de backup inválido');
+   signal?.throwIfAborted();if(!allowed(record.id))throw new Error(translate("common.fe2c568a9a30"));
+   const stat=await lstat(record.path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024+29)throw new Error(translate("common.a058a7f2709b"));
    total+=stat.size;if(total>64*1024*1024*1024)throw new Error('Backup limitado a 64 GiB');
    const bytes=await readFile(record.path,{signal});let plaintext:Buffer|undefined;
    try{
@@ -40,12 +41,12 @@ export async function writeBackupDirectory(directory:string,records:BackupSource
  * retries preserve current records and deletion tombstones. */
 export async function readBackupDirectory(directory:string,key:Buffer,consume:((id:string,plaintext:Buffer)=>void)|undefined,signal?:AbortSignal):Promise<number>{
  const manifestPath=join(directory,'manifest.enc'),stat=await lstat(manifestPath);
- if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024)throw new Error('Manifesto de backup inválido');
+ if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024)throw new Error(translate("common.9d5a5217e2ec"));
  const plaintext=open(key,await readFile(manifestPath),'backup-directory/v2');let records:BackupRecord[];
- try{const data=JSON.parse(plaintext.toString());if(data.version!==2||!Array.isArray(data.records)||data.records.length>100000)throw new Error('Versão de backup inválida');records=data.records;}finally{plaintext.fill(0);}
+ try{const data=JSON.parse(plaintext.toString());if(data.version!==2||!Array.isArray(data.records)||data.records.length>100000)throw new Error(translate("common.77722b029f3c"));records=data.records;}finally{plaintext.fill(0);}
  const seen=new Set<string>();let total=0;
  for(const record of records){
-  signal?.throwIfAborted();if(!record||!allowed(record.id)||seen.has(record.id)||typeof record.key!=='string'||Buffer.from(record.key,'base64').length!==32||!/^[a-f0-9]{64}\.enc$/.test(record.file)||!/^[a-f0-9]{64}$/.test(record.digest)||!Number.isSafeInteger(record.size)||record.size<29)throw new Error('Registro de backup inválido');
+  signal?.throwIfAborted();if(!record||!allowed(record.id)||seen.has(record.id)||typeof record.key!=='string'||Buffer.from(record.key,'base64').length!==32||!/^[a-f0-9]{64}\.enc$/.test(record.file)||!/^[a-f0-9]{64}$/.test(record.digest)||!Number.isSafeInteger(record.size)||record.size<29)throw new Error(translate("common.a058a7f2709b"));
   seen.add(record.id);total+=record.size;if(total>64*1024*1024*1024)throw new Error('Limite de backup');
   const bytes=await readCipher(directory,record),recordKey=Buffer.from(record.key,'base64');let plain:Buffer|undefined;
   try{plain=open(recordKey,bytes,record.id);}finally{plain?.fill(0);recordKey.fill(0);bytes.fill(0);}

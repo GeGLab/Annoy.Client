@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
 import { CLIENT_VERSION } from "./lib/client-version.ts";
 import { deviceId } from "./lib/device-id.ts";
@@ -76,7 +77,7 @@ export class Gateway {
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
       try { this.receive(JSON.parse(String(e.data)) as GatewayEvent); }
-      catch { socket.close(1002, "Invalid gateway event"); }
+      catch { socket.close(1002, translate("common.2e5abf725b2d")); }
     };
     socket.onclose = (e) => {
       if (this.socket !== socket) return;
@@ -84,7 +85,7 @@ export class Gateway {
       this.connectTimeout = null;
       this.stopHeartbeat();
       this.ready = false;
-      this.failPending("Conexão perdida");
+      this.failPending(translate("common.b74a6dad280d"));
       if (this.socket === socket) this.socket = null;
       if (this.closed) return;
       if (e.code === 4004) {
@@ -123,7 +124,7 @@ export class Gateway {
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = null;
     this.stopHeartbeat();
-    this.failPending("Conexão perdida");
+    this.failPending(translate("common.b74a6dad280d"));
     socket?.close();
     if (this.offlineSince === null) this.offlineSince = Date.now();
     this.onStatus("offline");
@@ -140,7 +141,7 @@ export class Gateway {
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = null;
     this.stopHeartbeat();
-    this.failPending("Conexão pausada enquanto o sistema está offline");
+    this.failPending(translate("common.88a151831984"));
     socket?.close();
     if (this.offlineSince === null) this.offlineSince = Date.now();
     if (this.retry) clearTimeout(this.retry);
@@ -194,7 +195,7 @@ export class Gateway {
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = null;
     this.stopHeartbeat();
-    this.failPending("Conexão encerrada");
+    this.failPending(translate("common.7e0af8664386"));
     this.socket?.close();
     this.socket = null;
   }
@@ -213,7 +214,7 @@ export class Gateway {
   voice<T = Record<string, unknown>>(method: VoiceMethod, data: Record<string, unknown> = {}): Promise<T> {
     const id = ++this.voiceSeq;
     return new Promise<T>((resolve, reject) => {
-      if (this.socket?.readyState !== WebSocket.OPEN) return reject(new Error("Sem conexão com o servidor"));
+      if (this.socket?.readyState !== WebSocket.OPEN) return reject(new Error(translate("common.e781a208e7bb")));
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
       this.send({ op: "voice", id, method, data });
     });
@@ -262,3 +263,5 @@ export class Gateway {
     this.pending.clear();
   }
 }
+
+

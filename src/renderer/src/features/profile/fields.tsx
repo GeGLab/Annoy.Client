@@ -1,15 +1,16 @@
+import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import type { ProfileFieldKind } from "@distopic/protocol";
 import { Globe, Mail, Phone } from "lucide-react";
-export const PROFILE_LABELS: Record<ProfileFieldKind, string> = {
+export let PROFILE_LABELS: Record<ProfileFieldKind, string> = {
   linkedin: "LinkedIn",
   instagram: "Instagram",
   facebook: "Facebook",
   twitter: "X / Twitter",
   github: "GitHub",
   youtube: "YouTube",
-  website: "Site pessoal",
-  email: "E-mail de contato",
-  phone: "Telefone",
+  website: translate("common.b1a78118d697"),
+  email: translate("common.7b67f1017fbc"),
+  phone: translate("common.2f151735cce7"),
 };
 export const PROFILE_PLACEHOLDERS: Record<ProfileFieldKind, string> = {
   linkedin: "https://www.linkedin.com/in/seu-perfil",
@@ -22,10 +23,10 @@ export const PROFILE_PLACEHOLDERS: Record<ProfileFieldKind, string> = {
   email: "voce@exemplo.com",
   phone: "+5511999999999",
 };
-export const AUDIENCE_LABELS = {
-  self: "Somente eu",
-  friends: "Amigos",
-  community: "Amigos e comunidades em comum",
+export let AUDIENCE_LABELS = {
+  self: translate("common.5697898e6471"),
+  friends: translate("common.bead8677698a"),
+  community: translate("common.3852e293d563"),
 };
 /** Platform marks stay monochrome and inherit the existing theme. */
 export function ProfileFieldIcon({ kind }: { kind: ProfileFieldKind }) {
@@ -88,3 +89,24 @@ export function ProfileFieldIcon({ kind }: { kind: ProfileFieldKind }) {
     </svg>
   );
 }
+
+
+
+
+
+onLocalizationChange(()=>{PROFILE_LABELS={
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  twitter: "X / Twitter",
+  github: "GitHub",
+  youtube: "YouTube",
+  website: translate("common.b1a78118d697"),
+  email: translate("common.7b67f1017fbc"),
+  phone: translate("common.2f151735cce7"),
+};});
+onLocalizationChange(()=>{AUDIENCE_LABELS={
+  self: translate("common.5697898e6471"),
+  friends: translate("common.bead8677698a"),
+  community: translate("common.3852e293d563"),
+};});

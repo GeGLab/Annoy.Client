@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Children, isValidElement, useId, type ComponentProps, type ReactNode, type ReactElement } from "react";
@@ -63,7 +64,7 @@ export function Select({
           <SelectPrimitive.Viewport className="ui-select-viewport">
             {missing && (
               <SelectPrimitive.Item value={selected} className="ui-select-item">
-                <SelectPrimitive.ItemText>Dispositivo indisponível</SelectPrimitive.ItemText>
+                <SelectPrimitive.ItemText>{translate("common.c39ae72ac8b3")}</SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator>
                   <Check size={15} />
                 </SelectPrimitive.ItemIndicator>
@@ -91,3 +92,5 @@ export function Select({
     </SelectPrimitive.Root>
   );
 }
+
+
