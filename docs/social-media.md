@@ -20,11 +20,40 @@ Se a instância não informar suporte a reações, **Adicionar reação** explic
 
 ## Emojis, GIFs, figurinhas e loja
 
-O botão de rosto no compositor abre três abas: **Emojis**, **GIFs** e **Figurinhas**. Escolher um emoji insere texto. Escolher um GIF local ou figurinha prepara um anexo; o envio continua dependendo do botão Enviar. O atalho **Gerenciar** abre **Configurações → Emojis e mídia**, onde ficam os pacotes, as importações, a exportação, a remoção e a configuração do GIPHY. O catálogo inicial oferece um pacote de reações Unicode e seis figurinhas OpenMoji (CC BY-SA 4.0). A autoria e a origem ficam visíveis.
+O botão de rosto no compositor abre três abas: **Emojis**, **GIFs** e **Figurinhas**. Escolher um emoji insere texto. Escolher um GIF local ou figurinha prepara um anexo; o envio continua dependendo do botão Enviar. O atalho **Gerenciar** abre **Configurações → Emojis e mídia**, onde ficam os pacotes, as importações, a exportação, a remoção e a configuração do GIPHY. O catálogo licenciado oferece seis pacotes e 36 figurinhas OpenMoji 16.0.0 (CC BY-SA 4.0), organizados por pesquisa e categorias. Os emojis Unicode continuam no seletor, renderizados pela fonte do sistema, sem distribuir imagens de outra fonte.
 
 Nas configurações, **Usar** volta à conversa e abre a aba local correspondente de emojis, GIFs ou figurinhas, preservando o rascunho da mensagem. Alterações de perfil ou preferências ainda não salvas continuam protegidas pela confirmação de salvar ou descartar. Sem uma conversa aberta, o gerenciamento permanece disponível e **Usar** fica desabilitado. Escolha um item para inseri-lo na mensagem ou preparar o anexo e depois envie pelo compositor.
 
 Os pacotes são salvos neste dispositivo em IndexedDB. A loja permite instalar, remover, importar imagens/GIFs e importar ou exportar pacotes JSON. O limite é de 60 itens por pacote, 8 MB por imagem e 50 MB de imagens por pacote. Exportações incorporam os arquivos para poder compartilhar a coleção. Não há cobrança, catálogo comercial remoto nem importação automática de coleções privadas de outros apps.
+
+O índice de busca contém apenas metadados. Os manifestos versionados são divididos
+em páginas de dois pacotes; abrir o catálogo não instala nem baixa os arquivos
+completos. A lista de instalados consulta 12 metadados por página, sem ler blobs.
+As listas têm carregamento incremental, estado final, erro com nova tentativa e
+botão **Carregar mais pacotes**, além de avanço por rolagem. O seletor consulta até
+48 itens por página, com navegação anterior/próximos, e carrega imagens locais
+quando entram na área visível. URLs temporárias são liberadas ao fechar/trocar itens.
+
+Na versão 2 do banco `annoy-expression`, os stores `pack-metadata`, `item-metadata`
+e `media-blobs` separam dados e arquivos. A migração percorre os pacotes legados
+por cursor dentro da transação de upgrade, preserva os créditos e mantém o store
+legado `packs` vazio após transferir seus registros. Falha de migração reverte a
+transação inteira. Os índices de pacote/tipo permitem busca sem ler imagens.
+Instalações fazem download de uma imagem por vez, com timeout e cancelamento;
+só uma transação final substitui o pacote e remove arquivos antigos. Falha de
+rede, integridade ou quota conserva a instalação anterior. Packs instalados
+funcionam offline; manifestos consultados têm cache limitado a 16 entradas.
+No aplicativo empacotado, catálogo e ativos acompanham a instalação.
+
+Cada pacote distribuído inclui versão, autoria, origem fixada no commit do
+OpenMoji, licença, link e créditos expansíveis. Os PNGs são originais, sem
+alteração. Manifestos e imagens têm SHA-256; a licença completa acompanha os
+arquivos em `public/expression/openmoji/LICENSE.txt`. O script
+`node scripts/build-expression-catalog.mjs` recria os manifestos e ativos a partir
+da revisão fixada. Para auditar sem downloads, use
+`node --test scripts/tests/expression-catalog.test.mjs`. Exportações preservam
+versão e créditos. A licença declarada por um pacote importado não o inclui no
+catálogo oficial. Não há scraping nem integração automatizada com emoji.gg.
 
 Formato de um pacote importável:
 

@@ -1,0 +1,2 @@
+# Catalog pages are hashed byte-for-byte by the index on every platform.
+src/renderer/public/expression/catalog/** text eol=lf

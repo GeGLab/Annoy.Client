@@ -170,7 +170,7 @@ controles utilizáveis na fonte máxima e zoom de 200%.
 Saída: testes de pacotes Windows/Linux; opções não suportadas explicadas;
 nenhuma janela fica oculta sem mecanismo funcional de restauração.
 
-### M7 — catálogo licenciado (R07)
+### M7 — catálogo licenciado (R07; concluído em 02/11/2026)
 
 1. Preparar manifestos versionados e divididos em páginas, com licença,
    autoria, origem e créditos; começar com catálogo próprio/OpenMoji.
@@ -183,6 +183,15 @@ nenhuma janela fica oculta sem mecanismo funcional de restauração.
 
 Saída: catálogo real navegável sem baixar todos os itens; cada ativo distribuído
 tem licença verificada. Integração emoji.gg não é dependência.
+
+Entrega: seis packs/36 imagens OpenMoji 16.0.0 com origem fixada, créditos,
+licença completa e hashes; manifestos em páginas de dois packs; IndexedDB v2
+com migração transacional, metadados separados e blobs sob demanda. Instalação
+sequencial cancelável com commit atômico, cache offline limitado e interface
+incremental com retry/botão acessível. Limites e envio explícito preservados.
+Sete cenários M7 e sete regressões de mídia aprovados no Playwright, incluindo
+renderer empacotado; typecheck/build e 90 unitários aprovados, três ignorados.
+Detalhes e limites de validação em [progresso](annoy-progress.md#m7--catálogo-licenciado-02112026).
 
 ## 3. Contratos e políticas de implementação
 
@@ -412,10 +421,11 @@ produção, Linux, leitor de tela e instâncias publicadas.
 ## 9. Próxima tarefa executável
 
 M5 (R14–R16) e M6 (R17, R18, R20) foram concluídos e integrados à base 0.9.3.
-Evidências e limites da regressão estão em `annoy-progress.md`. O próximo marco de
-implementação é **M7 — catálogo licenciado** (R07), somente em outra execução
-autorizada. Falhas preexistentes de vídeo SFrame e acesso do CI ao Annoy Global
-estão registradas separadamente; não ampliar M5/M6 para reimplementar segurança.
+M7 (R07) também está implementado e integrado sobre essa base. Não há M8 definido
+neste plano. Evidências e limites da regressão estão em `annoy-progress.md`.
+O próximo trabalho é validar a entrega integrada e tratar os problemas externos
+já registrados: vídeo SFrame, acesso do CI ao Annoy Global e validações manuais
+em ambientes reais. Não presumir que concluir os marcos elimina esses limites.
 
 ## 10. Entrega M3/M4 (30/10/2026)
 

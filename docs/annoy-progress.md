@@ -27,7 +27,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. |
 | M5 — idiomas/acessibilidade | concluído | Sete catálogos locais, preferências independentes, prévia/save/discard, Intl e escala 16–24 px integrados à main 0.9.3. Regressão, teclado e zoom 200% aprovados; limites abaixo. |
 | M6 — desktop/updates | concluído | Preferências main, autostart, bandeja e atualizador assinado integrados à main 0.9.3. Pacotes Windows/Linux, regressão e recuperação aprovados; limites abaixo. |
-| M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
+| M7 — loja licenciada | concluído | Catálogo OpenMoji paginado, armazenamento local atômico e validação registrada abaixo. |
 
 ## Status por requisito
 
@@ -39,7 +39,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | R04 | Conectividade global | concluído em M1 | M1.1–M1.3 validados: observações por camada, scheduler com causa/tentativa/próximo retry, jitter e pausa offline; isolamento confirmado em testes unitários e Playwright. | M1 |
 | R05 | Seis layouts de canal | concluído em M2 | Estados de loading/erro/vazio/permissão, recuperação, pesquisa paginada de membros/arquivos e detalhes de comunidades sob demanda; testes integrados aprovados. | M2 |
 | R06 | Nova Aba | concluído em M2 | Comunidades e conexão priorizadas, serviços em seção própria, descoberta progressiva e escolha explícita da instância com várias contas; testes integrados aprovados. | M2 |
-| R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
+| R07 | Loja de emojis | concluído | Catálogo licenciado, metadados paginados, blobs sob demanda e instalação atômica; validação M7 abaixo. | M7 |
 | R08 | Histórico escalável | concluído em M3 | Janela bidirecional indexada, limites 500/5.000, virtualização variável, âncora e reconciliação de respostas/eventos; testes de escala e UI aprovados. | M3 |
 | R09 | Última leitura | concluído em M3 | Cursor monotônico privado, duas sessões, fronteira estável, avanço visível e recomposição de contadores/menções. | M3 |
 | R10 | Amigos e atividades | concluído em M4 | Resumo principal +N acionável, presença e capacidade ampliada com filtros legados e fontes reais. | M4 |
@@ -467,12 +467,6 @@ Estado: **concluído e validado localmente**.
   [Server #6](https://github.com/GeGLab/Annoy.Server/pull/6). Commits separados para
   M3, M4 e correções encontradas na validação conjunta.
 
-## Próxima tarefa recomendada
-
-M5/M6 concluídos com as evidências e os limites registrados abaixo. O próximo
-marco de implementação é **M7 — catálogo licenciado** (R07), somente em outra
-execução autorizada.
-
 ## M5 e M6 — 01/11/2026
 
 - Implementação de M5 em `fbe9b0b`, com correção de transporte em `91762ca`:
@@ -552,3 +546,58 @@ execução autorizada.
   os controles próprios e a fonte do editor seguem as preferências. Os catálogos
   foram revisados nos fluxos principais; não houve revisão profissional de
   todos os textos por falantes nativos. Nenhum dado de usuário foi traduzido.
+
+## M7 — catálogo licenciado (02/11/2026)
+
+- A base local inicial antecedia M5/M6. Antes da publicação, o M7 foi integrado
+  à main atual, que incorporou M5/M6 pelo PR #8; esses marcos estão concluídos.
+- Catálogo real: seis packs e 36 PNGs OpenMoji 16.0.0, sem alterar as imagens,
+  fixados no commit `66e17da0f2d4347f64ee9d78c367fc5234283863`. Licença oficial
+  CC BY-SA 4.0 conferida e distribuída junto aos ativos; créditos, autoria,
+  origem e versão visíveis e preservados na exportação. SHA-256 verifica os
+  manifestos e cada imagem antes de instalar. Script de reconstrução em
+  `scripts/build-expression-catalog.mjs`; nenhuma dependência nova.
+- Índice leve de pesquisa/categorias; manifestos em páginas reais de dois
+  packs, até duas requisições de manifesto por página. Uma consulta por lista;
+  skeleton, erro/retry, vazio, fim e botão acessível de carregar mais acompanham
+  a rolagem incremental. Cache de metadados limitado a oito entradas em memória
+  e 16 no IndexedDB; chaves de página incluem versão e hash.
+- IndexedDB v2 preserva o store legado e migra seus registros por cursor em
+  transação de upgrade. Metadados de packs/itens e blobs ficam separados,
+  com índices de pacote e tipo. A lista de instalados lê 12 metadados/página;
+  o seletor lê até 48 itens/página, buscando inclusive além da primeira página.
+  Não há `getAll()` de blobs na listagem. Prévias locais leem imagens por
+  visibilidade e liberam object URLs ao trocar/fechar.
+- Download sequencial, timeout e cancelamento; substituição e remoção de arquivos
+  antigos em uma única transação. Quota, interrupção, hash inválido e cancelamento
+  não deixam instalação parcial nem substituem o pack anterior. Preservados os
+  limites de 60 itens, 8 MiB/imagem e 50 MiB/pack. Envio continua explícito e
+  navegação respeita rascunhos e o guard de configurações.
+- Testes executados **após a implementação**, conforme solicitado:
+  `npm run typecheck` e `npx electron-vite build` aprovados; suíte unitária
+  `node --experimental-strip-types --test scripts/tests/*.test.mjs` com 90
+  aprovados, zero falhas e três ignorados pelo ambiente.
+- Playwright: sete cenários em `tests/expression-catalog.spec.ts` aprovados:
+  migração legada sem leitura de blobs na listagem, cursores e busca além da
+  primeira página, interrupção/cancelamento/quota/integridade, catálogo paginado,
+  retry/vazio de UI, cache e imagens após reiniciar o renderer offline, rollback
+  de migração e retry preservando os bytes. Sete regressões em `experience.spec.ts`
+  aprovadas: instalação/importação/restauração, GIPHY, round-trip de exportação,
+  renderer empacotado `file:`, anexo real, guard sem conversa e gestão/rascunhos.
+  Uma falha inicial do teste offline foi corrigida restringindo o bloqueio de
+  rede aos ativos, pois o glob inicial também bloqueava módulos do Vite.
+- Revisão visual local: capturas `media-settings-dark.png` e
+  `media-settings-light-minimum.png` em `.impeccable/review`, sem overflow em
+  940×620; sistema visual preservado. Detector consultado uma vez: aviso de
+  animação de margem preexistente e sugestões de escala tipográfica/raios,
+  incluindo o novo título de catálogo em `1rem`. São divergências do registro
+  visual, sem ampliar este marco para reescrever M5. Build mantém os avisos
+  preexistentes de chunks grandes e imports dinâmicos; um cenário registrou
+  aviso ResizeObserver. Sem publicação, alterações de Server ou instaladores.
+
+
+## Próxima tarefa recomendada
+
+M0–M7 implementados. Não há M8 definido neste plano. A próxima etapa é
+validar a entrega integrada e tratar as limitações externas registradas em M5/M6,
+incluindo os cenários SFrame e o acesso do CI ao repositório Annoy Global.

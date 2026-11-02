@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "version": "1",
+  "packs": [
+    {
+      "id": "openmoji-food",
+      "name": "Sabores do OpenMoji",
+      "category": "food",
+      "author": "OpenMoji",
+      "version": "16.0.0",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "source": "https://github.com/hfg-gmuend/openmoji/tree/66e17da0f2d4347f64ee9d78c367fc5234283863/color/618x618",
+      "credits": "All emojis designed by OpenMoji, the open-source emoji and icon project. HfG Schwäbisch Gmünd, Benedikt Groß, Daniel Utz, students and external contributors. Unmodified PNG artwork.",
+      "items": [
+        {
+          "id": "1F355",
+          "name": "Pizza",
+          "kind": "sticker",
+          "url": "openmoji/1F355.png",
+          "sha256": "36beea286d028ba2ea621a893c3f205199284457edaece1d9807c9e68b345dd5"
+        },
+        {
+          "id": "1F354",
+          "name": "Hambúrguer",
+          "kind": "sticker",
+          "url": "openmoji/1F354.png",
+          "sha256": "0c7afd27bcb31c85ec5993d57a8a73838a140d62609b65106b4a2573c6cafa61"
+        },
+        {
+          "id": "1F34E",
+          "name": "Maçã",
+          "kind": "sticker",
+          "url": "openmoji/1F34E.png",
+          "sha256": "8534c1bec8bde9d9641656508ab9476ad46acac394bd2de25bc0e6eeca4f5a72"
+        },
+        {
+          "id": "1F353",
+          "name": "Morango",
+          "kind": "sticker",
+          "url": "openmoji/1F353.png",
+          "sha256": "9e80cb897208f4657c56a1ac1b90f1c17efa730233cbfebda77465bb1de56e0c"
+        },
+        {
+          "id": "1F366",
+          "name": "Sorvete",
+          "kind": "sticker",
+          "url": "openmoji/1F366.png",
+          "sha256": "1e6b7948a64612983e0aa17dfced00d739be7396ffb41f18a44c5857d42e174e"
+        },
+        {
+          "id": "2615",
+          "name": "Café",
+          "kind": "sticker",
+          "url": "openmoji/2615.png",
+          "sha256": "9641a86ca68b2a37b2138fd3f679557560e6764d728eb7bf4f6955c37b299ff4"
+        }
+      ]
+    },
+    {
+      "id": "openmoji-nature",
+      "name": "Natureza do OpenMoji",
+      "category": "nature",
+      "author": "OpenMoji",
+      "version": "16.0.0",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "source": "https://github.com/hfg-gmuend/openmoji/tree/66e17da0f2d4347f64ee9d78c367fc5234283863/color/618x618",
+      "credits": "All emojis designed by OpenMoji, the open-source emoji and icon project. HfG Schwäbisch Gmünd, Benedikt Groß, Daniel Utz, students and external contributors. Unmodified PNG artwork.",
+      "items": [
+        {
+          "id": "1F308",
+          "name": "Arco-íris",
+          "kind": "sticker",
+          "url": "openmoji/1F308.png",
+          "sha256": "e64d4d09858960c0b09e3c7c6568ddff14db3207bec2d9d1d41d8cbf250085f2"
+        },
+        {
+          "id": "1F319",
+          "name": "Lua",
+          "kind": "sticker",
+          "url": "openmoji/1F319.png",
+          "sha256": "e1a019e189f06f57efc7eea39a4872f9497b396f291cc2035c577e94b76fadc0"
+        },
+        {
+          "id": "2B50",
+          "name": "Estrela",
+          "kind": "sticker",
+          "url": "openmoji/2B50.png",
+          "sha256": "d8303ca5eac30dd96cc6cff9ade3d1f177865e91777b132ac668c1b9f67c556d"
+        },
+        {
+          "id": "1F33B",
+          "name": "Girassol",
+          "kind": "sticker",
+          "url": "openmoji/1F33B.png",
+          "sha256": "4dc908f328b82c0b64722593555dfd493c383d8e4538b1cfc95376fe1e4a239b"
+        },
+        {
+          "id": "1F332",
+          "name": "Árvore",
+          "kind": "sticker",
+          "url": "openmoji/1F332.png",
+          "sha256": "1e34874f11877568ebf21a50efe0c7063a586a33c6ee650cb6d9a08b97ff0f0c"
+        },
+        {
+          "id": "1F335",
+          "name": "Cacto",
+          "kind": "sticker",
+          "url": "openmoji/1F335.png",
+          "sha256": "22cdb23480fed93b08fcf4712ee491e195e87036bb473f936bfb0221235e3892"
+        }
+      ]
+    }
+  ]
+}
