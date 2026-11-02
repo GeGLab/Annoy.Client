@@ -411,9 +411,11 @@ produção, Linux, leitor de tela e instâncias publicadas.
 
 ## 9. Próxima tarefa executável
 
-M3 (R08, R09, R19) e M4 (R10–R13) foram implementados e validados localmente.
-Iniciar **M5 — localização e acessibilidade** (R14–R16), seguindo sua ordem e
-dependências. Não iniciar M5 automaticamente nesta execução de M3/M4.
+M5 (R14–R16) e M6 (R17, R18, R20) foram concluídos e integrados à base 0.9.3.
+Evidências e limites da regressão estão em `annoy-progress.md`. O próximo marco de
+implementação é **M7 — catálogo licenciado** (R07), somente em outra execução
+autorizada. Falhas preexistentes de vídeo SFrame e acesso do CI ao Annoy Global
+estão registradas separadamente; não ampliar M5/M6 para reimplementar segurança.
 
 ## 10. Entrega M3/M4 (30/10/2026)
 
@@ -432,3 +434,25 @@ dependências. Não iniciar M5 automaticamente nesta execução de M3/M4.
   70 cenários Playwright aprovados incluindo repetição de um timeout inicial;
   52 testes do servidor aprovados. Falha preexistente de symlink Windows e cinco
   testes Global ignorados estão detalhados em `annoy-progress.md`.
+
+## 11. Entrega M5/M6 (02/11/2026)
+
+- M5 centraliza sete catálogos locais tipados, formatação regional com `Intl`,
+  frases reordenáveis com slots React seguros e preferências independentes de
+  idioma/região/hora. Escala 16–24px, links, calendários, prévia/save/discard e
+  restauração do idioma anterior integram a arquitetura existente.
+- Tradução externa foi autorizada somente para texto estático público. Marcas,
+  placeholders e fluxos principais foram revisados; mensagens, contatos,
+  credenciais e demais dados de usuários não foram enviados.
+- M6 persiste preferências versionadas/atômicas no main com IPC de origem
+  restrita, lê aceleração antes de ready e diferencia salvo/aplicado/reinício.
+  Implementa autostart Windows/XDG, início minimizado, suporte de bandeja e
+  recuperação por segunda instância. Sair/reiniciar respeita edições pendentes.
+- O atualizador conserva assinatura independente e política crítica da main
+  0.9.3, com checagens coordenadas, notificação configurável por versão/sessão e
+  estados de erro/retry. Checksums sozinhos não autorizam instalar um artefato.
+- Matriz de pacotes Windows/Linux aprovada em CI, sem publicar: NSIS/AppImage,
+  código/fuses Linux, renderização, vídeo/captura e persistência nos dois modos
+  de aceleração. Validação usa CDP do renderer com inspector do main desabilitado.
+- Evidências, commits, PR e limites da validação estão em `annoy-progress.md`.
+  M7 não foi iniciado nesta execução.
