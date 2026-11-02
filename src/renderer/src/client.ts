@@ -1,3 +1,4 @@
+import { requestNavigation } from "./lib/navigation-guard.ts";
 import {t as translate} from "../../shared/localization/index.ts";
 import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
@@ -358,6 +359,10 @@ export function markServerRead(accountId: string, serverId: string): void {
 }
 
 export function navigate(view: View): void {
+  requestNavigation(() => applyNavigation(view));
+}
+
+function applyNavigation(view: View): void {
   flushChatState();
   const destinationAccountId = view.kind === "server" || view.kind === "home" || view.kind === "marketplace" ? view.accountId : null;
   if (destinationAccountId) clearRecoveryReturn(destinationAccountId);

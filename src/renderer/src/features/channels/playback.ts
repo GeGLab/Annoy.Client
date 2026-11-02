@@ -1,9 +1,10 @@
 import { playbackPosition, type PlaybackAction, type PlaybackItem, type PlaybackState } from "@distopic/protocol";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { toast, useStore } from "../../store.ts";
 import { onRoomEvent } from "./events.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
 
 // One theater or song room's shared playback, and the loop that keeps this device on it.
 
@@ -14,11 +15,13 @@ export interface Playback {
   retry: () => void;
   /** Server clock minus ours, in ms. */
   offset: number;
-  send: (action: PlaybackAction) => Promise<void>;
+  send: (action: PlaybackAction) => Promise<boolean>;
 }
 
 export function usePlayback(accountId: string, channelId: string): Playback {
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
+  const requests = useRequestOwner(JSON.stringify([accountId, channelId, connected]));
+  const writes = useMemo(() => new Map<string, Promise<boolean>>(), [requests]);
   const [state, setState] = useState<PlaybackState | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -53,14 +56,25 @@ export function usePlayback(accountId: string, channelId: string): Playback {
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   const send = useCallback(
-    async (action: PlaybackAction) => {
-      try {
-        apply(await apiFor(accountId).post<PlaybackState>(`/channels/${channelId}/playback`, action));
-      } catch (err) {
-        toast((err as Error).message);
-      }
+    (action: PlaybackAction): Promise<boolean> => {
+      const key = JSON.stringify(action), pending = writes.get(key);
+      if (pending) return pending;
+      const operation = (async () => {
+        try {
+          const next = await apiFor(accountId).post<PlaybackState>(`/channels/${channelId}/playback`, action, requests.signal);
+          requests.signal.throwIfAborted();
+          apply(next);
+          return true;
+        } catch (err) {
+          if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
+          return false;
+        }
+      })();
+      writes.set(key, operation);
+      void operation.finally(() => { if (writes.get(key) === operation) writes.delete(key); });
+      return operation;
     },
-    [accountId, channelId, apply],
+    [accountId, channelId, apply, requests, writes],
   );
 
   return { state: connected ? state : null, offset, send, loading: connected && loading, error: connected ? error : null, retry };
@@ -116,7 +130,7 @@ export function useSync(driver: Driver | null, playback: Playback, enabled = tru
       const s = ref.current.state;
       if (!s?.currentId) return;
       if (action === "pause" && !s.paused) void send({ op: "pause", position });
-      else if (action === "play" && s.paused) void send({ op: "seek", position }).then(() => send({ op: "play" }));
+      else if (action === "play" && s.paused) void send({ op: "seek", position }).then((saved) => saved && send({ op: "play" }));
       else if (action === "seek" && Math.abs(playbackPosition(s, ref.current.offset) - position) > 1) void send({ op: "seek", position });
     },
     onEnded() {
