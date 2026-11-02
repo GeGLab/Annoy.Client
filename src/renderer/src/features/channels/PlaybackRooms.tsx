@@ -1,3 +1,5 @@
+import {rich} from "../../lib/localization.ts";
+import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { has, Permission, playbackPosition, type Channel, type Message, type PlaybackItem, type ServerState } from "@distopic/protocol";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { apiFor, joinVoice, leaveVoice, openChannel } from "../../client.ts";
@@ -10,7 +12,7 @@ import { currentItem, elementDriver, useSync, usePlayback, viewDriver, type Driv
 
 type Slot = "theater" | "music";
 const inView = (item: PlaybackItem | null) => item?.kind === "youtube" || item?.kind === "site";
-const KIND_LABEL: Record<PlaybackItem["kind"], string> = { file: "Arquivo", direct: "Link direto", youtube: "YouTube", site: "Site" };
+let KIND_LABEL: Record<PlaybackItem["kind"], string> = { file: translate("common.ba8a452f2f83"), direct: translate("common.944bf23879bd"), youtube: "YouTube", site: translate("common.fa7955814e32") };
 const KIND_ICON: Record<PlaybackItem["kind"], IconName> = { file: "file", direct: "link", youtube: "play", site: "external" };
 
 function clock(seconds: number): string {
@@ -96,30 +98,28 @@ function Controls({ playback, canControl, canSkip }: { playback: Playback; canCo
         className="round-btn"
         disabled={!canControl}
         onClick={() => void send(state.paused ? { op: "play" } : { op: "pause", position })}
-        title={state.paused ? "Reproduzir para todos" : "Pausar para todos"}
+        title={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")}
       >
         <Icon name={state.paused ? "play" : "pause"} size={20} />
       </button>
-      <button className="round-btn" disabled={!canSkip} onClick={() => void send({ op: "next" })} title="Próximo">
+      <button className="round-btn" disabled={!canSkip} onClick={() => void send({ op: "next" })} title={translate("common.4a1772b0c06a")}>
         <Icon name="skip" size={20} />
       </button>
       <span className="playback-now">
         <strong className="truncate">{item.title}</strong>
         <small className="muted">
-          {state.paused ? "Pausado" : "Tocando"} · {clock(position)}
+          {state.paused ? translate("common.d455cfb682d3") : translate("common.b6f1f2a32314")} · {clock(position)}
         </small>
       </span>
-      <button className={`chip${state.autoplay ? " on" : ""}`} disabled={!canControl} onClick={() => void send({ op: "autoplay", value: !state.autoplay })}>
-        Reprodução automática
-      </button>
+      <button className={`chip${state.autoplay ? " on" : ""}`} disabled={!canControl} onClick={() => void send({ op: "autoplay", value: !state.autoplay })}>{translate("common.aaae0f8a9481")}</button>
     </div>
   );
 }
 
 function PlaybackFeedback({ playback }: { playback: Playback }) {
-  if (playback.loading && !playback.state) return <div className="playback-feedback" role="status">Carregando a fila…</div>;
+  if (playback.loading && !playback.state) return <div className="playback-feedback" role="status">{translate("common.de8ebfb32da9")}</div>;
   if (!playback.error) return null;
-  return <div className="playback-feedback error" role="alert"><span>Não foi possível atualizar a fila: {playback.error}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? "Tentando…" : "Tentar novamente"}</button></div>;
+  return <div className="playback-feedback error" role="alert"><span>{rich("common.3e66b8012f4a",{p0:(playback.error)})}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? "Tentando…" : translate("common.b9e10688be01")}</button></div>;
 }
 
 function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean }) {
@@ -145,7 +145,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
     setBusy(true);
     try {
       for (const f of list) {
-        const message = await apiFor(accountId).sendMessage<Message>(channel.id, `Adicionou à fila: ${f.name}`, [f], null);
+        const message = await apiFor(accountId).sendMessage<Message>(channel.id, translate("common.d8571b73592d",{p0:(f.name)}), [f], null);
         const attachment = message.attachments[0];
         if (attachment) await send({ op: "add", url: "", uploadId: attachment.id });
       }
@@ -162,16 +162,13 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder={audioOnly ? "Link do YouTube ou de um arquivo de áudio" : "Link do YouTube, de um vídeo ou de um site"}
-            aria-label="Link para adicionar à fila"
+            placeholder={audioOnly ? translate("common.f92e8e941b1d") : translate("common.006f5c9b0031")}
+            aria-label={translate("common.ab491e3fdf77")}
           />
-          <button className="btn" disabled={busy || !url.trim()}>
-            <Icon name="plus" size={16} />
-            Adicionar
-          </button>
+          <button className="btn" disabled={busy || !url.trim()}>{rich("common.86d6df3e9dd0",{p0:(<Icon name="plus" size={16} />)})}</button>
           {canAttach && (
             <>
-              <button type="button" className="icon-btn" disabled={busy} title="Enviar arquivo de áudio ou vídeo" onClick={() => file.current?.click()}>
+              <button type="button" className="icon-btn" disabled={busy} title={translate("common.d273bd0711f9")} onClick={() => file.current?.click()}>
                 <Icon name="upload" size={18} />
               </button>
               <input
@@ -191,7 +188,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
         </form>
       )}
       <ol className="queue-list">
-        {state?.queue.length === 0 && <li className="muted queue-empty">A fila está vazia. Adicione um link para começar.</li>}
+        {state?.queue.length === 0 && <li className="muted queue-empty">{translate("common.74e940674eb5")}</li>}
         {state?.queue.map((item, index) => {
           const current = item.id === state.currentId;
           const removable = moderator || item.addedBy === me;
@@ -203,22 +200,22 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
                   {item.title}
                 </strong>
                 <small className="muted truncate">
-                  <Icon name={KIND_ICON[item.kind]} size={12} /> {KIND_LABEL[item.kind]} · {names.get(item.addedBy) ?? "alguém"}
+                  <Icon name={KIND_ICON[item.kind]} size={12} /> {KIND_LABEL[item.kind]} · {names.get(item.addedBy) ?? translate("common.11bf7e98a3f1")}
                 </small>
               </span>
               <span className="row-actions">
                 {!current && canAdd && (
-                  <button className="icon-btn tiny" title="Tocar agora" onClick={() => void send({ op: "play", itemId: item.id })}>
+                  <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id })}>
                     <Icon name="play" size={14} />
                   </button>
                 )}
                 {moderator && index > 0 && (
-                  <button className="icon-btn tiny" title="Subir" onClick={() => void send({ op: "move", itemId: item.id, index: index - 1 })}>
+                  <button className="icon-btn tiny" title={translate("common.b3aad4488f3a")} onClick={() => void send({ op: "move", itemId: item.id, index: index - 1 })}>
                     <Icon name="up" size={14} />
                   </button>
                 )}
                 {removable && (
-                  <button className="icon-btn tiny" title="Remover da fila" onClick={() => void send({ op: "remove", itemId: item.id })}>
+                  <button className="icon-btn tiny" title={translate("common.59edc3f0849b")} onClick={() => void send({ op: "remove", itemId: item.id })}>
                     <Icon name="x" size={14} />
                   </button>
                 )}
@@ -241,7 +238,7 @@ function RoomChat({ accountId, state, channel, perms }: { accountId: string; sta
     <Chat
       accountId={accountId}
       channelId={channel.id}
-      title="Chat"
+      title={translate("common.460b3a7da007")}
       icon="message"
       canSend={has(perms, Permission.SEND_MESSAGES)}
       canAttach={has(perms, Permission.ATTACH_FILES)}
@@ -265,8 +262,8 @@ function TheaterPlayer({ accountId, playback }: { accountId: string; playback: P
     return (
       <div className="theater-empty">
         <Icon name="theater" size={44} />
-        <h2>Nada passando agora</h2>
-        <p className="muted">Adicione um link do YouTube, um vídeo ou um site na fila. Em sites, anúncios e pop-ups são bloqueados.</p>
+        <h2>{translate("common.39a3b1a7265b")}</h2>
+        <p className="muted">{translate("common.48d6ba9efc7e")}</p>
       </div>
     );
   }
@@ -302,26 +299,16 @@ export function TheaterView({ accountId, state, channel, perms }: { accountId: s
       <header className="chat-header">
         <Icon name="theater" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <div className="segmented" role="tablist" aria-label="O que assistir">
-          <button role="tab" aria-selected={mode === "player"} className={mode === "player" ? "active" : ""} onClick={() => setMode("player")}>
-            Player
-          </button>
-          <button role="tab" aria-selected={mode === "screen"} className={mode === "screen" ? "active" : ""} onClick={() => setMode("screen")}>
-            Telas{sharing ? " •" : ""}
-          </button>
+        <div className="segmented" role="tablist" aria-label={translate("common.08c5711fd759")}>
+          <button role="tab" aria-selected={mode === "player"} className={mode === "player" ? "active" : ""} onClick={() => setMode("player")}>{translate("common.64aee8c6cbd0")}</button>
+          <button role="tab" aria-selected={mode === "screen"} className={mode === "screen" ? "active" : ""} onClick={() => setMode("screen")}>{rich("common.4acd7eeb327c",{p0:(sharing ? " •" : "")})}</button>
         </div>
-        <span className="chat-topic">{inCall.length === 0 ? "Ninguém na chamada" : `${inCall.length} na chamada`}</span>
+        <span className="chat-topic">{inCall.length === 0 ? translate("common.f5c42021d624") : `${inCall.length} na chamada`}</span>
         {connected ? (
-          <button className="btn btn-ghost" onClick={() => leaveVoice()}>
-            <Icon name="hangup" size={16} />
-            Sair da chamada
-          </button>
+          <button className="btn btn-ghost" onClick={() => leaveVoice()}>{rich("common.5cf06e6bd5ed",{p0:(<Icon name="hangup" size={16} />)})}</button>
         ) : (
           has(perms, Permission.CONNECT) && (
-            <button className="btn" onClick={() => void joinVoice(accountId, state.server.id, channel.id)}>
-              <Icon name="mic" size={16} />
-              Entrar na chamada
-            </button>
+            <button className="btn" onClick={() => void joinVoice(accountId, state.server.id, channel.id)}>{rich("common.132f882f83f8",{p0:(<Icon name="mic" size={16} />)})}</button>
           )
         )}
       </header>
@@ -338,13 +325,9 @@ export function TheaterView({ accountId, state, channel, perms }: { accountId: s
           )}
         </div>
         <aside className="theater-side">
-          <div className="segmented" role="tablist" aria-label="Painel lateral">
-            <button role="tab" aria-selected={side === "queue"} className={side === "queue" ? "active" : ""} onClick={() => setSide("queue")}>
-              Fila{playback.state?.queue.length ? ` (${playback.state.queue.length})` : ""}
-            </button>
-            <button role="tab" aria-selected={side === "chat"} className={side === "chat" ? "active" : ""} onClick={() => setSide("chat")}>
-              Chat
-            </button>
+          <div className="segmented" role="tablist" aria-label={translate("common.ded83118d934")}>
+            <button role="tab" aria-selected={side === "queue"} className={side === "queue" ? "active" : ""} onClick={() => setSide("queue")}>{rich("common.8396d1b92ce2",{p0:(playback.state?.queue.length ? ` (${playback.state.queue.length})` : "")})}</button>
+            <button role="tab" aria-selected={side === "chat"} className={side === "chat" ? "active" : ""} onClick={() => setSide("chat")}>{translate("common.460b3a7da007")}</button>
           </div>
           {side === "queue" ? (
             <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly={false} />
@@ -406,17 +389,11 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
       <header className="chat-header">
         <Icon name="song" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{channel.topic || "Todos ouvem a mesma música ao mesmo tempo"}</span>
+        <span className="chat-topic">{channel.topic || translate("common.58547828fc8e")}</span>
         {here ? (
-          <button className="btn btn-ghost" onClick={() => listenTo(null)}>
-            <Icon name="volumeOff" size={16} />
-            Parar de ouvir
-          </button>
+          <button className="btn btn-ghost" onClick={() => listenTo(null)}>{rich("common.3f4403be164d",{p0:(<Icon name="volumeOff" size={16} />)})}</button>
         ) : (
-          <button className="btn" onClick={() => listenTo({ accountId, serverId: state.server.id, channelId: channel.id, name: channel.name })}>
-            <Icon name="headphones" size={16} />
-            Ouvir junto
-          </button>
+          <button className="btn" onClick={() => listenTo({ accountId, serverId: state.server.id, channelId: channel.id, name: channel.name })}>{rich("common.89b5c2ca7704",{p0:(<Icon name="headphones" size={16} />)})}</button>
         )}
       </header>
       <div className="song-body">
@@ -427,20 +404,16 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
           ) : (
             <div className="song-cover">
               <Icon name="music" size={56} />
-              <strong>{item?.title ?? "Nada tocando"}</strong>
-              {!here && item && <span className="muted">Clique em Ouvir junto para escutar com a sala.</span>}
+              <strong>{item?.title ?? translate("common.29f1d2c89080")}</strong>
+              {!here && item && <span className="muted">{translate("common.d6dd41e50c28")}</span>}
             </div>
           )}
           <Controls playback={playback} canControl={has(perms, Permission.SEND_MESSAGES)} canSkip={canSkip} />
         </div>
         <aside className="theater-side">
-          <div className="segmented" role="tablist" aria-label="Painel lateral">
-            <button role="tab" aria-selected={side === "queue"} className={side === "queue" ? "active" : ""} onClick={() => setSide("queue")}>
-              Fila{playback.state?.queue.length ? ` (${playback.state.queue.length})` : ""}
-            </button>
-            <button role="tab" aria-selected={side === "chat"} className={side === "chat" ? "active" : ""} onClick={() => setSide("chat")}>
-              Chat
-            </button>
+          <div className="segmented" role="tablist" aria-label={translate("common.ded83118d934")}>
+            <button role="tab" aria-selected={side === "queue"} className={side === "queue" ? "active" : ""} onClick={() => setSide("queue")}>{rich("common.8396d1b92ce2",{p0:(playback.state?.queue.length ? ` (${playback.state.queue.length})` : "")})}</button>
+            <button role="tab" aria-selected={side === "chat"} className={side === "chat" ? "active" : ""} onClick={() => setSide("chat")}>{translate("common.460b3a7da007")}</button>
           </div>
           {side === "queue" ? (
             <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly />
@@ -462,16 +435,16 @@ function SongPlayer({ session }: { session: Listening }) {
   useViewBounds("music", slot, inView(item) && !!slot?.isConnected);
   const position = playback.state ? playbackPosition(playback.state, playback.offset) : 0;
   return (
-    <div className="song-dock" role="region" aria-label="Música da sala">
+    <div className="song-dock" role="region" aria-label={translate("common.62fe17b6d2a1")}>
       <Icon name="song" size={16} />
-      <button className="song-dock-title truncate" title="Abrir a sala" onClick={() => openChannel(session.accountId, session.serverId, session.channelId)}>
-        <strong>{item?.title ?? "Fila vazia"}</strong>
+      <button className="song-dock-title truncate" title={translate("common.bea6078b5e33")} onClick={() => openChannel(session.accountId, session.serverId, session.channelId)}>
+        <strong>{item?.title ?? translate("common.cede3e8165b2")}</strong>
         <span className="muted"> · {session.name}</span>
       </button>
       <PlaybackFeedback playback={playback} />
       {item && <span className="muted">{clock(position)}</span>}
       {item && !inView(item) && <video key={item.id} ref={setAudio} className="song-audio" src={apiFor(session.accountId).resolve(item.url)} autoPlay />}
-      <button className="icon-btn tiny" title="Parar de ouvir" onClick={() => listenTo(null)}>
+      <button className="icon-btn tiny" title={translate("common.512e5a1c3a9e")} onClick={() => listenTo(null)}>
         <Icon name="x" size={14} />
       </button>
     </div>
@@ -490,3 +463,7 @@ export function SongDock() {
   if (!session || !connected) return null;
   return <SongPlayer key={`${session.accountId}:${session.channelId}`} session={session} />;
 }
+
+onLocalizationChange(()=>{KIND_LABEL={ file: translate("common.ba8a452f2f83"), direct: translate("common.944bf23879bd"), youtube: "YouTube", site: translate("common.fa7955814e32") };});
+
+onLocalizationChange(()=>{KIND_LABEL={ file: translate("common.ba8a452f2f83"), direct: translate("common.944bf23879bd"), youtube: "YouTube", site: translate("common.fa7955814e32") };});

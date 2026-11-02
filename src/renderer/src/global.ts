@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 // Annoy Global in the app: one account for many servers. The password and the
 // account keys never leave this device; Global keeps the server list only
 // encrypted, and never learns which servers this account signs in to
@@ -45,7 +46,7 @@ async function request<T>(base: string, path: string, init: { method?: string; b
   try {
     const result = await requests.run((active) => fetchJson<T>(base + path, {
       method,
-      headers: { ...(init.body !== undefined && { "content-type": "application/json" }), ...(init.token && { authorization: `Bearer ${init.token}` }) },
+      headers: { ...(init.body !== undefined && { "content-type": "application/json" }), ...(init.token && { authorization: translate("common.69c9d7985d22",{p0:(init.token)}) }) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     }, active), { signal: init.signal, timeoutMs: method === "GET" ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS, key: method === "GET" ? base + path : undefined });
     if (observesGlobal && generation === requests.generation) setState((s) => {
@@ -231,7 +232,7 @@ let tokenKeys: { at: number; keys: kdf.IssuerKey[]; issueWith: string } | null =
  * Global sees neither the server nor the identity.
  */
 async function proofFor(url: string, serverId: string, signal?: AbortSignal) {
-  if (!keys || !session) throw new GlobalError(401, "signed_out", "Entre na sua conta global primeiro");
+  if (!keys || !session) throw new GlobalError(401, "signed_out", translate("common.a38b33c692e3"));
   const generation = sessionGeneration, unlocked = keys;
   if (!tokenKeys || Date.now() - tokenKeys.at > 3_600_000) {
     const fresh = await global<{ keys: kdf.IssuerKey[]; issueWith: string }>("/v1/tokens/keys", { signal });
@@ -295,3 +296,7 @@ export async function linkAccount(account: Account, serverId: string, signal?: A
   assertSession(generation, signal);
   void rememberServer({ url: account.url, serverId });
 }
+
+
+
+

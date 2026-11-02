@@ -1,3 +1,5 @@
+import {rich} from "../../lib/localization.ts";
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { Gamepad2, Headphones, ExternalLink,Monitor,Activity } from "lucide-react";
 import type { UserActivity } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
@@ -25,13 +27,13 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   return (
     <div className={`activity-card activity-${activity.kind}${compact ? " compact" : ""}`}>
       <span className={`activity-artwork${image ? "" : " no-artwork"}`}>
-        {development ? <DevelopmentIcon name={activity.file ? activity.language ?? "code" : activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? `Capa de ${activity.name}` : `Capa do álbum ${activity.album || activity.name}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
+        {development ? <DevelopmentIcon name={activity.file ? activity.language ?? "code" : activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? translate("activity.29532ceb0b3e",{p0:(activity.name)}) : translate("activity.f3023eeabae2",{p0:(activity.album || activity.name)})} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
           : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : video?<Monitor size={compact?20:28} aria-hidden/>:generic?<Activity size={compact?20:28} aria-hidden/>:<Headphones size={compact ? 20 : 28} aria-hidden />}
       </span>
       <div>
-        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? `Programando · ${{ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": "Visual Studio" }[activity.provider as "vscode"] ?? activity.provider}` : game ? "Jogando" : video?"Vídeo / compartilhamento":generic?"Em atividade":`Ouvindo no ${activity.provider === "spotify" ? "Spotify" : "Apple Music"}`}</small>
+        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? translate("common.1fdb45064aad",{p0:({ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": translate("activity.026bf2b64617") }[activity.provider as "vscode"] ?? activity.provider)}) : game ? translate("activity.476e526adee7") : video?translate("activity.e3f1fb46cae7"):generic?translate("activity.575a3b4743ee"):translate("activity.007e5ab5ceee",{p0:(activity.provider === "spotify" ? "Spotify" : translate("activity.3b00b32d64af"))})}</small>
         <strong title={activity.name}>{activity.name}</strong>
-        {activity.startedAt != null && Number.isFinite(activity.startedAt) && <span className="activity-elapsed" aria-label={`Tempo na atividade: ${elapsed}`}>{elapsed} decorridos</span>}
+        {activity.startedAt != null && Number.isFinite(activity.startedAt) && <span className="activity-elapsed" aria-label={translate("activity.8eb5c9eabcfb",{p0:(elapsed)})}>{rich("common.74971f0a4dcd",{p0:(elapsed)})}</span>}
         {activity.artist && <span title={activity.artist}>{activity.artist}</span>}
         {development && activity.file && <span className="activity-file" title={activity.file}><DevelopmentIcon name={activity.language ?? "code"} size={14} />{activity.file}</span>}
       </div>
@@ -40,16 +42,16 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
           href={`https://store.steampowered.com/app/${activity.appId}/`}
           target="_blank"
           rel="noreferrer"
-          aria-label={`Ver ${activity.name} na Steam`}
+          aria-label={translate("activity.65a776e333d0",{p0:(activity.name)})}
         >
           <ExternalLink size={16} />
         </a>
       )}
       {!compact && activity.provider === "spotify" && (
-        <a href={`https://open.spotify.com/search/${encodeURIComponent(`${activity.name} ${activity.artist ?? ""}`.trim())}`} target="_blank" rel="noreferrer" aria-label={`Abrir ${activity.name} no Spotify`}><ExternalLink size={16} /></a>
+        <a href={`https://open.spotify.com/search/${encodeURIComponent(`${activity.name} ${activity.artist ?? ""}`.trim())}`} target="_blank" rel="noreferrer" aria-label={translate("activity.ae2c69b17ec6",{p0:(activity.name)})}><ExternalLink size={16} /></a>
       )}
       {!compact && activity.provider === "apple-music" && (
-        <a href={`https://music.apple.com/br/search?term=${encodeURIComponent(`${activity.name} ${activity.artist ?? ""}`.trim())}`} target="_blank" rel="noreferrer" aria-label={`Abrir ${activity.name} no Apple Music`}><ExternalLink size={16} /></a>
+        <a href={`https://music.apple.com/br/search?term=${encodeURIComponent(`${activity.name} ${activity.artist ?? ""}`.trim())}`} target="_blank" rel="noreferrer" aria-label={translate("activity.7033911a5781",{p0:(activity.name)})}><ExternalLink size={16} /></a>
       )}
     </div>
   );
@@ -78,9 +80,13 @@ export function ActivityStack({ activities, compact = false }: { activities: rea
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [signature, compact]);
   if (!activities.length) return null;
-  if(compact)return <div className="activity-summary"><button className="activity-summary-toggle" aria-expanded={intent===true} aria-label={`${activities[0]!.name}${activities.length>1?` e mais ${activities.length-1} atividades`:""}. Ver detalhes`} onClick={()=>setIntent(intent!==true)}><ProviderIcon provider={activities[0]!.provider} size={14}/><span>{activities[0]!.name}</span>{activities.length>1&&<strong>+{activities.length-1}</strong>}</button>{intent===true&&<div className="activity-summary-details">{activities.map(activity=><ActivityCard key={`${activity.kind}:${activity.provider}`} activity={activity} compact/>)}</div>}</div>;
+  if(compact)return <div className="activity-summary"><button className="activity-summary-toggle" aria-expanded={intent===true} aria-label={translate("activity.9d47c960ad08",{p0:(activities[0]!.name),p1:(activities.length>1?translate("activity.0cc428fe03de",{p0:(activities.length-1)}):"")})} onClick={()=>setIntent(intent!==true)}><ProviderIcon provider={activities[0]!.provider} size={14}/><span>{activities[0]!.name}</span>{activities.length>1&&<strong>+{activities.length-1}</strong>}</button>{intent===true&&<div className="activity-summary-details">{activities.map(activity=><ActivityCard key={`${activity.kind}:${activity.provider}`} activity={activity} compact/>)}</div>}</div>;
   return <div className={`activity-stack${activities.length > 1 ? " multiple" : ""}${open ? " expanded" : ""}`} onMouseEnter={() => { setHovered(true); setIntent(null); }} onMouseLeave={() => setHovered(false)} onFocusCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIntent(null); setFocused(true); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
-    {activities.length > 1 && <button className="activity-stack-toggle" aria-expanded={open} onClick={() => setIntent(!open)}>{activities.length} atividades <span>{open ? "Recolher" : "Expandir"}</span></button>}
+    {activities.length > 1 && <button className="activity-stack-toggle" aria-expanded={open} onClick={() => setIntent(!open)}>{activities.length}{translate("activity.948d3744fc44")}<span>{open ? translate("activity.2225d4a9a607") : translate("activity.e095e6d5592b")}</span></button>}
     <div className="activity-stack-cards" ref={cards}>{activities.map((activity, index) => <div className="activity-stack-item" key={`${activity.kind}:${activity.provider}:${activity.appId ?? activity.name}`} style={{ zIndex: activities.length - index, marginTop: index && !open && heights[index] ? -heights[index]! + 14 : 0 }}><ActivityCard activity={activity} compact={compact} /></div>)}</div>
   </div>;
 }
+
+
+
+

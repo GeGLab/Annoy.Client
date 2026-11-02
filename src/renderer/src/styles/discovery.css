@@ -33,14 +33,14 @@
   min-width: 0;
 }
 .entity-copy strong {
-  font-size: 13px;
+  font-size: 0.92857rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .entity-copy small {
-  font-size: 11px;
+  font-size: 0.78571rem;
   color: var(--text-muted);
 }
 .entity-popover {
@@ -74,7 +74,7 @@
 }
 .entity-popover [cmdk-group-heading] {
   padding: 10px 10px 6px;
-  font-size: 11px;
+  font-size: 0.78571rem;
   font-weight: 700;
   color: var(--text-muted);
 }
@@ -99,7 +99,7 @@
   color: var(--text-muted);
 }
 .entity-custom {
-  font-size: 10px;
+  font-size: 0.71429rem;
   padding: 3px 6px;
   margin-left: auto;
   color: var(--accent-strong);
@@ -111,7 +111,7 @@
   margin: 0;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.78571rem;
 }
 .entity-popover[data-state="open"] {
   animation: menu-in 160ms var(--ease);
@@ -138,7 +138,7 @@
   border-radius: 6px;
   background: var(--bg-deep);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.78571rem;
 }
 .titlebar-search kbd {
   margin-left: auto;
@@ -170,8 +170,8 @@
 }
 .action-dialog-form { display: flex; flex-direction: column; }
 .action-dialog-body { display: flex; flex-direction: column; gap: 10px; padding: 24px; }
-.action-dialog-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--text); }
-.action-dialog-description { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-soft); overflow-wrap: anywhere; }
+.action-dialog-title { margin: 0; font-size: 1.28571rem; font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--text); }
+.action-dialog-description { margin: 0; font-size: 1rem; line-height: 1.6; color: var(--text-soft); overflow-wrap: anywhere; }
 .action-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--border); background: var(--bg-main); }
 .ui-checkbox {
   display: inline-flex;
@@ -336,7 +336,7 @@
 }
 .calendar-popover .rdp-weekday {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.78571rem;
   padding: 8px 0;
 }
 .calendar-popover .rdp-outside {
@@ -369,7 +369,7 @@
   justify-content: space-between;
   margin: 8px 0 16px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.85714rem;
 }
 .search-filters {
   display: grid;
@@ -409,7 +409,7 @@
 .search-result time,
 .search-result small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.78571rem;
 }
 .search-result p {
   white-space: pre-wrap;
@@ -435,7 +435,7 @@
   background: var(--accent-soft);
   color: var(--accent-strong);
   padding: 12px;
-  font-size: 12px;
+  font-size: 0.85714rem;
 }
 .search-highlight {
   background: var(--accent-soft);
@@ -465,17 +465,17 @@
 }
 .activity-card small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 0.71429rem;
 }
 .activity-card strong {
-  font-size: 13px;
+  font-size: 0.92857rem;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
 .activity-card span {
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 0.85714rem;
 }
 .activity-card.compact {
   padding: 0;
@@ -487,11 +487,11 @@
   display: none;
 }
 .activity-card.compact strong {
-  font-size: 11px;
+  font-size: 0.78571rem;
   font-weight: 500;
 }
 .activity-card.compact span {
-  font-size: 10px;
+  font-size: 0.71429rem;
 }
 .activity-card .activity-artwork { display: flex; align-items: center; justify-content: center; flex: none; width: 64px; height: 64px; overflow: hidden; border-radius: 4px; background: var(--bg-input); color: var(--accent); }
 .activity-card .activity-artwork > img { width: 100%; height: 100%; object-fit: contain; }
@@ -511,7 +511,7 @@
 }
 .friend-activities h3 {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.78571rem;
   font-weight: 600;
   margin: 4px 0 12px;
 }
@@ -525,7 +525,7 @@
   text-align: left;
 }
 .friend-activities > button > strong {
-  font-size: 11px;
+  font-size: 0.78571rem;
 }
 .member-profile {
   max-width: calc(100vw - 24px);

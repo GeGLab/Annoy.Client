@@ -12,5 +12,6 @@
 @import "./styles/services.css" layer(components);
 @import "./styles/social-experience.css" layer(components);
 @import "./styles/channels.css" layer(components);
+@import "./styles/accessibility.css" layer(components);
 @source "./";
 @custom-variant dark (&:where(.dark, .dark *));

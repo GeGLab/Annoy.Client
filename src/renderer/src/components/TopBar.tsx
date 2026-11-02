@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { ServerSummary } from "@distopic/protocol";
 import * as Popover from "@radix-ui/react-popover";
 import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
@@ -37,9 +39,9 @@ function ServerTab({ account, server, inst }: { account: Account; server: Server
       <button
         className={`tab-item${active ? " active" : ""}${unread.count ? " unread" : ""}${inst?.status === "ready" ? "" : " offline"}`}
         onClick={() => void openServer(account.id, server.id)}
-        aria-label={`${server.name} · ${account.instanceName}`}
+        aria-label={translate("common.ae04d0e6f63d",{p0:(server.name),p1:(account.instanceName)})}
         aria-current={active ? "page" : undefined}
-        title={`${server.name} · ${account.instanceName} · botão direito para opções`}
+        title={translate("common.71b46ca526aa",{p0:(server.name),p1:(account.instanceName)})}
       >
         <span className="tab-tile">{server.iconUrl ? <img className="server-icon" src={server.iconUrl} alt="" /> : initials(server.name)}</span>
         <span className="rail-label">{server.name}</span>
@@ -73,45 +75,44 @@ export function UserPanel() {
       <div className="user-panel-row">
         <Popover.Root>
           <Popover.Trigger asChild>
-          <button className="user-identity" aria-label="Abrir meu perfil">
+          <button className="user-identity" aria-label={translate("common.5c9cb6831931")}>
             {user ? <Avatar user={user} size={32} presence={ownPresence} /> : <Brand size={32} />}
             <span className="user-identity-text">
-              <strong className="truncate">{user?.displayName ?? "Seu espaço"}</strong>
-              <span>{user ? `@${user.username}` : "Vamos conversar?"}</span>
+              <strong className="truncate">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>
+              <span>{user ? `@${user.username}` : translate("common.423f69a38f8e")}</span>
             </span>
           </button>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label="Meu perfil">
+            <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label={translate("common.9edbcdb31d91")}>
               <div className="member-card-head">
                 {user ? <Avatar user={user} size={56} presence={ownPresence} /> : <Brand size={48} />}
-                <div><strong className="member-card-name">{user?.displayName ?? "Seu espaço"}</strong>{user && <div className="muted">@{user.username}</div>}</div>
+                <div><strong className="member-card-name">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>{user && <div className="muted">@{user.username}</div>}</div>
               </div>
               {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
-              <label className="profile-status-choice">Meu status
-                <Select aria-label="Meu status" value={settings.manualPresence} onChange={(event) => setState((s) => { s.settings.manualPresence = event.target.value as ManualPresence; })}>
+              <label className="profile-status-choice">{translate("common.87c9043c582f")}<Select aria-label={translate("common.87c9043c582f")} value={settings.manualPresence} onChange={(event) => setState((s) => { s.settings.manualPresence = event.target.value as ManualPresence; })}>
                   {(["online", "idle", "dnd", "offline"] as const).map((status) => <option key={status} value={status}>{presenceLabel(status)}</option>)}
                 </Select>
               </label>
-              <p className="muted small">{settings.manualPresence === "online" ? "Fica ausente automaticamente após o tempo configurado." : settings.manualPresence === "idle" ? "Permanece ausente até você mudar o status." : settings.manualPresence === "dnd" ? "Silencia avisos de mensagens e chamadas." : "Você continua conectado, mas aparece offline e oculta suas atividades."}</p>
-              {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">Atualize esta instância para seus amigos também verem o status manual.</p>}
+              <p className="muted small">{settings.manualPresence === "online" ? translate("common.6b422f6d024f") : settings.manualPresence === "idle" ? translate("common.905d1c0b9f78") : settings.manualPresence === "dnd" ? translate("common.84b97bf196c0") : translate("common.d78216f5ca21")}</p>
+              {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">{translate("common.41f9f802ad4b")}</p>}
               <div className="self-profile-activity">
-                <h3>Minha atividade</h3>
+                <h3>{translate("common.c539537cdd76")}</h3>
                 <ActivityStack activities={activities} />
-                {!activities.length && <p className="muted">{!settings.shareActivity ? "O compartilhamento está desativado." : snapshot?.error ?? "Nenhuma atividade detectada agora."}</p>}
-                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? "Visível apenas para você enquanto aparece offline." : groupActivitySupported ? "Compartilhada com amigos e membros dos seus servidores." : "Compartilhada com seus amigos nesta instância."}</p>}
+                {!activities.length && <p className="muted">{!settings.shareActivity ? translate("common.c9d1b9e3ba94") : snapshot?.error ?? translate("common.f557b5cdcc29")}</p>}
+                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? translate("common.57415ffd7b3b") : translate("common.7bda91a1a79b")}</p>}
               </div>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />Editar perfil</button></Popover.Close>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" size={16} />Trocar de conta</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}>{rich("common.fdea9c93093b",{p0:(<Icon name="edit" size={16} />)})}</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" size={16} />)})}</button></Popover.Close>
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
         <div className="user-control-pair">
-          <Tooltip content={settings.selfMute ? "Ativar microfone" : "Silenciar microfone"} side="top">
+          <Tooltip content={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")} side="top">
             <button
               className={`icon-btn${settings.selfMute ? " danger" : ""}`}
               onClick={() => toggleVoiceSetting("selfMute")}
-              aria-label={settings.selfMute ? "Ativar microfone" : "Silenciar microfone"}
+              aria-label={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")}
               aria-pressed={settings.selfMute}
             >
               <Icon name={settings.selfMute ? "micOff" : "mic"} size={17} />
@@ -120,11 +121,11 @@ export function UserPanel() {
           <DeviceMenu kind="input" />
         </div>
         <div className="user-control-pair">
-          <Tooltip content={settings.selfDeaf ? "Ativar áudio" : "Desativar áudio"} side="top">
+          <Tooltip content={settings.selfDeaf ? translate("common.5cfebda5d336") : translate("common.3b97c043a1c1")} side="top">
             <button
               className={`icon-btn${settings.selfDeaf ? " danger" : ""}`}
               onClick={() => toggleVoiceSetting("selfDeaf")}
-              aria-label={settings.selfDeaf ? "Ativar áudio" : "Desativar áudio"}
+              aria-label={settings.selfDeaf ? translate("common.5cfebda5d336") : translate("common.3b97c043a1c1")}
               aria-pressed={settings.selfDeaf}
             >
               <Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} size={17} />
@@ -133,7 +134,7 @@ export function UserPanel() {
           <DeviceMenu kind="output" />
         </div>
         <Tooltip content="Configurações" side="top">
-          <button className="icon-btn" onClick={openSettings} aria-label="Configurações">
+          <button className="icon-btn" onClick={openSettings} aria-label={translate("common.76b0fb6ad189")}>
             <Icon name="gear" size={17} />
           </button>
         </Tooltip>
@@ -164,36 +165,40 @@ export function TopBar() {
   return (
     <header className="topbar clean-rail">
       <Tooltip content="Mensagens diretas">
-        <button className={`rail-brand rail-home tab-item${view.kind === "home" ? " active" : ""}`} aria-label="Mensagens diretas" aria-current={view.kind === "home" ? "page" : undefined} onClick={() => navigate({ kind: "home", accountId: "accountId" in view ? view.accountId ?? accounts[0]?.id ?? null : accounts[0]?.id ?? null, dmId: null })}>
+        <button className={`rail-brand rail-home tab-item${view.kind === "home" ? " active" : ""}`} aria-label={translate("common.53c413d8aae2")} aria-current={view.kind === "home" ? "page" : undefined} onClick={() => navigate({ kind: "home", accountId: "accountId" in view ? view.accountId ?? accounts[0]?.id ?? null : accounts[0]?.id ?? null, dmId: null })}>
           <Brand size={settings.barPosition === "top" ? 30 : 44} />
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
       </Tooltip>
       <span className="rail-divider rail-home-divider" aria-hidden="true" />
-      <nav className="tabs-strip" aria-label="Navegação do Annoy">
-        <Tooltip content="Todos os servidores"><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label="Servidores" aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">Servidores</span></button></Tooltip>
+      <nav className="tabs-strip" aria-label={translate("common.0beb691c8956")}>
+        <Tooltip content="Todos os servidores"><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label={translate("common.c1158df03518")} aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">{translate("common.c1158df03518")}</span></button></Tooltip>
         {directMessages.map(({ account, dm, unread }) => {
           const user = dm.recipients[0];
           if (!user) return null;
           const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
-          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname} · ${unread} novas mensagens`}><button className="tab-item dm-shortcut" aria-label={`Conversa com ${nickname}, ${unread} mensagens não lidas`} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
+          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname} · ${unread} novas mensagens`}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(unread)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
         })}
         {before.map((service) => <ServiceTab key={service.id} service={service} />)}
         {before.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {accounts.map((account) => {
           const inst = instances[account.id];
           return <div key={account.id} className="tab-group">
-            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status === "invalid" ? "sessão expirada, entre de novo" : "sem conexão. Clique para tentar agora"}`} aria-label={`${account.instanceName}: ${inst?.status === "invalid" ? "entrar novamente" : "tentar reconectar"}`} onClick={() => inst?.status === "invalid" ? setState((s) => { s.modal = { kind: "addAccount" }; }) : reconnect(account.id)} />}
+            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={translate("common.07e3a63ea0ed",{p0:(account.instanceName),p1:(inst?.status === "invalid" ? translate("common.f2c87349e41f") : translate("common.e27be73b7089"))})} aria-label={translate("common.07e3a63ea0ed",{p0:(account.instanceName),p1:(inst?.status === "invalid" ? translate("common.9200e693d8d3") : translate("common.63d538de9074"))})} onClick={() => inst?.status === "invalid" ? setState((s) => { s.modal = { kind: "addAccount" }; }) : reconnect(account.id)} />}
             {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
           </div>;
         })}
         {after.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {after.map((service) => <ServiceTab key={service.id} service={service} />)}
-        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title="Nova aba: servidor Annoy ou serviço" aria-label="Nova aba" onClick={() => openModal({ kind: "addTab" })}><span className="tab-tile"><Icon name="plus" size={18} /></span><span className="rail-label">Nova aba</span></button></Tooltip>
+        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title={translate("common.07281181367c")} aria-label={translate("common.32db25cd960a")} onClick={() => openModal({ kind: "addTab" })}><span className="tab-tile"><Icon name="plus" size={18} /></span><span className="rail-label">{translate("common.32db25cd960a")}</span></button></Tooltip>
       </nav>
       <div className="rail-footer">
-        <Tooltip content="Novidades do Annoy"><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label="Novidades do Annoy" aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
+        <Tooltip content="Novidades do Annoy"><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label={translate("common.e9e2484c356c")} aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
       </div>
     </header>
   );
 }
+
+
+
+

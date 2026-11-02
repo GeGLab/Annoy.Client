@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { SongDock } from "./features/channels/PlaybackRooms.tsx";
 import { LazyMotion, MotionConfig } from "framer-motion";
@@ -76,6 +77,8 @@ function Modals() {
 const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
+  const localization = useLocalization();
+  useEffect(() => applyTextPreferences(localization), [localization]);
   const view = useStore((s) => s.view);
   const service = useStore((s) => (s.view.kind === "service" ? s.services.find((sv) => sv.id === (s.view as { serviceId: string }).serviceId) : undefined));
   const modalOpen = useStore((s) => s.modal !== null || s.directCall !== null);
@@ -190,7 +193,7 @@ export function App() {
       </main>
       </div>
       </div>
-      <Suspense fallback={<div className="overlay-loading" role="status">Abrindo…</div>}><Modals /></Suspense>
+      <Suspense fallback={<div className="overlay-loading" role="status">{translate("common.0911dfa616da")}</div>}><Modals /></Suspense>
       <MandatoryUpdate />
       <ActionDialogHost />
       <DirectCallPanel />
@@ -203,3 +206,6 @@ export function App() {
     </TooltipProvider></LazyMotion></MotionConfig>
   );
 }
+import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
+
+

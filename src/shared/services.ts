@@ -1,3 +1,4 @@
+import {t as translate,onLocalizationChange} from "./localization/index.ts";
 // Browser services that can live in a tab next to Annoy servers. Shared by the
 // main process (which hosts each one in its own sandboxed view and session) and
 // the renderer (which lists, adds and removes them).
@@ -41,13 +42,13 @@ export interface CatalogEntry {
   color: string;
 }
 
-export const CATALOG: readonly CatalogEntry[] = [
-  { kind: "discord", name: "Discord", description: "Seus servidores e conversas do Discord, logado como no navegador.", url: "https://discord.com/app", tile: "DC", color: "#5865f2" },
-  { kind: "teamspeak", name: "TeamSpeak", description: "Seus servidores do TeamSpeak, a um clique no app oficial.", url: "", tile: "TS", color: "#2580c3" },
-  { kind: "whatsapp", name: "WhatsApp", description: "WhatsApp Web, pareado com o seu celular.", url: "https://web.whatsapp.com/", tile: "WA", color: "#25d366" },
-  { kind: "telegram", name: "Telegram", description: "Telegram Web, com suas conversas e grupos.", url: "https://web.telegram.org/k/", tile: "TG", color: "#27a7e7" },
-  { kind: "element", name: "Element", description: "Salas do Matrix pelo Element.", url: "https://app.element.io/", tile: "EL", color: "#0dbd8b" },
-  { kind: "slack", name: "Slack", description: "Seus workspaces do Slack.", url: "https://app.slack.com/client", tile: "SL", color: "#611f69" },
+export let CATALOG: readonly CatalogEntry[] = [
+  { kind: "discord", name: "Discord", description: translate("common.9230f5269dc6"), url: "https://discord.com/app", tile: "DC", color: "#5865f2" },
+  { kind: "teamspeak", name: "TeamSpeak", description: translate("common.08aab01e3cd5"), url: "", tile: "TS", color: "#2580c3" },
+  { kind: "whatsapp", name: "WhatsApp", description: translate("common.7beb5f314d48"), url: "https://web.whatsapp.com/", tile: "WA", color: "#25d366" },
+  { kind: "telegram", name: "Telegram", description: translate("common.5426c745e153"), url: "https://web.telegram.org/k/", tile: "TG", color: "#27a7e7" },
+  { kind: "element", name: "Element", description: translate("common.d1129bb99638"), url: "https://app.element.io/", tile: "EL", color: "#0dbd8b" },
+  { kind: "slack", name: "Slack", description: translate("common.babcc74c0e53"), url: "https://app.slack.com/client", tile: "SL", color: "#611f69" },
 ];
 
 /** Domains each kind may navigate within; anything else opens in the system browser. */
@@ -95,3 +96,14 @@ export function teamspeakLink(server: TeamSpeakServer): string {
   const query = params.toString();
   return `ts3server://${host}${query ? `?${query}` : ""}`;
 }
+
+
+
+onLocalizationChange(()=>{CATALOG=[
+  { kind: "discord", name: "Discord", description: translate("common.9230f5269dc6"), url: "https://discord.com/app", tile: "DC", color: "#5865f2" },
+  { kind: "teamspeak", name: "TeamSpeak", description: translate("common.08aab01e3cd5"), url: "", tile: "TS", color: "#2580c3" },
+  { kind: "whatsapp", name: "WhatsApp", description: translate("common.7beb5f314d48"), url: "https://web.whatsapp.com/", tile: "WA", color: "#25d366" },
+  { kind: "telegram", name: "Telegram", description: translate("common.5426c745e153"), url: "https://web.telegram.org/k/", tile: "TG", color: "#27a7e7" },
+  { kind: "element", name: "Element", description: translate("common.d1129bb99638"), url: "https://app.element.io/", tile: "EL", color: "#0dbd8b" },
+  { kind: "slack", name: "Slack", description: translate("common.babcc74c0e53"), url: "https://app.slack.com/client", tile: "SL", color: "#611f69" },
+];});

@@ -1,3 +1,5 @@
+import {number,localizationPreferences} from "./../../shared/localization/index.ts";
+import {t as translate} from "../../shared/localization/index.ts";
 import type { ReactNode } from "react";
 
 /** Resolves an id to a display name, for <@user> and <#channel> mentions. */
@@ -23,13 +25,13 @@ function inline(text: string, nameOf: NameOf, channelOf: NameOf, me: string | nu
       const id = token.slice(2, -1);
       out.push(
         <span key={key} className={`mention${id === me ? " mention-me" : ""}`}>
-          @{nameOf(id) ?? "usuário"}
+          @{nameOf(id) ?? translate("common.c4197364c8d5")}
         </span>,
       );
     } else if (token.startsWith("<#")) {
       out.push(
         <span key={key} className="mention">
-          #{channelOf(token.slice(2, -1)) ?? "canal-desconhecido"}
+          #{channelOf(token.slice(2, -1)) ?? translate("common.e113486af161")}
         </span>,
       );
     } else if (token.startsWith("@")) out.push(<span key={key} className="mention">{token}</span>);
@@ -58,8 +60,8 @@ export function previewText(content: string, nameOf: NameOf, channelOf: NameOf =
       if (token.startsWith("`")) return token.slice(1, -1);
       if (token.startsWith("**") || token.startsWith("__") || token.startsWith("~~")) return token.slice(2, -2);
       if (token.startsWith("*")) return token.slice(1, -1);
-      if (token.startsWith("<@")) return `@${nameOf(token.slice(2, -1)) ?? "usuário"}`;
-      if (token.startsWith("<#")) return `#${channelOf(token.slice(2, -1)) ?? "canal-desconhecido"}`;
+      if (token.startsWith("<@")) return `@${nameOf(token.slice(2, -1)) ?? translate("common.c4197364c8d5")}`;
+      if (token.startsWith("<#")) return `#${channelOf(token.slice(2, -1)) ?? translate("common.e113486af161")}`;
       return token;
     })
     .trim();
@@ -86,15 +88,15 @@ export function renderContent(content: string, nameOf: NameOf, me: string | null
 export function formatTime(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
-  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === today.toDateString()) return `Hoje às ${time}`;
+  const time = d.toLocaleTimeString(localizationPreferences().region, { hour: "2-digit", minute: "2-digit", hourCycle:localizationPreferences().hourCycle });
+  if (d.toDateString() === today.toDateString()) return translate("common.01ab17c3ebca",{p0:(time)});
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return `Ontem às ${time}`;
-  return `${d.toLocaleDateString("pt-BR")} ${time}`;
+  if (d.toDateString() === yesterday.toDateString()) return translate("common.2c81730c5698",{p0:(time)});
+  return `${d.toLocaleDateString(localizationPreferences().region)} ${time}`;
 }
 
-export const formatClock = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+export const formatClock = (iso: string) => new Date(iso).toLocaleTimeString(localizationPreferences().region, { hour: "2-digit", minute: "2-digit", hourCycle:localizationPreferences().hourCycle });
 
 /** Label for a day divider: "Hoje", "Ontem" or a full date. */
 export function formatDay(iso: string): string {
@@ -102,15 +104,15 @@ export function formatDay(iso: string): string {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Hoje";
-  if (d.toDateString() === yesterday.toDateString()) return "Ontem";
-  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  if (d.toDateString() === today.toDateString()) return translate("common.a46d7cd01bd9");
+  if (d.toDateString() === yesterday.toDateString()) return translate("common.358ce4a99328");
+  return d.toLocaleDateString(localizationPreferences().region, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024) return `${number(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${number(bytes / 1024,{minimumFractionDigits:1,maximumFractionDigits:1})} KB`;
+  return `${number(bytes / 1024 / 1024,{minimumFractionDigits:1,maximumFractionDigits:1})} MB`;
 }
 
 export function initials(name: string): string {
@@ -126,3 +128,5 @@ export function colorFor(id: string): string {
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return `hsl(${h % 360} 45% 45%)`;
 }
+
+

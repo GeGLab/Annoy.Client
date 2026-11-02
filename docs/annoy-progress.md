@@ -25,7 +25,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | M2 — navegação/canais | concluído | R05–R06 implementados; cliente e Annoy.Server validados abaixo. |
 | M3 — mensagens/leitura/pins | concluído | Histórico indexado/virtualizado, cursor privado persistido e pins autorizados; validação com um milhão de mensagens e duas sessões. |
 | M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. Próximo: M5. |
-| M5 — idiomas/acessibilidade | pendente | Completa migração de textos e adaptação das superfícies anteriores. |
+| M5 — idiomas/acessibilidade | em andamento | Implementação em commit próprio: sete catálogos locais, preferências independentes, prévia/save/discard, Intl e escala 16–24 px. Regressão e confirmação visual finais junto do M6. |
 | M6 — desktop/updates | pendente | Requer validação de pacotes Windows/Linux. |
 | M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
 
@@ -46,9 +46,9 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | R11 | Redes sociais | concluído em M4 | Sete plataformas/site, validação compartilhada HTTPS/host, editor com prévia/save/discard e audiência por campo. | M4 |
 | R12 | Perfil completo | concluído em M4 | Modal com estados distintos e retorno de foco; histórico consentido, três sessões/30 dias, duração incompleta, exclusão e revogação. | M4 |
 | R13 | Contatos e privacidade | concluído em M4 | E-mail/telefone/site privados inicialmente, audiências verificadas no servidor, sem alteração de credenciais e sem dados privados em User/eventos. | M4 |
-| R14 | Idioma/região/hora | pendente | Formatação fixa em pt-BR; preferências e desfazer pendentes. | M5 |
-| R15 | Sete línguas | pendente | Sem camada central de catálogos. | M5 |
-| R16 | Fonte/links/prévia | pendente | Base 14px e medidas fixas; escala/acessibilidade pendentes. | M5 |
+| R14 | Idioma/região/hora | em validação em M5 | Preferências independentes, pt-BR em instalações existentes, sugestão regional, aviso e restauração. | M5 |
+| R15 | Sete línguas | em validação em M5 | 1.694 chaves tipadas em sete catálogos, slots React seguros e formatos Intl; revisão principal e paridade aprovadas. | M5 |
+| R16 | Fonte/links/prévia | em validação em M5 | Base 16px, escala até 24px, sublinhado independente, prévia/discard; cenário Electron com zoom 200% aprovado. Regressão final pendente. | M5 |
 | R17 | Aceleração | pendente | Sem controle persistido antes de ready. | M6 |
 | R18 | Inicialização/bandeja | pendente | Fechar oculta na bandeja Windows; faltam opções e matriz de suporte. | M6 |
 | R19 | Fixações | concluído em M3 | Pins idempotentes/persistidos, paginação, contexto fora do cache, autorização e convergência por eventos. | M3 |
@@ -471,3 +471,14 @@ Estado: **concluído e validado localmente**.
 
 Iniciar **M5 — localização e acessibilidade** (R14–R16), na ordem do plano.
 Não iniciar M5 nesta execução autorizada para M3/M4.
+
+## M5 ? 01/11/2026
+
+- Catalogs are local at runtime. External machine translation was explicitly authorized
+  for public static UI text only; no user content was sent. Main flows, brand names,
+  keys and placeholders were reviewed. Professional linguistic review remains useful.
+- Initial validation: typecheck/build and four localization/persistence tests passed;
+  Electron scenario covers all seven languages, preview/discard/save/reload, keyboard,
+  24px text and 200% zoom. Two initial test failures used incorrect button labels;
+  corrected selectors passed without changing application behavior.
+- Full regression and final visual confirmation remain scheduled after M6.

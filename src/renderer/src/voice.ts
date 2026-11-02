@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
@@ -154,12 +155,12 @@ export class VoiceSession {
 
   /** Starts a camera, or a screen capture (the source was chosen beforehand, see client.ts). */
   async startVideo(source: "camera" | "screen", deviceId?: string): Promise<void> {
-    if (!this.send || !this.canStream) throw new Error("Sem permissão para transmitir neste canal");
+    if (!this.send || !this.canStream) throw new Error(translate("common.a29daa11e424"));
     if (this.video.has(source)) return;
     const profile = source === "screen" ? screenProfile(this.settings) : CAMERA_PROFILE;
     if (source === "screen" && this.settings.screenAudio) {
-      if (!screenAudioSupported()) toast("Áudio da transmissão disponível apenas no Windows.", 8000);
-      else if (!this.serverScreenAudio) toast("Transmissão sem som: esta instância precisa anunciar suporte a screen_audio. Atualize o servidor Annoy.", 12000);
+      if (!screenAudioSupported()) toast(translate("common.a61148654b3b"), 8000);
+      else if (!this.serverScreenAudio) toast(translate("common.036d4bf6473c"), 12000);
     }
     const withAudio = source === "screen" && this.settings.screenAudio && this.serverScreenAudio && screenAudioSupported();
     const stream =
@@ -169,8 +170,8 @@ export class VoiceSession {
     for (const captured of stream.getTracks()) this.capturedTracks.add(captured);
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
-    if (withAudio && !sound) toast("O Windows não forneceu áudio para a transmissão. Confira a saída de som e tente compartilhar novamente.", 10000);
-    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error("Nenhuma imagem capturada"); }
+    if (withAudio && !sound) toast(translate("common.5cd6dd99a676"), 10000);
+    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error(translate("common.5641e70d7b1b")); }
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
@@ -197,7 +198,7 @@ export class VoiceSession {
       } catch (err) {
         sound.stop();
         console.warn("screen audio failed", err);
-        toast("A imagem está sendo transmitida, mas o envio do áudio falhou. Pare a transmissão e tente novamente.", 10000);
+        toast(translate("common.ce01001e093b"), 10000);
       }
     }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });
@@ -296,3 +297,5 @@ export class VoiceSession {
     this.micGate?.stop();
   }
 }
+
+

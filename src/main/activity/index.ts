@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import type { BrowserWindow, IpcMain } from "electron";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../../shared/activity.ts";
 import { probeWindows } from "./windows.ts";
@@ -29,7 +30,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
       snapshot = {
         supported: true,
         activities: [],
-        error: "Não foi possível ler a atividade. A leitura será tentada novamente.",
+        error: translate("desktop.fa615e37dc00"),
       };
     }
     publish();
@@ -37,7 +38,7 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
   };
   ipc.handle("activity:configure", (event, input: unknown) => {
     if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
-      throw new Error("Invalid activity sender");
+      throw new Error(translate("desktop.00cea4103202"));
     const values = input as Partial<ActivityPreferences> | null;
     preferences = { games: values?.games === true, music: values?.music === true, development: values?.development === true };
     ++generation;
@@ -51,12 +52,12 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
   });
   ipc.handle("activity:get", (event) => {
     if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
-      throw new Error("Invalid activity sender");
+      throw new Error(translate("desktop.00cea4103202"));
     return snapshot;
   });
   ipc.handle("activity:game-icon", (event, appId: unknown) => {
     if (event.sender !== window()?.webContents || event.senderFrame !== window()?.webContents.mainFrame)
-      throw new Error("Invalid activity sender");
+      throw new Error(translate("desktop.00cea4103202"));
     return typeof appId === "string" ? steamGameIcon(appId) : null;
   });
   return () => {
@@ -65,3 +66,5 @@ export function registerActivity(ipc: IpcMain, window: () => BrowserWindow | nul
     if (timer) clearTimeout(timer);
   };
 }
+
+

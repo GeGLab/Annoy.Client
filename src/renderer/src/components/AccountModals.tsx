@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { Select } from "./ui/select.tsx";
 import type { InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -71,7 +73,7 @@ export function AddAccountModal() {
       signal.throwIfAborted();
       setInfo(found);
     } catch (err) {
-      if (!isCancellation(err)) setError(err instanceof TypeError ? "Não foi possível alcançar o servidor" : (err as Error).message);
+      if (!isCancellation(err)) setError(err instanceof TypeError ? translate("common.8ad698582e04") : (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -125,49 +127,41 @@ export function AddAccountModal() {
   }
 
   return (
-    <Modal title={info ? mode === "register" ? "Criar sua conta" : "Bem-vindo de volta" : "Conectar a um servidor Annoy"} className="auth-modal">
-      <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? `Seu espaço em ${info.info.name}. ${mode === "register" ? "Escolha como seus amigos vão encontrar você." : "Entre para continuar suas conversas."}` : "Suas comunidades, suas conversas. Comece pelo endereço da sua instância."}</p></div>
+    <Modal title={info ? mode === "register" ? translate("common.5cee3300234b") : translate("common.5cab734a703f") : translate("common.9c9822ea2ed2")} className="auth-modal">
+      <div className="auth-intro"><Brand size={44} wordmark /><p>{info ? translate("common.461f89141d29",{p0:(info.info.name),p1:(mode === "register" ? translate("common.fa8a67c48a9a") : translate("common.0b4a1f0a5d92"))}) : translate("common.eb405545f232")}</p></div>
       {!info ? (
         <form onSubmit={probe} className="form">
-          <p className="muted">
-            Digite só o endereço do servidor, sem https://, como no TeamSpeak. Se ele não responder pelo endereço, o client tenta a porta {DEFAULT_PORT}.
-          </p>
-          <Field label="Endereço">
-            <Input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder="chat.exemplo.com ou 192.168.0.10" required />
+          <p className="muted">{rich("common.a8f0392bbff0",{p0:(DEFAULT_PORT)})}</p>
+          <Field label={translate("common.ef5e7e12bdac")}>
+            <Input autoFocus value={address} onChange={(e) => setAddress(e.target.value)} placeholder={translate("common.7a85f966dd7d")} required />
           </Field>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
-            <Button type="button" variant="secondary" onClick={closeModal}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="secondary" onClick={closeModal}>{translate("common.bb9dbb406dcb")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Conectando…" : "Continuar"}
+              {busy ? "Conectando…" : translate("common.63e2bbaf1c92")}
             </Button>
           </div>
         </form>
       ) : globalFirst ? (
         <form onSubmit={(e) => void withGlobal(e)} className="form">
-          <p className="muted">
-            Primeira vez neste servidor com a conta global. Escolha como você aparece aqui: ele não fica sabendo da sua conta global.
-          </p>
-          <Field label="Nome de usuário neste servidor">
+          <p className="muted">{translate("common.d225f33c0b43")}</p>
+          <Field label={translate("common.118590be3458")}>
             <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" required />
           </Field>
-          <Field label="Nome de exibição" hint="Opcional; você pode mudar depois">
+          <Field label={translate("common.80d20f1ebbc0")} hint={translate("common.3801e195f8e9")}>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field>
           {needsInvite && (
-            <Field label="Convite de cadastro" hint="Peça a quem hospeda esta instância">
-              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
+            <Field label={translate("common.3dba7a6e77c4")} hint={translate("common.2dd350972cf4")}>
+              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder={translate("common.fb6e4a9111bb")} required />
             </Field>
           )}
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
-            <Button type="button" variant="secondary" onClick={() => setGlobalFirst(false)}>
-              Voltar
-            </Button>
+            <Button type="button" variant="secondary" onClick={() => setGlobalFirst(false)}>{translate("common.59dc926760d0")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Aguarde…" : "Entrar"}
+              {busy ? "Aguarde…" : translate("common.4105811890ae")}
             </Button>
           </div>
         </form>
@@ -175,69 +169,59 @@ export function AddAccountModal() {
         <form onSubmit={submit} className="form">
           {info.info.globalServerId && globalAccount && (
             <>
-              <Button type="button" variant={globalDefault ? "default" : "outline"} loading={busy} onClick={() => void withGlobal()}>
-                Entrar com a conta global ({globalAccount.name})
-              </Button>
+              <Button type="button" variant={globalDefault ? "default" : "outline"} loading={busy} onClick={() => void withGlobal()}>{rich("common.8243cbed1058",{p0:(globalAccount.name)})}</Button>
               <div className="or">
-                <span>ou com uma conta deste servidor</span>
+                <span>{translate("common.bf980888f076")}</span>
               </div>
             </>
           )}
           <div className="tabs">
-            <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => { setMode("login"); if (remembered) setUsername(remembered.username); }}>
-              Entrar
-            </Button>
+            <Button type="button" variant="ghost" className={mode === "login" ? "tab active" : "tab"} onClick={() => { setMode("login"); if (remembered) setUsername(remembered.username); }}>{translate("common.4105811890ae")}</Button>
             <Button
               type="button"
               variant="ghost"
               className={mode === "register" ? "tab active" : "tab"}
               onClick={() => { setMode("register"); if (remembered) setUsername(""); }}
               disabled={!info.info.registrationOpen}
-              title={info.info.registrationOpen ? undefined : "Cadastro fechado nesta instância"}
-            >
-              Criar conta
-            </Button>
+              title={info.info.registrationOpen ? undefined : translate("common.7e880dddb2bf")}
+            >{translate("common.8cb3525e3b7e")}</Button>
           </div>
           <p className="muted">{info.url}</p>
-          {remembered && mode === "login" && <div className="auth-remembered"><Avatar user={{ id: remembered.userId, username: remembered.username, displayName: remembered.displayName, avatarUrl: remembered.avatarUrl }} size={40} /><div><strong>{remembered.displayName}</strong><small>@{remembered.username} · Conta lembrada neste dispositivo</small></div></div>}
+          {remembered && mode === "login" && <div className="auth-remembered"><Avatar user={{ id: remembered.userId, username: remembered.username, displayName: remembered.displayName, avatarUrl: remembered.avatarUrl }} size={40} /><div><strong>{remembered.displayName}</strong><small>{rich("common.e839b7bc6a6e",{p0:(remembered.username)})}</small></div></div>}
           {info.info.discordLogin && (
             <>
               {waitingDiscord ? (
                 <div className="discord-wait">
-                  <span>Autorize no navegador que abriu…</span>
-                  <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>
-                    Cancelar
-                  </Button>
+                  <span>{translate("common.2b4dccbda2db")}</span>
+                  <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>{translate("common.bb9dbb406dcb")}</Button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" onClick={() => void withDiscord()}>
-                  Entrar com Discord
-                </Button>
+                <Button type="button" variant="outline" onClick={() => void withDiscord()}>{translate("common.d1a81cb724d8")}</Button>
               )}
               {needsInvite && (
-                <Field label="Convite (para conta nova)" hint="Quem já tem conta pode deixar em branco">
-                  <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" />
+                <Field label={translate("common.46ab540b0def")} hint={translate("common.32d8dc1914f9")}>
+                  <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder={translate("common.fb6e4a9111bb")} />
                 </Field>
               )}
               <div className="or">
-                <span>ou com usuário e senha</span>
+                <span>{translate("common.44dd7040a457")}</span>
               </div>
             </>
           )}
-          <Field label="Usuário">
+          <Field label={translate("expression.f53bbaa05fae")}>
             <Input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
           </Field>
           {mode === "register" && (
-            <Field label="Nome de exibição" hint="Opcional; você pode mudar depois">
+            <Field label={translate("common.80d20f1ebbc0")} hint={translate("common.3801e195f8e9")}>
               <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             </Field>
           )}
           {mode === "register" && needsInvite && (
-            <Field label="Convite de cadastro" hint="Peça a quem hospeda esta instância">
-              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="aB3dE5gH" required />
+            <Field label={translate("common.3dba7a6e77c4")} hint={translate("common.2dd350972cf4")}>
+              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder={translate("common.fb6e4a9111bb")} required />
             </Field>
           )}
-          <Field label="Senha" hint={mode === "register" ? "Mínimo de 8 caracteres" : undefined}>
+          <Field label={translate("common.d482c10b3d4d")} hint={mode === "register" ? translate("common.7ecfbdb65f40") : undefined}>
             <Input
               type="password"
               value={password}
@@ -248,11 +232,9 @@ export function AddAccountModal() {
           </Field>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
-            <Button type="button" variant="secondary" onClick={() => setInfo(null)}>
-              Voltar
-            </Button>
+            <Button type="button" variant="secondary" onClick={() => setInfo(null)}>{translate("common.59dc926760d0")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Aguarde…" : mode === "login" ? "Entrar" : "Criar conta"}
+              {busy ? "Aguarde…" : mode === "login" ? translate("common.4105811890ae") : translate("common.8cb3525e3b7e")}
             </Button>
           </div>
         </form>
@@ -264,10 +246,10 @@ export function AddAccountModal() {
 export function SwitchAccountModal() {
   const accounts = useStore((s) => s.accounts), instances = useStore((s) => s.instances), remembered = useStore((s) => s.rememberedAccounts);
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
-  return <Modal title="Trocar de conta" className="account-switcher"><p className="muted">Escolha uma conta conectada ou entre novamente em uma conta salva. Senhas não são lembradas.</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user; return <button key={account.id} className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
-    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{user?.displayName ?? account.instanceName}</strong><small>{account.instanceName} · Conectada</small></span><Icon name="check" /></button>; })}
-    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{account.instanceName} · Entrar novamente</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={`Esquecer ${account.displayName}`} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
-  </div><Button onClick={() => openModal({ kind: "addAccount" })}><Icon name="plus" />Adicionar conta</Button></Modal>;
+  return <Modal title={translate("common.cd405060935b")} className="account-switcher"><p className="muted">{translate("common.7cad3bbb5598")}</p><div className="saved-accounts">{accounts.map((account) => { const user = instances[account.id]?.user; return <button key={account.id} className="saved-account" onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+    {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{user?.displayName ?? account.instanceName}</strong><small>{rich("common.585ec732bc98",{p0:(account.instanceName)})}</small></span><Icon name="check" /></button>; })}
+    {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{rich("common.e089089b332e",{p0:(account.instanceName)})}</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={translate("common.cb11afce3a10",{p0:(account.displayName)})} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
+  </div><Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.f058dba0348d",{p0:(<Icon name="plus" />)})}</Button></Modal>;
 }
 
 /** Invite codes may be pasted bare or as part of a link. */
@@ -325,11 +307,11 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
   }
 
   return (
-    <Modal title={mode === "create" ? "Criar uma comunidade" : "Entrar com convite"}>
+    <Modal title={mode === "create" ? translate("common.7f49e3ac1fc1") : translate("common.fec758322645")}>
       {accounts.length > 1 && (
-        <Field label="Escolha a instância de destino">
+        <Field label={translate("common.328353ea53eb")}>
           <Select value={accountId} disabled={busy} onChange={(e) => { setAccountId(e.target.value); setPreview(null); }}>
-            <option value="">Escolha uma instância…</option>
+            <option value="">{translate("common.9e5b48e0e8cc")}</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.instanceName} ({a.url})
@@ -338,50 +320,46 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
           </Select>
         </Field>
       )}
-      {accounts.length === 0 && <div className="empty-action"><p className="muted">Conecte uma instância Annoy antes de criar ou entrar numa comunidade.</p><Button onClick={() => openModal({ kind: "addAccount" })}>Conectar instância</Button></div>}
-      {accounts.length > 0 && <div className="tabs" role="tablist" aria-label="Ação de comunidade">
-        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "create"} className={mode === "create" ? "tab active" : "tab"} onClick={() => { setMode("create"); setPreview(null); }}>Criar</Button>
-        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "join"} className={mode === "join" ? "tab active" : "tab"} onClick={() => { setMode("join"); setPreview(null); }}>Entrar com convite</Button>
+      {accounts.length === 0 && <div className="empty-action"><p className="muted">{translate("common.32620c152c2e")}</p><Button onClick={() => openModal({ kind: "addAccount" })}>{translate("common.d9d7919adc16")}</Button></div>}
+      {accounts.length > 0 && <div className="tabs" role="tablist" aria-label={translate("common.30b932877e7d")}>
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "create"} className={mode === "create" ? "tab active" : "tab"} onClick={() => { setMode("create"); setPreview(null); }}>{translate("common.49ba5d18d8c4")}</Button>
+        <Button type="button" variant="ghost" role="tab" aria-selected={mode === "join"} className={mode === "join" ? "tab active" : "tab"} onClick={() => { setMode("join"); setPreview(null); }}>{translate("common.fec758322645")}</Button>
       </div>}
       {mode === "create" && accounts.length > 0 && <form onSubmit={create} className="form">
-        <h3>Nova comunidade</h3>
-        <Field label="Nome do servidor">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meu servidor" required maxLength={100} />
+        <h3>{translate("common.d825f5d935e9")}</h3>
+        <Field label={translate("common.87f8ee74878a")}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={translate("common.94a0c36fb1ea")} required maxLength={100} />
         </Field>
         <div className="form-actions">
-          <Button type="submit" loading={busy} disabled={!accountId || !name.trim()}>
-            Criar comunidade
-          </Button>
+          <Button type="submit" loading={busy} disabled={!accountId || !name.trim()}>{translate("common.985f18314d9a")}</Button>
         </div>
       </form>}
       {mode === "join" && accounts.length > 0 && <form onSubmit={join} className="form">
-        <h3>Convite da comunidade</h3>
-        <Field label="Código do convite">
+        <h3>{translate("common.3d44c76a75cd")}</h3>
+        <Field label={translate("common.bf7d8d4c951b")}>
           <Input
             value={invite}
             onChange={(e) => {
               setInvite(e.target.value);
               setPreview(null);
             }}
-            placeholder="aB3dE5gH"
+            placeholder={translate("common.fb6e4a9111bb")}
             required
           />
         </Field>
         {preview && (
-          <p className="invite-preview">
-            <strong>{preview.server.name}</strong> · {preview.memberCount} membro{preview.memberCount === 1 ? "" : "s"}
-          </p>
+          <p className="invite-preview"><strong>{preview.server.name}</strong> ? {counted(preview.memberCount,"counts.member.one","counts.member.other")}</p>
         )}
         <div className="form-actions">
           <Button type="submit" loading={busy} disabled={!accountId || !invite.trim()}>
-            {preview ? "Entrar no servidor" : "Verificar convite"}
+            {preview ? translate("common.6c371b23031d") : translate("common.f60e5c5c2f25")}
           </Button>
         </div>
       </form>}
       <hr />
       <div className="form">
-        <h3>Trazer do Discord</h3>
-        <p className="muted small">Copie canais, cargos, permissões e o histórico de um servidor do Discord, escolhendo o que entra.</p>
+        <h3>{translate("common.d92359f0e940")}</h3>
+        <p className="muted small">{translate("common.9390c74f16b6")}</p>
         <div className="form-actions start">
           <Button
             variant="secondary"
@@ -391,9 +369,7 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
               })
             }
             disabled={!accountId}
-          >
-            Importar do Discord…
-          </Button>
+          >{translate("common.2ac009991644")}</Button>
         </div>
       </div>
       <hr />
@@ -405,10 +381,12 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
               s.modal = { kind: "addAccount" };
             })
           }
-        >
-          Conectar a outra instância Annoy…
-        </Button>
+        >{translate("common.84de157494fd")}</Button>
       </div>
     </Modal>
   );
 }
+
+
+
+

@@ -1,7 +1,8 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import giphyAttribution from "../../assets/expression/powered-by-giphy.gif";
 import { useEffect, useState } from "react";
 import { apiFor } from "../../client.ts";
-export function GiphyAttribution() { return <img className="giphy-attribution" src={giphyAttribution} alt="Powered by GIPHY" />; }
+export function GiphyAttribution() { return <img className="giphy-attribution" src={giphyAttribution} alt={translate("expression.05f14e07ec0c")} />; }
 export interface GiphyItem { id: string; title: string; images: { fixed_height: { url: string }; original: { url: string } }; }
 const keyRequests = new Map<string, Promise<string | null>>();
 export const localGiphyKey = () => localStorage.getItem("annoy.giphy-client-key") ?? "";
@@ -18,7 +19,7 @@ export function giphyImage(url: string | undefined): string | undefined {
 export async function searchGiphy(key: string, query: string, signal: AbortSignal, offset = 0) {
   const params = new URLSearchParams({ api_key: key, limit: "24", offset: String(offset), rating: "pg-13", lang: "pt", ...(query.trim() ? {q: query.trim()} : {}) });
   const response = await fetch(`https://api.giphy.com/v1/gifs/${query.trim() ? "search" : "trending"}?${params}`, {signal, cache:"no-store", credentials:"omit"});
-  if (!response.ok) throw new Error(response.status === 429 ? "Limite de consultas atingido. Tente novamente mais tarde." : "Não foi possível consultar o GIPHY. Confira sua chave e a conexão.");
+  if (!response.ok) throw new Error(response.status === 429 ? translate("expression.6029173a7bbc") : translate("expression.1be1b0a22011"));
   return await response.json() as { data: GiphyItem[]; pagination: { total_count: number; offset: number; count: number } };
 }
 export function GiphyMessage({accountId, content}: {accountId: string; content: string}) {
@@ -35,5 +36,9 @@ export function GiphyMessage({accountId, content}: {accountId: string; content: 
     return () => controller.abort();
   }, [accountId,id]);
   const url = giphyImage(item?.images?.original?.url);
-  return url ? <a className="giphy-message" href={content.trim()} target="_blank" rel="noreferrer"><img src={url} alt={item?.title || "GIF do GIPHY"} loading="lazy" /><GiphyAttribution /></a> : null;
+  return url ? <a className="giphy-message" href={content.trim()} target="_blank" rel="noreferrer"><img src={url} alt={item?.title || translate("expression.984615e925bc")} loading="lazy" /><GiphyAttribution /></a> : null;
 }
+
+
+
+

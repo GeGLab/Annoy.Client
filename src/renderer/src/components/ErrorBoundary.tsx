@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 const log = (text: string) => window.distopic?.logError?.(text);
@@ -49,14 +50,16 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     if (retrying) return <div className="crash-screen" />;
     return (
       <div className="crash-screen" role="alert">
-        <h1>Algo deu errado nesta tela</h1>
-        <p className="muted">Suas contas e conversas estão salvas. O erro foi registrado no arquivo errors.log, na pasta de dados do Annoy.</p>
+        <h1>{translate("common.10c06fcbbaf8")}</h1>
+        <p className="muted">{translate("common.d86a74b0772a")}</p>
         <code>{error.message}</code>
         <div className="crash-actions">
-          <button className="btn" onClick={this.retry}>Tentar de novo</button>
-          <button className="btn btn-ghost" onClick={() => location.reload()}>Recarregar o Annoy</button>
+          <button className="btn" onClick={this.retry}>{translate("common.6bb3150b9757")}</button>
+          <button className="btn btn-ghost" onClick={() => location.reload()}>{translate("common.c4fe439a51e4")}</button>
         </div>
       </div>
     );
   }
 }
+
+

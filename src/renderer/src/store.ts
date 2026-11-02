@@ -107,7 +107,7 @@ export interface VoiceUi {
   screen: boolean;
 }
 
-export interface Settings {
+export interface Settings extends LocalizationPreferences {
   theme: "dark" | "light" | "system";
   accentColor: string | null;
   surfaceColor: string | null;
@@ -189,6 +189,7 @@ const VIEW_KEY = "distopic.view";
 const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
+  ...defaultLocalization(navigator.language),
   theme: "dark",
   accentColor: null,
   surfaceColor: null,
@@ -234,7 +235,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? normalizeLocalization(saved, navigator.language) : {}) } as T;
   } catch {
     return fallback;
   }
@@ -312,6 +313,7 @@ let state: AppState = {
 const listeners = new Set<() => void>();
 
 export const getState = () => state;
+configureLocalization(state.settings);
 
 export function setState(recipe: (draft: Draft<AppState>) => void): void {
   const prev = state;
@@ -320,6 +322,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   if (state.accounts !== prev.accounts) localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(state.accounts));
   if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  if (JSON.stringify(normalizeLocalization(state.settings)) !== JSON.stringify(normalizeLocalization(prev.settings))) configureLocalization(state.settings);
   if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
   if (state.services !== prev.services) localStorage.setItem(SERVICES_KEY, JSON.stringify(state.services));
   for (const l of listeners) l();
@@ -355,3 +358,4 @@ export function toast(text: string, durationMs = 4500): void {
 export function instanceOf(s: AppState, accountId: string): InstanceState | undefined {
   return s.instances[accountId];
 }
+import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";

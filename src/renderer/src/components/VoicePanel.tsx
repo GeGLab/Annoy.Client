@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, updateVoiceSettings } from "../client.ts";
 import { setState, useStore } from "../store.ts";
@@ -37,14 +39,14 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
       <DropdownMenuTrigger asChild>
         <button
           className="device-menu-trigger"
-          aria-label={kind === "input" ? "Dispositivos de microfone" : "Dispositivos de áudio"}
-          title="Escolher dispositivo"
+          aria-label={kind === "input" ? translate("common.621f11d1b81b") : translate("common.060bba66a58c")}
+          title={translate("common.7e0468cd5c35")}
         >
           <Icon name="chevron" size={11} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="end" className="device-dropdown">
-        <DropdownMenuLabel>{kind === "input" ? "Dispositivo de entrada" : "Dispositivo de saída"}</DropdownMenuLabel>
+        <DropdownMenuLabel>{kind === "input" ? translate("common.1b9441c4f487") : translate("common.fac2b769ff4a")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={selected}
           onValueChange={(value) => {
@@ -55,10 +57,10 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
             updateVoiceSettings();
           }}
         >
-          <DropdownMenuRadioItem value="default">Padrão do sistema</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="default">{translate("common.f48584be4417")}</DropdownMenuRadioItem>
           {devices.map((device) => (
             <DropdownMenuRadioItem key={device.deviceId} value={device.deviceId}>
-              {device.label || (kind === "input" ? "Microfone" : "Alto-falante")}
+              {device.label || (kind === "input" ? translate("common.39aa7e5f1a46") : translate("common.208ad472ea8e"))}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -69,10 +71,7 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
               s.modal = { kind: "userSettings", section: "voice" };
             })
           }
-        >
-          <Icon name="sliders" />
-          Configurações de voz
-        </DropdownMenuItem>
+        >{rich("common.c1a8976a48bc",{p0:(<Icon name="sliders" />)})}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -92,54 +91,58 @@ export function VoicePanel() {
         <button
           className="voice-panel-location"
           onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}
-          aria-label="Abrir chamada atual"
+          aria-label={translate("common.9c0c279ac93f")}
         >
-          <strong>{connected ? "Voz conectada" : "Conectando…"}</strong>
+          <strong>{connected ? translate("common.e58c700521d2") : "Conectando…"}</strong>
           <span className="truncate">
-            {channel?.name ?? "Voz"} / {server?.server.name ?? "Servidor"}
+            {channel?.name ?? translate("settings.c9566ca43bdc")} / {server?.server.name ?? translate("common.05e427a291c2")}
           </span>
         </button>
         <Tooltip content="Sair da chamada" side="top">
-          <button className="icon-btn danger" aria-label="Desconectar da voz" onClick={() => leaveVoice()}>
+          <button className="icon-btn danger" aria-label={translate("common.e047771bf38f")} onClick={() => leaveVoice()}>
             <Icon name="hangup" size={18} />
           </button>
         </Tooltip>
       </div>
       <div className="voice-panel-actions">
         <Tooltip
-          content={!voice.canStream ? "Sem permissão para transmitir" : voice.camera ? "Desligar câmera" : "Ligar câmera"}
+          content={!voice.canStream ? translate("common.957726dc235e") : voice.camera ? translate("common.7c25aa8599d9") : translate("common.df2b6ab01662")}
           side="top"
         >
           <button
             disabled={!connected || !voice.canStream}
             className={`voice-action${voice.camera ? " on" : ""}`}
-            aria-label={voice.camera ? "Desligar câmera" : "Ligar câmera"}
+            aria-label={voice.camera ? translate("common.7c25aa8599d9") : translate("common.df2b6ab01662")}
             aria-pressed={voice.camera}
             onClick={() => void toggleCamera()}
           >
             <Icon name={voice.camera ? "camera" : "cameraOff"} size={18} />
-            <span>Câmera</span>
+            <span>{translate("common.dafb61aca12d")}</span>
           </button>
         </Tooltip>
         <Tooltip
-          content={!voice.canStream ? "Sem permissão para transmitir" : voice.screen ? "Parar transmissão" : "Compartilhar tela"}
+          content={!voice.canStream ? translate("common.957726dc235e") : voice.screen ? translate("common.6ef17b51fd93") : translate("common.b1f3d8d4c916")}
           side="top"
         >
           <button
             disabled={!connected || !voice.canStream}
             className={`voice-action${voice.screen ? " on" : ""}`}
-            aria-label={voice.screen ? "Parar transmissão" : "Compartilhar tela"}
+            aria-label={voice.screen ? translate("common.6ef17b51fd93") : translate("common.b1f3d8d4c916")}
             aria-pressed={voice.screen}
             onClick={() => void toggleScreenShare()}
           >
             <Icon name="monitor" size={18} />
-            <span>{voice.screen ? "Ao vivo" : "Transmitir"}</span>
+            <span>{voice.screen ? translate("common.6872fc989a63") : translate("common.85344dae041c")}</span>
           </button>
         </Tooltip>
       </div>
       <span className="voice-panel-note">
-        {connected ? `${count || 1} ${count === 1 || !count ? "pessoa na sala" : "pessoas na sala"}` : "Estabelecendo conexão de áudio"}
+        {connected ? counted(count || 1,"counts.room.one","counts.room.other") : translate("common.7372b662aff9")}
       </span>
     </div>
   );
 }
+
+
+
+

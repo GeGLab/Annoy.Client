@@ -1,0 +1,45 @@
+/* Own application surfaces; embedded third-party services retain their styles. */
+:root { font-size: 16px; }
+html[data-underline-links="true"] a[href] { text-decoration: underline; text-underline-offset: .16em; }
+html[data-underline-links="false"] a[href]:not(:hover):not(:focus-visible) { text-decoration: none; }
+button, input, textarea, select { font: inherit; }
+.btn, .ui-select-trigger { white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 2.25rem; }
+.icon-button, .titlebar-button { flex-shrink: 0; }
+.field, .settings-section, .modal-header > h2 { min-width: 0; overflow-wrap: anywhere; }
+.modal { max-width: calc(100vw - 24px); max-height: calc(100dvh - 48px); }
+.modal-header, .modal-footer, .form-actions, .settings-savebar { flex-wrap: wrap; flex-shrink: 0; }
+.modal-header h2 { font-size: clamp(1.1rem, 3vw, 1.5rem); line-height: 1.25; overflow-wrap: anywhere; }
+.modal-body { min-height: 0; overflow-y: auto; }
+.settings-savebar { gap: .6rem; padding-block: .75rem; max-height: 42%; overflow-y: auto; }
+.localization-preview, .localization-notice { border-inline-start: 3px solid var(--accent); padding: .8rem 1rem; background: var(--bg-hover); line-height: 1.6; }
+.localization-settings .check-row { display: flex; align-items: center; gap: .75rem; }
+.localization-settings .check-row > button { flex: none; }
+.localization-settings h3 { display: flex; align-items: center; gap: .6rem; }
+.settings-sidebar button { width: 100%; }
+.ui-select-content, .ui-dropdown-content, .calendar-popover { max-width: calc(100vw - 24px); max-height: min(80dvh, var(--radix-select-content-available-height, 80dvh)); overflow: auto; }
+@media (max-width: 70rem) {
+ .user-settings-modal { width: calc(100vw - 24px); height: calc(100dvh - 48px); }
+ .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+ .settings-sidebar { padding: .6rem; max-height: 25dvh; border-right: 0; border-bottom: 1px solid var(--border); }
+ .settings-sidebar .settings-identity { display: none; }
+ .settings-sidebar input { margin-bottom: .4rem; }
+ .settings-sidebar nav { flex-direction: row; flex-wrap: wrap; }
+ .settings-sidebar nav button { width: auto; flex: 1 1 9rem; padding: .5rem; }
+ .settings-content { padding: 1rem; }
+ .has-savebar .settings-content { padding-bottom: 10rem; }
+ .switch-setting, .preference-card { gap: .75rem; }
+ .update-banner { height: auto !important; min-height: 40px; flex-wrap: wrap; }
+}
+@media (max-width: 36rem) {
+ .user-settings-modal { height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
+ .settings-sidebar { max-height: 22dvh; }
+ .settings-content { padding: .65rem; }
+ .settings-content .settings-section h3 { font-size: 1.1rem; }
+ .modal-header { padding: .65rem; }
+ .modal-body { padding: .75rem; }
+ .settings-sidebar nav button { flex-basis: 7rem; }
+ .form-actions > .btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+ *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

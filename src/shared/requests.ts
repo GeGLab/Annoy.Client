@@ -1,3 +1,4 @@
+import {t as translate,localizationPreferences,textForError} from "./localization/index.ts";
 export const READ_TIMEOUT_MS = 15_000;
 export const WRITE_TIMEOUT_MS = 20_000;
 /** File transfers have a separate bound; they are never retried automatically. */
@@ -12,7 +13,7 @@ export class RequestError extends Error {
 }
 
 export const isCancellation = (error: unknown): boolean => error instanceof Error && error.name === "AbortError";
-export const cancelled = () => new DOMException("Operação cancelada", "AbortError");
+export const cancelled = () => new DOMException(translate("common.78382ccf3d5b"), "AbortError");
 
 /** Owns the timer and parent listener, including while the response body is being read. */
 async function bounded<T>(operation: (signal: AbortSignal) => Promise<T>, parent: AbortSignal, timeoutMs: number): Promise<T> {
@@ -20,7 +21,7 @@ async function bounded<T>(operation: (signal: AbortSignal) => Promise<T>, parent
   const abort = () => controller.abort(parent.reason ?? cancelled());
   parent.addEventListener("abort", abort, { once: true });
   if (parent.aborted) abort();
-  const timer = setTimeout(() => controller.abort(new RequestError(0, "O servidor demorou para responder. Tente novamente.", "timeout")), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new RequestError(0, translate("common.f135e867878f"), "timeout")), timeoutMs);
   let onAbort: () => void = () => {};
   try {
     return await Promise.race([
@@ -102,13 +103,15 @@ export async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   let body: unknown;
   try { body = text ? JSON.parse(text) : {}; }
-  catch { if (response.ok) throw new RequestError(response.status, "O servidor retornou uma resposta inválida. Tente novamente.", "invalid-response"); }
+  catch { if (response.ok) throw new RequestError(response.status, translate("common.680a61415826"), "invalid-response"); }
   if (!response.ok) {
-    const message = typeof body === "object" && body !== null && "message" in body && typeof body.message === "string" ? body.message
-      : response.status === 401 ? "Sua sessão expirou. Entre novamente."
-      : response.status === 403 ? "Você não tem permissão para esta ação."
-      : response.status >= 500 ? "O serviço está indisponível. Tente novamente."
-      : `Não foi possível concluir a solicitação (HTTP ${response.status}).`;
+    const remote = typeof body === "object" && body !== null && "message" in body && typeof body.message === "string" ? body.message : null;
+    const localized = remote ? textForError(remote) : null;
+    const message = remote && (localizationPreferences().language === "pt-BR" || localized !== remote) ? localized!
+      : response.status === 401 ? translate("common.f134d8076fce")
+      : response.status === 403 ? translate("common.a3bbc2853f1c")
+      : response.status >= 500 ? translate("common.dfaf3c810ae2")
+      : translate("common.837cc135fa3d",{p0:(response.status)});
     const code = typeof body === "object" && body !== null && "error" in body && typeof body.error === "string" ? body.error : undefined;
     throw new RequestError(response.status, message, undefined, code);
   }
@@ -124,7 +127,7 @@ export async function fetchJson<T>(url: string, init: RequestInit, signal: Abort
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof RequestError || isCancellation(error)) throw error;
-    throw new RequestError(0, "Não foi possível alcançar o servidor. Verifique a conexão e tente novamente.", "network");
+    throw new RequestError(0, translate("common.adaaa0fcc09f"), "network");
   }
 }
 
@@ -137,3 +140,7 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", abort, { once: true });
   });
 }
+
+
+
+

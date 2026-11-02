@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { setState, useStore } from "../../store.ts";
 import { Icon } from "../ui.tsx";
@@ -76,17 +77,17 @@ export function ResizablePanel({ panel, children, otherVisible = false, reserved
       setPreview(null);
     }
   };
-  const label = panel === "channels" ? "canais" : "membros";
+  const label = panel === "channels" ? "canais" : translate("common.6e1304653447");
   if (!open)
     return null;
   return (
-    <aside className={`${panel} resizable-panel`} style={{ width }} aria-label={`Painel de ${label}`}>
+    <aside className={`${panel} resizable-panel`} style={{ width }} aria-label={translate("common.f9b39aab493b",{p0:(label)})}>
       <div className="panel-content">{children}</div>
       <div
         className={`panel-resize panel-resize-${panel}`}
         role="separator"
         aria-orientation="vertical"
-        aria-label={`Largura do painel de ${label}`}
+        aria-label={translate("common.5ad5e7f00749",{p0:(label)})}
         aria-valuemin={limit.min}
         aria-valuemax={limit.max}
         aria-valuenow={width}
@@ -122,3 +123,5 @@ export function ResizablePanel({ panel, children, otherVisible = false, reserved
     </aside>
   );
 }
+
+

@@ -1,3 +1,5 @@
+import {rich} from "../../lib/localization.ts";
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
 import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll } from "@distopic/protocol";
 import { apiFor } from "../../client.ts";
@@ -52,7 +54,7 @@ export function SteamConnection({ accountId }: { accountId: string }) {
           return;
         }
       }
-      throw new Error("Tempo esgotado esperando a Steam. Tente novamente.");
+      throw new Error(translate("activity.de798be734d3"));
     } catch (error) {
       if (!abort.signal.aborted) setError((error as Error).message);
     } finally {
@@ -71,17 +73,21 @@ export function SteamConnection({ accountId }: { accountId: string }) {
     finally { setBusy(false); }
   };
   if (!account || !supported) return null;
-  return <PreferenceCard icon="radio" title={`Steam · ${account.instanceName}`} description="Conecte sua conta pelo navegador para complementar a detecção local. Sua senha fica na Steam. O vínculo vale para esta conta nesta instância.">
-    {status?.connection && <p className="row"><ProviderIcon provider="steam" /><a href={status.connection.profileUrl} target="_blank" rel="noreferrer">Perfil Steam · {status.connection.steamId}</a></p>}
+  return <PreferenceCard icon="radio" title={translate("activity.c85c3636aafe",{p0:(account.instanceName)})} description={translate("activity.c01de0aeccbc")}>
+    {status?.connection && <p className="row"><ProviderIcon provider="steam" /><a href={status.connection.profileUrl} target="_blank" rel="noreferrer">{rich("common.13e868e9ba0d",{p0:(status.connection.steamId)})}</a></p>}
     {status?.connection && ownGame && <ActivityCard activity={ownGame} />}
-    {status && <p className="muted small">{status.onlineActivityAvailable ? "Com o compartilhamento ativado, o jogo público da Steam aparece quando nenhum jogo local é detectado. Perfis privados podem não informar atividade." : "Conta pode ser vinculada. Para consultar atividade online, o administrador precisa configurar a integração Steam na instância. A detecção local já funciona sem isso."}</p>}
+    {status && <p className="muted small">{status.onlineActivityAvailable ? translate("activity.53b4251b7285") : translate("activity.f309480a1c0d")}</p>}
     <div className="row">
-      {status && !status.connection && !busy && <Button variant="secondary" size="sm" onClick={() => void connect()}>Conectar Steam</Button>}
-      {waiting && <Button variant="secondary" size="sm" onClick={() => { void disconnect(); }}>Cancelar conexão Steam</Button>}
-      {status?.connection && !waiting && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void disconnect()}>Desconectar Steam</Button>}
-      {!status && error && <Button variant="secondary" size="sm" onClick={() => { void apiFor(accountId).get<SteamConnectionStatus>("/users/@me/steam").then(setStatus).catch((error) => setError(error.message)); }}>Tentar novamente</Button>}
+      {status && !status.connection && !busy && <Button variant="secondary" size="sm" onClick={() => void connect()}>{translate("activity.94665f4f307d")}</Button>}
+      {waiting && <Button variant="secondary" size="sm" onClick={() => { void disconnect(); }}>{translate("activity.c41cf256486d")}</Button>}
+      {status?.connection && !waiting && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void disconnect()}>{translate("activity.a606bbae3955")}</Button>}
+      {!status && error && <Button variant="secondary" size="sm" onClick={() => { void apiFor(accountId).get<SteamConnectionStatus>("/users/@me/steam").then(setStatus).catch((error) => setError(error.message)); }}>{translate("common.b9e10688be01")}</Button>}
     </div>
-    {waiting && <p role="status" className="muted small">Conclua a autorização no navegador.</p>}
+    {waiting && <p role="status" className="muted small">{translate("activity.bdb251f0da37")}</p>}
     {error && <p className="error small" role="alert">{error}</p>}
   </PreferenceCard>;
 }
+
+
+
+

@@ -1,3 +1,6 @@
+import {rich} from "../../lib/localization.ts";
+import {localizationPreferences} from "../../../../shared/localization/index.ts";
+import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { Select } from "../../components/ui/select.tsx";
 import { useMemo, useState } from "react";
 import { apiFor, navigate } from "../../client.ts";
@@ -11,7 +14,7 @@ import { installBot, setBotEnabled, uninstallBot } from "./api.ts";
 import { useBotPlatform } from "./useBotPlatform.ts";
 import { BOT_PERMISSIONS, type BotInstallation, type BotListing } from "./types.ts";
 
-const runtimeLabels = { starting: "Iniciando", running: "Em execução", stopped: "Parado", error: "Falha na execução" };
+let runtimeLabels = { starting: translate("common.4ec788bb7183"), running: translate("common.3127edd67f20"), stopped: translate("common.31e8729fef87"), error: translate("common.c8e3214bc0f8") };
 
 function BotServer({ accountId, serverId }: { accountId: string; serverId: string }) {
   const { snapshot, status, error, busy, refresh, run } = useBotPlatform(accountId, serverId);
@@ -22,43 +25,32 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
   >(null);
   const installed = useMemo(() => new Map(snapshot?.installations.map((i) => [i.botId, i]) ?? []), [snapshot]);
   const names = useMemo(() => new Map(snapshot?.bots.map((b) => [b.id, b]) ?? []), [snapshot]);
-  const normalized = query.trim().toLocaleLowerCase("pt-BR");
+  const normalized = query.trim().toLocaleLowerCase(localizationPreferences().region);
   if (status === "loading") return <ChatSkeleton />;
   if (status === "unsupported")
     return (
       <div className="bot-platform-empty">
         <Icon name="bot" size={44} />
-        <h2>As integrações precisam do suporte da sua instância</h2>
-        <p>
-          Este servidor ainda não oferece instalação e execução de bots Annoy. Quem hospeda a instância precisa habilitar a plataforma
-          antes de você instalar um bot.
-        </p>
-        <p className="muted">
-          Bots existentes do Discord precisam ser adaptados para funcionar aqui. Seus bots e servidores do Discord continuam disponíveis na
-          aba Discord.
-        </p>
-        <Button variant="secondary" onClick={() => void refresh()}>
-          <Icon name="refresh" size={16} />
-          Verificar novamente
-        </Button>
+        <h2>{translate("common.eec7a26b4277")}</h2>
+        <p>{translate("common.e0158ad4976b")}</p>
+        <p className="muted">{translate("common.5d5cced7251a")}</p>
+        <Button variant="secondary" onClick={() => void refresh()}>{rich("common.13d1d4853c27",{p0:(<Icon name="refresh" size={16} />)})}</Button>
       </div>
     );
   if (!snapshot)
     return (
       <div className="bot-platform-empty">
         <Icon name="wifiOff" size={36} />
-        <h2>Não foi possível abrir as integrações</h2>
+        <h2>{translate("common.efc935c6600f")}</h2>
         <p role="alert">{error}</p>
-        <Button variant="secondary" onClick={() => void refresh()}>
-          Tentar novamente
-        </Button>
+        <Button variant="secondary" onClick={() => void refresh()}>{translate("common.b9e10688be01")}</Button>
       </div>
     );
   const catalog = snapshot.bots.filter((bot) =>
-    `${bot.name} ${bot.description} ${bot.author}`.toLocaleLowerCase("pt-BR").includes(normalized),
+    `${bot.name} ${bot.description} ${bot.author}`.toLocaleLowerCase(localizationPreferences().region).includes(normalized),
   );
   const installations = snapshot.installations.filter((i) =>
-    `${names.get(i.botId)?.name ?? i.botId}`.toLocaleLowerCase("pt-BR").includes(normalized),
+    `${names.get(i.botId)?.name ?? i.botId}`.toLocaleLowerCase(localizationPreferences().region).includes(normalized),
   );
   const canManage = snapshot.canManage && status === "ready";
   const confirm = async () => {
@@ -76,7 +68,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
         <div
           className="tabs inline"
           role="tablist"
-          aria-label="Bots do servidor"
+          aria-label={translate("common.371becfc0b02")}
           onKeyDown={(event) => {
             if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
@@ -93,9 +85,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
             tabIndex={tab === "catalog" ? 0 : -1}
             aria-selected={tab === "catalog"}
             onClick={() => setTab("catalog")}
-          >
-            Explorar
-          </button>
+          >{translate("common.aa56664d77c6")}</button>
           <button
             className={`tab${tab === "installed" ? " active" : ""}`}
             role="tab"
@@ -104,34 +94,30 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
             tabIndex={tab === "installed" ? 0 : -1}
             aria-selected={tab === "installed"}
             onClick={() => setTab("installed")}
-          >
-            Instalados <span className="bot-count">{snapshot.installations.length}</span>
+          >{translate("common.f09622ba36ca")}<span className="bot-count">{snapshot.installations.length}</span>
           </button>
         </div>
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar bots" aria-label="Buscar bots" />
-        <Button variant="ghost" size="icon" disabled={!!busy} onClick={() => void refresh()} aria-label="Atualizar bots">
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={translate("common.0696da4f794d")} aria-label={translate("common.0696da4f794d")} />
+        <Button variant="ghost" size="icon" disabled={!!busy} onClick={() => void refresh()} aria-label={translate("common.78d7db9a9d6f")}>
           <Icon name="refresh" size={17} />
         </Button>
       </div>
       <div className="bot-page-content" id="bots-tab-panel" role="tabpanel" aria-labelledby={`bots-tab-${tab}`} tabIndex={0}>
         <div className="bot-intro">
-          <h2>{tab === "catalog" ? "Mais possibilidades para a sua comunidade." : "Os bots deste servidor."}</h2>
+          <h2>{tab === "catalog" ? translate("common.f600f53631e4") : translate("common.9aeaa65f5fc0")}</h2>
           <p>
             {tab === "catalog"
-              ? "Explore os bots publicados pela sua instância e revise as permissões antes de instalar."
-              : "Desativar mantém a instalação. Remover desinstala o bot deste servidor."}
+              ? translate("common.5b768fb240ce")
+              : translate("common.8f696503334c")}
           </p>
         </div>
         {!snapshot.canManage && (
-          <p className="bot-notice">
-            <Icon name="lock" size={16} />
-            Você pode consultar as integrações. Para alterar bots, peça permissão a quem administra o servidor.
-          </p>
+          <p className="bot-notice">{rich("common.e0e13031ef5a",{p0:(<Icon name="lock" size={16} />)})}</p>
         )}
         {error && (
           <p className="error bot-error" role="alert">
             {error}
-            <button onClick={() => void refresh()}>Atualizar estado</button>
+            <button onClick={() => void refresh()}>{translate("common.2772d019cbdc")}</button>
           </p>
         )}
         {tab === "catalog" ? (
@@ -145,27 +131,25 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
                     </span>
                     <div>
                       <h3>{bot.name}</h3>
-                      <span className="muted small">
-                        {bot.author} · v{bot.version}
-                      </span>
+                      <span className="muted small">{rich("common.fe985ae40a56",{p0:(bot.author),p1:(bot.version)})}</span>
                     </div>
                   </div>
                   <p>{bot.description}</p>
-                  <span className="bot-permission-count">{bot.permissions.length} permissões solicitadas</span>
+                  <span className="bot-permission-count">{rich("common.98573cade371",{p0:(bot.permissions.length)})}</span>
                   <Button
                     variant={installed.has(bot.id) ? "secondary" : "default"}
                     disabled={!canManage || !!busy || installed.has(bot.id)}
                     onClick={() => setConfirmation({ kind: "install", bot })}
                   >
-                    {installed.has(bot.id) ? "Instalado" : "Revisar e instalar"}
+                    {installed.has(bot.id) ? translate("common.668467851678") : translate("common.f62d0c114a61")}
                   </Button>
                 </article>
               ))}
             </div>
           ) : (
             <div className="bot-list-empty">
-              <h3>{query ? "Nenhum bot encontrado" : "O catálogo ainda está vazio"}</h3>
-              <p className="muted">{query ? "Tente outro nome ou limpe a busca." : "Os bots publicados pela instância aparecerão aqui."}</p>
+              <h3>{query ? translate("common.618573be078d") : translate("common.d4b9c352be45")}</h3>
+              <p className="muted">{query ? translate("common.d8c1afb51853") : translate("common.23c558fcf75a")}</p>
             </div>
           )
         ) : installations.length ? (
@@ -179,9 +163,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
                   </span>
                   <div className="installed-bot-info">
                     <h3>{bot?.name ?? installation.botId}</h3>
-                    <span className={`bot-runtime ${installation.enabled ? installation.runtimeStatus : "disabled"}`}>
-                      {!installation.enabled ? "Desativado" : runtimeLabels[installation.runtimeStatus]} · v{installation.version}
-                    </span>
+                    <span className={`bot-runtime ${installation.enabled ? installation.runtimeStatus : "disabled"}`}>{rich("common.fe985ae40a56",{p0:(!installation.enabled ? translate("common.f47dfde9cb6f") : runtimeLabels[installation.runtimeStatus]),p1:(installation.version)})}</span>
                     {installation.lastError && <p className="error small">{installation.lastError}</p>}
                   </div>
                   <Button
@@ -193,12 +175,12 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
                       void run(installation.id, () => setBotEnabled(apiFor(accountId), serverId, installation.id, !installation.enabled))
                     }
                   >
-                    {installation.enabled ? "Desativar" : "Ativar"}
+                    {installation.enabled ? translate("common.67afbeec3df0") : translate("common.631205572827")}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={`Remover ${bot?.name ?? installation.botId}`}
+                    aria-label={translate("expression.82e85db7347e",{p0:(bot?.name ?? installation.botId)})}
                     disabled={!canManage || !!busy}
                     onClick={() => setConfirmation({ kind: "uninstall", installation, name: bot?.name ?? installation.botId })}
                   >
@@ -211,12 +193,10 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
         ) : (
           <div className="bot-list-empty">
             <Icon name="bot" size={36} />
-            <h3>{query ? "Nenhum bot encontrado" : "Sua primeira integração começa aqui"}</h3>
-            <p className="muted">{query ? "Tente outro nome." : "Explore o catálogo para adicionar um bot ao servidor."}</p>
+            <h3>{query ? translate("common.618573be078d") : translate("common.64c51c991076")}</h3>
+            <p className="muted">{query ? translate("common.278eda9a4058") : translate("common.d17469e324f6")}</p>
             {!query && (
-              <Button variant="secondary" onClick={() => setTab("catalog")}>
-                Explorar bots
-              </Button>
+              <Button variant="secondary" onClick={() => setTab("catalog")}>{translate("common.ce38f241cdd3")}</Button>
             )}
           </div>
         )}
@@ -226,14 +206,11 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
           <DialogContent className="modal bot-confirmation" showClose={false} aria-describedby="bot-confirm-description">
             <div className="modal-body">
               <DialogTitle asChild>
-                <h2>{confirmation.kind === "install" ? `Instalar ${confirmation.bot.name}?` : `Remover ${confirmation.name}?`}</h2>
+                <h2>{confirmation.kind === "install" ? translate("common.9e3b80b80cff",{p0:(confirmation.bot.name)}) : translate("common.f5a2d16b8d07",{p0:(confirmation.name)})}</h2>
               </DialogTitle>
               {confirmation.kind === "install" ? (
                 <>
-                  <p id="bot-confirm-description" className="muted">
-                    {confirmation.bot.author} · v{confirmation.bot.version}. O bot será executado pela instância e terá estas permissões
-                    neste servidor:
-                  </p>
+                  <p id="bot-confirm-description" className="muted">{rich("common.3d1c1a7ee692",{p0:(confirmation.bot.author),p1:(confirmation.bot.version)})}</p>
                   <ul className="bot-permissions">
                     {confirmation.bot.permissions.map((permission) => (
                       <li key={permission}>
@@ -244,9 +221,7 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
                   </ul>
                 </>
               ) : (
-                <p id="bot-confirm-description" className="muted">
-                  O bot será interrompido e sua instalação será removida deste servidor. Para apenas pausar o funcionamento, use Desativar.
-                </p>
+                <p id="bot-confirm-description" className="muted">{translate("common.abcee77a6976")}</p>
               )}
               {error && (
                 <p className="error" role="alert">
@@ -254,21 +229,17 @@ function BotServer({ accountId, serverId }: { accountId: string; serverId: strin
                 </p>
               )}
               {status === "error" && (
-                <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void refresh()}>
-                  Atualizar estado
-                </Button>
+                <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void refresh()}>{translate("common.2772d019cbdc")}</Button>
               )}
               <div className="form-actions">
-                <Button variant="secondary" disabled={!!busy} onClick={() => setConfirmation(null)}>
-                  Cancelar
-                </Button>
+                <Button variant="secondary" disabled={!!busy} onClick={() => setConfirmation(null)}>{translate("common.bb9dbb406dcb")}</Button>
                 <Button
                   variant={confirmation.kind === "uninstall" ? "destructive" : "default"}
                   disabled={!canManage}
                   loading={!!busy}
                   onClick={() => void confirm()}
                 >
-                  {confirmation.kind === "install" ? "Autorizar e instalar" : "Remover bot"}
+                  {confirmation.kind === "install" ? translate("common.aa5019de8fdc") : translate("common.6db7953be9a9")}
                 </Button>
               </div>
             </div>
@@ -290,13 +261,13 @@ export default function Marketplace({ accountId, serverId }: { accountId: string
     <section className="marketplace">
       <header className="chat-header">
         <Icon name="cable" size={21} />
-        <h1>Integrações</h1>
-        <span className="marketplace-context">Annoy</span>
+        <h1>{translate("common.02cba44bb25b")}</h1>
+        <span className="marketplace-context">{translate("desktop.7cd80ae96251")}</span>
         <span className="spacer" />
         {selected && (
           <Select
             className="bot-server-select"
-            aria-label="Servidor dos bots"
+            aria-label={translate("common.7b4891b9a36e")}
             value={selected.key}
             onChange={(event) => {
               const choice = choices.find((c) => c.key === event.target.value);
@@ -316,11 +287,15 @@ export default function Marketplace({ accountId, serverId }: { accountId: string
       ) : (
         <div className="bot-platform-empty">
           <Icon name="store" size={44} />
-          <h2>Conecte sua comunidade para explorar bots</h2>
-          <p>Os bots são instalados por servidor. Conecte uma instância Annoy e escolha um servidor para começar.</p>
-          <Button onClick={() => openModal({ kind: "addAccount" })}>Conectar uma instância</Button>
+          <h2>{translate("common.c3fe7034d6c7")}</h2>
+          <p>{translate("common.995457afd3bc")}</p>
+          <Button onClick={() => openModal({ kind: "addAccount" })}>{translate("common.3613a9c100f2")}</Button>
         </div>
       )}
     </section>
   );
 }
+
+onLocalizationChange(()=>{runtimeLabels={ starting: translate("common.4ec788bb7183"), running: translate("common.3127edd67f20"), stopped: translate("common.31e8729fef87"), error: translate("common.c8e3214bc0f8") };});
+
+onLocalizationChange(()=>{runtimeLabels={ starting: translate("common.4ec788bb7183"), running: translate("common.3127edd67f20"), stopped: translate("common.31e8729fef87"), error: translate("common.c8e3214bc0f8") };});

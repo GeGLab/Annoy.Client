@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import type { AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@distopic/protocol";
 import { abortableDelay, cancelled, fetchJson, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../shared/requests.ts";
 export { RequestError } from "../../shared/requests.ts";
@@ -81,7 +82,7 @@ export async function discordLogin(url: string, begin: () => Promise<DiscordLogi
     if (result.status === "done") return result;
     if (result.status === "error") throw new Error(result.message);
   }
-  throw new Error("Tempo esgotado esperando o Discord");
+  throw new Error(translate("common.5af56b62db97"));
 }
 
 export async function beginDiscordLogin(url: string, inviteCode?: string, signal?: AbortSignal): Promise<DiscordLoginBegin> {
@@ -115,7 +116,7 @@ export class Api {
     }, (error: unknown) => {
       if (generation !== this.scope.generation) throw cancelled();
       if (mutation && error instanceof RequestError && error.kind === "timeout")
-        error = new RequestError(0, "Não foi possível confirmar a operação. Verifique o resultado antes de tentar novamente.", "timeout");
+        error = new RequestError(0, translate("common.c5a5bb09c7e0"), "timeout");
       if (error instanceof RequestError) this.observed?.(error);
       throw error;
     });
@@ -126,7 +127,7 @@ export class Api {
   }
 
   private requireConnection(): void {
-    if (!this.canWrite()) throw new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar.");
+    if (!this.canWrite()) throw new Error(translate("common.2ff92506e4aa"));
   }
 
   async request<T = unknown>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -134,7 +135,7 @@ export class Api {
     return this.fetch<T>(path, {
       method,
       headers: {
-        authorization: `Bearer ${this.token}`,
+        authorization: translate("common.69c9d7985d22",{p0:(this.token)}),
         ...(body !== undefined && { "content-type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -150,13 +151,13 @@ export class Api {
   async uploadServerIcon<T>(serverId: string, photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("icon", photo, "icon");
-    return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
+    return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
   async uploadAvatar<T>(photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");
-    return this.fetch("/users/@me/avatar", { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
+    return this.fetch("/users/@me/avatar", { method: "POST", headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null, signal?: AbortSignal): Promise<T> {
@@ -168,14 +169,14 @@ export class Api {
     for (const f of files) form.append("files", f, f.name);
     return this.fetch<T>(`/channels/${channelId}/messages`, {
       method: "POST",
-      headers: { authorization: `Bearer ${this.token}` },
+      headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) },
       body: form,
     }, signal, UPLOAD_TIMEOUT_MS);
   }
 
   /** Like sendMessage with files, reporting upload progress from 0 to 1. */
   uploadMessage<T>(channelId: string, content: string, files: File[], onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
-    if (!this.canWrite()) return Promise.reject(new Error("Sem conexão com o servidor. Aguarde a reconexão para continuar."));
+    if (!this.canWrite()) return Promise.reject(new Error(translate("common.2ff92506e4aa")));
     const form = new FormData();
     form.append("content", content);
     for (const f of files) form.append("files", f, f.name);
@@ -192,14 +193,14 @@ export class Api {
       };
       const abort = () => { xhr.abort(); finish(() => reject(active.reason)); };
       xhr.open("POST", `${this.baseUrl}/api/channels/${channelId}/messages`);
-      xhr.setRequestHeader("authorization", `Bearer ${this.token}`);
+      xhr.setRequestHeader("authorization", translate("common.69c9d7985d22",{p0:(this.token)}));
       xhr.upload.onprogress = (e) => !active.aborted && e.lengthComputable && onProgress(e.loaded / e.total);
       xhr.onload = () => void parseResponse<T>(new Response(xhr.responseText || null, { status: xhr.status })).then(
         (data) => finish(() => active.aborted ? reject(active.reason) : resolve({ data, status: xhr.status })),
         (error: unknown) => finish(() => reject(error)),
       );
-      xhr.onerror = () => finish(() => reject(new RequestError(0, "Falha de rede ao enviar. Tente novamente.", "network")));
-      xhr.onabort = () => finish(() => reject(active.reason ?? new DOMException("Envio cancelado", "AbortError")));
+      xhr.onerror = () => finish(() => reject(new RequestError(0, translate("common.9dc7d1c17432"), "network")));
+      xhr.onabort = () => finish(() => reject(active.reason ?? new DOMException(translate("common.7b52f41d0bb2"), "AbortError")));
       active.addEventListener("abort", abort, { once: true });
       try { active.throwIfAborted(); xhr.send(form); }
       catch (error) { finish(() => reject(error)); }
@@ -211,3 +212,7 @@ export class Api {
     return path.startsWith("http") ? path : `${this.baseUrl}${path}`;
   }
 }
+
+
+
+

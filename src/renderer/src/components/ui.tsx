@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { Presence, User } from "@distopic/protocol";
 import { requestNavigation } from "../lib/navigation-guard.ts";
 import { useSettingsGuard } from "./settings/SettingsGuard.tsx";
@@ -93,7 +94,7 @@ export function Modal({
           <DialogTitle asChild>
             <h2>{title}</h2>
           </DialogTitle>
-          <button className="icon-btn" onClick={requestClose} aria-label="Fechar">
+          <button className="icon-btn" onClick={requestClose} aria-label={translate("common.0f2bd88ef0ac")}>
             <Icon name="x" />
           </button>
         </header>
@@ -115,3 +116,5 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     </label>
   );
 }
+
+

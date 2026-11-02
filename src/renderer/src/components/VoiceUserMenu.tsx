@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { FocusEvent, ReactNode } from "react";
 import type { Member, VoiceState } from "@distopic/protocol";
 import { apiFor } from "../client.ts";
@@ -23,21 +25,23 @@ function VoiceMenuItems({ accountId, serverId, member, voice, canModerate, conte
     {canModerate && <>
       <Separator />
       {(voice.serverMute || !voice.selfMute) && <Item onSelect={() => void act(apiFor(accountId).patch(`/servers/${serverId}/members/${member.user.id}/voice`, { serverMute: !voice.serverMute }))}>
-        <Icon name={voice.serverMute ? "mic" : "micOff"} />{voice.serverMute ? "Remover silêncio do servidor" : "Silenciar no servidor"}
+        <Icon name={voice.serverMute ? "mic" : "micOff"} />{voice.serverMute ? translate("common.24059e1a1ff4") : translate("common.f5b97f82540a")}
       </Item>}
-      <Item destructive onSelect={() => void act(apiFor(accountId).patch(`/servers/${serverId}/members/${member.user.id}/voice`, { disconnect: true }))}><Icon name="hangup" />Desconectar da voz</Item>
+      <Item destructive onSelect={() => void act(apiFor(accountId).patch(`/servers/${serverId}/members/${member.user.id}/voice`, { disconnect: true }))}>{rich("common.acacdbe48cbe",{p0:(<Icon name="hangup" />)})}</Item>
     </>}
   </>;
 }
 
 export function VoiceUserContextMenu({ children, ...props }: Props & { children: ReactNode }) {
   return <ContextMenu><ContextMenuTrigger>{children}</ContextMenuTrigger>
-    <ContextMenuContent onFocus={focusVolume} aria-label={`Opções de voz de ${displayNameOf(props.member)}`}><VoiceMenuItems {...props} context /></ContextMenuContent>
+    <ContextMenuContent onFocus={focusVolume} aria-label={translate("common.f0647b2f9a6d",{p0:(displayNameOf(props.member))})}><VoiceMenuItems {...props} context /></ContextMenuContent>
   </ContextMenu>;
 }
 
 export function VoiceUserMenuButton(props: Props) {
   return <DropdownMenu><DropdownMenuTrigger asChild>
-    <button className="icon-btn tiny voice-mod" aria-label={`Ações de voz de ${displayNameOf(props.member)}`}><Icon name="more" size={14} /></button>
-  </DropdownMenuTrigger><DropdownMenuContent align="end" onFocus={focusVolume} aria-label={`Opções de voz de ${displayNameOf(props.member)}`}><VoiceMenuItems {...props} context={false} /></DropdownMenuContent></DropdownMenu>;
+    <button className="icon-btn tiny voice-mod" aria-label={translate("common.e0ea6c559299",{p0:(displayNameOf(props.member))})}><Icon name="more" size={14} /></button>
+  </DropdownMenuTrigger><DropdownMenuContent align="end" onFocus={focusVolume} aria-label={translate("common.f0647b2f9a6d",{p0:(displayNameOf(props.member))})}><VoiceMenuItems {...props} context={false} /></DropdownMenuContent></DropdownMenu>;
 }
+
+

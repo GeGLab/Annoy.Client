@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
@@ -32,9 +33,9 @@ export function callAction(action: "accept" | "reject" | "end") {
   if (action !== "accept") { cleanup(); setState((s) => { s.directCall = null; }); }
 }
 export async function startDirectCall(accountId: string, userId: string, video: boolean) {
-  if (getState().instances[accountId]?.status !== "ready") return toast("Sem conexão com o servidor para iniciar a chamada.");
-  if (!getState().instances[accountId]?.instance?.directCalls) return toast("Esta instância precisa ser atualizada para chamadas privadas.");
-  if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
+  if (getState().instances[accountId]?.status !== "ready") return toast(translate("common.94c2e2f7ad46"));
+  if (!getState().instances[accountId]?.instance?.directCalls) return toast(translate("common.15fbe9001510"));
+  if (getState().directCall) return toast(translate("common.f56448863241"));
   try { leaveVoice(); await apiFor(accountId).post<DirectCall>("/calls", { userId, video, deviceId: callDeviceId }); }
   catch (error) { toast((error as Error).message); }
 }
@@ -55,21 +56,21 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
   connection.onicecandidate = (event) => { if (event.candidate && sessionId === call.id) sendSignal(accountId, call, { candidate: { ...event.candidate.toJSON(), candidate: event.candidate.candidate } }); };
   connection.onconnectionstatechange = () => {
     if (sessionId !== call.id) return;
-    if (connection.connectionState === "failed") { toast("A conexão da chamada falhou. Confira a rede ou a configuração TURN da instância."); callAction("end"); }
+    if (connection.connectionState === "failed") { toast(translate("common.51b873d7167c")); callAction("end"); }
     if (connection.connectionState === "connected") { media = { ...media, connected: true }; emit(); }
   };
   preparing = (async () => {
     const settings = getState().settings;
     const mic = await openMic(settings.inputDeviceId, settings.noiseFilter);
-    if (sessionId !== call.id) { mic.stop(); throw new Error("Chamada encerrada"); }
+    if (sessionId !== call.id) { mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
     callMic = mic;
     const stream = new MediaStream([mic.track]);
     if (call.video) {
       const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } });
-      if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error("Chamada encerrada"); }
+      if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
       camera.getVideoTracks().forEach((track) => stream.addTrack(track));
     }
-    if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error("Chamada encerrada"); }
+    if (sessionId !== call.id) { stream.getTracks().forEach((track) => track.stop()); throw new Error(translate("common.b868f5fbf270")); }
     for (const track of stream.getTracks()) { if (track.kind === "audio") track.enabled = !settings.selfMute && !settings.selfDeaf; connection.addTrack(track, stream); }
     media = { ...media, local: stream }; updateDirectCallMute(); emit(); return connection;
   })();
@@ -91,7 +92,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       const existed = getState().directCall?.call;
       if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
         window.distopic?.flashWindow();
-        if (!document.hasFocus()) try { const notification = new Notification("Chamada recebida", { body: `${getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? "Um amigo"} está chamando você.`, silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
+        if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: translate("common.beceda3adc2f",{p0:(getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? translate("common.9980aa129514"))}), silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }
       setState((s) => { s.directCall = { accountId, call }; });
       if (call.status === "active" && existed?.status !== "active") {
@@ -118,3 +119,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
 }
 export function disconnectDirectCall(accountId: string) { if (getState().directCall?.accountId === accountId) { cleanup(); setState((s) => { s.directCall = null; }); } }
 const incomingNotificationNeeded = (call: DirectCall, userId: string | undefined, previousId?: string) => call.status === "ringing" && call.calleeId === userId && previousId !== call.id;
+
+
+
+

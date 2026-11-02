@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useRef, useSyncExternalStore } from "react";
 import { Button } from "./button.tsx";
@@ -28,12 +29,12 @@ function ask(
     queue.push({
       id: ++sequence,
       message,
-      title: options?.title ?? (prompt ? "Confirme os detalhes" : "Confirmar ação"),
+      title: options?.title ?? (prompt ? translate("common.18b5b35ac7ad") : translate("common.7b601095df03")),
       prompt,
       secret: options?.secret ?? false,
       value,
-      confirmLabel: options?.confirmLabel ?? (prompt ? "Confirmar" : "Confirmar ação"),
-      cancelLabel: options?.cancelLabel ?? "Cancelar",
+      confirmLabel: options?.confirmLabel ?? (prompt ? translate("common.717bedea36fc") : translate("common.7b601095df03")),
+      cancelLabel: options?.cancelLabel ?? translate("common.bb9dbb406dcb"),
       resolve,
     });
     emit();
@@ -82,7 +83,7 @@ export function ActionDialogHost() {
             {request.prompt && (
               <Input
                 ref={input}
-                aria-label="Sua resposta"
+                aria-label={translate("common.7aecacc096a4")}
                 type={request.secret ? "password" : "text"}
                 autoComplete={request.secret ? "current-password" : undefined}
                 defaultValue={request.value}
@@ -105,3 +106,5 @@ export function ActionDialogHost() {
     </AlertDialog.Root>
   );
 }
+
+

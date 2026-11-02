@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useRef, type ComponentProps } from "react";
@@ -19,5 +20,7 @@ export function DialogContent({ className, overlayClassName, children, showClose
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && focused.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return;
     if (opener.current?.isConnected) opener.current.focus();
-  }); } }} {...props}>{children}{showClose && <DialogPrimitive.Close className="icon-btn dialog-close" aria-label="Fechar"><X size={18} /></DialogPrimitive.Close>}</DialogPrimitive.Content></DialogPrimitive.Portal>;
+  }); } }} {...props}>{children}{showClose && <DialogPrimitive.Close className="icon-btn dialog-close" aria-label={translate("common.0f2bd88ef0ac")}><X size={18} /></DialogPrimitive.Close>}</DialogPrimitive.Content></DialogPrimitive.Portal>;
 }
+
+

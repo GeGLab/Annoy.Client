@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { loadBotPlatform, UnsupportedBotPlatform } from "./api.ts";
@@ -27,7 +28,7 @@ export function useBotPlatform(accountId: string, serverId: string) {
     } catch (error) {
       if (!mounted.current || controller.signal.aborted) return;
       setStatus(error instanceof UnsupportedBotPlatform ? "unsupported" : "error");
-      setError((error as Error).message || "Não foi possível carregar as integrações. Tente novamente.");
+      setError((error as Error).message || translate("common.f7dd226d0b79"));
     }
   }, [accountId, serverId]);
   useEffect(() => {
@@ -56,11 +57,11 @@ export function useBotPlatform(accountId: string, serverId: string) {
       if (mounted.current) {
         setStatus("error");
         setError(
-          "Não foi possível confirmar a operação. Ela pode ter sido aplicada no servidor. Atualize o estado antes de tentar novamente.",
+          translate("common.e3bf2f3c434c"),
         );
         if (error instanceof RequestError && (error.status === 401 || error.status === 403)) {
           await refresh();
-          if (mounted.current) setError("A instância recusou a alteração. Suas permissões foram consultadas novamente.");
+          if (mounted.current) setError(translate("common.7c137f26c7be"));
         }
       }
       return false;
@@ -71,3 +72,5 @@ export function useBotPlatform(accountId: string, serverId: string) {
   };
   return { snapshot, status, error, busy, refresh, run };
 }
+
+

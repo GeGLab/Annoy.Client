@@ -1,3 +1,4 @@
+import {t as translate,onLocalizationChange} from "../../shared/localization/index.ts";
 // Microphone capture with optional neural noise suppression, shared by voice
 // sessions and the settings meter. Everything runs locally in AudioWorklets;
 // no audio leaves the machine before the filters.
@@ -17,12 +18,12 @@ import rnnoiseWorklet from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?u
  */
 export type NoiseFilter = "gtcrn" | "rnnoise" | "max" | "browser" | "off";
 
-export const NOISE_FILTERS: { value: NoiseFilter; label: string; hint: string }[] = [
-  { value: "gtcrn", label: "IA forte (recomendado)", hint: "Remove teclado, cliques e ventilador. Atraso de ~30 ms." },
-  { value: "rnnoise", label: "RNNoise (IA)", hint: "Mais leve. Ótimo para ventilador e ar-condicionado, fraco com teclado." },
-  { value: "max", label: "Máximo", hint: "As duas IAs juntas: o mínimo de ruído, com a voz um pouco mais processada. Atraso de ~50 ms." },
-  { value: "browser", label: "Do navegador", hint: "O filtro padrão do Chromium, mais fraco." },
-  { value: "off", label: "Desligado", hint: "Áudio do microfone sem filtro." },
+export let NOISE_FILTERS: { value: NoiseFilter; label: string; hint: string }[] = [
+  { value: "gtcrn", label: translate("common.8ccce6fcaec1"), hint: translate("common.51a652e6241a") },
+  { value: "rnnoise", label: translate("common.5f1104865a91"), hint: translate("common.05237f96876b") },
+  { value: "max", label: translate("common.994d51043f7d"), hint: translate("common.366ba4ffb33d") },
+  { value: "browser", label: translate("common.31204f8019ef"), hint: translate("common.b45117f459b3") },
+  { value: "off", label: translate("common.20324fbd274a"), hint: translate("common.19fdba9b1e25") },
 ];
 
 type Model = "gtcrn" | "rnnoise";
@@ -79,7 +80,7 @@ export async function openMic(deviceId: string, filter: NoiseFilter): Promise<Mi
   } catch (err) {
     // Fall back to the unfiltered signal rather than losing the microphone.
     console.warn("noise filter unavailable", err);
-    toast("Não foi possível carregar a redução de ruído. O microfone continua disponível; confira o filtro nas configurações de voz.", 10000);
+    toast(translate("common.809333909b92"), 10000);
   }
   await ctx.resume();
   const dest = ctx.createMediaStreamDestination();
@@ -96,3 +97,13 @@ export async function openMic(deviceId: string, filter: NoiseFilter): Promise<Mi
     },
   };
 }
+
+
+
+onLocalizationChange(()=>{NOISE_FILTERS=[
+  { value: "gtcrn", label: translate("common.8ccce6fcaec1"), hint: translate("common.51a652e6241a") },
+  { value: "rnnoise", label: translate("common.5f1104865a91"), hint: translate("common.05237f96876b") },
+  { value: "max", label: translate("common.994d51043f7d"), hint: translate("common.366ba4ffb33d") },
+  { value: "browser", label: translate("common.31204f8019ef"), hint: translate("common.b45117f459b3") },
+  { value: "off", label: translate("common.20324fbd274a"), hint: translate("common.19fdba9b1e25") },
+];});

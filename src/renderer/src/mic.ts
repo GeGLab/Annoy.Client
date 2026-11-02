@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 // Microphone capture with voice-activity or push-to-talk gating, shared by
 // every voice backend. The analyser listens to the filtered signal (so a
 // keyboard doesn't open the gate); the gate only toggles the transmitted
@@ -27,7 +28,7 @@ export class MicGate {
     const mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter);
     if (this.stopped) {
       mic.stop();
-      throw new Error("Sessão de voz encerrada");
+      throw new Error(translate("common.99e2847d16e5"));
     }
     this.mic = mic;
     this.track = this.mic.track;
@@ -76,3 +77,5 @@ export class MicGate {
     this.track = null;
   }
 }
+
+

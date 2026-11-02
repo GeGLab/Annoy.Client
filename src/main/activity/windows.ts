@@ -1,3 +1,4 @@
+import {t as translate} from "../../shared/localization/index.ts";
 import { execFile } from "node:child_process";
 import { sep } from "node:path";
 import type { UserActivity } from "@distopic/protocol";
@@ -47,7 +48,7 @@ export function detectActivities(probe: WindowsProbe, games: InstalledGame[], pr
       const project = clean(parts.find((part) => clean(part) !== file) ?? parts[0] ?? "");
       const extension = /\.([a-z0-9]{1,12})(?:\s|$)/i.exec(file)?.[1]?.toLowerCase();
       const language = extension === "tsx" || extension === "jsx" ? "react" : extension === "ts" ? "typescript" : extension === "js" ? "javascript" : extension === "py" ? "python" : extension === "cs" ? "csharp" : extension === "sql" ? "sql" : extension === "vue" ? "vue" : extension;
-      activities.push({ kind: "development", provider, name: project || "Programando", ...(file && { file }), ...(project && { project }), ...(language && { language }) });
+      activities.push({ kind: "development", provider, name: project || translate("desktop.6bdaa109a995"), ...(file && { file }), ...(project && { project }), ...(language && { language }) });
     }
   }
   return activities;
@@ -80,7 +81,9 @@ export async function probeWindows(preferences: ActivityPreferences, signal?: Ab
     activities,
     error:
       preferences.music && probe.mediaError
-        ? "O Windows não disponibilizou a sessão de música. Confira se o aplicativo está reproduzindo e tente novamente."
+        ? translate("desktop.ad5bb0faeba7")
         : null,
   };
 }
+
+

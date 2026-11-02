@@ -1,11 +1,12 @@
+import {t as translate,onLocalizationChange} from "../../shared/localization/index.ts";
 // Capture and encoding choices shared by both voice backends.
 
 export type ScreenQuality = "30" | "60" | "max";
 
-export const SCREEN_QUALITIES: { value: ScreenQuality; label: string; hint: string }[] = [
-  { value: "60", label: "60 fps", hint: "Fluido para jogos, em até 1080p." },
-  { value: "30", label: "30 fps", hint: "Gasta menos internet. Bom para mostrar documentos e código." },
-  { value: "max", label: "Sem limite", hint: "Usa a resolução e a taxa de quadros da sua tela." },
+export let SCREEN_QUALITIES: { value: ScreenQuality; label: string; hint: string }[] = [
+  { value: "60", label: translate("common.225e1c6af8cb"), hint: translate("common.4cf6b4a50ee8") },
+  { value: "30", label: translate("common.5e119b2325ce"), hint: translate("common.ccc2f6390b73") },
+  { value: "max", label: translate("common.b669ba5781e9"), hint: translate("common.ff7bff9dec7d") },
 ];
 
 /** Sender caps; the SFU forwards one encoding, so these bound everyone's download too. */
@@ -111,3 +112,11 @@ export function alignExtmap(remote: string, local: string | undefined): string {
       .join("")
   );
 }
+
+
+
+onLocalizationChange(()=>{SCREEN_QUALITIES=[
+  { value: "60", label: translate("common.225e1c6af8cb"), hint: translate("common.4cf6b4a50ee8") },
+  { value: "30", label: translate("common.5e119b2325ce"), hint: translate("common.ccc2f6390b73") },
+  { value: "max", label: translate("common.b669ba5781e9"), hint: translate("common.ff7bff9dec7d") },
+];});

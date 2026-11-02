@@ -12,6 +12,10 @@ export interface TheaterEvents {
 }
 
 const bridge = {
+  localization: {
+    get: () => ipcRenderer.invoke("localization:get") as Promise<{saved:LocalizationPreferences;systemLocale:string}>,
+    set: (values:LocalizationPreferences) => ipcRenderer.invoke("localization:set",values) as Promise<LocalizationPreferences>,
+  },
   platform: process.platform,
   idleSeconds: () => ipcRenderer.invoke("system:idle") as Promise<number>,
   activity: {
@@ -98,3 +102,4 @@ const bridge = {
 export type DistopicBridge = typeof bridge;
 
 contextBridge.exposeInMainWorld("distopic", bridge);
+import type {LocalizationPreferences} from "../shared/localization/preferences.ts";

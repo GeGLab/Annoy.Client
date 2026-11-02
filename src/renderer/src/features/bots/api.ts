@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import type { Api } from "../../api.ts";
 import { RequestError } from "../../api.ts";
 import { BOT_PERMISSIONS, type BotInstallation, type BotListing, type BotPlatformSnapshot } from "./types.ts";
@@ -25,11 +26,11 @@ export async function loadBotPlatform(api: Api, serverId: string, signal: AbortS
     info = await api.request("GET", "/bot-platform", undefined, signal);
   } catch (error) {
     if (error instanceof RequestError && (error.status === 404 || error.status === 501))
-      throw new UnsupportedBotPlatform("Esta instância ainda não oferece a plataforma de bots.");
+      throw new UnsupportedBotPlatform(translate("common.6cf5172e050e"));
     throw error;
   }
   if (!object(info) || info.apiVersion !== 1)
-    throw new Error("A versão da plataforma de bots é incompatível. Atualize o cliente ou consulte quem hospeda a instância.");
+    throw new Error(translate("common.90f402ec1818"));
   const root = `/servers/${encodeURIComponent(serverId)}/bot-installations`;
   const [catalog, installed] = await Promise.all([
     api.request<unknown>("GET", "/bots/catalog", undefined, signal),
@@ -48,7 +49,7 @@ export async function loadBotPlatform(api: Api, serverId: string, signal: AbortS
     !installed.installations.every(installation) ||
     new Set(installed.installations.map((i) => i.botId)).size !== installed.installations.length
   )
-    throw new Error("A instância retornou dados inválidos. Atualize o estado antes de alterar bots.");
+    throw new Error(translate("common.7469ebe3b9a6"));
   return { bots: catalog.bots, installations: installed.installations, canManage: installed.canManage };
 }
 
@@ -76,3 +77,5 @@ export async function uninstallBot(api: Api, serverId: string, id: string) {
     AbortSignal.timeout(20_000),
   );
 }
+
+

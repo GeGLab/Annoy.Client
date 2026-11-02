@@ -1,3 +1,4 @@
+import {t as translate} from "../../../../shared/localization/index.ts";
 import * as Popover from "@radix-ui/react-popover";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 import { useState, useSyncExternalStore } from "react";
@@ -57,29 +58,29 @@ export function ColorPicker({
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="color-popover" sideOffset={8} collisionPadding={14} aria-label={`Escolher ${label}`}>
+        <Popover.Content className="color-popover" sideOffset={8} collisionPadding={14} aria-label={translate("common.e0e61df5120b",{p0:(label)})}>
           <div className="color-picker-heading">
             <strong>{label}</strong>
             <span className="color-swatch" style={{ background: pending }} />
           </div>
-          <HexColorPicker color={pending} onChange={setPending} aria-label={`Seletor de ${label}`} />
+          <HexColorPicker color={pending} onChange={setPending} aria-label={translate("common.5789e5649265",{p0:(label)})} />
           <label className="hex-field">
-            <span>HEX</span>
-            <HexColorInput color={pending} onChange={setPending} prefixed aria-label={`Código hexadecimal de ${label}`} />
+            <span>{translate("common.4d4a964e0320")}</span>
+            <HexColorInput color={pending} onChange={setPending} prefixed aria-label={translate("common.80fe2472e18b",{p0:(label)})} />
           </label>
-          <div className="color-presets" aria-label="Cores sugeridas">
+          <div className="color-presets" aria-label={translate("common.37b68ef51f8b")}>
             {presets.map((color) => (
               <button
                 key={color}
                 className="color-chip"
                 style={{ background: color }}
-                aria-label={`Selecionar ${color}`}
+                aria-label={translate("common.7aa34b3b94e2",{p0:(color)})}
                 onClick={() => setPending(color)}
               />
             ))}
           </div>
           <div className="color-history">
-            <span>Últimas cores</span>
+            <span>{translate("common.312f5f461cb8")}</span>
             {history.length ? (
               <div className="color-presets">
                 {history.map((color) => (
@@ -87,19 +88,17 @@ export function ColorPicker({
                     key={color}
                     className="color-chip"
                     style={{ background: color }}
-                    aria-label={`Cor recente ${color}`}
+                    aria-label={translate("common.78b6e9f5fd37",{p0:(color)})}
                     onClick={() => setPending(color)}
                   />
                 ))}
               </div>
             ) : (
-              <p>As cores que você usar aparecem aqui.</p>
+              <p>{translate("common.23d730b77422")}</p>
             )}
           </div>
           <div className="form-actions">
-            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>{translate("common.bb9dbb406dcb")}</Button>
             <Button
               size="sm"
               disabled={!validColor(pending)}
@@ -108,12 +107,12 @@ export function ColorPicker({
                 onChange(pending);
                 setOpen(false);
               }}
-            >
-              Usar cor
-            </Button>
+            >{translate("common.ddf665fa1d37")}</Button>
           </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
+
+

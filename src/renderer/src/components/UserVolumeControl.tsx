@@ -1,3 +1,5 @@
+import {rich} from "../lib/localization.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import { setUserVolume } from "../client.ts";
 import { useStore } from "../store.ts";
 import { userVolume } from "../../../shared/user-volume.ts";
@@ -12,8 +14,10 @@ export function UserVolumeControl({ accountId, userId, name }: {
     // Let the slider use arrows/Home/End and native Tab without the surrounding menu handling them.
     if (event.key !== "Escape") event.stopPropagation();
   }}>
-    <div className="user-volume-heading"><span><Icon name={value === 0 ? "volumeOff" : "speaker"} size={15} />Volume do usuário</span><output>{value}%</output></div>
-    <Slider aria-label={`Volume de ${name}`} aria-valuetext={`${value}%`} min={0} max={200} step={1} value={value}
+    <div className="user-volume-heading"><span>{rich("common.3b5906012111",{p0:(<Icon name={value === 0 ? "volumeOff" : "speaker"} size={15} />)})}</span><output>{value}%</output></div>
+    <Slider aria-label={translate("common.695ed8139a63",{p0:(name)})} aria-valuetext={translate("common.d4bdf581de91",{p0:(value)})} min={0} max={200} step={1} value={value}
       onChange={(event) => setUserVolume(accountId, userId, Number(event.target.value))} />
   </div>;
 }
+
+

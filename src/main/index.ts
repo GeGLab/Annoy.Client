@@ -1,3 +1,4 @@
+import {t as translate} from "../shared/localization/index.ts";
 import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
@@ -23,9 +24,9 @@ function createTray(): void {
   tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Abrir Annoy", click: restoreWindow },
+    { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
     { type: "separator" },
-    { label: "Sair do Annoy", click: () => app.quit() },
+    { label: translate("desktop.b08423738547"), click: () => app.quit() },
   ]));
   tray.on("double-click", restoreWindow);
 }
@@ -47,6 +48,7 @@ if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
   }
 }
 
+registerLocalization(ipcMain, () => win);
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
 // Chromium picks the keychain by desktop name and falls back to no encryption
 // on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
@@ -206,32 +208,32 @@ function showNativeMenu(params: Electron.ContextMenuParams): void {
   const image = params.mediaType === "image" && /^(https?|blob|data):/.test(params.srcURL);
   if (image) {
     items.push(
-      { label: "Copiar imagem", click: () => wc.copyImageAt(params.x, params.y) },
-      { label: "Salvar imagem como…", click: () => wc.downloadURL(params.srcURL) },
+      { label: translate("desktop.6605544f120f"), click: () => wc.copyImageAt(params.x, params.y) },
+      { label: translate("desktop.e7ff7c72cedc"), click: () => wc.downloadURL(params.srcURL) },
     );
     if (/^https?:/.test(params.srcURL)) {
       items.push(
-        { label: "Copiar endereço da imagem", click: () => clipboard.writeText(params.srcURL) },
-        { label: "Abrir original", click: () => openExternal(params.srcURL) },
+        { label: translate("desktop.c727fdb5fd76"), click: () => clipboard.writeText(params.srcURL) },
+        { label: translate("desktop.dd9bdbdc3f1f"), click: () => openExternal(params.srcURL) },
       );
     }
   }
   if (params.linkURL && /^https?:/.test(params.linkURL) && params.linkURL !== params.srcURL) {
     if (items.length) items.push({ type: "separator" });
-    items.push({ label: "Copiar link", click: () => clipboard.writeText(params.linkURL) });
+    items.push({ label: translate("desktop.c19488a05564"), click: () => clipboard.writeText(params.linkURL) });
   }
   if (params.isEditable) {
     if (items.length) items.push({ type: "separator" });
     items.push(
-      { label: "Recortar", role: "cut", enabled: params.editFlags.canCut },
-      { label: "Copiar", role: "copy", enabled: params.editFlags.canCopy },
-      { label: "Colar", role: "paste", enabled: params.editFlags.canPaste },
+      { label: translate("desktop.b659da7fa50d"), role: "cut", enabled: params.editFlags.canCut },
+      { label: translate("desktop.39dcf1cbeb5a"), role: "copy", enabled: params.editFlags.canCopy },
+      { label: translate("desktop.83229f4fb36b"), role: "paste", enabled: params.editFlags.canPaste },
       { type: "separator" },
-      { label: "Selecionar tudo", role: "selectAll" },
+      { label: translate("desktop.6dc56b9dcaea"), role: "selectAll" },
     );
   } else if (params.selectionText.trim()) {
     if (items.length) items.push({ type: "separator" });
-    items.push({ label: "Copiar", role: "copy" });
+    items.push({ label: translate("desktop.39dcf1cbeb5a"), role: "copy" });
   }
   if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
 }
@@ -244,7 +246,7 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 560,
     backgroundColor: "#171621",
-    title: "Annoy",
+    title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
     icon: join(import.meta.dirname, "../renderer/icon.png"),
@@ -395,3 +397,6 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+import {registerLocalization} from "./localization.ts";
+
+

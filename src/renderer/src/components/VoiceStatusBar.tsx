@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import { leaveVoice, openChannel } from "../client.ts";
 import { useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
@@ -18,22 +19,22 @@ export function VoiceStatusBar() {
         <Icon name={voice.status === "connected" ? "radio" : "loader"} size={16} />
       </span>
       <div className="voice-status-copy">
-        <span role="status">{voice.status === "connected" ? "Voz conectada" : "Conectando…"}</span>
+        <span role="status">{voice.status === "connected" ? translate("common.e58c700521d2") : "Conectando…"}</span>
         <strong className="truncate">
-          {channel?.name ?? "Canal de voz"}
+          {channel?.name ?? translate("common.b9bd50cb65eb")}
           <span>
             {" "}
-            · {state?.server.name ?? "Servidor"}
+            · {state?.server.name ?? translate("common.05e427a291c2")}
             {count > 0 && ` · ${count} na sala`}
           </span>
         </strong>
       </div>
-      <Button variant="ghost" size="sm" onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}>
-        Ver chamada
-      </Button>
-      <Button variant="ghost" size="icon" aria-label="Sair da chamada de voz" title="Sair da chamada" onClick={() => leaveVoice()}>
+      <Button variant="ghost" size="sm" onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}>{translate("common.22615e437db8")}</Button>
+      <Button variant="ghost" size="icon" aria-label={translate("common.4e054f9afb78")} title={translate("common.df851ef5297e")} onClick={() => leaveVoice()}>
         <Icon name="hangup" />
       </Button>
     </div>
   );
 }
+
+
