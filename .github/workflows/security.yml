@@ -32,11 +32,22 @@ jobs:
           repository: GeGLab/Annoy.Server
           ref: ${{ inputs.server_ref || 'main' }}
           path: annoy-server
+      - name: Require read-only access to the private Global integration dependency
+        shell: bash
+        env:
+          ANNOY_GLOBAL_READ_TOKEN: ${{ secrets.ANNOY_GLOBAL_READ_TOKEN }}
+        run: |
+          if [ -z "$ANNOY_GLOBAL_READ_TOKEN" ]; then
+            echo "::error::Configure ANNOY_GLOBAL_READ_TOKEN with read-only contents access to GeGLab/Annoy-api-global. The Client GITHUB_TOKEN cannot read another private repository."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
-          repository: GeGLab/annoy-api-global
+          repository: GeGLab/Annoy-api-global
           ref: ${{ inputs.global_ref || 'main' }}
           path: annoy-api-global
+          token: ${{ secrets.ANNOY_GLOBAL_READ_TOKEN }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 26
@@ -61,7 +72,7 @@ jobs:
         working-directory: annoy-client
       - run: npm run test:activity
         working-directory: annoy-client
-      - run: node --experimental-strip-types --test scripts/tests/app-access.test.mjs scripts/tests/server-removal.test.mjs scripts/tests/user-volume.test.mjs
+      - run: node --experimental-strip-types --test scripts/tests/app-access.test.mjs scripts/tests/async-secrets.test.mjs scripts/tests/server-removal.test.mjs scripts/tests/user-volume.test.mjs
         working-directory: annoy-client
       - run: npm run test:security
         working-directory: annoy-server
