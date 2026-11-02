@@ -80,6 +80,8 @@ jobs:
         working-directory: annoy-api-global
       - run: npm run build
         working-directory: annoy-client
+      - run: node --experimental-strip-types --test scripts/tests/sframe-wasm.test.mjs
+        working-directory: annoy-client
       - name: Package Linux locally without publishing
         if: runner.os == 'Linux'
         run: npx electron-builder --linux --x64 --dir --publish never --config.npmRebuild=false --config.directories.output=dist/security-package

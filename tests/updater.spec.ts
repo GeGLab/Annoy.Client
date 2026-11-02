@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 for (const critical of [false, true])
   test(`local updater feed: ${critical ? "critical policy" : "optional update"}, coalescing, notifications, recovery and checksum rejection`, async () => {
     const data = await mkdtemp(join(tmpdir(), "annoy-feed-"));
+    // Disable notifications before the main-process startup check can run.
+    await writeFile(join(data, "updates.json"), JSON.stringify({version:1,values:{notifications:false}}));
     const valid = Buffer.from("Synthetic installer fixture; never executed.");
     const digest = createHash("sha512").update(valid).digest("base64");
     let corrupt = true,

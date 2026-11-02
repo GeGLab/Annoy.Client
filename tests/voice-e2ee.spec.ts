@@ -251,10 +251,11 @@ test('a private call between two Electron clients is sealed with SFrame end to e
   await expect.poll(async()=>{const [a,b]=[await stats(pages[0]!),await stats(pages[1]!)];return Math.min(a?.sealed??0,a?.opened??0,b?.sealed??0,b?.opened??0);},{timeout:45_000}).toBeGreaterThan(200);
   const [a,b]=[await stats(pages[0]!),await stats(pages[1]!)];
   expect(a!.epoch).toBe('1');expect(b!.epoch).toBe('1');
-  // No frame fails authentication. The P2P stack occasionally delivers a frame twice
-  // (redundant audio after loss); anti-replay discards that copy, as RFC 9605 9.3 requires.
+  // No frame fails authentication. Retransmission volume depends on transport
+  // conditions; byte-identical replay rejection is tested directly in the WASM.
   expect((a!.dropped.rejected??0)+(b!.dropped.rejected??0),JSON.stringify({alice:a,bob:b})).toBe(0);
-  expect((a!.dropped.replay??0)+(b!.dropped.replay??0)).toBeLessThanOrEqual(Math.ceil((a!.opened+b!.opened)/100));
+  expect(a!.byKind.video.opened).toBeGreaterThan(30);
+  expect(b!.byKind.video.opened).toBeGreaterThan(30);
   for(const page of pages){
    expect((await page.evaluate(async()=>(await import(location.origin+'/src/store.ts')).getState().directCall?.call.protection))).toBe('sframe');
    await expect.poll(()=>page.locator('.direct-call-video video').first().evaluate((video:HTMLVideoElement)=>video.videoWidth),{timeout:20_000}).toBeGreaterThan(0);
