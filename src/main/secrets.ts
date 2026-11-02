@@ -17,8 +17,8 @@ export class SecretStore {
   private async read(): Promise<Record<string, string>> {
     try {
       const value: unknown = JSON.parse(await readFile(this.file, "utf8"));
-      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-      return Object.fromEntries(Object.entries(value).filter(([, value]) => typeof value === "string"));
+      if (!value || typeof value !== "object" || Array.isArray(value) || Object.values(value).some((entry) => typeof entry !== "string")) throw new Error("Invalid secret metadata");
+      return value as Record<string, string>;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
       throw error; // Never overwrite an unreadable file with an empty store.

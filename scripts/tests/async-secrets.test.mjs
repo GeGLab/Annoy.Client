@@ -32,8 +32,11 @@ test('async secret writes serialize concurrent account/global updates and keep t
 });
 test('unreadable secret metadata is preserved and a failed operation does not poison the queue',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'annoy-secret-retry-'));try{
-  const file=join(dir,'secrets.json'),store=new SecretStore(file,storage().api);await writeFile(file,'invalid-json');
-  await assert.rejects(store.set('global','secret'));assert.equal(await readFile(file,'utf8'),'invalid-json');
+  const file=join(dir,'secrets.json'),store=new SecretStore(file,storage().api);
+  for(const invalid of ['invalid-json','[]','null','{"accounts":42}']){
+   await writeFile(file,invalid);
+   await assert.rejects(store.set('global','secret'));assert.equal(await readFile(file,'utf8'),invalid);
+  }
   await writeFile(file,'{}');await store.set('global','secret');assert.equal(await store.get('global'),'secret');
  }finally{await rm(dir,{recursive:true,force:true});}
 });
