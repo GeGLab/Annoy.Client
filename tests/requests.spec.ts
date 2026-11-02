@@ -211,3 +211,85 @@ test("requests cannot restore a Global session after sign-out while login is pen
   late.resolve();
   await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().global)).toBe(null);
 });
+
+async function special(page: Page, id: string, type: "code" | "song") {
+  await open(page);
+  await page.evaluate(async ({ id, type }) => {
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    const { openChannel } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+    setState((s: any) => { s.instances.a.serverStates.shared.channels.push({ id, serverId: "shared", name: id, type, topic: "", parentId: null, position: 1, overwrites: [] }); });
+    openChannel("a", "shared", id);
+  }, { id, type });
+}
+
+test("code saves coalesce, preserve edits made during a request and guard navigation after a failure", async ({ page }) => {
+  await seed(page);
+  let writes = 0, fail = false;
+  const held = deferred();
+  await page.route("https://requests-a.test/api/channels/code/code**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/tree")) return route.fulfill({ json: [{ path: "main.ts", type: "file", size: 8 }] });
+    if (path.endsWith("/status")) return route.fulfill({ json: { branch: "main", upstream: null, ahead: 0, behind: 0, files: [], branches: ["main"], log: [] } });
+    if (path.endsWith("/file")) {
+      if (route.request().method() === "PUT") {
+        writes++; if (writes === 1) await held.promise;
+        if (fail) return route.fulfill({ status: 503, json: { message: "Falha ao salvar código" } });
+        return route.fulfill({ json: { path: "main.ts", content: route.request().postDataJSON().content, hash: `hash-${writes}`, binary: false } });
+      }
+      return route.fulfill({ json: { path: "main.ts", content: "initial", hash: "hash-0", binary: false } });
+    }
+    return route.fulfill({ json: { channelId: "code", status: "ready", url: "https://example.test/repo", branch: "main", head: "h", error: null } });
+  });
+  await special(page, "code", "code");
+  await page.locator(".code-node").filter({ hasText: "main.ts" }).click();
+  await expect(page.locator(".code-tab")).toContainText("main.ts");
+  const edit = (value: string) => page.evaluate(async (value) => {
+    const { monaco } = await import(/* @vite-ignore */ `${location.origin}/src/features/channels/monaco.ts`);
+    monaco.editor.getModels().find((model: any) => model.uri.path === "/code/main.ts")!.setValue(value);
+  }, value);
+  await edit("first edit");
+  await page.locator(".code-save").click();
+  await expect.poll(() => writes).toBe(1);
+  await expect(page.locator(".code-save")).toBeDisabled();
+  await edit("edit while saving");
+  held.resolve();
+  await expect(page.locator(".code-save")).toBeEnabled();
+  await expect(page.locator(".code-dirty")).toHaveCount(1);
+  fail = true;
+  await page.locator(".code-save").click();
+  await expect(page.locator(".toast")).toContainText("Falha ao salvar código");
+  await expect(page.locator(".code-dirty")).toHaveCount(1);
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "chat"));
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.locator(".code-tab")).toContainText("main.ts");
+  expect(writes).toBe(2);
+});
+
+test("playback failures preserve the submitted URL and ignore stale responses after changing channels", async ({ page }) => {
+  await seed(page);
+  let writes = 0, fail = true;
+  const late = deferred();
+  const playback = { channelId: "music", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true };
+  await page.route("https://requests-a.test/api/channels/music/playback", async (route) => {
+    if (route.request().method() === "POST") {
+      writes++;
+      if (fail) return route.fulfill({ status: 503, json: { message: "Fila indisponível" } });
+      await late.promise;
+    }
+    await route.fulfill({ json: playback }).catch(() => undefined);
+  });
+  await special(page, "music", "song");
+  const input = page.getByRole("textbox", { name: "Link para adicionar à fila" });
+  await input.fill("https://example.test/song.mp3");
+  await page.locator(".queue-add button[type=submit], .queue-add .btn").first().click();
+  await expect(page.locator(".toast")).toContainText("Fila indisponível");
+  await expect(input).toHaveValue("https://example.test/song.mp3");
+  fail = false;
+  await page.locator(".queue-add .btn").first().click();
+  await expect.poll(() => writes).toBe(2);
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "chat"));
+  late.resolve();
+  await expect(page.getByRole("heading", { name: "geral", exact: true })).toBeVisible();
+  await expect(page.locator(".playback-feedback")).toHaveCount(0);
+});

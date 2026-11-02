@@ -197,6 +197,22 @@
 .expression-provider-fields { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 16px; }
 .expression-provider-fields p { margin: 0; }
 .expression-provider-fields input { width: 100%; }
+.expression-catalog > h4 { margin: 28px 0 12px; font-size: 1rem; }
+.expression-catalog-filters { display: flex; gap: 12px; flex-wrap: wrap; }
+.expression-catalog-filters input { flex: 1 1 220px; min-width: 0; }
+.expression-catalog-filters .ui-select-trigger { flex: 1 1 180px; }
+.expression-credits { margin-top: 8px; font-size: .85714rem; color: var(--text-soft); }
+.expression-credits summary { cursor: pointer; }
+.expression-credits p { margin: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.expression-credits > div { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.expression-credits a { text-decoration: underline; text-underline-offset: .2em; }
+.expression-page-end { padding: 12px 0; }
+.expression-installed > .expression-page-end { display: block; border: 0; }
+.expression-install-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; }
+.expression-install-progress progress { accent-color: var(--accent); max-width: 100%; }
+.expression-skeleton { height: 72px; margin-bottom: 8px; border-radius: 8px; background: var(--bg-hover); }
+.media-library-settings .expression-pack { flex-wrap: wrap; }
+.media-library-settings .expression-pack > div:not(.expression-pack-preview) { flex: 1 1 180px; }
 .expression-sources, .expression-pagination { display: flex; justify-content: space-between; gap: 8px; padding: 0 12px 12px; }
 .expression-sources button { padding: 6px 10px; font-size: 0.78571rem; color: var(--text-muted); border-radius: 8px; }
 .expression-sources [aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-strong); }

@@ -1,3 +1,4 @@
+import {serverRoot} from './fixtures/server-root.ts';
 import {electron} from './fixtures/electron-launch.ts';
 import {test,expect,type ElectronApplication} from '@playwright/test';
 import {createRequire} from 'node:module';
@@ -10,13 +11,13 @@ import {createServer} from 'node:http';
 const require=createRequire(import.meta.url);
 test('real Electron clients exchange MLS, attachments and edits; external IPC cannot use their vault',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'annoy-desktop-crypto-'));
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/crypto-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server')},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/crypto-desktop.ts'],{cwd:serverRoot(),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server')},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;alice:string;bob:string}>((resolve,reject)=>{
    const timer=setTimeout(()=>reject(new Error('Backend timeout: '+stderr)),15000);
    createInterface({input:backend.stdout}).once('line',line=>{clearTimeout(timer);try{resolve(JSON.parse(line));}catch{reject(new Error('Invalid fixture output'));}});
-   backend.once('exit',()=>{clearTimeout(timer);reject(new Error('Backend stopped: '+stderr));});
+   backend.once('error',reject);backend.once('exit',()=>{clearTimeout(timer);reject(new Error('Backend stopped: '+stderr));});
   });
   const pages=[];
   for(const name of ['alice','bob'] as const){

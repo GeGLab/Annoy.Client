@@ -59,6 +59,7 @@ export class CallEncryption {
   private keyed!: Promise<void>;
   private resolveKeyed!: () => void;
   private failures = 0;
+  private pendingKeyPort: MessagePort | null = null;
 
   private constructor(
     private readonly bridge: MediaBridge,
@@ -77,7 +78,7 @@ export class CallEncryption {
     const worker = new Worker(new URL("./sframe-worker.ts", import.meta.url), { type: "module", name: "annoy-sframe" });
     const call = new CallEncryption(bridge, worker, signaling, account, channelId, onError);
     worker.addEventListener("message", (event) => {
-      if ((event.data as { type?: string })?.type === "failed") call.onError(translate("common.f91891cd6292"));
+      if (["failed", "stream-failed"].includes((event.data as { type?: string })?.type ?? "")) call.onError(translate("common.f91891cd6292"));
     });
     try {
       await call.begin(media.callId);
@@ -94,9 +95,17 @@ export class CallEncryption {
 
   private async openHandle(): Promise<string> {
     const { handle, port } = await awaitPort(this.bridge.open(this.account.url, this.account.token, this.channelId, this.account.userId));
-    this.worker.postMessage({ type: "keys", port }, [port]);
+    if (this.closed) { port.close(); await this.bridge.close(handle); throw new Error(translate("common.b868f5fbf270")); }
+    this.pendingKeyPort = port;
     this.handle = handle;
     return handle;
+  }
+
+  private attachKeyPort(): void {
+    const port = this.pendingKeyPort;
+    if (!port) return;
+    this.pendingKeyPort = null;
+    this.worker.postMessage({ type: "keys", port }, [port]);
   }
 
   private async begin(existing: string | null): Promise<void> {
@@ -107,15 +116,21 @@ export class CallEncryption {
       const reply = await this.signaling.voice<{ created: boolean; callId: string }>("mediaCreate", { callId: created.callId, binding: created.binding });
       if (reply.created) {
         this.callId = created.callId;
+        this.attachKeyPort();
         this.resolveKeyed();
         return;
       }
       // Someone else created the call at the same time: join theirs.
+      // Never install the provisional epoch of the losing group in the worker.
+      // Its epoch number can equal the winning group's, but its key is unrelated.
+      this.pendingKeyPort?.close();
+      this.pendingKeyPort = null;
       await this.bridge.close(handle);
       this.handle = null;
       callId = reply.callId;
     }
     const handle = await this.openHandle();
+    this.attachKeyPort();
     const proposal = await this.bridge.propose(handle, callId);
     this.callId = callId;
     await this.signaling.voice("mediaPropose", { callId, keyPackage: proposal.keyPackage, binding: proposal.binding });
@@ -140,6 +155,8 @@ export class CallEncryption {
     if (this.closed) return;
     const handle = this.handle;
     if (event.kind === "restart") {
+      this.pendingKeyPort?.close();
+      this.pendingKeyPort = null;
       if (handle) await this.bridge.close(handle);
       this.handle = null;
       this.callId = null;
@@ -203,6 +220,8 @@ export class CallEncryption {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.pendingKeyPort?.close();
+    this.pendingKeyPort = null;
     this.worker.postMessage({ type: "close" });
     // Let the worker wipe its keys before it is terminated.
     setTimeout(() => this.worker.terminate(), 200);

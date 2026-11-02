@@ -177,6 +177,43 @@ test("the local exception requires the server flag and a validated local session
   } finally { await close(); }
 });
 
+test("expected local authentication refusals and async secret operations produce no Electron handler/deprecation errors", async () => {
+  const { app, page, auth, close } = await launch();
+  let errors = "";
+  app.process().stderr?.on("data", (chunk) => { errors += chunk.toString(); });
+  try {
+    auth.setMode("global");
+    const result = await page.evaluate(async (credential) => {
+      let message = "";
+      try { await window.distopic!.auth.local(credential); } catch (error) { message = (error as Error).message; }
+      const saved = await window.distopic!.secrets.set("global", "synthetic-secret-canary");
+      const decrypted = await window.distopic!.secrets.get("global");
+      await window.distopic!.secrets.set("global", null);
+      await window.distopic!.crypto.unlock("synthetic-local-password-for-tests");
+      return { message, saved, decrypted, access: await window.distopic!.auth.get() };
+    }, { id: "local", url: auth.url, token: auth.localToken, userId: "local-user" });
+    expect(result.message).toBe("Este servidor exige conta Annoy");
+    expect(result.access.allowed).toBe(false);
+    if (result.saved) expect(result.decrypted).toBe("synthetic-secret-canary");
+    else expect(result.decrypted).toBeNull(); // Linux without a keychain uses the explicit vault password.
+    expect(errors).not.toMatch(/safeStorage\.(?:isEncryptionAvailable|decryptString|encryptString).*deprecated/);
+    expect(errors).not.toContain("Error occurred in handler for 'auth:local'");
+  } finally { await close(); }
+});
+
+test("account metadata distinguishes local and Annoy sessions before connecting", async () => {
+  const { page, close } = await launch();
+  try {
+    const kinds = await page.evaluate(async () => {
+      const { toAccount } = await import(/* @vite-ignore */ `${location.origin}/src/global.ts`);
+      const auth = { token: "synthetic", user: { id: "u", username: "u", displayName: "U", avatarUrl: null } };
+      const info = { name: "Fixture", version: "1", protocol: 1, registrationOpen: true, registration: "open", discordLogin: false };
+      return [toAccount("https://instance.test", { ...info, accountMode: "local" }, auth).annoy, toAccount("https://instance.test", { ...info, accountMode: "global" }, auth).annoy, toAccount("https://instance.test", info, { ...auth, user: { ...auth.user, global: true } }).annoy];
+    });
+    expect(kinds).toEqual([false, true, true]);
+  } finally { await close(); }
+});
+
 
 test("reload locks native access without deleting saved server connections", async () => {
   const { app, page, auth, close } = await launch();

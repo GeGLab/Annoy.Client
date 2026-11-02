@@ -1,3 +1,4 @@
+import { requestNavigation } from "./lib/navigation-guard.ts";
 import {t as translate} from "../../shared/localization/index.ts";
 import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
@@ -358,6 +359,10 @@ export function markServerRead(accountId: string, serverId: string): void {
 }
 
 export function navigate(view: View): void {
+  requestNavigation(() => applyNavigation(view));
+}
+
+function applyNavigation(view: View): void {
   flushChatState();
   const destinationAccountId = view.kind === "server" || view.kind === "home" || view.kind === "marketplace" ? view.accountId : null;
   if (destinationAccountId) clearRecoveryReturn(destinationAccountId);
@@ -871,16 +876,17 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
       const account = getState().accounts.find(a => a.id === accountId);
       if (account) {
         // An Annoy account on this server: access comes from the Annoy sign-in, never from local credentials.
-        const annoyUser = event.d.user.global === true;
-        if (annoyUser && !account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = true; });
+        const annoyUser = event.d.user.global ?? account.annoy === true;
+        if (annoyUser !== account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = annoyUser; });
         if (window.distopic?.auth) {
-          const bind = () => window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
+          const current = () => getState().accounts.some((saved) => saved.id === account.id && saved.token === account.token && saved.url === account.url);
+          const bind = () => current() ? window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
             // A new session lives only minutes until it is bound to this device's key (DPoP).
             // Servers without MLS (older versions) have no device-bound sessions to set up.
-            if (!/MLS/.test(error.message)) toast(translate("common.5f0ce6405685",{p0:(error.message)}), 10000);
-          });
+            if (current() && !/MLS/.test(error.message)) toast(translate("common.5f0ce6405685",{p0:(error.message)}), 10000);
+          }) : undefined;
           if (annoyUser) void bind();
-          else void window.distopic.auth.local(account).then(bind, () => undefined);
+          else void window.distopic.auth.local(account).then(bind, (error: Error) => { if (current()) toast(error.message, 10000); });
         }
         else void fetchInfo(account.url).then(async info => {
           if (info.accountMode === "global") return;

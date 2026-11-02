@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "version": "1",
+  "packs": [
+    {
+      "id": "openmoji-animals",
+      "name": "Bichos do OpenMoji",
+      "category": "animals",
+      "search": "Gato Cachorro Sapo Raposa Panda Unicórnio",
+      "page": "catalog/1/page-1.json",
+      "sha256": "f56f27ebc7120ce0ffd8e0d8f635f1040fc12436e4dd8bffb65d3fd11bb5b0d8"
+    },
+    {
+      "id": "openmoji-faces",
+      "name": "Sorrisos do OpenMoji",
+      "category": "reactions",
+      "search": "Sorriso feliz Chorando de rir Apaixonado Óculos legal Pensando Chorando",
+      "page": "catalog/1/page-1.json",
+      "sha256": "f56f27ebc7120ce0ffd8e0d8f635f1040fc12436e4dd8bffb65d3fd11bb5b0d8"
+    },
+    {
+      "id": "openmoji-food",
+      "name": "Sabores do OpenMoji",
+      "category": "food",
+      "search": "Pizza Hambúrguer Maçã Morango Sorvete Café",
+      "page": "catalog/1/page-2.json",
+      "sha256": "5491dc3dd3364bcf925c2a740f6f696c5affc7018a1969411174641313c34831"
+    },
+    {
+      "id": "openmoji-nature",
+      "name": "Natureza do OpenMoji",
+      "category": "nature",
+      "search": "Arco-íris Lua Estrela Girassol Árvore Cacto",
+      "page": "catalog/1/page-2.json",
+      "sha256": "5491dc3dd3364bcf925c2a740f6f696c5affc7018a1969411174641313c34831"
+    },
+    {
+      "id": "openmoji-celebration",
+      "name": "Festa do OpenMoji",
+      "category": "reactions",
+      "search": "Festa Balão Presente Bolo Troféu Fogos",
+      "page": "catalog/1/page-3.json",
+      "sha256": "a7341fb9ddf7c1458a951cff6cd43b8cb5cb12064ca2f1fccd8e03a75c750a27"
+    },
+    {
+      "id": "openmoji-play",
+      "name": "Diversão do OpenMoji",
+      "category": "activities",
+      "search": "Jogo Foguete Música Futebol Dado Arte",
+      "page": "catalog/1/page-3.json",
+      "sha256": "a7341fb9ddf7c1458a951cff6cd43b8cb5cb12064ca2f1fccd8e03a75c750a27"
+    }
+  ]
+}

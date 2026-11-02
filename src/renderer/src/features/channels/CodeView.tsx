@@ -9,10 +9,13 @@ import { toast, useStore } from "../../store.ts";
 import { act, Icon } from "../../components/ui.tsx";
 import { confirmAction, promptText } from "../../components/ui/action-dialog.tsx";
 import { onRoomEvent } from "./events.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { registerNavigationGuard } from "../../lib/navigation-guard.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 
 type Monaco = typeof import("./monaco.ts");
 let monacoModule: Promise<Monaco> | null = null;
-const loadMonaco = () => (monacoModule ??= import("./monaco.ts"));
+const loadMonaco = () => (monacoModule ??= import("./monaco.ts").catch((error) => { monacoModule = null; throw error; }));
 
 /** Push tokens live in memory for this session only, never on disk. */
 const tokens = new Map<string, string>();
@@ -54,15 +57,20 @@ let STATUS_LABEL: Record<string, string> = { M: translate("common.079552d3fad4")
 const statusLetter = (code: string) => (code === "??" ? "U" : (code.trim()[0] ?? "M"));
 
 function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Channel; repo: CodeRepo }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
+  const pending = useRef(false);
   const [url, setUrl] = useState(repo.url ?? "");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
-    await act(apiFor(accountId).put(`/channels/${channel.id}/code`, { url, token: token || undefined }));
-    if (token) tokens.set(`${accountId}:${channel.id}`, token);
-    setBusy(false);
+    try {
+      const saved = await act(apiFor(accountId).put(`/channels/${channel.id}/code`, { url, token: token || undefined }, requests.signal));
+      if (saved && token && !requests.signal.aborted) tokens.set(`${accountId}:${channel.id}`, token);
+    } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
   };
   return (
     <form className="code-link form" onSubmit={submit}>
@@ -122,6 +130,11 @@ function Tree({ nodes, depth, active, changed, onOpen, onToggle, expanded, actio
 /** A code channel: an editor in the VS Code style over the server's clone of an external repository. */
 export function CodeView({ accountId, channel, perms }: { accountId: string; state: ServerState; channel: Channel; perms: number }) {
   const api = apiFor(accountId);
+  const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
+  const refreshVersion = useRef(0), diffVersion = useRef(0);
+  const fileVersions = useRef(new Map<string, number>());
+  const saving = useRef(new Set<string>()), operation = useRef(false), leaving = useRef(false);
+  const [savingPaths, setSavingPaths] = useState(new Set<string>());
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
   const canEdit = has(perms, Permission.SEND_MESSAGES);
   const canLink = has(perms, Permission.MANAGE_CHANNELS);
@@ -162,35 +175,43 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const ready = repo?.status === "ready";
 
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current;
+    const live = () => !requests.signal.aborted && version === refreshVersion.current;
     setLoading(true);
     setLoadError(null);
     try {
-      const info = await api.get<CodeRepo>(base);
+      const info = await api.get<CodeRepo>(base, requests.signal);
+      if (!live()) return;
       setRepo(info);
       if (info.status !== "ready") { setEntries([]); setStatus(null); return; }
-      const [tree, git] = await Promise.all([api.get<CodeEntry[]>(`${base}/tree`), api.get<CodeStatus>(`${base}/status`)]);
+      const [tree, git] = await Promise.all([api.get<CodeEntry[]>(`${base}/tree`, requests.signal), api.get<CodeStatus>(`${base}/status`, requests.signal)]);
+      if (!live()) return;
       setEntries(tree);
       setStatus(git);
     } catch (err) {
-      setLoadError((err as Error).message || translate("common.5779c56625eb"));
+      if (live() && !isCancellation(err)) setLoadError((err as Error).message || translate("common.5779c56625eb"));
     } finally {
-      setLoading(false);
+      if (live()) setLoading(false);
     }
-  }, [api, base]);
+  }, [api, base, requests]);
 
   useEffect(() => {
     void refresh();
-    void loadMonaco().then(setMonaco);
-  }, [refresh]);
+    void loadMonaco().then((value) => { if (!requests.signal.aborted) setMonaco(value); }).catch((error) => { if (!requests.signal.aborted) setLoadError(error.message); });
+  }, [refresh, requests]);
 
   const patchFile = (path: string, patch: Partial<OpenFile>) => setFiles((list) => list.map((f) => (f.path === path ? { ...f, ...patch } : f)));
 
   /** Loads `path` into its model, replacing the text unless the user has unsaved edits. */
   const fetchFile = useCallback(
     async (path: string, force = false) => {
+      const version = fileVersions.current.get(path) ?? 0;
       // The first file can be opened before Monaco finished loading.
       const monaco = await loadMonaco();
-      const file = await api.get<CodeFile>(`${base}/file?path=${encodeURIComponent(path)}`);
+      requests.signal.throwIfAborted();
+      const file = await api.get<CodeFile>(`${base}/file?path=${encodeURIComponent(path)}`, requests.signal);
+      requests.signal.throwIfAborted();
+      if (version !== (fileVersions.current.get(path) ?? 0)) throw new DOMException("Obsolete file read", "AbortError");
       const open = filesRef.current.find((f) => f.path === path);
       if (open?.dirty && !force) return patchFile(path, { stale: true });
       let model = models.current.get(path);
@@ -212,18 +233,21 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
           : [...list, { path, hash: file.hash, binary: file.binary, dirty: false, stale: false }],
       );
     },
-    [api, base, channel.id],
+    [api, base, channel.id, requests],
   );
 
   const openFile = async (path: string) => {
+    ++diffVersion.current;
     setDiff(null);
     if (!filesRef.current.some((f) => f.path === path)) {
       try {
         await fetchFile(path);
       } catch (err) {
-        return toast((err as Error).message);
+        if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
+        return;
       }
     }
+    if (requests.signal.aborted) return;
     setActive(path);
   };
 
@@ -234,18 +258,19 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
         if (event.t !== "CODE_UPDATE") return;
         setRepo(event.d.repo);
         if (event.d.repo.status !== "ready") return;
-        void Promise.all([api.get<CodeEntry[]>(`${base}/tree`), api.get<CodeStatus>(`${base}/status`)])
+        void Promise.all([api.get<CodeEntry[]>(`${base}/tree`, requests.signal), api.get<CodeStatus>(`${base}/status`, requests.signal)])
           .then(([tree, git]) => {
+            if (requests.signal.aborted) return;
             setEntries(tree);
             setStatus(git);
           })
-          .catch(() => {});
+          .catch((error) => { if (!requests.signal.aborted && !isCancellation(error)) setLoadError(error.message); });
         if (event.d.by === me && !event.d.paths.includes("*")) return;
         for (const file of filesRef.current) {
-          if (event.d.paths.includes("*") || event.d.paths.includes(file.path)) void fetchFile(file.path).catch(() => {});
+          if (event.d.paths.includes("*") || event.d.paths.includes(file.path)) void fetchFile(file.path).catch((error) => { if (!requests.signal.aborted && !isCancellation(error)) { patchFile(file.path, { stale: true }); toast(error.message); } });
         }
       }),
-    [accountId, channel.id, api, base, me, fetchFile],
+    [accountId, channel.id, api, base, me, fetchFile, requests],
   );
 
   // One editor; switching tabs swaps its model, like VS Code.
@@ -281,6 +306,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
     () => () => {
       for (const model of models.current.values()) model.dispose();
       models.current.clear();
+      const diff = diffEditor.current, pair = diff?.getModel();
+      diff?.dispose(); pair?.original.dispose(); pair?.modified.dispose(); diffEditor.current = null;
     },
     [],
   );
@@ -289,19 +316,38 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
     async (path = activeRef.current, overwrite = false) => {
       const file = filesRef.current.find((f) => f.path === path);
       const model = path ? models.current.get(path) : undefined;
-      if (!path || !file || !model || !canEdit) return;
+      if (!path || !file || !model || !canEdit || saving.current.has(path)) return false;
+      saving.current.add(path); setSavingPaths(new Set(saving.current));
+      const version = model.getVersionId(), content = model.getValue();
       try {
-        const saved = await api.put<CodeFile>(`${base}/file`, { path, content: model.getValue(), baseHash: overwrite ? undefined : file.hash });
-        patchFile(path, { hash: saved.hash, dirty: false, stale: false });
+        const saved = await api.put<CodeFile>(`${base}/file`, { path, content, baseHash: overwrite ? undefined : file.hash }, requests.signal);
+        requests.signal.throwIfAborted();
+        if (model.isDisposed()) return false;
+        const edited = model.getVersionId() !== version;
+        patchFile(path, { hash: saved.hash, dirty: edited, stale: false });
+        return !edited;
       } catch (err) {
+        if (requests.signal.aborted || isCancellation(err)) return false;
         if (err instanceof RequestError && err.status === 409) {
           patchFile(path, { stale: true });
           toast(translate("common.d12acb44a12c"));
         } else toast((err as Error).message);
+        return false;
+      } finally {
+        saving.current.delete(path);
+        if (!requests.signal.aborted) setSavingPaths(new Set(saving.current));
       }
     },
-    [api, base, canEdit],
+    [api, base, canEdit, requests],
   );
+
+  useEffect(() => registerNavigationGuard((action) => {
+    if (saving.current.size || operation.current) return;
+    if (leaving.current || !filesRef.current.some((file) => file.dirty)) { action(); return; }
+    void confirmAction(translate("common.4d8d02e7e59a", { p0: filesRef.current.filter((file) => file.dirty).map((file) => file.path).join(", ") }), { title: translate("common.2fe59d189a9f"), confirmLabel: translate("common.0f2bd88ef0ac") }).then((yes) => {
+      if (yes && !requests.signal.aborted) { leaving.current = true; action(); }
+    });
+  }), [requests]);
 
   // Ctrl+S saves, as in any editor.
   useEffect(() => {
@@ -314,6 +360,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const closeFile = async (path: string) => {
     const file = files.find((f) => f.path === path);
     if (file?.dirty && !(await confirmAction(translate("common.4d8d02e7e59a",{p0:(path)}), { title: translate("common.2fe59d189a9f"), confirmLabel: translate("common.0f2bd88ef0ac") }))) return;
+    if (requests.signal.aborted || saving.current.has(path)) return;
+    fileVersions.current.set(path, (fileVersions.current.get(path) ?? 0) + 1);
     models.current.get(path)?.dispose();
     models.current.delete(path);
     const rest = files.filter((f) => f.path !== path);
@@ -323,22 +371,26 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   const showDiff = async (path: string) => {
     if (!monaco || !host.current) return;
+    const version = ++diffVersion.current;
     try {
-      const { original } = await api.get<{ diff: string; original: string }>(`${base}/diff?path=${encodeURIComponent(path)}`);
-      const current = await api.get<CodeFile>(`${base}/file?path=${encodeURIComponent(path)}`).catch(() => ({ content: "" }) as CodeFile);
+      const { original } = await api.get<{ diff: string; original: string }>(`${base}/diff?path=${encodeURIComponent(path)}`, requests.signal);
+      const current = await api.get<CodeFile>(`${base}/file?path=${encodeURIComponent(path)}`, requests.signal).catch((error) => { if (error instanceof RequestError && error.status === 404) return { content: "" } as CodeFile; throw error; });
+      requests.signal.throwIfAborted();
+      if (version !== diffVersion.current) return;
       setActive(null);
       setDiff(path);
       requestAnimationFrame(() => {
         const el = document.getElementById(`code-diff-${channel.id}`);
-        if (!el) return;
-        diffEditor.current?.dispose();
+        if (!el || requests.signal.aborted || version !== diffVersion.current) return;
+        const previous = diffEditor.current, pair = previous?.getModel();
+        previous?.dispose(); pair?.original.dispose(); pair?.modified.dispose();
         const language = monaco.languageOf(path);
         const instance = monaco.monaco.editor.createDiffEditor(el, { theme: monaco.editorTheme(), automaticLayout: true, readOnly: true, renderSideBySide: true });
         instance.setModel({ original: monaco.monaco.editor.createModel(original, language), modified: monaco.monaco.editor.createModel(current.content, language) });
         diffEditor.current = instance;
       });
     } catch (err) {
-      toast((err as Error).message);
+      if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
     }
   };
   useEffect(() => {
@@ -354,9 +406,9 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   const newFile = async (dir = "") => {
     const name = await promptText(translate("common.e67565bea6c7"), dir ? `${dir}/` : "");
-    if (!name?.trim()) return;
+    if (!name?.trim() || requests.signal.aborted) return;
     const path = name.trim().replace(/^\/+/, "");
-    if (await act(api.put(`${base}/file`, { path, content: "", baseHash: null }))) {
+    if (await act(api.put(`${base}/file`, { path, content: "", baseHash: null }, requests.signal))) {
       await refresh();
       await openFile(path);
     }
@@ -364,8 +416,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   const renamePath = async (node: TreeNode) => {
     const to = await promptText(translate("common.97ae558ab7a9",{p0:(node.path)}), node.path);
-    if (!to?.trim() || to.trim() === node.path) return;
-    if (await act(api.post(`${base}/rename`, { from: node.path, to: to.trim() }))) {
+    if (!to?.trim() || to.trim() === node.path || requests.signal.aborted) return;
+    if (await act(api.post(`${base}/rename`, { from: node.path, to: to.trim() }, requests.signal))) {
       for (const f of files.filter((x) => x.path === node.path || x.path.startsWith(`${node.path}/`))) await closeFile(f.path);
       void refresh();
     }
@@ -373,7 +425,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   const removePath = async (node: TreeNode) => {
     if (!(await confirmAction(translate("common.7813657d346a",{p0:(node.path)}), { title: translate("common.8b19518ff49b"), confirmLabel: translate("common.8b19518ff49b") }))) return;
-    if (await act(api.del(`${base}/file?path=${encodeURIComponent(node.path)}`))) {
+    if (requests.signal.aborted) return;
+    if (await act(api.del(`${base}/file?path=${encodeURIComponent(node.path)}`, requests.signal))) {
       for (const f of files.filter((x) => x.path === node.path || x.path.startsWith(`${node.path}/`))) {
         models.current.get(f.path)?.dispose();
         models.current.delete(f.path);
@@ -384,11 +437,11 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   };
 
   const git = async (label: string, run: () => Promise<unknown>, ok?: string) => {
+    if (operation.current || requests.signal.aborted) return false;
+    operation.current = true;
     setBusy(label);
-    const done = await act(run(), ok);
-    setBusy(null);
-    void refresh();
-    return done;
+    try { return await act(run(), ok); }
+    finally { operation.current = false; if (!requests.signal.aborted) { setBusy(null); void refresh(); } }
   };
 
   const askToken = async (why: string) => {
@@ -405,29 +458,30 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
   const commit = async (e: FormEvent) => {
     e.preventDefault();
     const dirty = files.filter((f) => f.dirty);
-    if (dirty.length && (await confirmAction(translate("common.e70c5afbcf4b",{p0:(dirty.length)}), { title: translate("common.ef62cc8ce991"), confirmLabel: translate("common.aef7cd5b2081") }))) {
-      for (const f of dirty) await save(f.path);
+    if (dirty.length) {
+      if (!(await confirmAction(translate("common.e70c5afbcf4b",{p0:(dirty.length)}), { title: translate("common.ef62cc8ce991"), confirmLabel: translate("common.aef7cd5b2081") }))) return;
+      for (const f of dirty) if (!await save(f.path)) return;
     }
     try {
       localStorage.setItem("annoy.git.email", email);
     } catch {
       // Private mode: the address is just not remembered.
     }
-    if (await git("commit", () => api.post(`${base}/commit`, { message, email: email.trim() || undefined }), "Commit feito")) setMessage("");
+    if (await git("commit", () => api.post(`${base}/commit`, { message, email: email.trim() || undefined }, requests.signal), "Commit feito")) setMessage("");
   };
 
   const push = async () => {
     const token = await askToken(translate("common.0208b523ec6c"));
     if (!token) return;
-    const ok = await git("push", () => api.post(`${base}/push`, { token }), translate("common.0d7017f71296"));
+    const ok = await git("push", () => api.post(`${base}/push`, { token }, requests.signal), translate("common.0d7017f71296"));
     if (!ok) tokens.delete(tokenKey);
   };
 
-  const pull = () => git("pull", () => api.post(`${base}/pull`, { token: tokens.get(tokenKey) }), translate("common.9bad2b2f05a9"));
+  const pull = () => git("pull", () => api.post(`${base}/pull`, { token: tokens.get(tokenKey) }, requests.signal), translate("common.9bad2b2f05a9"));
 
   const checkout = async (branch: string, create = false) => {
     if (files.some((f) => f.dirty) && !(await confirmAction(translate("common.2a5ffad9ff90"), { title: translate("common.16155b83733b"), confirmLabel: translate("common.a5575a1a9fa7") }))) return;
-    await git("checkout", () => api.post(`${base}/checkout`, { branch, create }));
+    await git("checkout", () => api.post(`${base}/checkout`, { branch, create }, requests.signal));
   };
 
   const tree = useMemo(() => buildTree(entries), [entries]);
@@ -488,7 +542,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
             title={translate("common.117067ec5f7a")}
             onClick={async () => {
               if (await confirmAction(translate("common.c81738b44ed0"), { title: translate("common.117067ec5f7a"), confirmLabel: translate("common.66667c616661") })) {
-                void act(api.del(base));
+                void act(api.del(base, requests.signal));
               }
             }}
           >
@@ -618,7 +672,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                         title={translate("common.a350912ad6ee")}
                         onClick={async () => {
                           if (await confirmAction(translate("common.295e4e1e645e",{p0:(f.path)}), { title: translate("common.a350912ad6ee"), confirmLabel: translate("common.1a878a55c594") })) {
-                            await git("discard", () => api.post(`${base}/discard`, { path: f.path }));
+                            await git("discard", () => api.post(`${base}/discard`, { path: f.path }, requests.signal));
                             if (files.some((x) => x.path === f.path)) void fetchFile(f.path, true).catch(() => closeFile(f.path));
                           }
                         }}
@@ -672,7 +726,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
           {activeFile?.stale && (
             <div className="code-conflict" role="alert">
               <span>{translate("common.9d38204d7f3e")}</span>
-              <button className="btn btn-ghost" onClick={() => void fetchFile(activeFile.path, true)}>{translate("common.c93d468c72bb")}</button>
+              <button className="btn btn-ghost" onClick={() => void fetchFile(activeFile.path, true).catch((error) => { if (!requests.signal.aborted && !isCancellation(error)) toast(error.message); })}>{translate("common.c93d468c72bb")}</button>
               <button className="btn" onClick={() => void save(activeFile.path, true)}>{translate("common.b92d153723fe")}</button>
             </div>
           )}
@@ -702,7 +756,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                 <span>{activeFile.dirty ? translate("common.28424d39e33d") : translate("common.db14b511e33a")}</span>
                 <span>{monaco?.languageOf(activeFile.path)}</span>
                 {canEdit && activeFile.dirty && (
-                  <button className="code-save" onClick={() => void save()}>{rich("common.f8a58a64aa6d",{p0:(<Icon name="save" size={12} />)})}</button>
+                  <button className="code-save" disabled={savingPaths.has(activeFile.path)} aria-busy={savingPaths.has(activeFile.path)} onClick={() => void save()}>{rich("common.f8a58a64aa6d",{p0:(<Icon name="save" size={12} />)})}</button>
                 )}
               </>
             )}

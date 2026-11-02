@@ -1814,8 +1814,9 @@ test("media pack export round-trips blobs and rejects malformed packages",async(
  const {page,close}=await launch();
  try{
   const result=await page.evaluate(async()=>{
-   const {CATALOG,installPack,readPacks,exportPack,parsePack,removePack}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
-   await installPack(CATALOG[1]!);const first=(await readPacks())[0]!;
+   const {installPack,readPacks,exportPack,parsePack,removePack}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
+   const {readCatalogPage}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/catalog.ts`);
+   await installPack((await readCatalogPage()).items[0]!);const first=(await readPacks())[0]!;
    const exported=JSON.parse(await (await exportPack(first)).text());const imported=parsePack(exported);await installPack(imported);
    const copy=(await readPacks()).find((pack)=>pack.id===imported.id)!;
    const same=Array.from(new Uint8Array(await first.items[0]!.blob!.arrayBuffer())).join()===Array.from(new Uint8Array(await copy.items[0]!.blob!.arrayBuffer())).join();
@@ -2049,7 +2050,7 @@ test("compact reactions expand and search while library management lives in sett
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
     expect(await page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: join(capture, "media-settings-light-minimum.png") });
-    await library.locator("summary").click();
+    await library.locator(".expression-provider-config > summary").click();
     await library.getByLabel("Chave de cliente GIPHY", { exact: true }).fill("synthetic-client-key");
     await library.getByRole("button", { name: "Salvar chave", exact: true }).click();
     expect(await page.evaluate(() => localStorage.getItem("annoy.giphy-client-key"))).toBe("synthetic-client-key");

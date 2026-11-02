@@ -7,6 +7,8 @@ import {secureHttpUrl} from '../shared/transport.ts';
 import {nativeApiFetch} from './native-api-fetch.ts';
 import {registerPrivateDownload} from './private-download.ts';
 import { registerCrypto } from "./crypto/ipc.ts";
+import { osStorage } from "./safe-storage.ts";
+import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
@@ -391,32 +393,14 @@ ipcMain.on("log:error", (event, text: unknown) => {
 // the OS keychain. Without a real keychain nothing is written: the app asks for
 // the password again next time instead of storing keys in the clear.
 const SECRET_NAMES = new Set(["global", "accounts"]);
-const secretsFile = () => join(app.getPath("userData"), "secrets.json");
-const keychainAvailable = () =>
-  safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
-function readSecrets(): Record<string, string> {
-  try {
-    return JSON.parse(readFileSync(secretsFile(), "utf8")) as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
+const secrets = new SecretStore(join(app.getPath("userData"), "secrets.json"), osStorage(safeStorage));
 ipcMain.handle("secrets:get", (event, name: unknown) => {
-  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name) || !keychainAvailable()) return null;
-  const sealed = readSecrets()[name];
-  try {
-    return sealed ? safeStorage.decryptString(Buffer.from(sealed, "base64")) : null;
-  } catch {
-    return null;
-  }
+  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name)) return null;
+  return secrets.get(name).catch(() => null);
 });
 ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
-  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name)) return false;
-  const all = readSecrets();
-  if (typeof value === "string" && keychainAvailable()) all[name] = safeStorage.encryptString(value).toString("base64");
-  else delete all[name];
-  writeFileSync(secretsFile(), JSON.stringify(all), { mode: 0o600 });
-  return name in all;
+  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name) || (value !== null && typeof value !== "string")) return false;
+  return secrets.set(name, value).catch(() => false);
 });
 
 // Native browsing stays locked until credentials are independently validated here.
@@ -426,9 +410,10 @@ ipcMain.handle("auth:global", (event, token: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
   return appAccess.verifyGlobal(token);
 });
-ipcMain.handle("auth:local", (event, account: unknown) => {
+ipcMain.handle("auth:local", async (event, account: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
-  return appAccess.verifyLocal(account);
+  try { await appAccess.verifyLocal(account); return { ok: true }; }
+  catch (error) { return { ok: false, message: error instanceof Error ? error.message : translate("common.2587fca90678") }; }
 });
 ipcMain.handle("auth:logout-global", event => { if (fromRenderer(event)) {stopCrypto();appAccess.revokeGlobal();} });
 ipcMain.handle("auth:logout-local", (event, id: unknown, lock:unknown=true) => { if (fromRenderer(event) && typeof id === "string") {if(lock!==false)stopCrypto();appAccess.revokeLocal(id);} });

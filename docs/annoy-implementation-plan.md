@@ -1,6 +1,6 @@
 # Annoy — plano de implementação
 
-Atualizado em 30/10/2026. Referências: [especificação](annoy-product-spec.md) e
+Atualizado em 02/11/2026. Referências: [especificação](annoy-product-spec.md) e
 [progresso](annoy-progress.md). Executar um marco em tarefas pequenas; não tentar
 implementar os 20 requisitos em uma única execução.
 
@@ -15,8 +15,10 @@ implementar os 20 requisitos em uma única execução.
 - `packages/protocol`: contrato TypeScript de entidades, permissões e eventos.
   A origem é o servidor; `scripts/sync-protocol.mjs` copia para o cliente. As
   duas cópias são idênticas na análise inicial.
-- Backend da Conta Global não foi localizado nos diretórios examinados. M1
-  observa chamadas existentes, sem inventar endpoint central ou depender de sua alteração.
+- Na análise inicial, o backend da Conta Global não estava nos diretórios
+  examinados; M1 preservou os contratos existentes. No fechamento local,
+  `../Annoy-api-global` foi obtido e seus testes reais foram executados,
+  sem alteração de endpoints ou código desse serviço.
 
 ### Estado, autenticação e comunicação
 
@@ -170,7 +172,7 @@ controles utilizáveis na fonte máxima e zoom de 200%.
 Saída: testes de pacotes Windows/Linux; opções não suportadas explicadas;
 nenhuma janela fica oculta sem mecanismo funcional de restauração.
 
-### M7 — catálogo licenciado (R07)
+### M7 — catálogo licenciado (R07; concluído em 02/11/2026)
 
 1. Preparar manifestos versionados e divididos em páginas, com licença,
    autoria, origem e créditos; começar com catálogo próprio/OpenMoji.
@@ -183,6 +185,17 @@ nenhuma janela fica oculta sem mecanismo funcional de restauração.
 
 Saída: catálogo real navegável sem baixar todos os itens; cada ativo distribuído
 tem licença verificada. Integração emoji.gg não é dependência.
+
+Entrega: seis packs/36 imagens OpenMoji 16.0.0 com origem fixada, créditos,
+licença completa e hashes; manifestos em páginas de dois packs; IndexedDB v2
+com migração transacional, metadados separados e blobs sob demanda. Instalação
+sequencial cancelável com commit atômico, cache offline limitado e interface
+incremental com retry/botão acessível. Limites e envio explícito preservados.
+Oito cenários M7, sete regressões de mídia e um cenário de localização aprovados
+no Playwright, incluindo renderer empacotado; typecheck/build e 104 unitários
+aprovados, três ignorados. A integração preserva os sete idiomas de M5 e fixa
+os finais de linha dos manifestos para manter os hashes em Windows/Linux.
+Detalhes e limites de validação em [progresso](annoy-progress.md#m7--catálogo-licenciado-02112026).
 
 ## 3. Contratos e políticas de implementação
 
@@ -412,10 +425,15 @@ produção, Linux, leitor de tela e instâncias publicadas.
 ## 9. Próxima tarefa executável
 
 M5 (R14–R16) e M6 (R17, R18, R20) foram concluídos e integrados à base 0.9.3.
-Evidências e limites da regressão estão em `annoy-progress.md`. O próximo marco de
-implementação é **M7 — catálogo licenciado** (R07), somente em outra execução
-autorizada. Falhas preexistentes de vídeo SFrame e acesso do CI ao Annoy Global
-estão registradas separadamente; não ampliar M5/M6 para reimplementar segurança.
+M7 (R07) também está implementado e integrado sobre essa base. Não há M8 definido
+neste plano. Evidências e limites da regressão estão em `annoy-progress.md`.
+O fechamento local inclui a auditoria de [R03](annoy-async-audit.md), autenticação,
+armazenamento assíncrono e validação integrada de mídia. Os cenários SFrame
+renderizam vídeo com captura sintética determinística, sem alterar a cifra.
+CI privado, Cloudflare real e validações manuais em outros ambientes exigem suas
+respectivas credenciais/infraestrutura. Em 02/11/2026 o usuário escolheu concluir
+a validação local por enquanto; essas verificações externas não são declaradas
+aprovadas nem substituídas por mocks.
 
 ## 10. Entrega M3/M4 (30/10/2026)
 
@@ -455,4 +473,5 @@ estão registradas separadamente; não ampliar M5/M6 para reimplementar seguran�
   código/fuses Linux, renderização, vídeo/captura e persistência nos dois modos
   de aceleração. Validação usa CDP do renderer com inspector do main desabilitado.
 - Evidências, commits, PR e limites da validação estão em `annoy-progress.md`.
-  M7 não foi iniciado nesta execução.
+  A entrega posterior de M7 e o fechamento local de R03 também estão registrados
+  no progresso atualizado.

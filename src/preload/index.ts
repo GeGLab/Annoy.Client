@@ -51,7 +51,10 @@ const bridge = {
     get: () => ipcRenderer.invoke("auth:get") as Promise<AppAccessState>,
     globalUrl: () => ipcRenderer.invoke("auth:global-url") as Promise<string>,
     global: (token: string) => ipcRenderer.invoke("auth:global", token) as Promise<{ id: string; name: string; email: string; cryptoMigrationRequired?:boolean }>,
-    local: (account: { id: string; url: string; token: string; userId: string }) => ipcRenderer.invoke("auth:local", account) as Promise<void>,
+    local: async (account: { id: string; url: string; token: string; userId: string }): Promise<void> => {
+      const response = await ipcRenderer.invoke("auth:local", account) as { ok: true } | { ok: false; message: string };
+      if (!response.ok) throw new Error(response.message);
+    },
     logoutGlobal: () => ipcRenderer.invoke("auth:logout-global") as Promise<void>,
     logoutLocal: (id: string, lock=true) => ipcRenderer.invoke("auth:logout-local", id, lock) as Promise<void>,
     onState(listener: (state: AppAccessState) => void): () => void {

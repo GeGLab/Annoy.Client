@@ -10,7 +10,7 @@ const binary=process.env.ANNOY_CRYPTO_BINARY??resolve('native/annoy-crypto/targe
 if(process.env.ANNOY_REQUIRE_NATIVE==='1'&&!existsSync(binary))throw new Error('Native OpenMLS binary missing; security validation cannot skip this test');
 test('real native service persists ratchets and delivery outbox before returning ciphertext', {skip:!existsSync(binary)},async()=>{
  const dir=mkdtempSync(join(tmpdir(),'annoy-native-'));const master=randomBytes(32);
- const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});vault.unlock();
+ const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});await vault.unlock();
  let a=new MlsService(binary,vault,'alice','a');const b=new MlsService(binary,vault,'bob','b');
  try {
   const kp=await b.command({op:'key_package'});
@@ -41,7 +41,7 @@ test('real native service persists ratchets and delivery outbox before returning
 
 test('dedicated media engines export only acknowledged epochs, never queue keys, and retire all call state', {skip:!existsSync(binary)},async()=>{
  const dir=mkdtempSync(join(tmpdir(),'annoy-media-')),master=randomBytes(32),recovery=randomBytes(32),keys=[];
- const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});vault.unlock();
+ const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});await vault.unlock();
  const a=new MlsService(binary,vault,'alice','media:alice:call','media'),b=new MlsService(binary,vault,'bob','media:bob:call','media');
  const messages=new MlsService(binary,vault,'alice','messages');
  const group='annoy/media/v1/instance-a/call-a';
@@ -104,7 +104,7 @@ test('dedicated media engines export only acknowledged epochs, never queue keys,
 
 test('media state cannot be restored as messages and old message snapshots remain compatible', {skip:!existsSync(binary)},async()=>{
  const dir=mkdtempSync(join(tmpdir(),'annoy-domain-')),master=randomBytes(32);
- const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});vault.unlock();
+ const vault=new EncryptedVault(dir,{available:()=>true,seal:b=>seal(master,b,'os'),open:b=>open(master,b,'os')});await vault.unlock();
  const engines=[],create=(id,domain='messages')=>{const engine=new MlsService(binary,vault,'alice',id,domain);engines.push(engine);return engine;};
  const read=id=>{const bytes=vault.get('protocol:'+id);try{return JSON.parse(bytes.toString());}finally{bytes.fill(0);}};
  const write=(id,state)=>{const bytes=Buffer.from(JSON.stringify(state));try{vault.put('protocol:'+id,bytes);}finally{bytes.fill(0);}};

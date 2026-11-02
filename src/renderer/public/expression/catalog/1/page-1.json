@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "version": "1",
+  "packs": [
+    {
+      "id": "openmoji-animals",
+      "name": "Bichos do OpenMoji",
+      "category": "animals",
+      "author": "OpenMoji",
+      "version": "16.0.0",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "source": "https://github.com/hfg-gmuend/openmoji/tree/66e17da0f2d4347f64ee9d78c367fc5234283863/color/618x618",
+      "credits": "All emojis designed by OpenMoji, the open-source emoji and icon project. HfG Schwäbisch Gmünd, Benedikt Groß, Daniel Utz, students and external contributors. Unmodified PNG artwork.",
+      "items": [
+        {
+          "id": "1F431",
+          "name": "Gato",
+          "kind": "sticker",
+          "url": "openmoji/1F431.png",
+          "sha256": "ed043c8f1e420d9afca7598615a67d7f56a94963b9454d00f51996d8f1c9d84f"
+        },
+        {
+          "id": "1F436",
+          "name": "Cachorro",
+          "kind": "sticker",
+          "url": "openmoji/1F436.png",
+          "sha256": "0a71dcce68116cad0f5b821add6a73b6fdaeda8a811568de80eb2f4d0e684c8c"
+        },
+        {
+          "id": "1F438",
+          "name": "Sapo",
+          "kind": "sticker",
+          "url": "openmoji/1F438.png",
+          "sha256": "572f49d25074c684c1aa0976e4951ee470258095d7554011621c5c490eff6fab"
+        },
+        {
+          "id": "1F98A",
+          "name": "Raposa",
+          "kind": "sticker",
+          "url": "openmoji/1F98A.png",
+          "sha256": "8fbcc7cac7b0c3c617cf4033d856757293753bfae6a02ff6fb22774015df803a"
+        },
+        {
+          "id": "1F43C",
+          "name": "Panda",
+          "kind": "sticker",
+          "url": "openmoji/1F43C.png",
+          "sha256": "0735d0e783c7d920dd442441373c043707524832a806d5426eb21c28cafa6c1b"
+        },
+        {
+          "id": "1F984",
+          "name": "Unicórnio",
+          "kind": "sticker",
+          "url": "openmoji/1F984.png",
+          "sha256": "03a80e30ea55a175f00b2be6d94f81a62048bd9bc87be485871a4fac31765d9a"
+        }
+      ]
+    },
+    {
+      "id": "openmoji-faces",
+      "name": "Sorrisos do OpenMoji",
+      "category": "reactions",
+      "author": "OpenMoji",
+      "version": "16.0.0",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "source": "https://github.com/hfg-gmuend/openmoji/tree/66e17da0f2d4347f64ee9d78c367fc5234283863/color/618x618",
+      "credits": "All emojis designed by OpenMoji, the open-source emoji and icon project. HfG Schwäbisch Gmünd, Benedikt Groß, Daniel Utz, students and external contributors. Unmodified PNG artwork.",
+      "items": [
+        {
+          "id": "1F600",
+          "name": "Sorriso feliz",
+          "kind": "sticker",
+          "url": "openmoji/1F600.png",
+          "sha256": "4f598c9d7db8d7124c98a23829c3ef1c7423ced5b436c4ea90956fc97eea2190"
+        },
+        {
+          "id": "1F602",
+          "name": "Chorando de rir",
+          "kind": "sticker",
+          "url": "openmoji/1F602.png",
+          "sha256": "bd6ec82f57463f53926fc9ea3e85a9015362c98eaebaa67d2335e101f803be37"
+        },
+        {
+          "id": "1F60D",
+          "name": "Apaixonado",
+          "kind": "sticker",
+          "url": "openmoji/1F60D.png",
+          "sha256": "57e4901eeb8a4a94f8b7bc1f5a1c458f405c5d6a47caf443b985c060922e55bd"
+        },
+        {
+          "id": "1F60E",
+          "name": "Óculos legal",
+          "kind": "sticker",
+          "url": "openmoji/1F60E.png",
+          "sha256": "a04627439215141b0e8f13a592f509f4259f9cbb49b7da17511e79dd88506b4b"
+        },
+        {
+          "id": "1F914",
+          "name": "Pensando",
+          "kind": "sticker",
+          "url": "openmoji/1F914.png",
+          "sha256": "b1c6dc001b1a7898d4f8d6b98e31393469ff6b20fbd974802c2512bdb8584491"
+        },
+        {
+          "id": "1F62D",
+          "name": "Chorando",
+          "kind": "sticker",
+          "url": "openmoji/1F62D.png",
+          "sha256": "bc403528c3b82b779d99cd966867c8513bb454a7368113a88087bd2643f1bb5f"
+        }
+      ]
+    }
+  ]
+}

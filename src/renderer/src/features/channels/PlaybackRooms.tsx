@@ -9,6 +9,8 @@ import { Chat } from "../../components/Chat.tsx";
 import { VoiceStage } from "../../components/VoiceStage.tsx";
 import { Icon, type IconName } from "../../components/ui.tsx";
 import { currentItem, elementDriver, useSync, usePlayback, viewDriver, type Driver, type Playback, type UserEvents } from "./playback.ts";
+import { useRequestOwner } from "../../lib/use-request-owner.ts";
+import { isCancellation } from "../../../../shared/requests.ts";
 
 type Slot = "theater" | "music";
 const inView = (item: PlaybackItem | null) => item?.kind === "youtube" || item?.kind === "site";
@@ -126,6 +128,8 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
   const { state, send } = playback;
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
   const file = useRef<HTMLInputElement>(null);
   const canAdd = has(perms, Permission.SEND_MESSAGES);
   const canAttach = canAdd && has(perms, Permission.ATTACH_FILES);
@@ -133,26 +137,32 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    if (!url.trim() || pending.current) return;
+    const submitted = url.trim();
+    pending.current = true;
     setBusy(true);
-    await send({ op: "add", url: url.trim() });
-    setUrl("");
-    setBusy(false);
+    try {
+      if (await send({ op: "add", url: submitted })) setUrl((current) => current.trim() === submitted ? "" : current);
+    } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
   };
 
   // An upload is a message in the room's chat; its file then joins the queue.
   const upload = async (list: File[]) => {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
     try {
       for (const f of list) {
-        const message = await apiFor(accountId).sendMessage<Message>(channel.id, translate("common.d8571b73592d",{p0:(f.name)}), [f], null);
+        const message = await apiFor(accountId).sendMessage<Message>(channel.id, translate("common.d8571b73592d",{p0:(f.name)}), [f], null, null, requests.signal);
+        requests.signal.throwIfAborted();
         const attachment = message.attachments[0];
-        if (attachment) await send({ op: "add", url: "", uploadId: attachment.id });
+        if (attachment && !await send({ op: "add", url: "", uploadId: attachment.id })) break;
       }
     } catch (err) {
-      toast((err as Error).message);
+      if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
     }
-    setBusy(false);
+    pending.current = false;
+    if (!requests.signal.aborted) setBusy(false);
   };
 
   return (

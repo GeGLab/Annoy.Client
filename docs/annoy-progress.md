@@ -27,7 +27,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. |
 | M5 — idiomas/acessibilidade | concluído | Sete catálogos locais, preferências independentes, prévia/save/discard, Intl e escala 16–24 px integrados à main 0.9.3. Regressão, teclado e zoom 200% aprovados; limites abaixo. |
 | M6 — desktop/updates | concluído | Preferências main, autostart, bandeja e atualizador assinado integrados à main 0.9.3. Pacotes Windows/Linux, regressão e recuperação aprovados; limites abaixo. |
-| M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
+| M7 — loja licenciada | concluído | Catálogo OpenMoji paginado, armazenamento local atômico e validação registrada abaixo. |
 
 ## Status por requisito
 
@@ -35,11 +35,11 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | --- | --- | --- | --- | --- |
 | R01 | Listagem e disponibilidade | concluído em M1 | M1.4 validado: destino agrupado, busca, filtro por conta, cache com instante observado, erros recuperáveis; Playwright cobre agrupamento, busca, filtro e abertura pela conta correta. | M1 |
 | R02 | Reconexão e retorno | concluído em M1 | M1.3/M1.5 validados: backoff com jitter, pausa offline, prazo de primeiro plano condicionado à área atual, retorno explícito e preservação da conversa. | M1 |
-| R03 | Feedback assíncrono | auditoria inicial concluída; contínuo | M1 revisa autenticação, abertura de comunidade/DM, configurações e uploads; M1.5 cancela trabalhos obsoletos e preserva edições. Cada novo fluxo segue os critérios do seu marco. | M1–M7 |
+| R03 | Feedback assíncrono | concluído localmente | Inventário em `annoy-async-audit.md`; autenticação/IPC, código, salas de mídia e disputa de chaves cobertos por regressões. Evidências e limites de ambiente abaixo. | M1–M7 |
 | R04 | Conectividade global | concluído em M1 | M1.1–M1.3 validados: observações por camada, scheduler com causa/tentativa/próximo retry, jitter e pausa offline; isolamento confirmado em testes unitários e Playwright. | M1 |
 | R05 | Seis layouts de canal | concluído em M2 | Estados de loading/erro/vazio/permissão, recuperação, pesquisa paginada de membros/arquivos e detalhes de comunidades sob demanda; testes integrados aprovados. | M2 |
 | R06 | Nova Aba | concluído em M2 | Comunidades e conexão priorizadas, serviços em seção própria, descoberta progressiva e escolha explícita da instância com várias contas; testes integrados aprovados. | M2 |
-| R07 | Loja de emojis | pendente | Biblioteca IndexedDB, packs e GIPHY; falta catálogo indexado/incremental. | M7 |
+| R07 | Loja de emojis | concluído | Catálogo licenciado, metadados paginados, blobs sob demanda e instalação atômica; validação M7 abaixo. | M7 |
 | R08 | Histórico escalável | concluído em M3 | Janela bidirecional indexada, limites 500/5.000, virtualização variável, âncora e reconciliação de respostas/eventos; testes de escala e UI aprovados. | M3 |
 | R09 | Última leitura | concluído em M3 | Cursor monotônico privado, duas sessões, fronteira estável, avanço visível e recomposição de contadores/menções. | M3 |
 | R10 | Amigos e atividades | concluído em M4 | Resumo principal +N acionável, presença e capacidade ampliada com filtros legados e fontes reais. | M4 |
@@ -467,12 +467,6 @@ Estado: **concluído e validado localmente**.
   [Server #6](https://github.com/GeGLab/Annoy.Server/pull/6). Commits separados para
   M3, M4 e correções encontradas na validação conjunta.
 
-## Próxima tarefa recomendada
-
-M5/M6 concluídos com as evidências e os limites registrados abaixo. O próximo
-marco de implementação é **M7 — catálogo licenciado** (R07), somente em outra
-execução autorizada.
-
 ## M5 e M6 — 01/11/2026
 
 - Implementação de M5 em `fbe9b0b`, com correção de transporte em `91762ca`:
@@ -552,3 +546,142 @@ execução autorizada.
   os controles próprios e a fonte do editor seguem as preferências. Os catálogos
   foram revisados nos fluxos principais; não houve revisão profissional de
   todos os textos por falantes nativos. Nenhum dado de usuário foi traduzido.
+
+## M7 — catálogo licenciado (02/11/2026)
+
+- A base local inicial antecedia M5/M6. Antes da publicação, o M7 foi integrado
+  à main atual, que incorporou M5/M6 pelo PR #8; esses marcos estão concluídos.
+- Os novos controles e diagnósticos usam os sete catálogos do M5, com 51 novas
+  chaves e slots preservados. O importador existente traduziu apenas os textos
+  públicos estáticos, com revisão dos slots, termos de cliente e marcas. Nomes,
+  licença e autoria dos packs continuam dados originais, sem tradução automática.
+  Categorias respondem à troca de idioma com a tela aberta; escala e guardas
+  permanecem as de M5/M6.
+- Catálogo real: seis packs e 36 PNGs OpenMoji 16.0.0, sem alterar as imagens,
+  fixados no commit `66e17da0f2d4347f64ee9d78c367fc5234283863`. Licença oficial
+  CC BY-SA 4.0 conferida e distribuída junto aos ativos; créditos, autoria,
+  origem e versão visíveis e preservados na exportação. SHA-256 verifica os
+  manifestos e cada imagem antes de instalar. Script de reconstrução em
+  `scripts/build-expression-catalog.mjs`; nenhuma dependência nova.
+- Índice leve de pesquisa/categorias; manifestos em páginas reais de dois
+  packs, até duas requisições de manifesto por página. Uma consulta por lista;
+  skeleton, erro/retry, vazio, fim e botão acessível de carregar mais acompanham
+  a rolagem incremental. Cache de metadados limitado a oito entradas em memória
+  e 16 no IndexedDB; chaves de página incluem versão e hash.
+- IndexedDB v2 preserva o store legado e migra seus registros por cursor em
+  transação de upgrade. Metadados de packs/itens e blobs ficam separados,
+  com índices de pacote e tipo. A lista de instalados lê 12 metadados/página;
+  o seletor lê até 48 itens/página, buscando inclusive além da primeira página.
+  Não há `getAll()` de blobs na listagem. Prévias locais leem imagens por
+  visibilidade e liberam object URLs ao trocar/fechar.
+- Download sequencial, timeout e cancelamento; substituição e remoção de arquivos
+  antigos em uma única transação. Quota, interrupção, hash inválido e cancelamento
+  não deixam instalação parcial nem substituem o pack anterior. Preservados os
+  limites de 60 itens, 8 MiB/imagem e 50 MiB/pack. Envio continua explícito e
+  navegação respeita rascunhos e o guard de configurações.
+- Testes executados **após a implementação**, conforme solicitado:
+  `npm run typecheck` e `npx electron-vite build` aprovados; suíte unitária
+  `node --experimental-strip-types --test scripts/tests/*.test.mjs` com 104
+  aprovados, zero falhas e três ignorados pelo ambiente.
+- Playwright sobre a main integrada: **16 cenários aprovados**. Oito em
+  `tests/expression-catalog.spec.ts` cobrem:
+  migração legada sem leitura de blobs na listagem, cursores e busca além da
+  primeira página, interrupção/cancelamento/quota/integridade, catálogo paginado,
+  retry/vazio de UI, cache e imagens após reiniciar o renderer offline, rollback
+  de migração e retry preservando os bytes, sete idiomas ao vivo e fonte de 24px
+  em janela de 940×620. Sete regressões em `experience.spec.ts`
+  aprovadas: instalação/importação/restauração, GIPHY, round-trip de exportação,
+  renderer empacotado `file:`, anexo real, guard sem conversa e gestão/rascunhos.
+  O cenário de `localization.spec.ts` também passou, exercitando prévia,
+  descarte, persistência, fonte máxima e zoom de 200%. Uma falha inicial do teste
+  offline foi corrigida restringindo o bloqueio de rede aos ativos, pois o glob
+  inicial também bloqueava módulos do Vite.
+- A integração detectou conversão local de JSON para CRLF no Windows, invalidando
+  os hashes das páginas. `.gitattributes` fixa o catálogo em LF; bytes normalizados,
+  auditoria de integridade e build foram repetidos com sucesso.
+- Revisão visual local: capturas `media-settings-dark.png` e
+  `media-settings-light-minimum.png` em `.impeccable/review`, sem overflow em
+  940×620; sistema visual preservado. Detector consultado uma vez: aviso de
+  animação de margem preexistente e sugestões de escala tipográfica/raios,
+  incluindo o novo título de catálogo em `1rem`. O sistema visual existente foi
+  preservado, com nova captura em inglês/24px. Build mantém os avisos
+  preexistentes de chunks grandes e imports dinâmicos; um cenário registrou
+  aviso ResizeObserver. Sem publicação de release, alterações de Server ou instaladores.
+
+
+## Fechamento local do plano — 02/11/2026
+
+- Primeiro foram corrigidos os avisos do Electron e o erro de `auth:local`:
+  `isAsyncEncryptionAvailable`, `encryptStringAsync` e `decryptStringAsync`
+  substituem todas as chamadas síncronas obsoletas. O resultado da descriptografia
+  é extraído de `.result`; indicação de rotação renova a cifra preservando os
+  formatos existentes. Linux `basic_text`/backend desconhecido não habilita
+  armazenamento inseguro: permanece o desbloqueio explícito por senha.
+- Credenciais global/contas têm fila serial e escrita atômica, impedindo perda
+  de uma chave quando duas operações assíncronas concorrem. Falha temporária do
+  keychain não apaga a cifra salva. O desbloqueio do cofre é assíncrono e
+  coalescido; lock durante a espera invalida a operação e limpa a chave candidata.
+  Controladores, backup/restauração e testes foram adaptados com `await`.
+- Recusas esperadas de autenticação local retornam envelope de erro pelo IPC,
+  sem stack do handler do Electron; o preload conserva a rejeição tratável.
+  `toAccount` distingue contas locais/Annoy e READY conserva a identificação
+  compatível com servidores legados. A verificação de política/sessão no main
+  continua obrigatória; respostas antigas não vinculam conta removida.
+- R03: [inventário final](annoy-async-audit.md). O editor cancela leituras ao sair,
+  evita saves/Git duplicados, mantém edição feita durante um save, protege a
+  navegação com trabalho sujo e não faz commit após falha de save. Erros de diff
+  só representam arquivo vazio quando o servidor confirma 404. Modelos/diffs
+  são liberados. Filme/Música coalescem ações e preservam a URL após falha ou
+  edição durante a espera; navegação invalida respostas antigas.
+- O dispositivo virtual do Chromium não entregava vídeo estável; os testes
+  SFrame agora usam quadros sintéticos de canvas. Encoder, RTP, mediasoup/P2P,
+  SFrame, decoder e quadros renderizados continuam reais, inclusive checagem
+  de ciphertext no SFU, rotação de epoch e revogação. A suíte completa inicial
+  encontrou uma corrida adicional na criação simultânea de grupos da chamada
+  privada: a chave provisória perdedora podia chegar ao worker. Sua entrega
+  agora espera a confirmação do servidor; o grupo perdedor é descartado.
+  Duas regressões controlam os resultados da disputa e três repetições da
+  chamada real passaram sem falhas de autenticação. Os testes também esperam
+  o carregamento do renderer antes de autenticar. Nenhuma mudança na cifra
+  Rust/WASM. Diagnósticos separam áudio/vídeo e sinalizam falhas de transform.
+- Checkouts renomeados são descobertos em testes Client/Server, com overrides
+  explícitos para CI. O serviço nativo é localizado em release/debug. O Server
+  executou 94 testes com sucesso, zero falhas e dois ignorados no Windows:
+  symlink de arquivo sem privilégio e SIGTERM. A proteção por junction e o
+  restante do cenário de código foram exercitados. Typechecks de ambos passaram.
+- Client: 113 testes unitários aprovados, sem skips, exigindo o serviço nativo
+  real de OpenMLS. A API Global foi obtida no checkout privado acessível e seus
+  16 testes reais passaram; nenhum código Global foi alterado. Protocolo Client
+  e Server conserva SHA-256 idêntico. Build do Client aprovado.
+- Pacote Windows x64/NSIS gerado sem publicar nem instalar. Comparação do ASAR
+  confirmou código compilado e serviço OpenMLS iguais aos validados, sem
+  arquivos sensíveis de teste; fuses de proteção conferidos. O aplicativo
+  empacotado passou com aceleração ligada/desligada em perfis descartáveis:
+  renderização, vídeo sintético, enumeração de fontes de captura, persistência
+  das preferências e atualização por feed local. Inspector do main permanece
+  desabilitado. O instalador local não tem assinatura Authenticode configurada.
+- Playwright: a execução completa terminou com 102 aprovados, dois com falha
+  e um ignorado (Cloudflare real sem credenciais). Os dois casos restantes
+  foram corrigidos e repetidos, junto ao cenário crítico do atualizador:
+  **nove execuções aprovadas** (três repetições de cada cenário). Isso conclui
+  a validação dos 104 cenários distintos executáveis localmente, entre a suíte
+  completa e os retestes focados; não representa uma nova execução completa
+  com todos verdes em um único comando.
+- No atualizador, a preferência de notificações agora é gravada antes de
+  iniciar o main; configurar depois da tela carregar permitia uma notificação
+  legítima de startup antes da asserção. Na chamada privada, foi removido o
+  limite arbitrário de 1% para retransmissões. Zero falhas de autenticação e
+  vídeo decifrado nos dois lados continuam obrigatórios. O novo teste direto
+  do WASM distribuído confirma bytes originais, recusa do replay exato e de
+  tag adulterada, sem modificar a proteção criptográfica.
+- O usuário optou por concluir **a validação local por enquanto**. O workflow
+  de segurança informa e usa `ANNOY_GLOBAL_READ_TOKEN` somente no checkout
+  privado, com `persist-credentials: false`. Nenhum token pessoal foi copiado
+  para secrets do GitHub; execução desse workflow depende de configurar o secret.
+
+## Próxima tarefa recomendada
+
+Não há M8 definido. Após o fechamento local de R03/M0–M7, restam verificações de
+ambiente: CI com acesso privado ao Global, Cloudflare real com credenciais,
+matriz Linux para esta revisão e testes manuais de SO/dispositivos/leitor de tela.
+Essas verificações não são apresentadas como executadas neste Windows.
