@@ -222,6 +222,7 @@ test("M7 catalog follows all seven languages and keeps licensed metadata unchang
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
     setState((s: any) => { s.settings.fontSize = 24; s.settings.theme = "light"; });
   });
+  await catalog.locator("h4").scrollIntoViewIfNeeded();
   expect(await page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: ".impeccable/review/m7-catalog-english-24px-minimum.png" });
 });

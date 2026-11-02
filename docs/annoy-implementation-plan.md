@@ -189,8 +189,10 @@ licença completa e hashes; manifestos em páginas de dois packs; IndexedDB v2
 com migração transacional, metadados separados e blobs sob demanda. Instalação
 sequencial cancelável com commit atômico, cache offline limitado e interface
 incremental com retry/botão acessível. Limites e envio explícito preservados.
-Sete cenários M7 e sete regressões de mídia aprovados no Playwright, incluindo
-renderer empacotado; typecheck/build e 90 unitários aprovados, três ignorados.
+Oito cenários M7, sete regressões de mídia e um cenário de localização aprovados
+no Playwright, incluindo renderer empacotado; typecheck/build e 104 unitários
+aprovados, três ignorados. A integração preserva os sete idiomas de M5 e fixa
+os finais de linha dos manifestos para manter os hashes em Windows/Linux.
 Detalhes e limites de validação em [progresso](annoy-progress.md#m7--catálogo-licenciado-02112026).
 
 ## 3. Contratos e políticas de implementação

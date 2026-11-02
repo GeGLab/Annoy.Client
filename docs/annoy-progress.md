@@ -551,6 +551,12 @@ Estado: **concluído e validado localmente**.
 
 - A base local inicial antecedia M5/M6. Antes da publicação, o M7 foi integrado
   à main atual, que incorporou M5/M6 pelo PR #8; esses marcos estão concluídos.
+- Os novos controles e diagnósticos usam os sete catálogos do M5, com 51 novas
+  chaves e slots preservados. O importador existente traduziu apenas os textos
+  públicos estáticos, com revisão dos slots, termos de cliente e marcas. Nomes,
+  licença e autoria dos packs continuam dados originais, sem tradução automática.
+  Categorias respondem à troca de idioma com a tela aberta; escala e guardas
+  permanecem as de M5/M6.
 - Catálogo real: seis packs e 36 PNGs OpenMoji 16.0.0, sem alterar as imagens,
   fixados no commit `66e17da0f2d4347f64ee9d78c367fc5234283863`. Licença oficial
   CC BY-SA 4.0 conferida e distribuída junto aos ativos; créditos, autoria,
@@ -575,29 +581,37 @@ Estado: **concluído e validado localmente**.
   navegação respeita rascunhos e o guard de configurações.
 - Testes executados **após a implementação**, conforme solicitado:
   `npm run typecheck` e `npx electron-vite build` aprovados; suíte unitária
-  `node --experimental-strip-types --test scripts/tests/*.test.mjs` com 90
+  `node --experimental-strip-types --test scripts/tests/*.test.mjs` com 104
   aprovados, zero falhas e três ignorados pelo ambiente.
-- Playwright: sete cenários em `tests/expression-catalog.spec.ts` aprovados:
+- Playwright sobre a main integrada: **16 cenários aprovados**. Oito em
+  `tests/expression-catalog.spec.ts` cobrem:
   migração legada sem leitura de blobs na listagem, cursores e busca além da
   primeira página, interrupção/cancelamento/quota/integridade, catálogo paginado,
   retry/vazio de UI, cache e imagens após reiniciar o renderer offline, rollback
-  de migração e retry preservando os bytes. Sete regressões em `experience.spec.ts`
+  de migração e retry preservando os bytes, sete idiomas ao vivo e fonte de 24px
+  em janela de 940×620. Sete regressões em `experience.spec.ts`
   aprovadas: instalação/importação/restauração, GIPHY, round-trip de exportação,
   renderer empacotado `file:`, anexo real, guard sem conversa e gestão/rascunhos.
-  Uma falha inicial do teste offline foi corrigida restringindo o bloqueio de
-  rede aos ativos, pois o glob inicial também bloqueava módulos do Vite.
+  O cenário de `localization.spec.ts` também passou, exercitando prévia,
+  descarte, persistência, fonte máxima e zoom de 200%. Uma falha inicial do teste
+  offline foi corrigida restringindo o bloqueio de rede aos ativos, pois o glob
+  inicial também bloqueava módulos do Vite.
+- A integração detectou conversão local de JSON para CRLF no Windows, invalidando
+  os hashes das páginas. `.gitattributes` fixa o catálogo em LF; bytes normalizados,
+  auditoria de integridade e build foram repetidos com sucesso.
 - Revisão visual local: capturas `media-settings-dark.png` e
   `media-settings-light-minimum.png` em `.impeccable/review`, sem overflow em
   940×620; sistema visual preservado. Detector consultado uma vez: aviso de
   animação de margem preexistente e sugestões de escala tipográfica/raios,
-  incluindo o novo título de catálogo em `1rem`. São divergências do registro
-  visual, sem ampliar este marco para reescrever M5. Build mantém os avisos
+  incluindo o novo título de catálogo em `1rem`. O sistema visual existente foi
+  preservado, com nova captura em inglês/24px. Build mantém os avisos
   preexistentes de chunks grandes e imports dinâmicos; um cenário registrou
-  aviso ResizeObserver. Sem publicação, alterações de Server ou instaladores.
+  aviso ResizeObserver. Sem publicação de release, alterações de Server ou instaladores.
 
 
 ## Próxima tarefa recomendada
 
-M0–M7 implementados. Não há M8 definido neste plano. A próxima etapa é
-validar a entrega integrada e tratar as limitações externas registradas em M5/M6,
-incluindo os cenários SFrame e o acesso do CI ao repositório Annoy Global.
+M0–M7 implementados. Não há M8 definido neste plano. A próxima etapa é fechar a
+auditoria transversal de R03, homologar a entrega integrada e tratar as limitações
+externas registradas em M5/M6, incluindo os cenários SFrame, as credenciais
+Cloudflare e o acesso do CI ao repositório Annoy Global.
