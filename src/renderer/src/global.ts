@@ -272,24 +272,33 @@ async function proofFor(url: string, serverId: string, signal?: AbortSignal) {
   if (info.accountMode === "local" || info.globalServerId !== serverId) throw new GlobalError(403, "account_mode", "Este servidor não aceita esta identidade global");
   if (!keys || !session) throw new GlobalError(401, "signed_out", "Entre na sua conta Annoy primeiro");
   const generation = sessionGeneration, unlocked = keys;
-  if (!tokenKeys || Date.now() - tokenKeys.at > 3_600_000) {
-    const fresh = await global<{ keys: kdf.IssuerKey[]; issueWith: string }>("/v1/tokens/keys", { signal });
-    assertSession(generation, signal);
-    tokenKeys = { at: Date.now(), ...fresh };
-  }
-  const issuingKeys = tokenKeys;
   const identity = await kdf.serverIdentity(unlocked, serverId);
   assertSession(generation, signal);
-  const { challenge } = await request<{ challenge: string }>(url, "/api/auth/global/challenge", { body: {}, signal });
-  assertSession(generation, signal);
-  const key = issuingKeys.keys.find((k) => k.kid === issuingKeys.issueWith)!;
-  const pending = await kdf.blindToken(key, kdf.tokenContext(serverId, identity.id));
-  assertSession(generation, signal);
-  const issued = await global<{ signatures: string[] }>("/v1/tokens", { body: { kid: issuingKeys.issueWith, blinded: [pending.blinded] }, signal });
-  assertSession(generation, signal);
-  const signature = await kdf.signForServer(identity.privateKey, challenge);
-  assertSession(generation, signal);
-  return { identity: identity.id, challenge, signature, token: await kdf.finalizeToken(pending, issued.signatures[0]!) };
+  // Global starts a new signing key each week: on "stale_key", fetch the keys again and retry once.
+  for (let attempt = 0; ; attempt++) {
+    if (!tokenKeys || Date.now() - tokenKeys.at > 3_600_000) {
+      const fresh = await global<{ keys: kdf.IssuerKey[]; issueWith: string }>("/v1/tokens/keys", { signal });
+      assertSession(generation, signal);
+      tokenKeys = { at: Date.now(), ...fresh };
+    }
+    const issuingKeys = tokenKeys;
+    const key = issuingKeys.keys.find((k) => k.kid === issuingKeys.issueWith)!;
+    const pending = await kdf.blindToken(key, kdf.tokenContext(serverId, identity.id));
+    assertSession(generation, signal);
+    let issued: { signatures: string[] };
+    try {
+      issued = await global<{ signatures: string[] }>("/v1/tokens", { body: { kid: issuingKeys.issueWith, blinded: [pending.blinded] }, signal });
+    } catch (error) {
+      if (attempt === 0 && error instanceof GlobalError && error.code === "stale_key") { tokenKeys = null; continue; }
+      throw error;
+    }
+    assertSession(generation, signal);
+    const { challenge } = await request<{ challenge: string }>(url, "/api/auth/global/challenge", { body: {}, signal });
+    assertSession(generation, signal);
+    const signature = await kdf.signForServer(identity.privateKey, challenge);
+    assertSession(generation, signal);
+    return { identity: identity.id, challenge, signature, token: await kdf.finalizeToken(pending, issued.signatures[0]!) };
+  }
 }
 
 /**
