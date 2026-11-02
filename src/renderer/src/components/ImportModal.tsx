@@ -1,5 +1,3 @@
-import {rich} from "../lib/localization.ts";
-import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
@@ -44,8 +42,12 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
     <form className="form" onSubmit={submit}>
       <p className="muted">{translate("common.d2cccc3bfc19")}</p>
       <ol className="steps">
-        <li>{rich("common.78076469b576",{p0:(<a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>),p1:(<strong>{translate("common.6386dc360341")}</strong>)})}</li>
-        <li>{rich("common.29602d85caaf",{p0:(<strong>{translate("common.41e35ba1a1fd")}</strong>),p1:(<strong>{translate("common.e24b44ae6f40")}</strong>),p2:(<strong>{translate("common.74b3ca264e52")}</strong>)})}</li>
+        <li>{translate("common.1ea442a134b2")}{" "}
+          <a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>{translate("common.a6267017103b")}<strong>{translate("common.6386dc360341")}</strong>).
+        </li>
+        <li>{translate("common.0dfdfa31ff44")}<strong>{translate("common.41e35ba1a1fd")}</strong>{translate("common.b0d63c46c652")}<strong>{translate("common.e24b44ae6f40")}</strong>{translate("common.35a6c044139b")}{" "}
+          <strong>{translate("common.74b3ca264e52")}</strong>.
+        </li>
         <li>{translate("common.607cd4cd05aa")}</li>
       </ol>
       <Field label={translate("common.973157512cfd")} hint={translate("common.ed96d8977e3f")}>
@@ -106,7 +108,7 @@ function GuildStep({
   };
   return (
     <div className="form">
-      <p className="muted">{rich("common.1b4c81917852",{p0:(<strong>{list.bot.username}</strong>)})}</p>
+      <p className="muted">{translate("common.e05bd7aba80f")}<strong>{list.bot.username}</strong>{translate("common.be0ff2deb677")}</p>
       <div className="guild-grid">
         {list.guilds.map((g) => (
           <button key={g.id} className="guild-card" onClick={() => void pick(g)} disabled={busy !== null}>
@@ -118,8 +120,10 @@ function GuildStep({
         {list.guilds.length === 0 && <p className="muted">{translate("common.2fcbda924218")}</p>}
       </div>
       <div className="form-actions">
-        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">{rich("common.74e527cc852e",{p0:(<Icon name="userPlus" size={16} />)})}</a>
-        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>{rich("common.ea6b1b832c3c",{p0:(<Icon name="refresh" size={16} />)})}</button>
+        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">
+          <Icon name="userPlus" size={16} />{translate("common.18a75191f5df")}</a>
+        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>
+          <Icon name="refresh" size={16} />{translate("common.d039c022beb4")}</button>
       </div>
     </div>
   );
@@ -150,9 +154,9 @@ function SelectStep({
   const [serverId, setServerId] = useState(presetServerId ?? owned[0]?.id ?? "");
   const [roleIds, setRoleIds] = useState(() => new Set(roles.filter((r) => !r.managed).map((r) => r.id)));
   const [channelIds, setChannelIds] = useState(() => new Set(importable.map((c) => c.id)));
-  const [historyIds, setHistoryIds] = useState(() => new Set(textIds));
+  const [historyIds, setHistoryIds] = useState(() => new Set<string>());
   const [limit, setLimit] = useState<number | null>(1000);
-  const [attachments, setAttachments] = useState(true);
+  const [attachments, setAttachments] = useState(false);
   const [overwrites, setOverwrites] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -188,7 +192,7 @@ function SelectStep({
           <label className="check history">
             <Checkbox
               checked={historyIds.has(c.id)}
-              disabled={!on}
+              disabled={true}
               onChange={(e) => setHistoryIds((s) => toggle(s, [c.id], e.target.checked))}
             />{translate("common.c91b5726e58e")}</label>
         )}
@@ -196,7 +200,7 @@ function SelectStep({
     );
   };
 
-  const selectedHistory = [...historyIds].filter((id) => channelIds.has(id));
+  const selectedHistory:string[] = []; // Server-side plaintext history import is incompatible with E2EE.
   const start = async () => {
     setBusy(true);
     const body: ImportRequest = {
@@ -225,6 +229,7 @@ function SelectStep({
 
   return (
     <div className="form import-select">
+      <p role="note">{translate("common.d2c4dee4495b")}</p>
       <section>
         <h3>{translate("common.8e7290e44546")}</h3>
         <RadioGroup
@@ -276,7 +281,7 @@ function SelectStep({
               )
             }
           >{translate("common.76e1824b75a3")}</button>
-          <button className="link-btn" onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>{translate("common.04bb71a57546")}</button>
+          <button className="link-btn" disabled onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>{translate("common.04bb71a57546")}</button>
           <button className="link-btn" onClick={() => setHistoryIds(new Set())}>{translate("common.af1c241e6792")}</button>
         </div>
         <div className="import-tree">
@@ -317,7 +322,7 @@ function SelectStep({
 
       <section className="grid-2">
         <Field label={translate("common.c628a0bcecba")}>
-          <Select value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
+          <Select disabled value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
             {LIMITS.map((l) => (
               <option key={String(l.value)} value={String(l.value)}>
                 {l.label}
@@ -327,13 +332,14 @@ function SelectStep({
         </Field>
         <div className="option-checks">
           <label className="check">
-            <Checkbox checked={attachments} onChange={(e) => setAttachments(e.target.checked)} />{translate("common.58a57c789eca")}</label>
+            <Checkbox disabled checked={false} onChange={(e) => setAttachments(e.target.checked)} />{translate("common.58a57c789eca")}</label>
           <label className="check">
             <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} />{translate("common.fe60feaa1250")}</label>
         </div>
       </section>
 
-      <p className="muted small">{rich("common.96e9752d1c77",{p0:(channelIds.size),p1:(selectedHistory.length),p2:([...roleIds].filter((id) => id !== guild.id).length)})}</p>
+      <p className="muted small">
+        {channelIds.size}{translate("common.713f46e91b98")}{selectedHistory.length}{translate("common.65a9ef5232d8")}{[...roleIds].filter((id) => id !== guild.id).length}{" "}{translate("common.28de34bbfbc1")}</p>
       <div className="form-actions">
         <button
           className="btn"
@@ -348,7 +354,7 @@ function SelectStep({
 }
 
 let PHASE_LABEL: Record<ImportJob["phase"], string> = {
-  structure: translate("common.c31c81ca4ebe"),
+  structure: "Criando cargos e canais…",
   messages: translate("common.17212671aa2e"),
   done: translate("common.db003659b843"),
   failed: translate("common.5d8a36ef7254"),
@@ -366,14 +372,16 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       <div className="progress">
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported.toLocaleString(localizationPreferences().region)),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? translate("common.405beaea7ce4",{p0:(job.currentChannel)}) : "")})}</p>
+      <p className="muted small">
+        {job.channelsDone}/{job.channelsTotal}{translate("common.3c3e8cc8716c")}{job.messagesImported.toLocaleString("pt-BR")}{translate("common.fe42bde17035")}{job.attachmentsImported}{" "}{translate("common.78edfd3d2513")}{job.currentChannel && running ? ` · agora em #${job.currentChannel}` : ""}
+      </p>
       {job.error && <p className="error">{job.error}</p>}
       {(job.phase === "cancelled" || job.phase === "failed") && job.serverId && (
         <p className="muted small">{translate("common.ea9c5c602d8b")}</p>
       )}
       {job.warnings.length > 0 && (
         <details className="warnings" open={!running}>
-          <summary>{rich("common.0046ab6cd135",{p0:(job.warnings.length)})}</summary>
+          <summary>{job.warnings.length}{translate("common.fcca156c4938")}</summary>
           <ul>
             {job.warnings.map((w) => (
               <li key={w}>{w}</li>
@@ -464,11 +472,9 @@ onLocalizationChange(()=>{LIMITS=[
   { label: translate("common.311c2f32bdb4"), value: null },
 ] as const;});
 onLocalizationChange(()=>{PHASE_LABEL={
-  structure: translate("common.c31c81ca4ebe"),
+  structure: "Criando cargos e canais…",
   messages: translate("common.17212671aa2e"),
   done: translate("common.db003659b843"),
   failed: translate("common.5d8a36ef7254"),
   cancelled: translate("common.bb9811b14ec4"),
 };});
-
-

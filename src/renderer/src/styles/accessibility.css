@@ -1,5 +1,5 @@
 /* Own application surfaces; embedded third-party services retain their styles. */
-:root { font-size: 16px; }
+:root { font-size: 1.14286rem; }
 html[data-underline-links="true"] a[href] { text-decoration: underline; text-underline-offset: .16em; }
 html[data-underline-links="false"] a[href]:not(:hover):not(:focus-visible) { text-decoration: none; }
 button, input, textarea, select { font: inherit; }

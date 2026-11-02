@@ -111,7 +111,7 @@ export interface User {
   username: string;
   displayName: string;
   avatarUrl: string | null;
-  /** Signs in with an Annoy Global account. Only sent for the user's own profile. */
+  /** Signs in with an Annoy account. Only sent for the user's own profile. */
   global?: boolean;
 }
 
@@ -159,7 +159,12 @@ export interface Channel {
   overwrites: Overwrite[];
   /** Temporary voice room: deleted when everyone leaves, or after 10 minutes if nobody joins. */
   temporary?: boolean;
+  /** New messages are deleted automatically after this long (set by the server admins). Absent: permanent. */
+  messageTtlMs?: number;
 }
+
+/** Lifetimes the server admins can choose for a text channel: 1 hour, 1 day, 7 days. */
+export const MESSAGE_TTLS = [3_600_000, 86_400_000, 604_800_000] as const;
 
 export interface DmChannel {
   id: string;
@@ -204,6 +209,9 @@ export interface ChannelFilePage {
 }
 
 export interface Message {
+  sharedBy?: string;
+  protection?: "e2ee" | "legacy_plaintext";
+  expiresAt?: string | null;
   id: string;
   channelId: string;
   author: User;
@@ -287,6 +295,8 @@ export interface VoiceState {
   /** Sharing a screen or window. */
   screen: boolean;
   screenQuality?: { height: number; fps: number; width?: number };
+  /** The call this state belongs to uses end-to-end encrypted media. */
+  e2ee?: boolean;
 }
 
 /** What a producer carries; one camera and one screen per user at most. */
@@ -400,8 +410,13 @@ export interface ImportJob {
 export type RegistrationMode = "open" | "invite" | "closed";
 
 export interface InstanceInfo {
+  crypto?: { version: 1; protocol: "MLS-RFC9420"; dpopNonce?:string; media?:{e2ee:false;protocol:null;status:"unvalidated"}|{e2ee:true;protocol:"SFrame-RFC9605/MLS-RFC9420";scope:readonly ("voice"|"direct_calls")[];status:"unaudited"}; instanceId: string };
+  /** Exclusive authentication policy; older hosts may omit it. */
+  accountMode?: "global" | "local";
   name: string;
   version: string;
+  /** Oldest client version this server accepts. Older hosts omit it. */
+  minClientVersion?: string;
   protocol: number;
   /** True when sign-up is possible at all (open, or with an invite). */
   registrationOpen: boolean;
@@ -409,13 +424,13 @@ export interface InstanceInfo {
   /** "Entrar com Discord" (OAuth2) is configured on this instance. */
   discordLogin: boolean;
   /**
-   * This server's Annoy Global ID when global accounts can log in here; null
+   * This server's Annoy Global ID when Annoy accounts can log in here; null
    * when the host turned Global off or it isn't reachable. Older servers omit it.
    */
   globalServerId?: string | null;
 }
 
-/** Proof of a global account for one server (Annoy-api-global DESIGN.md). */
+/** Proof of an Annoy account for one server (Annoy-api-global DESIGN.md). */
 export interface GlobalProof {
   /** This account's identity on this server: an Ed25519 public key (JWK "x"). */
   identity: string;
@@ -425,6 +440,8 @@ export interface GlobalProof {
   signature: string;
   /** Blind token from Annoy Global, bound to this server and identity. */
   token: { kid: string; message: string; signature: string };
+  /** Global's signature that this identity belongs to the account with this public ID. */
+  attestation?: { publicId: string; expires: number; signature: string };
 }
 
 export interface GlobalLogin extends GlobalProof {
@@ -588,18 +605,35 @@ export type VoiceMethod =
   | "renegotiate"
   /** Takes back a Cloudflare session after a reconnect or a server restart, without renegotiating media. */
   | "resume"
+  // End-to-end encrypted media (SFrame keyed by an MLS group per call), both backends:
+  | "mediaCreate"
+  | "mediaPropose"
+  | "mediaCommit"
   | "leave";
+
+/** "sframe": media is end-to-end encrypted. The other value is an explicit consent to transport-only protection. */
+export type VoiceMediaProtection = "sframe" | "transport_only_acknowledged";
+
+/** A call device, signed by that device's own Ed25519 key. Clients verify it against their pinned directory. */
+export interface VoiceMediaBinding { userId: string; deviceId: string; mediaKey: string; signature: string }
+
+export type VoiceMediaEvent =
+  | { channelId: string; kind: "proposals"; callId: string; epoch: number; adds: { ref: number; binding: VoiceMediaBinding; keyPackage: string }[]; removes: { ref: number; binding: VoiceMediaBinding }[]; bindings: VoiceMediaBinding[] }
+  | { channelId: string; kind: "commit"; callId: string; epoch: number; commit: string; bindings: VoiceMediaBinding[] }
+  | { channelId: string; kind: "welcome"; callId: string; epoch: number; welcome: string; bindings: VoiceMediaBinding[] }
+  /** Every member left before this device was admitted: start the call again. */
+  | { channelId: string; kind: "restart" };
 
 /** Where voice media flows: the built-in mediasoup SFU, or Cloudflare's Realtime SFU (works behind CGNAT). */
 export type VoiceBackend = "builtin" | "cloudflare";
 
-export interface DirectCall { callerDeviceId?: string; calleeDeviceId?: string; id: string; callerId: string; calleeId: string; video: boolean; status: "ringing" | "active" | "ended"; reason?: string; iceServers?: { urls: string | string[]; username?: string; credential?: string }[] }
+export interface DirectCall { callerDeviceId?: string; calleeDeviceId?: string; id: string; callerId: string; calleeId: string; video: boolean; status: "ringing" | "active" | "ended"; reason?: string; protection?: VoiceMediaProtection; iceServers?: { urls: string | string[]; username?: string; credential?: string }[] }
 
 export type ClientOp =
-  | { op: "identify"; features?: string[]; deviceId?: string; token: string; presence?: Presence }
+  | { op: "identify"; dpop?:string; clientVersion?: string; features?: string[]; deviceId?: string; token: string; presence?: Presence }
   | { op: "heartbeat" }
   | { op: "presence"; idle: boolean; status?: Presence }
-  | { op: "call"; deviceId: string; callId: string; action: "accept" | "reject" | "end" | "signal"; signal?: { description?: { type: "offer" | "answer"; sdp: string }; candidate?: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null } } }
+  | { op: "call"; protection?: VoiceMediaProtection; deviceId: string; callId: string; action: "accept" | "reject" | "end" | "signal"; signal?: { description?: { type: "offer" | "answer"; sdp: string }; candidate?: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null } } }
   | { op: "activity"; activities: UserActivity[] }
   | { op: "typing"; channelId: string }
   | { op: "voice_state"; selfMute: boolean; selfDeaf: boolean; screenQuality?: { height: number; fps: number; width?: number } }
@@ -626,6 +660,7 @@ export type GatewayEvent =
   | { t: "SERVER_REMOVE"; d: { serverId: string } }
   /** Structure, roles or permissions changed: refetch GET /servers/:id. */
   | { t: "SERVER_REFRESH"; d: { serverId: string } }
+  | { t: "CRYPTO_DELIVERY"; d:{channelId:string} }
   | { t: "MESSAGE_CREATE"; d: Message }
   | { t: "MESSAGE_UPDATE"; d: Message }
   | { t: "MESSAGE_DELETE"; d: { channelId: string; messageId: string } }
@@ -639,6 +674,7 @@ export type GatewayEvent =
   | { t: "VOICE_STATE_UPDATE"; d: { userId: string; serverId: string; state: VoiceState | null } }
   | { t: "VOICE_NEW_PRODUCER"; d: { channelId: string; producerId: string; userId: string; kind: "audio" | "video"; source: MediaSource } }
   | { t: "VOICE_PRODUCER_CLOSED"; d: { producerId: string } }
+  | { t: "VOICE_MEDIA"; d: VoiceMediaEvent }
   | { t: "VOICE_KICKED"; d: { reason: string } }
   | { t: "VOICE_REPLY"; d: { id: number; ok: true; data: unknown } | { id: number; ok: false; message: string } }
   | { t: "DM_CREATE"; d: DmChannel }

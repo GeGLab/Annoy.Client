@@ -86,6 +86,7 @@ export function VoicePanel() {
   const count = server?.voiceStates.filter((s) => s.channelId === voice.channelId).length ?? 0;
   return (
     <div className={`voice-panel${connected ? " connected" : " connecting"}`}>
+      <small role="note">{translate("common.a305f799002b")}</small>
       <div className="voice-panel-heading">
         <Icon name={connected ? "radio" : "loader"} size={22} />
         <button

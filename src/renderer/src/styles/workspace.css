@@ -135,3 +135,13 @@
 
 .connection-notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg-raised, #282229); color: var(--text-muted, #bdb6c5); font-size: 0.92857rem; flex-shrink: 0; }
 .connection-notice svg { flex-shrink: 0; }
+
+/* Annoy account: a compact badge instead of a card. Paid plans will add their own badges. */
+.annoy-account-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.92857rem; }
+.annoy-account-row a, .annoy-account-row .link-button { color: var(--text-muted); font-size: 0.85714rem; }
+.annoy-account-row .link-button { background: none; border: 0; padding: 0; cursor: pointer; }
+.annoy-account-row .link-button:hover, .annoy-account-row a:hover { color: inherit; text-decoration: underline; }
+.annoy-account-row .error { flex-basis: 100%; margin: 0; }
+.account-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 0.85714rem; font-weight: 600; white-space: nowrap; }
+.account-badge svg { color: var(--text-muted); }
+.auth-divider { text-align: center; margin: 4px 0; }

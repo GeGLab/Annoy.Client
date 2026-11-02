@@ -1,3 +1,4 @@
+import {trustedRenderer} from "./trusted-renderer.ts";
 import { app, type BrowserWindow, type IpcMain } from "electron";
 import { join } from "node:path";
 import {
@@ -14,8 +15,7 @@ export function registerLocalization(
   let saved = readPreferences(file, normalizeLocalization);
   configureLocalization(saved);
   const local = (event: Electron.IpcMainInvokeEvent) =>
-    event.sender === window()?.webContents &&
-    event.senderFrame === window()?.webContents.mainFrame;
+    trustedRenderer(event,window());
   ipc.handle("localization:get", (event) => {
     if (!local(event)) throw new Error("Invalid localization sender");
     return {

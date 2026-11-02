@@ -1,7 +1,9 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
+import { CLIENT_VERSION } from "./lib/client-version.ts";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";
+import {secureHttpUrl} from '../../shared/transport.ts';
 import { jitterRetryDelay, recoveryDeadline as getRecoveryDeadline, type TransportStatus } from "../../shared/connectivity.ts";
 
 const HEARTBEAT_MS = 5_000;
@@ -9,6 +11,8 @@ const ACK_TIMEOUT_MS = 10_000;
 const MAX_BACKOFF_MS = 30_000;
 /** After the server says it's restarting, retry every second for this long instead of backing off. */
 const RESTART_WINDOW_MS = 3 * 60_000;
+
+type Status = TransportStatus | "outdated";
 export interface RecoveryEvent {
   cause: "network" | "timeout" | "service" | "system-offline";
   observedAt: number;
@@ -51,18 +55,24 @@ export class Gateway {
       this.pauseForOffline();
       return;
     }
+    let endpoint:URL;
+    try{endpoint=secureHttpUrl(this.url);endpoint.protocol=endpoint.protocol==='https:'?'wss:':'ws:';endpoint.pathname='/gateway';endpoint.search='';endpoint.hash='';}
+    catch{this.closed=true;this.onStatus('offline');return;}
     this.closed = false;
     this.ready = false;
     this.attempts++;
     if (this.offlineSince !== null) this.reportRecovery(this.retryCause, null);
     this.onStatus("connecting");
-    const socket = new WebSocket(`${this.url.replace(/^http/, "ws")}/gateway`);
+    const socket = new WebSocket(endpoint.toString());
     this.socket = socket;
     this.connectTimeout = setTimeout(() => { if (this.socket === socket) this.networkLost(); }, 30_000);
-    socket.onopen = () => {
+    socket.onopen = async () => {
       if (this.socket !== socket) return;
       this.onReachable?.();
-      this.send({ op: "identify", token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls", "extendedActivity"] });
+      let dpop:string|null=null;
+      try{dpop=await window.distopic?.crypto?.proof(this.url,this.token,'GET','/gateway')??null;}catch{socket.close(4004,'Desbloqueie o cofre local');return;}
+      if(this.socket!==socket)return;
+      this.send({ op: "identify", ...(dpop?{dpop}:{}), clientVersion: CLIENT_VERSION, token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls", "extendedActivity"] });
     };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
@@ -82,6 +92,11 @@ export class Gateway {
         this.invalid = true;
         this.onRecovery?.({ cause: "network", observedAt: Date.now(), attempt: this.attempts, nextRetryAt: null, recoveryDeadline: null, restartUntil: null });
         return this.onStatus("invalid");
+      }
+      // The server needs a newer app: no retries until the app is updated.
+      if (e.code === 4011) {
+        this.invalid = true;
+        return this.onStatus("outdated");
       }
       if (e.code === 4010) {
         // During an update the new version is already answering: reconnect at

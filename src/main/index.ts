@@ -1,22 +1,28 @@
-import {t as translate} from "../shared/localization/index.ts";
 import {onLocalizationChange} from "../shared/localization/index.ts";
 import {desktopController,supportsTray} from "./desktop.ts";
-import { appendFileSync, existsSync, mkdirSync,readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import {registerLocalization} from "./localization.ts";
+import {t as translate} from "../shared/localization/index.ts";
+import {trustedRenderer} from './trusted-renderer.ts';
+import {secureHttpUrl} from '../shared/transport.ts';
+import {nativeApiFetch} from './native-api-fetch.ts';
+import {registerPrivateDownload} from './private-download.ts';
+import { registerCrypto } from "./crypto/ipc.ts";
+import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
-import { registerTheater } from "./theater.ts";
+import { createAppAccess } from "./app-access.ts";
+import { registerTheater, closeAllTheater } from "./theater.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
-// Honor an explicitly selected profile before any preference/OS adapter reads it.
-const selectedProfile=app.commandLine.getSwitchValue("user-data-dir");
-if(selectedProfile){if(!isAbsolute(selectedProfile)||selectedProfile.includes("\0"))throw new Error("Invalid profile path");mkdirSync(selectedProfile,{recursive:true});app.setPath("userData",selectedProfile);}
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let trayCapable = false;
+let trayCapable=false;
+const selectedProfile=app.commandLine.getSwitchValue("user-data-dir");
+if(selectedProfile){if(!isAbsolute(selectedProfile)||selectedProfile.includes("\0"))throw new Error("Invalid profile path");mkdirSync(selectedProfile,{recursive:true});app.setPath("userData",selectedProfile);}
 let quitting = false;
 app.on("before-quit", () => { quitting = true; });
 function restoreWindow(): void {
@@ -39,17 +45,53 @@ function createTray(): void {
     { label: translate("desktop.b08423738547"), click: () => {restoreWindow();app.quit();} },
   ]));
 }
-const stopActivity = registerActivity(ipcMain, () => win);
+const stopActivity = registerActivity(ipcMain, () => win, () => appAccess.getState().allowed, event => trustedRenderer(event, win));
 app.on("will-quit", stopActivity);
 /** One sandboxed view per browser service, created on first open and kept alive. */
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
+const serviceWindows = new Set<BrowserWindow>();
+const globalUrl = (process.env.ANNOY_GLOBAL_URL || "https://global.geg.dev.br").replace(/\/+$/, "");
+let resettingRenderer = false;
+let stopCrypto = () => {};
+let proofCrypto:((url:string,token:string,method:string,path:string,nonce?:string)=>Promise<string|null>)|null=null;
+const appAccess = createAppAccess(globalUrl, state => {
+  if (!state.allowed) {
+    showService(null);
+    for (const entry of views.values()) {
+      win?.contentView.removeChildView(entry.view);
+      entry.view.webContents.close();
+    }
+    views.clear();
+    for (const popup of serviceWindows) if (!popup.isDestroyed()) popup.destroy();
+    serviceWindows.clear();
+    closeAllTheater();
+    stopActivity();
+  }
+  if (!resettingRenderer && win && !win.isDestroyed()) win.webContents.send("auth:state", state);
+},authenticatedMainFetch);
+async function authenticatedMainFetch(input:Parameters<typeof fetch>[0],init?:RequestInit):Promise<Response>{
+ const url=secureHttpUrl(String(input)),original=new Headers(init?.headers),token=original.get("authorization")?.match(/^(?:Bearer|DPoP) (.+)$/)?.[1];
+ const execute=async(nonce?:string)=>{const headers=new Headers(original);
+  if(token&&url.pathname.startsWith("/api/")&&proofCrypto){const proof=await proofCrypto(url.origin,token,init?.method??"GET",url.pathname+url.search,nonce);if(proof){headers.set("authorization","DPoP "+token);headers.set("dpop",proof);}}
+  return nativeApiFetch(input,{...init,headers,redirect:'error'});};
+ let response=await execute();const nonce=response.headers.get("dpop-nonce");
+ if(response.status===401&&token&&nonce&&/^[A-Za-z0-9_-]{43}$/.test(nonce)){await response.body?.cancel();response=await execute(nonce);}
+ return response;
+}
+
+const fromRenderer = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
+  trustedRenderer(event,win);
+const authorized = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => fromRenderer(event) && appAccess.getState().allowed;
+const stopDownloads=registerPrivateDownload(()=>win,authorized,authenticatedMainFetch);
+app.on("before-quit",stopDownloads);
+
 /** The page's main area, reported by the renderer: the bar can sit on the side or on top, with banners above. */
 let serviceArea = { x: 0, y: 0, width: 0, height: 0 };
 
 // 0.3 renamed the app from Distopic to Annoy; keep the existing profile (accounts, Discord login).
 const legacyProfile = join(app.getPath("appData"), "Distopic");
-if (!selectedProfile && !existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
+if (!selectedProfile&&!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
   try {
     renameSync(legacyProfile, app.getPath("userData"));
   } catch {
@@ -57,7 +99,7 @@ if (!selectedProfile && !existsSync(app.getPath("userData")) && existsSync(legac
   }
 }
 
-registerLocalization(ipcMain, () => win);
+registerLocalization(ipcMain,()=>win);
 const desktop=desktopController(()=>win,createTray,()=>!!tray&&!tray.isDestroyed(),()=>trayCapable,()=>{trayCapable=supportsTray();createTray();});
 onLocalizationChange(()=>{if(tray)createTray();});
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
@@ -108,10 +150,19 @@ const systemPicker = process.platform === "linux" && (process.env.XDG_SESSION_TY
 let chosenScreenSource: string | null = null;
 
 function configureSession(s: Session, own: boolean): void {
-  s.setPermissionRequestHandler((_wc, permission, callback) => callback(MEDIA_PERMISSIONS.has(permission)));
-  s.setPermissionCheckHandler((_wc, permission) => MEDIA_PERMISSIONS.has(permission));
+  const trusted = (wc:Electron.WebContents|null,origin:string) => {
+    if (!wc || !appAccess.getState().allowed) return false;
+    if (own) return wc === win?.webContents;
+    const entry=[...views.values()].find(e=>e.view.webContents===wc);
+    return !!entry && inSites(origin,sitesFor(entry.service)) && shownService===entry.service.id;
+  };
+  // Using the app is consent to its terms: media is granted without asking, but only to
+  // Annoy's own window and to the service tab on screen, never to other or hidden content.
+  s.setPermissionRequestHandler((wc,permission,callback,details) => callback(MEDIA_PERMISSIONS.has(permission) && trusted(wc,details.requestingUrl||wc.getURL())));
+  s.setPermissionCheckHandler((wc,permission,origin) => MEDIA_PERMISSIONS.has(permission) && trusted(wc,origin));
   s.setDisplayMediaRequestHandler(
     async (request, callback) => {
+      if (!appAccess.getState().allowed) { callback({}); return; }
       const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
       // Annoy's own UI picks a source first; services (and the portal case) take what the system offers.
       const picked = own && chosenScreenSource ? sources.find((src) => src.id === chosenScreenSource) : sources[0];
@@ -143,14 +194,16 @@ function ensureView(service: Service): WebContentsView {
   const s = session.fromPartition(name);
   configureSession(s, false);
   s.setUserAgent(chromeUserAgent(s));
-  const view = new WebContentsView({ webPreferences: { partition: name, contextIsolation: true, sandbox: true, spellcheck: true } });
+  const view = new WebContentsView({ webPreferences: { partition: name, contextIsolation: true, sandbox: true, nodeIntegration: false, nodeIntegrationInSubFrames: false, spellcheck: true } });
   const sites = sitesFor(service);
   const wc = view.webContents;
   wc.setWindowOpenHandler(({ url }) => {
+    if (!appAccess.getState().allowed) return { action: "deny" };
     if (inSites(url, sites)) return { action: "allow" };
     openExternal(url);
     return { action: "deny" };
   });
+  wc.on("did-create-window", popup => { serviceWindows.add(popup); popup.on("closed", () => serviceWindows.delete(popup)); });
   wc.on("will-navigate", (event, url) => {
     if (!inSites(url, sites)) {
       event.preventDefault();
@@ -163,7 +216,7 @@ function ensureView(service: Service): WebContentsView {
     const badge = match ? match[1]! : /^[•*]/.test(title) ? "•" : null;
     win?.webContents.send("service:badge", service.id, badge);
   });
-  void wc.loadURL(service.url);
+  void wc.loadURL(service.url).catch(() => undefined);
   win?.contentView.addChildView(view);
   view.setVisible(false);
   views.set(service.id, { view, service });
@@ -171,6 +224,7 @@ function ensureView(service: Service): WebContentsView {
 }
 
 function showService(service: Service | null): void {
+  if (service && !appAccess.getState().allowed) return;
   for (const [id, entry] of views) if (id !== service?.id) entry.view.setVisible(false);
   shownService = service?.id ?? null;
   if (!service) {
@@ -256,7 +310,7 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
-    show: false,
+    show:false,
     backgroundColor: "#171621",
     title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
@@ -268,6 +322,8 @@ function createWindow(): void {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,
       sandbox: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
       backgroundThrottling: false,
     },
   });
@@ -282,18 +338,25 @@ function createWindow(): void {
     }
   });
   win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
-  win.webContents.on("will-prevent-unload",()=>{quitting=false;});
   // A crashed or killed renderer leaves an empty window; bring the app back.
   win.webContents.on("render-process-gone", (_event, details) => {
     logError(`renderer gone: ${details.reason} (exit ${details.exitCode})`);
     if (details.reason !== "clean-exit") win?.webContents.reload();
   });
-  registerTheater(win);
+  registerTheater(win, () => appAccess.getState().allowed);
+  const resetRendererAccess = () => {
+    // Close native pages without sending a logout into the departing document.
+    resettingRenderer = true;
+    stopCrypto();
+    try { appAccess.reset(); } finally { resettingRenderer = false; }
+  };
+  win.webContents.on("did-start-loading", resetRendererAccess);
+  win.webContents.on("render-process-gone", resetRendererAccess);
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
   win.on("close", (event) => {
-    if (desktop.preferences().closeToTray && tray && !tray.isDestroyed() && !quitting) {
+    if (desktop.preferences().closeToTray&&tray&&!tray.isDestroyed() && !quitting) {
       event.preventDefault();
       win?.hide();
     }
@@ -303,9 +366,9 @@ function createWindow(): void {
     views.clear();
     shownService = null;
   });
-  win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
+  win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
+  if (!app.isPackaged&&process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
 
@@ -321,13 +384,13 @@ function logError(text: string): void {
   }
 }
 ipcMain.on("log:error", (event, text: unknown) => {
-  if (event.sender === win?.webContents && typeof text === "string") logError(text);
+  if (fromRenderer(event) && typeof text === "string") logError("Renderer failure; content and stack omitted to protect secrets");
 });
 
 // Secrets the renderer keeps across restarts (the Annoy Global keys), sealed by
 // the OS keychain. Without a real keychain nothing is written: the app asks for
 // the password again next time instead of storing keys in the clear.
-const SECRET_NAMES = new Set(["global"]);
+const SECRET_NAMES = new Set(["global", "accounts"]);
 const secretsFile = () => join(app.getPath("userData"), "secrets.json");
 const keychainAvailable = () =>
   safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
@@ -339,7 +402,7 @@ function readSecrets(): Record<string, string> {
   }
 }
 ipcMain.handle("secrets:get", (event, name: unknown) => {
-  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name) || !keychainAvailable()) return null;
+  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name) || !keychainAvailable()) return null;
   const sealed = readSecrets()[name];
   try {
     return sealed ? safeStorage.decryptString(Buffer.from(sealed, "base64")) : null;
@@ -348,13 +411,27 @@ ipcMain.handle("secrets:get", (event, name: unknown) => {
   }
 });
 ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
-  if (event.sender !== win?.webContents || typeof name !== "string" || !SECRET_NAMES.has(name)) return false;
+  if (!fromRenderer(event) || typeof name !== "string" || !SECRET_NAMES.has(name)) return false;
   const all = readSecrets();
   if (typeof value === "string" && keychainAvailable()) all[name] = safeStorage.encryptString(value).toString("base64");
   else delete all[name];
   writeFileSync(secretsFile(), JSON.stringify(all), { mode: 0o600 });
   return name in all;
 });
+
+// Native browsing stays locked until credentials are independently validated here.
+ipcMain.handle("auth:get", event => fromRenderer(event) ? appAccess.getState() : { allowed: false, global: false, localAccounts: [] });
+ipcMain.handle("auth:global-url", event => fromRenderer(event) ? globalUrl : null);
+ipcMain.handle("auth:global", (event, token: unknown) => {
+  if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
+  return appAccess.verifyGlobal(token);
+});
+ipcMain.handle("auth:local", (event, account: unknown) => {
+  if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
+  return appAccess.verifyLocal(account);
+});
+ipcMain.handle("auth:logout-global", event => { if (fromRenderer(event)) {stopCrypto();appAccess.revokeGlobal();} });
+ipcMain.handle("auth:logout-local", (event, id: unknown, lock:unknown=true) => { if (fromRenderer(event) && typeof id === "string") {if(lock!==false)stopCrypto();appAccess.revokeLocal(id);} });
 
 // Only the local, isolated renderer may control the desktop window.
 ipcMain.on("window:control", (event, action: unknown) => {
@@ -364,46 +441,56 @@ ipcMain.on("window:control", (event, action: unknown) => {
   else if (action === "close") win.close();
 });
 ipcMain.on("file:download", (event, url: unknown) => {
-  if (!win || event.sender !== win.webContents || typeof url !== "string" || !/^https?:\/\//.test(url)) return;
+  if (!authorized(event) || !win || typeof url !== "string" || !/^https?:\/\//.test(url)) return;
   win.webContents.downloadURL(url);
 });
-ipcMain.handle("system:idle", (event) => event.sender === win?.webContents ? powerMonitor.getSystemIdleTime() : 0);
-ipcMain.handle("window:maximized", (event) => event.sender === win?.webContents && win.isMaximized());
+ipcMain.handle("system:idle", (event) => fromRenderer(event) ? powerMonitor.getSystemIdleTime() : 0);
+ipcMain.handle("window:maximized", (event) => fromRenderer(event) && win!.isMaximized());
 
-ipcMain.on("service:show", (_e, raw: unknown) => {
+ipcMain.on("service:show", (event, raw: unknown) => {
+  if (!authorized(event)) return;
   const service = parseService(raw);
   if (service) showService(service);
 });
-ipcMain.on("service:hide", () => showService(null));
-ipcMain.on("service:reload", (_e, id: unknown) => {
+ipcMain.on("service:hide", event => { if (authorized(event)) showService(null); });
+ipcMain.on("service:reload", (event, id: unknown) => {
+  if (!authorized(event)) return;
   if (typeof id === "string") views.get(id)?.view.webContents.reload();
 });
-ipcMain.handle("service:remove", (_e, id: unknown) => (typeof id === "string" ? removeService(id) : undefined));
-ipcMain.on("service:bounds", (_e, raw: unknown) => {
+ipcMain.handle("service:remove", (event, id: unknown) => (authorized(event) && typeof id === "string" ? removeService(id) : undefined));
+ipcMain.on("service:bounds", (event, raw: unknown) => {
+  if (!authorized(event)) return;
   const r = (raw ?? {}) as Record<string, unknown>;
   const px = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
   serviceArea = { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) };
   layoutService();
 });
-ipcMain.on("teamspeak:open", (_e, link: unknown) => {
+ipcMain.on("teamspeak:open", (event, link: unknown) => {
+  if (!authorized(event)) return;
   if (typeof link === "string" && link.startsWith("ts3server://")) openExternal(link);
 });
-ipcMain.handle("screen:mode", () => (systemPicker ? "system" : "app"));
-ipcMain.handle("screen:sources", async () => {
+ipcMain.handle("screen:mode", event => authorized(event) ? (systemPicker ? "system" : "app") : null);
+ipcMain.handle("screen:sources", async event => {
+  if (!authorized(event)) return [];
   const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 } });
   return sources.map((src) => ({ id: src.id, name: src.name, kind: src.id.startsWith("screen:") ? "screen" : "window", thumbnail: src.thumbnail.toDataURL() }));
 });
-ipcMain.on("screen:choose", (_e, id: unknown) => {
+ipcMain.on("screen:choose", (event, id: unknown) => {
+  if (!authorized(event)) return;
   chosenScreenSource = typeof id === "string" ? id : null;
 });
-ipcMain.on("window:flash", () => {
+ipcMain.on("window:flash", event => {
+  if (!authorized(event)) return;
   if (win && !win.isFocused()) win.flashFrame(true);
 });
 
 app.whenReady().then(() => {
   trayCapable=supportsTray();
   createWindow();
+  const crypto=registerCrypto(() => win, () => appAccess.getState().allowed);
+  stopCrypto = crypto; proofCrypto=crypto.proof;
   createTray();
+  setInterval(() => void appAccess.revalidate(), 60_000).unref();
   if (win) startUpdater(win);
 });
 app.on("window-all-closed", () => {
@@ -412,6 +499,3 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
-import {registerLocalization} from "./localization.ts";
-
-

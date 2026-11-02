@@ -1,4 +1,6 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import {electron} from './fixtures/electron-launch.ts';
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
+import { test, expect } from "@playwright/test";
 import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
@@ -8,10 +10,12 @@ const require = createRequire(import.meta.url);
 
 test("desktop navigation, themes, window controls and image attachments", async () => {
   const userData = await mkdtemp(join(tmpdir(), "distopic-ui-"));
-  const env = { ...process.env, DISTOPIC_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+  const auth = await globalAuthFixture();
+  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -49,17 +53,20 @@ test("desktop navigation, themes, window controls and image attachments", async 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await page.screenshot({ path: join(screenshots, "desktop-light.png") });
 
-    // Tiling window managers can open or resize this test window maximized.
-    if (await page.getByRole("button", { name: "Restaurar janela", exact: true }).isVisible())
+    await test.step('native maximize/restore state', async step => {
+      step.skip(!!process.env.ANNOY_TEST_MONITOR, 'Dedicated Hyprland/XWayland floating windows do not acknowledge maximization; keep the no-focus monitor isolation. Validate native window state in the normal desktop/Windows run.');
+      // Tiling window managers can open or resize this test window maximized.
+      if (await page.getByRole("button", { name: "Restaurar janela", exact: true }).isVisible())
+        await page.getByRole("button", { name: "Restaurar janela", exact: true }).click();
+      await page.getByRole("button", { name: "Maximizar", exact: true }).click();
+      await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized())).toBe(true);
       await page.getByRole("button", { name: "Restaurar janela", exact: true }).click();
-    await page.getByRole("button", { name: "Maximizar", exact: true }).click();
-    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized())).toBe(true);
-    await page.getByRole("button", { name: "Restaurar janela", exact: true }).click();
-    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized())).toBe(false);
+      await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized())).toBe(false);
+    });
 
     // Synthetic state is injected only by this test, never by the shipped app.
-    await page.routeWebSocket("ws://fixture.test/gateway", () => {});
-    await page.route("http://fixture.test/**", async route => {
+    await page.routeWebSocket("wss://fixture.test/gateway", () => {});
+    await page.route("https://fixture.test/**", async route => {
       if (route.request().url().endsWith(".png")) return route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") });
       return route.fulfill({ contentType: "application/json", body: "[]" });
     });
@@ -72,13 +79,13 @@ test("desktop navigation, themes, window controls and image attachments", async 
       const channel = (id: string, name: string, type = "text", parentId: string | null = "community") => ({ id, serverId: "test", type, name, topic: "Um lugar para colocar o papo em dia.", parentId, position: 0, overwrites: [] });
       const now = new Date().toISOString();
       const message = (id: string, author: typeof me, content: string, attachments: unknown[] = []) => ({ id, channelId: "general", author, content, createdAt: now, editedAt: null, replyToId: null, attachments, mentionIds: [], mentionsEveryone: false });
-      addAccount({ id: "fixture", url: "http://fixture.test", token: "synthetic-test-token", userId: "me", instanceName: "Instância de teste" });
+      addAccount({ id: "fixture", url: "https://fixture.test", token: "synthetic-test-token", userId: "me", instanceName: "Instância de teste" });
       setState((s: any) => {
         const inst = s.instances.fixture;
         inst.status = "ready"; inst.user = me; inst.servers = [server];
         inst.presences = { me: "online", friend: "online" };
         inst.serverStates.test = { server, channels: [channel("community", "Comunidade", "category", null), channel("general", "geral"), channel("ideas", "ideias"), channel("images", "imagens"), channel("voice", "Sala de conversa", "voice")], roles: [{ id: "test", serverId: "test", name: "Membros", color: null, permissions: 2147483647, position: 0 }], members: [me, friend].map(user => ({ user, nick: null, roleIds: ["test"], joinedAt: now, presence: "online" })), voiceStates: [], permissions: 2147483647 };
-        inst.messages.general = { hasMore: false, loading: false, items: [message("1", me, "Bem-vindos ao nosso espaço de conversa!"), message("2", friend, "Trouxe a nova identidade para vocês verem. O que acharam?", ["a", "b"].map(id => ({ id, filename: `identidade-${id}.png`, size: 2048, contentType: "image/png", url: `http://fixture.test/${id}.png` }))), message("3", me, "Gostei! Dá para abrir as imagens aqui mesmo no Annoy.")] };
+        inst.messages.general = { hasMore: false, loading: false, items: [message("1", me, "Bem-vindos ao nosso espaço de conversa!"), message("2", friend, "Trouxe a nova identidade para vocês verem. O que acharam?", ["a", "b"].map(id => ({ id, filename: `identidade-${id}.png`, size: 2048, contentType: "image/png", url: `https://fixture.test/${id}.png` }))), message("3", me, "Gostei! Dá para abrir as imagens aqui mesmo no Annoy.")] };
         s.settings.theme = "dark";
         s.view = { kind: "server", accountId: "fixture", serverId: "test", channelId: "general" };
       });
@@ -112,6 +119,7 @@ test("desktop navigation, themes, window controls and image attachments", async 
     expect(errors).toEqual([]);
   } finally {
     await app.close();
+    await auth.close();
     await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

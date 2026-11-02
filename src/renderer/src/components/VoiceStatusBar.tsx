@@ -19,13 +19,25 @@ export function VoiceStatusBar() {
         <Icon name={voice.status === "connected" ? "radio" : "loader"} size={16} />
       </span>
       <div className="voice-status-copy">
-        <span role="status">{voice.status === "connected" ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}</span>
+        <span role="status">
+          {voice.status === "connected" ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}
+          {voice.status === "connected" && (
+            <span
+              className="voice-protection"
+              data-e2ee={voice.e2ee ? "true" : "false"}
+              title={voice.e2ee ? translate("common.8b4213cd6fe0") : translate("common.4e56a0bc7800")}
+            >
+              {" "}
+              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : "sem E2EE"}
+            </span>
+          )}
+        </span>
         <strong className="truncate">
-          {channel?.name ?? translate("common.b9bd50cb65eb")}
+          {channel?.name ?? "Canal de voz"}
           <span>
             {" "}
             · {state?.server.name ?? translate("common.05e427a291c2")}
-            {count > 0 && translate("common.f175b180fb81",{p0:(count)})}
+            {count > 0 && ` · ${count} na sala`}
           </span>
         </strong>
       </div>
@@ -36,5 +48,3 @@ export function VoiceStatusBar() {
     </div>
   );
 }
-
-

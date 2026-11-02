@@ -1,10 +1,9 @@
-import {rich} from "../lib/localization.ts";
-import {t as translate,plural} from "../../../shared/localization/index.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import type { ServerSummary } from "@distopic/protocol";
 import * as Popover from "@radix-ui/react-popover";
 import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
 import { initials } from "../format.tsx";
-import { setState, useStore, type Account, type InstanceState } from "../store.ts";
+import { identityAccountIds, setState, useStore, type Account, type InstanceState } from "../store.ts";
 import { Avatar, Icon, openModal } from "./ui.tsx";
 import { ServiceTab, tabLayout } from "./Services.tsx";
 import { Brand } from "./Brand.tsx";
@@ -55,7 +54,10 @@ export function UserPanel() {
   const settings = useStore((s) => s.settings);
   const view = useStore((s) => s.view);
   const accounts = useStore((s) => s.accounts);
-  const accountId = "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
+  const annoy = useStore((s) => s.global);
+  // The Annoy account selected in the switcher: the panel shows it, not a server account.
+  const annoyMode = "accountId" in view && view.accountId === null && !!annoy;
+  const accountId = annoyMode ? undefined : "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
   const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
   const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
   const manualSupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
@@ -66,7 +68,7 @@ export function UserPanel() {
 
   const openSettings = () =>
     setState((s) => {
-      s.modal = { kind: "userSettings" };
+      s.modal = { kind: "userSettings", ...(accountId && { accountId }) };
     });
 
   return (
@@ -76,43 +78,43 @@ export function UserPanel() {
         <Popover.Root>
           <Popover.Trigger asChild>
           <button className="user-identity" aria-label={translate("common.5c9cb6831931")}>
-            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : <Brand size={32} />}
+            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={32} /> : <Brand size={32} />}
             <span className="user-identity-text">
-              <strong className="truncate">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>
-              <span>{user ? `@${user.username}` : translate("common.423f69a38f8e")}</span>
+              <strong className="truncate">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>
+              <span>{user ? `@${user.username}` : annoyMode ? translate("common.21c5709ca7b8") : "Vamos conversar?"}</span>
             </span>
           </button>
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label={translate("common.9edbcdb31d91")}>
               <div className="member-card-head">
-                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : <Brand size={48} />}
-                <div><strong className="member-card-name">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>{user && <div className="muted">@{user.username}</div>}</div>
+                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={56} /> : <Brand size={48} />}
+                <div><strong className="member-card-name">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>{user ? <div className="muted">@{user.username}</div> : annoyMode && <div className="muted">{translate("common.3540090f1a7a")}{annoy!.email}</div>}</div>
               </div>
               {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
               <label className="profile-status-choice">{translate("common.87c9043c582f")}<Select aria-label={translate("common.87c9043c582f")} value={settings.manualPresence} onChange={(event) => setState((s) => { s.settings.manualPresence = event.target.value as ManualPresence; })}>
                   {(["online", "idle", "dnd", "offline"] as const).map((status) => <option key={status} value={status}>{presenceLabel(status)}</option>)}
                 </Select>
               </label>
-              <p className="muted small">{settings.manualPresence === "online" ? translate("common.6b422f6d024f") : settings.manualPresence === "idle" ? translate("common.905d1c0b9f78") : settings.manualPresence === "dnd" ? translate("common.84b97bf196c0") : translate("common.d78216f5ca21")}</p>
+              <p className="muted small">{settings.manualPresence === "online" ? translate("common.6b422f6d024f") : settings.manualPresence === "idle" ? translate("common.905d1c0b9f78") : settings.manualPresence === "dnd" ? "Silencia avisos de mensagens e chamadas." : translate("common.d78216f5ca21")}</p>
               {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">{translate("common.41f9f802ad4b")}</p>}
               <div className="self-profile-activity">
                 <h3>{translate("common.c539537cdd76")}</h3>
                 <ActivityStack activities={activities} />
-                {!activities.length && <p className="muted">{!settings.shareActivity ? translate("common.c9d1b9e3ba94") : snapshot?.error ?? translate("common.f557b5cdcc29")}</p>}
-                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? translate("common.57415ffd7b3b") : translate("common.7bda91a1a79b")}</p>}
+                {!activities.length && <p className="muted">{!settings.shareActivity ? translate("common.c9d1b9e3ba94") : snapshot?.error ?? "Nenhuma atividade detectada agora."}</p>}
+                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? "Compartilhada com amigos e membros dos seus servidores." : translate("common.7bda91a1a79b")}</p>}
               </div>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}>{rich("common.fdea9c93093b",{p0:(<Icon name="edit" size={16} />)})}</button></Popover.Close>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" size={16} />)})}</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />{translate("common.c10011b93f9c")}</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" size={16} />{translate("common.cd405060935b")}</button></Popover.Close>
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
         <div className="user-control-pair">
-          <Tooltip content={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")} side="top">
+          <Tooltip content={settings.selfMute ? translate("common.2c42f42f33a1") : "Silenciar microfone"} side="top">
             <button
               className={`icon-btn${settings.selfMute ? " danger" : ""}`}
               onClick={() => toggleVoiceSetting("selfMute")}
-              aria-label={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")}
+              aria-label={settings.selfMute ? translate("common.2c42f42f33a1") : "Silenciar microfone"}
               aria-pressed={settings.selfMute}
             >
               <Icon name={settings.selfMute ? "micOff" : "mic"} size={17} />
@@ -145,7 +147,10 @@ export function UserPanel() {
 
 /** Community bar, down the side or across the top: home, browser services and every server of every connected instance. */
 export function TopBar() {
-  const accounts = useStore((s) => s.accounts);
+  // Only the identity in use: another user's servers and conversations never show here.
+  const identity = useStore((s) => identityAccountIds(s).join("\n"));
+  const allAccounts = useStore((s) => s.accounts);
+  const accounts = allAccounts.filter((account) => identity.split("\n").includes(account.id));
   const instances = useStore((s) => s.instances);
   const view = useStore((s) => s.view);
   const services = useStore((s) => s.services);
@@ -177,14 +182,14 @@ export function TopBar() {
           const user = dm.recipients[0];
           if (!user) return null;
           const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
-          return <Tooltip key={`${account.id}-${dm.id}`} content={plural({one:"counts.unreadName.one",other:"counts.unreadName.other"},unread,{p0:nickname})}><button className="tab-item dm-shortcut" aria-label={plural({one:"counts.unreadConversation.one",other:"counts.unreadConversation.other"},unread,{p0:nickname})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
+          return <Tooltip key={`${account.id}-${dm.id}`} content={translate("common.6e8c81a18a65",{p0:(nickname),p1:(unread)})}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(unread)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
         })}
         {before.map((service) => <ServiceTab key={service.id} service={service} />)}
         {before.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {accounts.map((account) => {
           const inst = instances[account.id];
           return <div key={account.id} className="tab-group">
-            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={translate("common.07e3a63ea0ed",{p0:(account.instanceName),p1:(inst?.status === "invalid" ? translate("common.f2c87349e41f") : translate("common.e27be73b7089"))})} aria-label={translate("common.07e3a63ea0ed",{p0:(account.instanceName),p1:(inst?.status === "invalid" ? translate("common.9200e693d8d3") : translate("common.63d538de9074"))})} onClick={() => inst?.status === "invalid" ? setState((s) => { s.modal = { kind: "addAccount" }; }) : reconnect(account.id)} />}
+            {inst?.status !== "ready" && <button className={`instance-status ${inst?.status ?? "connecting"}`} title={`${account.instanceName}: ${inst?.status === "outdated" ? "atualize o Annoy para conectar" : inst?.status === "invalid" ? translate("common.f2c87349e41f") : translate("common.e27be73b7089")}`} aria-label={`${account.instanceName}: ${inst?.status === "outdated" ? "atualizar o Annoy" : inst?.status === "invalid" ? translate("common.9200e693d8d3") : translate("common.63d538de9074")}`} onClick={() => inst?.status === "outdated" ? openModal({ kind: "userSettings", section: "updates" }) : inst?.status === "invalid" ? openModal({ kind: "addAccount", accountId: account.id }) : reconnect(account.id)} />}
             {inst?.servers.map((server) => <ServerTab key={server.id} account={account} server={server} inst={inst} />)}
           </div>;
         })}
@@ -198,7 +203,3 @@ export function TopBar() {
     </header>
   );
 }
-
-
-
-

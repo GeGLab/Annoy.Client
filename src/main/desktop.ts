@@ -1,3 +1,4 @@
+import {trustedRenderer} from "./trusted-renderer.ts";
 import { app, ipcMain, type BrowserWindow } from "electron";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -119,7 +120,7 @@ export function desktopController(
     return snapshot();
   }
   const secure = (event: Electron.IpcMainInvokeEvent) => {
-    if (!localMainFrame(event, window()?.webContents))
+    if (!trustedRenderer(event, window()))
       throw new Error("Invalid desktop sender");
   };
   ipcMain.handle("desktop:get", (event) => {

@@ -26,7 +26,19 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb libgbm1 libnss3 libasound2t64
       - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo install wasm-bindgen-cli --version 0.2.130 --locked
       - run: npm run typecheck
+      - run: npm run crypto:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ runner.os }}
+          path: |
+            native/annoy-crypto/target/release/annoy-crypto*
+            src/renderer/src/media-e2ee/generated/annoy_sframe.wasm
+          retention-days: 3
       - name: Unit tests
         shell: bash
         run: node --experimental-transform-types --test scripts/tests/*.test.mjs

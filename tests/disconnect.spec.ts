@@ -1,8 +1,8 @@
 import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] } });
-const origin = 'http://disconnect.test';
+test.use({ launchOptions: { args: ['--mute-audio', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] } });
+const origin = 'https://disconnect.test';
 const me = { id: 'me', username: 'tester', displayName: 'Pessoa de teste', avatarUrl: null };
 const friend = { id: 'friend', username: 'friend', displayName: 'Amigo de teste', avatarUrl: null };
 const server = { id: 'server', name: 'Comunidade de teste', iconUrl: null, ownerId: 'me' };
@@ -44,7 +44,7 @@ async function setup(page: Page, acknowledge = true) {
     if (!available) return route.abort('connectionrefused');
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(new URL(route.request().url()).pathname.endsWith('/servers/server') ? state : []) });
   });
-  await page.routeWebSocket('ws://disconnect.test/gateway', ws => {
+  await page.routeWebSocket('wss://disconnect.test/gateway', ws => {
     if (!available) { ws.close({ code: 1013, reason: 'server unavailable' }); return; }
     socket = ws;
     ws.onMessage(raw => {
@@ -62,8 +62,10 @@ async function setup(page: Page, acknowledge = true) {
   });
   await page.goto('http://127.0.0.1:5178');
   await page.evaluate(async () => {
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    setState((s: any) => { s.access = { allowed: true, global: true, localAccounts: [] }; s.global = { id: "global-test", name: "Test", email: "test@example.com" }; });
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-    addAccount({ id: 'test', url: 'http://disconnect.test', userId: 'me', token: 'synthetic', instanceName: 'Instância de teste' });
+    addAccount({ id: 'test', url: 'https://disconnect.test', userId: 'me', token: 'synthetic', instanceName: 'Instância de teste' });
   });
   await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test?.status)).toBe('ready');
   return { methods, writes, stop: (code: number) => { available = false; socket.close({ code, reason: 'server stopped' }); }, resume: () => { available = true; } };
@@ -74,9 +76,10 @@ for (const code of [1001, 4010]) test(`gateway close ${code} ends camera, screen
   await page.evaluate(async () => {
     const client = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     client.navigate({ kind: 'home', accountId: 'test', dmId: 'dm' });
-    await client.joinVoice('test', 'server', 'voice');
-    await client.toggleCamera();
-    await client.startScreenShare(null);
+    void client.joinVoice('test', 'server', 'voice');
+  });
+  await expect.poll(()=>fixture.methods.includes('join')).toBe(true);
+  await page.evaluate(async()=>{const client=await import(location.origin+'/src/client.ts');await client.toggleCamera();await client.startScreenShare(null);
   });
   const input = page.getByRole('textbox', { name: 'Conversar em Amigo de teste' });
   await input.fill('Rascunho que não foi enviado');
@@ -88,7 +91,7 @@ for (const code of [1001, 4010]) test(`gateway close ${code} ends camera, screen
   await expect(input).toBeDisabled();
   await expect(input).toHaveValue('Rascunho que não foi enviado');
   await expect(page.getByRole('button', { name: 'Enviar mensagem', exact: true })).toBeDisabled();
-  await expect(page.locator('.connection-notice')).toContainText('Sem conexão');
+  await expect(page.locator('.connection-notice').filter({hasText:'Sem conexão'})).toBeVisible();
   expect(fixture.writes).toEqual([]);
   await expect(page.getByRole('button', { name: 'Ver conteúdo salvo' })).toBeVisible();
   await page.getByRole('button', { name: 'Ver conteúdo salvo' }).click();
@@ -122,7 +125,8 @@ test('network loss ends a private call and releases its devices', async ({ page 
 test('a silent gateway loses its lease within ten seconds and stops the microphone', async ({ page }) => {
   await page.clock.install();
   await setup(page, false);
-  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).joinVoice('test', 'server', 'voice'));
+  await page.evaluate(async()=>{const client=await import(location.origin+'/src/client.ts');(window as any).__pendingJoin=client.joinVoice('test','server','voice');});
+  await page.evaluate(async()=>{await (window as any).__pendingJoin;});
   await page.clock.runFor(10_001);
   expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().voice)).toBeNull();
   expect(await page.evaluate(() => (window as any).__captured.every((t: MediaStreamTrack) => t.readyState === 'ended'))).toBe(true);

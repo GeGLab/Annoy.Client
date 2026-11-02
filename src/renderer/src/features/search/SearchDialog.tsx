@@ -1,4 +1,3 @@
-import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useRef, useState } from "react";
 import { Search, SlidersHorizontal, FileSearch, ArrowUpRight } from "lucide-react";
@@ -72,7 +71,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
   };
   return (
     <Modal
-      title={serverId ? translate("common.340ea158fc1e",{p0:(instance?.serverStates[serverId]?.server.name ?? "servidor")}) : translate("common.a85a80ba87f5")}
+      title={serverId ? translate("common.340ea158fc1e",{p0:(instance?.serverStates[serverId]?.server.name ?? "servidor")}) : "Buscar mensagens"}
       wide
       className="search-modal"
     >
@@ -95,7 +94,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
           <Button loading={loading} type="submit">{translate("common.5f55edf90089")}</Button>
         </div>
         <div className="search-scope">
-          <span>{serverId ? translate("common.4ebc41a50c6a") : translate("common.89ef918fd4ca")}</span>
+          <span>{translate("common.7306ee64b7d1")}</span>
           <Button size="sm" variant="ghost" onClick={() => setFilters((v) => !v)} aria-expanded={filters}>
             <SlidersHorizontal size={15} />{translate("common.57ac13ce3d5b")}</Button>
         </div>
@@ -131,7 +130,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
                   ["video", translate("common.bc10c86c24b5")],
                   ["audio", translate("common.195c60bb2325")],
                   ["file", translate("common.e186297c35aa")],
-                  ["link", translate("common.a6a32dbc5618")],
+                  ["link", "Link"],
                 ].map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
@@ -172,11 +171,11 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             <div>
               <header>
                 <strong>{message.author.displayName}</strong>
-                <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time>
+                <time>{new Date(message.createdAt).toLocaleString("pt-BR")}</time>
               </header>
               <p>{message.content || `${message.attachments.length} anexo(s)`}</p>
               <small>
-                {resultServer ? `#${channelName}` : translate("common.4e19907ae2f0")}
+                {resultServer ? `#${channelName}` : "Mensagem direta"}
                 {message.attachments.length > 0 ? ` · ${message.attachments.length} anexo(s)` : ""}
               </small>
             </div>
@@ -207,7 +206,3 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
     </Modal>
   );
 }
-
-
-
-

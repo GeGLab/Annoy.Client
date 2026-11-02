@@ -1,5 +1,3 @@
-import {rich} from "../lib/localization.ts";
-import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
@@ -29,7 +27,7 @@ let LEVEL_TEXT: Record<VoiceUsage["level"], string> = {
 };
 
 /** Cloudflare bills decimal gigabytes. */
-const gb = (bytes: number) => `${(bytes / 1e9).toLocaleString(localizationPreferences().region, { maximumFractionDigits: bytes < 1e10 ? 2 : 0 })} GB`;
+const gb = (bytes: number) => `${(bytes / 1e9).toLocaleString("pt-BR", { maximumFractionDigits: bytes < 1e10 ? 2 : 0 })} GB`;
 
 function VoiceUsageBar({ usage }: { usage: VoiceUsage }) {
   const pct = usage.limitBytes > 0 ? Math.min(100, (usage.bytes / usage.limitBytes) * 100) : 0;
@@ -66,7 +64,7 @@ function SettingsTab({ accountId }: { accountId: string }) {
       <div className="stat-row">
         <div><strong>{overview.userCount}</strong><span>{translate("common.8c2c6ad91753")}</span></div>
         <div><strong>{overview.serverCount}</strong><span>{translate("common.75208deec696")}</span></div>
-        <div><strong>{overview.messageCount.toLocaleString(localizationPreferences().region)}</strong><span>{translate("common.a599d808caaa")}</span></div>
+        <div><strong>{overview.messageCount.toLocaleString("pt-BR")}</strong><span>{translate("common.a599d808caaa")}</span></div>
         <div><strong>{formatSize(overview.uploadsBytes)}</strong><span>{translate("common.bf627ff251cb")}</span></div>
       </div>
       {overview.voiceUsage && <VoiceUsageBar usage={overview.voiceUsage} />}
@@ -160,7 +158,7 @@ function UpdatesTab({ accountId }: { accountId: string }) {
         <>
           <div className="form-actions">
             <button className="btn" disabled={waitingFrom !== null || status.updating} onClick={apply}>
-              {waitingFrom !== null || status.updating ? translate("common.bf7bf10b3c9d") : translate("common.6301ab1abf1f")}
+              {waitingFrom !== null || status.updating ? translate("common.bf7bf10b3c9d") : "Atualizar agora"}
             </button>
           </div>
           <label className="check">
@@ -171,11 +169,12 @@ function UpdatesTab({ accountId }: { accountId: string }) {
               : translate("common.f6251d12ce9d")}
             {status.channel && status.channel !== "latest" && translate("common.1e09fb42f5d2",{p0:(status.channel)})}
           </p>
-          {status.lastCheck && <p className="muted small">{rich("common.e822ee324a5b",{p0:(formatTime(status.lastCheck))})}</p>}
+          {status.lastCheck && <p className="muted small">{translate("common.239b7be75667")}{formatTime(status.lastCheck)}</p>}
           {status.lastError && <p className="warning">{status.lastError}</p>}
         </>
       ) : (
-        <p className="warning">{rich("common.a736767b82f5",{p0:(<code>{translate("common.ecbf7c88b628")}</code>)})}</p>
+        <p className="warning">{translate("common.d161a116a5cf")}{" "}
+          <code>{translate("common.ecbf7c88b628")}</code>{translate("common.e501175dd2de")}</p>
       )}
     </div>
   );
@@ -196,12 +195,12 @@ function InvitesTab({ accountId }: { accountId: string }) {
       .then((inv) => {
         load();
         void navigator.clipboard.writeText(translate("common.1cf0bbd091a7",{p0:(address),p1:(inv.code)}));
-        toast(translate("common.2ab0a884e98c"));
+        toast("Convite criado e copiado");
       }, (e: Error) => toast(e.message));
   const now = new Date().toISOString();
   return (
     <div className="form">
-      <p className="muted small">{rich("common.5c52f7ccb006",{p0:(<strong>{translate("common.dd64642e2be5")}</strong>)})}</p>
+      <p className="muted small">{translate("common.f4eb154f1fad")}<strong>{translate("common.dd64642e2be5")}</strong>{translate("common.379ebee0a827")}</p>
       <div className="inline-form">
         <Field label={translate("common.feba17310985")}>
           <Select value={maxUses} onChange={(e) => setMaxUses(e.target.value)}>
@@ -219,7 +218,8 @@ function InvitesTab({ accountId }: { accountId: string }) {
             <option value="">{translate("common.12fcd0c7b77c")}</option>
           </Select>
         </Field>
-        <button className="btn" onClick={create}>{rich("common.3ead31b308c0",{p0:(<Icon name="plus" size={16} />)})}</button>
+        <button className="btn" onClick={create}>
+          <Icon name="plus" size={16} />{translate("common.0eeddb40bf57")}</button>
       </div>
       <div className="list">
         {invites?.length === 0 && <p className="muted">{translate("common.54179ddfad08")}</p>}
@@ -229,7 +229,11 @@ function InvitesTab({ accountId }: { accountId: string }) {
             <div key={inv.code} className={`list-row${dead ? " dim" : ""}`}>
               <span>
                 <code className="invite-code">{inv.code}</code>
-                <span className="muted small">{rich("common.8ac354e7a31b",{p0:(inv.uses),p1:(inv.maxUses ?? "∞"),p2:(inv.expiresAt ? `expira ${formatTime(inv.expiresAt)}` : translate("common.3d0f8cf7c58c")),p3:(dead ? translate("common.30d1317fe1fb") : "")})}</span>
+                <span className="muted small">
+                  {" "}
+                  · {inv.uses}/{inv.maxUses ?? "∞"}{translate("common.8a015333597e")}{inv.expiresAt ? `expira ${formatTime(inv.expiresAt)}` : translate("common.3d0f8cf7c58c")}
+                  {dead ? " · encerrado" : ""}
+                </span>
               </span>
               <span className="row-actions">
                 <button className="icon-btn" title={translate("desktop.39dcf1cbeb5a")} onClick={() => void navigator.clipboard.writeText(inv.code).then(() => toast(translate("common.8ef745e3e496")))}>
@@ -258,13 +262,12 @@ function UsersTab({ accountId }: { accountId: string }) {
     return () => clearTimeout(t);
   }, [accountId, q]);
   const ban = async (u: AdminUser) => {
-    const reason = await promptText(translate("common.e6c9ff049b6b",{p0:(u.user.displayName)}));
+    const reason = await promptText(`Suspender ${u.user.displayName}? Motivo (opcional):`);
     if (reason !== null) void act(api.post(`/admin/users/${u.user.id}/ban`, { reason }), translate("common.529d410aeddb")).then(load);
   };
   const remove = async (u: AdminUser) => {
-    if (!await confirmAction(translate("common.43bf0ba223b1",{p0:(u.user.displayName)}))) return;
-    const messages = await confirmAction(translate("common.780083bead19"), {confirmLabel:translate("common.6cbcb850c675"),cancelLabel:translate("common.92f3877caa1d")});
-    void act(api.del(`/admin/users/${u.user.id}?deleteMessages=${messages ? 1 : 0}`), translate("common.56a84683d20d")).then(load);
+    if (!await confirmAction(translate("common.7fd777b00ffe",{p0:(u.user.displayName)}))) return;
+    void act(api.del(`/admin/users/${u.user.id}`), translate("common.56a84683d20d")).then(load);
   };
   return (
     <div className="form">
@@ -279,14 +282,14 @@ function UsersTab({ accountId }: { accountId: string }) {
                 {u.isAdmin && <span className="tag accent">{translate("common.8c6976e5b541")}</span>}
                 {u.imported && <span className="tag">{translate("common.74f5d3d7eea9")}</span>}
                 {u.discordLinked && <span className="tag">{translate("common.e1ba4807a15d")}</span>}
-                {u.bannedAt && <span className="tag danger">{rich("common.7751b50b1c8f",{p0:(u.banReason ? `: ${u.banReason}` : "")})}</span>}
+                {u.bannedAt && <span className="tag danger">{translate("common.ef96b2fd4a3e")}{u.banReason ? `: ${u.banReason}` : ""}</span>}
               </span>
-              <span className="muted small">{rich("common.c95f315b2327",{p0:(new Date(u.createdAt).toLocaleDateString(localizationPreferences().region)),p1:(u.serverCount)})}</span>
+              <span className="muted small">{translate("common.62777edc5200")}{new Date(u.createdAt).toLocaleDateString("pt-BR")} · {u.serverCount}{translate("common.da25b1c8c747")}</span>
             </span>
             {u.user.id !== me && !u.imported && (
               <span className="row-actions">
                 <button className="btn btn-ghost btn-small" onClick={() => void act(api.patch(`/admin/users/${u.user.id}`, { isAdmin: !u.isAdmin })).then(load)}>
-                  {u.isAdmin ? translate("common.776ef3034932") : translate("common.0b7fd02234f7")}
+                  {u.isAdmin ? "Remover admin" : "Tornar admin"}
                 </button>
                 {!u.isAdmin &&
                   (u.bannedAt ? (
@@ -321,16 +324,18 @@ function ServersTab({ accountId }: { accountId: string }) {
         <div key={s.server.id} className="list-row">
           <span className="grow">
             <strong>{s.server.name}</strong>
-            <span className="muted small">{rich("common.76e944b28852",{p0:(s.owner?.displayName ?? "?"),p1:(s.memberCount),p2:(s.channelCount),p3:(new Date(s.createdAt).toLocaleDateString(localizationPreferences().region))})}</span>
+            <span className="muted small">
+              {" "}{translate("common.1cfab67e5e43")}{s.owner?.displayName ?? "?"} · {s.memberCount}{translate("common.e845c3d7c088")}{s.channelCount}{translate("common.20be13ddfe25")}{new Date(s.createdAt).toLocaleDateString("pt-BR")}
+            </span>
           </span>
           <button
             className="icon-btn danger"
-            title={s.server.ownerId === me && s.memberCount > 1 ? translate("common.12c8d248cf08") : translate("common.e5851a510556")}
+            title={s.server.ownerId === me && s.memberCount > 1 ? "Transfira a propriedade antes de excluir um servidor com outros membros." : "Excluir servidor"}
             disabled={s.server.ownerId === me && s.memberCount > 1}
             onClick={async () => {
               if (await confirmAction(
-                translate("common.3116a9c05a6a",{p0:(s.server.name)}),
-                { title: translate("settings.2ff41a4858a5",{p0:(s.server.name)}), confirmLabel: translate("common.e5851a510556") },
+                `Deseja mesmo excluir ${s.server.name}? Os canais, as mensagens e os anexos serão apagados.`,
+                { title: `Excluir "${s.server.name}"`, confirmLabel: "Excluir servidor" },
               )) void act(api.del(`/admin/servers/${s.server.id}`), translate("common.a8140b4b836e")).then(load);
             }}
           >
@@ -352,7 +357,7 @@ export function InstanceAdminModal({ accountId }: { accountId: string }) {
           [
             ["settings", translate("common.36664e8242af")],
             ["updates", translate("common.a1f09a31ad36")],
-            ["invites", translate("common.e263fc7fddf9")],
+            ["invites", "Convites de cadastro"],
             ["users", translate("common.06e7eb96a58e")],
             ["servers", translate("common.c1158df03518")],
           ] as const
@@ -376,26 +381,22 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
   const user = useStore((s) => s.instances[accountId]?.user);
   const [confirmText, setConfirmText] = useState("");
   const [password, setPassword] = useState("");
-  const [deleteMessages, setDeleteMessages] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!user) return null;
   const submit = async () => {
     setBusy(true);
-    const ok = await act(apiFor(accountId).request("DELETE", "/users/@me", { confirm: confirmText, password: password || undefined, deleteMessages }));
+    const ok = await act(apiFor(accountId).request("DELETE", "/users/@me", { confirm: confirmText, password: password || undefined }));
     setBusy(false);
     if (ok) {
       closeModal();
-      removeAccount(accountId);
+      removeAccount(accountId, "remove");
       toast(translate("common.56a84683d20d"));
     }
   };
   return (
     <Modal title={translate("common.37642ff749e3")}>
       <div className="form">
-        <p className="warning">{translate("common.389cf11250de")}</p>
-        <label className="check">
-          <Checkbox  checked={deleteMessages} onChange={(e) => setDeleteMessages(e.target.checked)} />{translate("common.22732ed71af8")}</label>
-        <p className="muted small">{translate("common.fe48cd4d0ca4")}</p>
+        <p className="warning">{translate("common.34bb391049e7")}</p>
         <Field label={translate("common.a5c92f994d5e",{p0:(user.username)})}>
           <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={user.username} />
         </Field>
@@ -421,5 +422,3 @@ onLocalizationChange(()=>{LEVEL_TEXT={
   video_off: translate("common.ddfbc131053a"),
   off: translate("common.67ed9e96f10f"),
 };});
-
-

@@ -1,4 +1,7 @@
-import { test, expect, _electron as electron, type Page, type WebSocketRoute } from "@playwright/test";
+import {electron} from './fixtures/electron-launch.ts';
+import {uiReactionFixture, uiSendFixture} from "./fixtures/ui-reactions.ts";
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
+import { test, expect,  type Page, type WebSocketRoute } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,11 +30,14 @@ async function fullyInside(page: Page, selector: string, top = 12) {
 async function launch({ fakeMedia = false, packaged = false } = {}) {
   const root = resolve(tmpdir()),
     data = await mkdtemp(join(root, "distopic-experience-"));
-  const env = { ...process.env, DISTOPIC_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+  const auth = await globalAuthFixture();
+  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
   if (packaged) delete (env as Partial<typeof env>).ELECTRON_RENDERER_URL;
   const app = await electron.launch({ executablePath: require("electron"), args: [...(fakeMedia ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] : []), resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
+  if(fakeMedia)await app.evaluate(({dialog})=>{dialog.showMessageBox=async(...args:any[])=>{const options=args.at(-1);if(options.message!=='Permitir media?')throw new Error('Unexpected native permission');return {response:1,checkboxChecked:false};};});
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".welcome")).toBeVisible();
   await page.evaluate(() => window.distopic?.activity.configure({ games: false, music: false, development: false }));
@@ -39,6 +45,7 @@ async function launch({ fakeMedia = false, packaged = false } = {}) {
   const close = async () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.destroy())).catch(() => undefined);
     await app.close();
+    await auth.close();
     if (dirname(data) !== root || !basename(data).startsWith("distopic-experience-")) throw new Error("Unsafe test directory");
     await rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
@@ -46,9 +53,9 @@ async function launch({ fakeMedia = false, packaged = false } = {}) {
 }
 
 async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
-  await page.routeWebSocket("ws://experience.test/gateway", (socket) => onSocket?.(socket));
-  await page.route("http://experience.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
-  await page.route("http://experience.test/image.png", async (route) =>
+  await page.routeWebSocket("wss://experience.test/gateway", (socket) => onSocket?.(socket));
+  await page.route("https://experience.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+  await page.route("https://experience.test/image.png", async (route) =>
     route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
   );
   await page.evaluate(async () => {
@@ -56,7 +63,7 @@ async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
     const user = { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null };
     const server = { id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null };
-    addAccount({ id: "test", url: "http://experience.test", userId: "person", token: "synthetic", instanceName: "Instância de teste" });
+    addAccount({ id: "test", url: "https://experience.test", userId: "person", token: "synthetic", instanceName: "Instância de teste" });
     setState((s: any) => {
       const inst = s.instances.test;
       inst.status = "ready";
@@ -106,14 +113,14 @@ async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
             mentionsEveryone: false,
             mentionIds: [],
             attachments: [
-              { id: "image", filename: "imagem.png", contentType: "image/png", size: 1000, url: "http://experience.test/image.png" },
-              { id: "audio", filename: "silencio.wav", contentType: "audio/wav", size: 96044, url: "http://experience.test/audio.wav" },
+              { id: "image", filename: "imagem.png", contentType: "image/png", size: 1000, url: "https://experience.test/image.png" },
+              { id: "audio", filename: "silencio.wav", contentType: "audio/wav", size: 96044, url: "https://experience.test/audio.wav" },
               {
                 id: "video",
                 filename: "video-teste.webm",
                 contentType: "video/webm",
                 size: 2000,
-                url: "http://experience.test/video.webm",
+                url: "https://experience.test/video.webm",
               },
             ],
           },
@@ -315,6 +322,8 @@ test("call membership sounds, stable participants, status icons and channel swit
     const tones = () => page.evaluate(() => (window as any).callTones);
     const users = page.locator(".voice-user");
     await page.locator(".channel.voice").filter({ hasText: "Sala de conversa" }).click();
+    // Voice is end-to-end encrypted by default: no transport-only consent is asked.
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect.poll(tones).toBe(3); // Local join, without a second cue for our gateway echo.
     update("friend", state("friend", "voice", { selfMute: true, selfDeaf: true, video: true, screen: true }));
     await expect.poll(tones).toBe(10); // Join plus the four-note screen-sharing cue.
@@ -372,7 +381,7 @@ test("individual voice volume reaches 200%, works without moderation and persist
       const message = JSON.parse(String(raw));
       if (message.op === "voice_state" || message.op === "voice") sharedChanges.push(message);
     }));
-    await page.route("http://experience.test/api/servers/server/members/**", (route) => {
+    await page.route("https://experience.test/api/servers/server/members/**", (route) => {
       sharedChanges.push(route.request().method());
       return route.fulfill({ contentType: "application/json", body: "{}" });
     });
@@ -531,6 +540,7 @@ test("voice names show local and online game activity, respecting sharing and fr
     await expect(friend.getByRole("img", { name: "Jogando Friend's game", exact: true })).toBeVisible();
     await expect(page.locator('.voice-user[data-user-id="visitor"] .voice-activity')).toHaveCount(0);
     await self.getByRole("img", { name: "Jogando Local game", exact: true }).hover();
+    await self.getByRole("img", { name: "Jogando Local game", exact: true }).focus();
     await expect(page.getByRole("tooltip")).toHaveText("Jogando Local game");
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -564,6 +574,8 @@ test("old server connections have a context menu and require a single named conf
       setState((s: any) => {
         s.accounts.push({ ...s.accounts[0], id: "old", url: "https://old-server.test", instanceName: "Conexão antiga", offlineSince: Date.now() - 7 * 24 * 60 * 60_000 });
         s.instances.old = old;
+        // The rail only shows the servers of the account in use.
+        s.view = { kind: "home", accountId: "old", dmId: null };
       });
     });
     // An unrelated offline instance must not block the connected community.
@@ -656,8 +668,8 @@ test("owners with other members must transfer ownership before leaving or removi
       const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       return structuredClone(getState().instances.test.serverStates.server);
     });
-    await page.route("http://experience.test/api/servers/server**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }));
-    await page.route("http://experience.test/api/servers/server/ownership", async (route) => {
+    await page.route("https://experience.test/api/servers/server**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }));
+    await page.route("https://experience.test/api/servers/server/ownership", async (route) => {
       expect(route.request().postDataJSON()).toEqual({ userId: "next-owner" });
       transfers++;
       data.server.ownerId = "next-owner";
@@ -802,13 +814,13 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
   try {
     for (const [id, session] of [["alice", left], ["bob", right]] as const) {
       const other = id === "alice" ? "bob" : "alice";
-      await session.page.route("http://private.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
-      await session.page.route("http://private.test/api/calls", async (route) => {
+      await session.page.route("https://private.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+      await session.page.route("https://private.test/api/calls", async (route) => {
         const body = route.request().postDataJSON();
         call = { id: "private-call", callerId: id, calleeId: other, video: body.video, status: "ringing", callerDeviceId: body.deviceId, iceServers: [] };
         publish(); await route.fulfill({ contentType: "application/json", body: JSON.stringify(call) });
       });
-      await session.page.routeWebSocket("ws://private.test/gateway", (socket) => {
+      await session.page.routeWebSocket("wss://private.test/gateway", (socket) => {
         sockets.set(id, socket);
         socket.onMessage((raw) => {
           const message = JSON.parse(String(raw));
@@ -836,7 +848,7 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
           (window as any).callStreams.push(stream); return stream;
         };
         const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-        addAccount({ id, url: "http://private.test", token: "synthetic", userId: id, instanceName: "Chamadas de teste" });
+        addAccount({ id, url: "https://private.test", token: "synthetic", userId: id, instanceName: "Chamadas de teste" });
       }, id);
       await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].displayName}`, exact: true })).toBeVisible();
     }
@@ -876,8 +888,8 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => { s.instances.test.instance = { isAdmin: false, registration: "open", voiceBackend: "builtin", socialProfiles: true }; });
     });
-    await page.route("http://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null, ...route.request().postDataJSON() }) }));
-    await page.route("http://experience.test/api/info", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ name: "Instância de teste", registrationOpen: true, registration: "open", discordLogin: false }) }));
+    await page.route("https://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null, ...route.request().postDataJSON() }) }));
+    await page.route("https://experience.test/api/info", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ name: "Instância de teste", registrationOpen: true, registration: "open", discordLogin: false, accountMode: "local" }) }));
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     const bio = page.getByRole("textbox", { name: "Biografia de tester", exact: true });
     await bio.fill("Uma biografia de teste com conteúdo para conferir o limite e a apresentação. ".repeat(14).slice(0, 1000));
@@ -898,13 +910,13 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
     await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Novidades do Annoy", exact: true })).toBeVisible();
     await page.screenshot({ path: join(capture, "annoy-news.png") });
-    await page.evaluate(async () => { const { removeAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); removeAccount("test"); openModal({ kind: "switchAccount" }); });
+    await page.evaluate(async () => { const { signOutAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); signOutAccount("test"); openModal({ kind: "switchAccount" }); });
     await expect(page.locator(".saved-account")).toHaveCount(1);
     expect(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("distopic.rememberedAccounts")!)))).not.toContain("token");
     await page.locator(".saved-account").click();
-    await expect(page.getByRole("textbox", { name: "Usuário", exact: true })).toHaveValue("tester");
+    await expect(page.getByRole("textbox", { name: "Usuário neste servidor", exact: true })).toHaveValue("tester");
     await page.screenshot({ path: join(capture, "remembered-login.png") });
-    await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+    await page.getByRole("button", { name: "Criar conta local", exact: true }).click();
     await page.screenshot({ path: join(capture, "register-redesign.png") });
   } finally { await close(); }
 });
@@ -916,7 +928,7 @@ test("Steam connection publishes online fallback, prefers local games and clears
   let activityRequests = 0;
   try {
     await page.evaluate(() => { window.open = () => null; });
-    await page.route("http://steam.test/api/**", (route) => {
+    await page.route("https://steam.test/api/**", (route) => {
       const path = new URL(route.request().url()).pathname;
       const connection = linked ? { steamId: "76561198000000001", profileUrl: "https://steamcommunity.com/profiles/76561198000000001/" } : null;
       let body: unknown = [];
@@ -931,7 +943,7 @@ test("Steam connection publishes online fallback, prefers local games and clears
       }
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
     });
-    await page.routeWebSocket("ws://steam.test/gateway", (socket) => socket.onMessage((message) => {
+    await page.routeWebSocket("wss://steam.test/gateway", (socket) => socket.onMessage((message) => {
       const data = JSON.parse(String(message));
       if (data.op === "identify") socket.send(JSON.stringify({ t: "READY", d: {
         user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {},
@@ -941,7 +953,7 @@ test("Steam connection publishes online fallback, prefers local games and clears
     }));
     await page.evaluate(async () => {
       const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-      addAccount({ id: "steam", url: "http://steam.test", token: "synthetic", userId: "me", instanceName: "Steam test" });
+      addAccount({ id: "steam", url: "https://steam.test", token: "synthetic", userId: "me", instanceName: "Steam test" });
     });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await page.getByRole("button", { name: "Atividade", exact: true }).click();
@@ -1003,8 +1015,8 @@ test("Spotify activity publishes on ready, clears when disabled and resumes afte
       ipcMain.removeHandler("activity:configure");
       ipcMain.handle("activity:configure", () => ({ supported: true, error: null, activities: [] }));
     });
-    await page.route("http://sharing.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
-    await page.routeWebSocket("ws://sharing.test/gateway", (ws) => {
+    await page.route("https://sharing.test/api/**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+    await page.routeWebSocket("wss://sharing.test/gateway", (ws) => {
       socket = ws;
       ws.onMessage((message) => {
         const data = JSON.parse(String(message));
@@ -1017,7 +1029,7 @@ test("Spotify activity publishes on ready, clears when disabled and resumes afte
       const { setState, getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       if (!getState().settings.shareActivity) throw new Error("Activity must default to enabled");
       setState((s: any) => { s.desktopActivity = { supported: true, error: null, activities: [{ kind: "music", provider: "spotify", name: "Faixa publicada", artist: "Artista", artwork: "data:image/jpeg;base64,/9j/AA==" }] }; });
-      addAccount({ id: "sharing", url: "http://sharing.test", token: "synthetic", userId: "me", instanceName: "Teste" });
+      addAccount({ id: "sharing", url: "https://sharing.test", token: "synthetic", userId: "me", instanceName: "Teste" });
     });
     await expect.poll(() => sent.some((items) => items[0]?.name === "Faixa publicada")).toBe(true);
     expect(sent.find((items) => items[0]?.name === "Faixa publicada")[0].artwork).toBeUndefined();
@@ -1093,8 +1105,8 @@ test("searchable permission targets distinguish roles and people and guard chang
   }
 });
 
-test("message search filters, pagination, context jump and return to latest", async () => {
-  const { page, close } = await launch();
+test("local message search filters, pagination, context jump and return to latest", async () => {
+  const { app, page, close } = await launch();
   try {
     await seed(page);
     let queries: URLSearchParams[] = [];
@@ -1110,18 +1122,16 @@ test("message search filters, pagination, context jump and return to latest", as
       mentionIds: [],
       mentionsEveryone: false,
     };
-    await page.route("http://experience.test/api/search/messages?**", (route) => {
-      const params = new URL(route.request().url()).searchParams;
-      queries.push(params);
-      return route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          items: params.has("cursor") ? [] : [{ message, channelName: "geral", serverId: "server" }],
-          nextCursor: params.has("cursor") ? null : "found",
-        }),
+    await app.evaluate(({ipcMain},message)=>{
+      (globalThis as any).__uiSearchQueries=[];
+      ipcMain.removeHandler('crypto:search');ipcMain.handle('crypto:search',(_event,raw)=>{
+        (globalThis as any).__uiSearchQueries.push(raw.query);
+        return {ok:true,value:{items:raw.query.cursor?[]:[{message,channelName:'geral',serverId:'server'}],nextCursor:raw.query.cursor?null:'found'}};
       });
-    });
-    await page.route("http://experience.test/api/channels/general/messages?**", (route) =>
+    },message);
+    // Search text must never go to a plaintext server search endpoint.
+    await page.route('https://experience.test/api/search/**',()=>{throw new Error('Local search leaked to the server');});
+    await page.route("https://experience.test/api/channels/general/messages?**", (route) =>
       route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(new URL(route.request().url()).searchParams.has("around") ? [message] : []),
@@ -1135,8 +1145,8 @@ test("message search filters, pagination, context jump and return to latest", as
     await page.getByRole("option", { name: "#geral", exact: true }).click();
     await page.getByRole("button", { name: "Buscar", exact: true }).click();
     await expect(page.locator(".search-result")).toHaveCount(1);
-    expect(queries[0]!.get("channelId")).toBe("general");
-    expect(queries[0]!.get("serverId")).toBe("server");
+    queries=(await app.evaluate(()=>(globalThis as any).__uiSearchQueries)).map((q:any)=>new URLSearchParams(q));
+    expect(queries[0]!.get('channelId')).toBe('general');expect(queries[0]!.get('serverId')).toBe('server');
     await page.screenshot({ path: join(capture, "message-search.png") });
     await page.setViewportSize({ width: 940, height: 620 });
     await page.evaluate(async () => {
@@ -1157,8 +1167,8 @@ test("message search filters, pagination, context jump and return to latest", as
     await page.getByRole("button", { name: "Limpar data", exact: true }).click();
     await page.setViewportSize({ width: 1320, height: 840 });
     await page.getByRole("button", { name: "Mais resultados", exact: true }).click();
-    await expect.poll(() => queries.length).toBe(2);
-    expect(queries[1]!.get("cursor")).toBe("found");
+    await expect.poll(()=>app.evaluate(()=>(globalThis as any).__uiSearchQueries.length)).toBe(2);
+    queries=(await app.evaluate(()=>(globalThis as any).__uiSearchQueries)).map((q:any)=>new URLSearchParams(q));expect(queries[1]!.get('cursor')).toBe('found');
     await page.locator(".search-result").click();
     await expect(page.locator('[data-message-id="found"]')).toBeInViewport();
     await expect(page.locator(".search-highlight")).toHaveCount(1);
@@ -1255,12 +1265,12 @@ test("wheel zoom and native in-app audio/video lifecycle", async () => {
   const { page, close } = await launch();
   try {
     await seed(page);
-    await page.route("http://experience.test/image.png", async (route) =>
+    await page.route("https://experience.test/image.png", async (route) =>
       route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
     );
-    await page.route("http://experience.test/audio.wav", (route) => route.fulfill({ contentType: "audio/wav", body: silence() }));
+    await page.route("https://experience.test/audio.wav", (route) => route.fulfill({ contentType: "audio/wav", body: silence() }));
     const video = await readFile("tests/fixtures/flower.webm");
-    await page.route("http://experience.test/video.webm", (route) =>
+    await page.route("https://experience.test/video.webm", (route) =>
       route.fulfill({ contentType: "video/webm", body: Buffer.from(video) }),
     );
     await page.getByRole("button", { name: "Visualizar imagem.png" }).click();
@@ -1392,7 +1402,7 @@ test("profile crop, deferred upload, save and removal failure retain draft", asy
   };
   try {
     await seed(page);
-    await page.route("http://experience.test/api/users/@me", (route) => {
+    await page.route("https://experience.test/api/users/@me", (route) => {
       const body = route.request().postDataJSON();
       if (failRemoval && body.avatarUrl === null)
         return route.fulfill({
@@ -1403,13 +1413,13 @@ test("profile crop, deferred upload, save and removal failure retain draft", asy
       user = { ...user, ...body };
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(user) });
     });
-    await page.route("http://experience.test/api/users/@me/avatar", (route) => {
+    await page.route("https://experience.test/api/users/@me/avatar", (route) => {
       uploads++;
       expect(route.request().postDataBuffer()!.length).toBeGreaterThan(1000);
-      user.avatarUrl = "http://experience.test/avatar.png";
+      user.avatarUrl = "https://experience.test/avatar.png";
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(user) });
     });
-    await page.route("http://experience.test/avatar.png", async (route) =>
+    await page.route("https://experience.test/avatar.png", async (route) =>
       route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
     );
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
@@ -1452,11 +1462,11 @@ test("server, role and channel settings share pending-save and exit guards", asy
   let failChannel = true;
   try {
     await seed(page);
-    await page.route("http://experience.test/api/servers/server**", (route) => {
+    await page.route("https://experience.test/api/servers/server**", (route) => {
       if (route.request().method() === "PATCH") writes.push({ url: route.request().url(), body: route.request().postDataJSON() });
       return route.fulfill({ contentType: "application/json", body: "{}" });
     });
-    await page.route("http://experience.test/api/channels/general", (route) => {
+    await page.route("https://experience.test/api/channels/general", (route) => {
       if (failChannel)
         return route.fulfill({
           status: 500,
@@ -1522,8 +1532,8 @@ test("friend sidebar, elapsed activity, animated stack and persistent personal v
         i.dms = [{ id: "dm-test", recipients: [user] }];
         i.messages["dm-test"] = { items: [], hasMore: false, loading: false };
         i.activities.friend = [
-          { kind: "game", provider: "steam", name: "Jogo de teste", appId: "480", artwork: "http://experience.test/image.png", startedAt: Date.now() - 125000 },
-          { kind: "music", provider: "spotify", name: "Faixa de teste", artist: "Artista de teste", artwork: "http://experience.test/image.png", startedAt: Date.now() - 60000 }
+          { kind: "game", provider: "steam", name: "Jogo de teste", appId: "480", artwork: "https://experience.test/image.png", startedAt: Date.now() - 125000 },
+          { kind: "music", provider: "spotify", name: "Faixa de teste", artist: "Artista de teste", artwork: "https://experience.test/image.png", startedAt: Date.now() - 60000 }
         ];
         s.view = { kind: "home", accountId: "test", dmId: "dm-test" };
       });
@@ -1669,17 +1679,17 @@ test("server search sits above group activities and server editing saves image d
     await seed(page);
     await page.evaluate(async()=>{
       const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"http://experience.test/image.png",startedAt:Date.now()-200000}];});
+      setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"https://experience.test/image.png",startedAt:Date.now()-200000}];});
     });
     await expect(page.locator(".titlebar .titlebar-search")).toHaveCount(0);
     await expect(page.locator(".member-search-slot").getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toBeVisible();
     await expect(page.locator(".friend-activities")).toContainText("Jogo do grupo");
     await expect(page.locator(".friend-activities")).toContainText("Atividades do grupo");
     await page.screenshot({path:join(capture,"group-search-dark.png")});
-    await page.route("http://experience.test/api/servers/server**",async(route)=>{
+    await page.route("https://experience.test/api/servers/server**",async(route)=>{
       if(route.request().method()==="PATCH"){writes.push("name");const body=route.request().postDataJSON();return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:body.name,ownerId:"person",iconUrl:null})});}await route.continue();
     });
-    await page.route("http://experience.test/api/servers/server/icon",(route)=>{writes.push("icon");return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:"Comunidade renovada",ownerId:"person",iconUrl:"http://experience.test/image.png"})});});
+    await page.route("https://experience.test/api/servers/server/icon",(route)=>{writes.push("icon");return route.fulfill({contentType:"application/json",body:JSON.stringify({id:"server",name:"Comunidade renovada",ownerId:"person",iconUrl:"https://experience.test/image.png"})});});
     await page.getByRole("button",{name:"Menu de Comunidade de teste"}).click();
     await page.getByRole("menuitem",{name:"Configurações do servidor",exact:true}).click();
     await page.getByLabel("Imagem do servidor",{exact:true}).setInputFiles("build/icon.png");
@@ -1693,7 +1703,7 @@ test("server search sits above group activities and server editing saves image d
     await page.screenshot({path:join(capture,"server-edit-image-light-minimum.png")});
     await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
     await expect(page.locator(".settings-savebar")).toHaveCount(0);expect(writes).toEqual(["name","icon"]);
-    await expect(page.locator(".tab-tile .server-icon")).toHaveAttribute("src","http://experience.test/image.png");
+    await expect(page.locator(".tab-tile .server-icon")).toHaveAttribute("src","https://experience.test/image.png");
     await page.keyboard.press("Escape");
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.modal={kind:"addTab"};});});
     await page.getByRole("tab",{name:"Serviços e sites"}).click();
@@ -1706,20 +1716,18 @@ test("server search sits above group activities and server editing saves image d
 });
 
 test("emoji reactions toggle and the media library installs, imports and restores packs", async()=>{
-  const {page,close}=await launch();const writes:string[]=[];
+  const {app,page,close}=await launch();
   try{
     await seed(page);
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};});});
-    await page.route("http://experience.test/api/channels/general/messages/message/reactions/**",async(route)=>{
-      writes.push(route.request().method());
-      const message=await page.evaluate(async()=>{const {getState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);return getState().instances.test!.messages.general!.items[0];});
-      await route.fulfill({contentType:"application/json",body:JSON.stringify({...message,reactions:route.request().method()==="PUT"?[{emoji:"👍",userIds:["person"]}]:[]})});
-    });
+    await uiReactionFixture(app);
+    await page.route('https://experience.test/api/channels/general/crypto',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({channel:{active:true}})}));
+    await page.evaluate(async()=>{const {setState}=await import(location.origin+'/src/store.ts');setState((s:any)=>{s.instances.test.messages.general.items[0].protection='e2ee';});});
     const row=page.locator('[data-message-id="message"]');await row.hover();
     await row.getByRole("button",{name:"Adicionar reação",exact:true}).click();
     await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
     const reaction=row.getByRole("button",{name:"👍: 1 reação",exact:true});await expect(reaction).toHaveAttribute("aria-pressed","true");
-    await reaction.click();await expect(reaction).toHaveCount(0);expect(writes).toEqual(["PUT","DELETE"]);
+    await reaction.click();await expect(reaction).toHaveCount(0);expect(await app.evaluate(()=> (globalThis as any).__uiReactionFixture.writes)).toEqual(["PUT","DELETE"]);
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
     const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});
     await picker.getByRole("button",{name:"sorriso feliz",exact:true}).click();
@@ -1752,7 +1760,7 @@ test("GIPHY queries the official API directly and shares a link without copying 
  const {page,close}=await launch();
  try{
   await seed(page);
-  await page.route("http://experience.test/api/media/config",(route)=>route.fulfill({contentType:"application/json",body:JSON.stringify({giphyApiKey:"synthetic-client-key"})}));
+  await page.route("https://experience.test/api/media/config",(route)=>route.fulfill({contentType:"application/json",body:JSON.stringify({giphyApiKey:"synthetic-client-key"})}));
   await page.route("https://api.giphy.com/v1/gifs/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify({data:[{id:"syntheticGIF",title:"GIF sintético de teste",images:{fixed_height:{url:"https://media.giphy.com/media/synthetic/giphy.gif"},original:{url:"https://media.giphy.com/media/synthetic/giphy.gif"}}}],pagination:{offset:0,count:1,total_count:1}})}));
   await page.route("https://media.giphy.com/**",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
   await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
@@ -1769,8 +1777,8 @@ test("profile editor stages an animated GIF without flattening it through croppi
  try{
   await seed(page);
   await page.evaluate(async()=>{const {Api}=await import(/* @vite-ignore */ `${location.origin}/src/api.ts`);const original=Api.prototype.uploadAvatar;Api.prototype.uploadAvatar=async function<T>(photo:Blob):Promise<T>{(window as any).stagedAvatarType=photo.type;(window as any).stagedAvatarHeader=new TextDecoder().decode((await photo.arrayBuffer()).slice(0,6));return original.call(this,photo) as Promise<T>;};});
-  await page.route("http://experience.test/api/users/@me/avatar",async(route)=>{bytes=route.request().postDataBuffer()!;await route.fulfill({contentType:"application/json",body:JSON.stringify({id:"person",username:"tester",displayName:"Pessoa de teste",avatarUrl:"http://experience.test/profile.gif"})});});
-  await page.route("http://experience.test/profile.gif",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
+  await page.route("https://experience.test/api/users/@me/avatar",async(route)=>{bytes=route.request().postDataBuffer()!;await route.fulfill({contentType:"application/json",body:JSON.stringify({id:"person",username:"tester",displayName:"Pessoa de teste",avatarUrl:"https://experience.test/profile.gif"})});});
+  await page.route("https://experience.test/profile.gif",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
   await page.getByRole("button",{name:"Configurações",exact:true}).click();
   await page.getByLabel("Selecionar foto de tester",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
   await expect(page.getByRole("dialog",{name:/recorte/i})).toHaveCount(0);expect(bytes).toBeUndefined();
@@ -1819,21 +1827,23 @@ test("media pack export round-trips blobs and rejects malformed packages",async(
 
 
 test("packaged renderer installs bundled stickers without a development server URL",async()=>{
- const {page,close}=await launch({packaged:true});
+ const {app,page,close}=await launch({packaged:true});
  try{
   expect(page.url()).toMatch(/^file:/);
   const user={id:"production",username:"production",displayName:"Pessoa",avatarUrl:null};
   const server={id:"packaged-server",name:"Servidor",ownerId:user.id,iconUrl:null};
   const channel={id:"packaged-general",serverId:server.id,type:"text",name:"geral",topic:"",parentId:null,position:0,overwrites:[]};
-  await page.route("http://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(new URL(route.request().url()).pathname.endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
-  await page.routeWebSocket("ws://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
-  await page.evaluate(({user,server,channel})=>{localStorage.setItem("distopic.accounts",JSON.stringify([{id:"packaged",url:"http://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
+  await page.route("https://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(new URL(route.request().url()).pathname.endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
+  await page.routeWebSocket("wss://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
+  // Synthetic legacy-token fixture exercises one-time migration; production
+  // persistence writes token-empty metadata and uses the OS secret store.
+  await page.evaluate(async({user,server,channel})=>{const account={id:"packaged",url:"https://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"};const saved=await window.distopic!.secrets.set("accounts",JSON.stringify([account]));localStorage.setItem("distopic.accounts",JSON.stringify([{...account,token:saved?"":account.token}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
   await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();const pack=page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Usar",exact:true})).toBeEnabled();await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
  }finally{await close();}
 });
 
-test("shared reaction chips group participants and ignore a stale HTTP response", async () => {
-  const { page, close } = await launch();
+test("shared reaction chips group participants and ignore a stale native response", async () => {
+  const { app, page, close } = await launch();
   let socket: WebSocketRoute;
   let release: (() => Promise<void>) | undefined;
   try {
@@ -1842,23 +1852,21 @@ test("shared reaction chips group participants and ignore a stale HTTP response"
       const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         s.instances.test.instance = { ...s.instances.test.instance, reactions: true };
+        s.instances.test.messages.general.items[0].protection='e2ee';
         s.instances.test.messages.general.items[0].reactions = [{ emoji: "👍", userIds: ["peer"] }];
       });
       return getState().instances.test!.messages.general!.items[0]!;
     });
-    await page.route("http://experience.test/api/channels/general/messages/message/reactions/**", async (route) => {
-      if (route.request().method() === "PUT") await new Promise<void>((resolve) => {
-        release = async () => { await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...message, reactions: [{ emoji: "👍", userIds: ["peer", "person"] }] }) }); resolve(); };
-      });
-      else await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...message, reactions: [{ emoji: "👍", userIds: ["peer", "other"] }] }) });
-    });
+    await uiReactionFixture(app);await app.evaluate(()=>{(globalThis as any).__uiReactionFixture.delay=true;});
+    release=async()=>{await app.evaluate(()=>{(globalThis as any).__uiReactionFixture.release?.();});};
+    await page.route('https://experience.test/api/channels/general/crypto',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({channel:{active:true}})}));
     const row = page.locator('[data-message-id="message"]');
     await expect(row.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
     await row.hover();
     await expect(row.locator(".reaction-quick")).toHaveCount(3);
     await row.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
-    await expect.poll(() => !!release).toBe(true);
-    socket!.send(JSON.stringify({ t: "MESSAGE_UPDATE", d: { ...message, reactions: [{ emoji: "👍", userIds: ["peer", "person", "other"] }] } }));
+    await expect.poll(() => app.evaluate(()=>!!(globalThis as any).__uiReactionFixture.release)).toBe(true);
+    await page.evaluate(message=>window.dispatchEvent(new CustomEvent('annoy:crypto-change',{detail:{url:'https://experience.test',channel:'general',id:message.id,message:{...message,reactions:[{emoji:'👍',userIds:['peer','person','other']}]}}})),message);
     await expect(row.getByRole("button", { name: "👍: 3 reações", exact: true })).toHaveAttribute("aria-pressed", "true");
     await release!();
     await expect(row.getByRole("button", { name: "Reagir com 👍", exact: true })).toBeEnabled();
@@ -1913,18 +1921,18 @@ test("clean navigation starts with direct messages and keeps secondary destinati
 });
 
 test("installed media packs open their collection and send a real attachment", async () => {
-  const { page, close } = await launch();
+  const { app, page, close } = await launch();
   try {
     await seed(page);
-    await expect(page.locator(".brand-symbol").first()).not.toHaveCSS("mask-image", "none");
-    let uploaded = false;
-    await page.route("http://experience.test/api/channels/general/messages", async (route) => {
-      if (route.request().method() !== "POST") return route.fulfill({ contentType: "application/json", body: "[]" });
-      expect(route.request().headers()["content-type"]).toContain("multipart/form-data");
-      expect(route.request().postDataBuffer()!.includes(Buffer.from('filename="Gato.png"'))).toBe(true);
-      uploaded = true;
-      await route.fulfill({ contentType: "application/json", body: "{}" });
+    // The colored app icon (white shell, dark visor), not a single-color mask.
+    await expect(page.locator(".brand img").first()).toHaveAttribute("src", /linearGradient/);
+    // Attachments go to the native MLS service, never as a plaintext upload.
+    let plaintext = false;
+    await page.route("https://experience.test/api/channels/general/messages", async (route) => {
+      if (route.request().method() === "POST") plaintext = true;
+      await route.fulfill({ contentType: "application/json", body: "[]" });
     });
+    await uiSendFixture(app);
     await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
     await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
@@ -1937,7 +1945,8 @@ test("installed media packs open their collection and send a real attachment", a
     await picker.getByRole("button", { name: "Gato", exact: true }).click();
     await expect(page.locator(".pending-file")).toContainText("Gato.png");
     await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-    await expect.poll(() => uploaded).toBe(true);
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__uiSendFixture.sends.flatMap((send: { files: string[] }) => send.files))).toEqual(["Gato.png"]);
+    expect(plaintext).toBe(false);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
     await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
@@ -1946,7 +1955,7 @@ test("installed media packs open their collection and send a real attachment", a
   } finally { await close(); }
 });
 
-test("profile preview follows unsaved drafts and global account has its own page", async () => {
+test("profile preview follows unsaved drafts and the Annoy account has no separate page", async () => {
   const { page, close } = await launch();
   try {
     await seed(page);
@@ -1966,33 +1975,26 @@ test("profile preview follows unsaved drafts and global account has its own page
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
     await preview.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(capture, "profile-live-preview-light-minimum.png") });
-    await page.getByRole("button", { name: "Conta global", exact: true }).click();
-    await expect(page.locator(".profile-editor")).toHaveCount(0);
-    await expect(page.locator(".global-signin-form")).toBeVisible();
-    const register = page.getByRole("link", { name: "Criar conta global" });
-    await expect(register).toHaveAttribute("href", /\/cadastro$/);
-    await expect(register).toHaveAttribute("target", "_blank");
-    await expect(page.getByLabel("E-mail", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
+    // The Annoy account lives in "Meu perfil e contas": no separate page and no sign-in form here.
+    await expect(page.getByRole("button", { name: "Conta global", exact: true })).toHaveCount(0);
+    await expect(page.locator(".global-signin-form")).toHaveCount(0);
     await expect(page.locator(".settings-savebar")).toBeVisible();
-    await page.screenshot({ path: join(capture, "global-account-light-minimum.png") });
-    await page.setViewportSize({ width: 1320, height: 840 });
-    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "dark"; }); });
-    await page.screenshot({ path: join(capture, "global-account-dark.png") });
   } finally { await close(); }
 });
 
 test("friend message reactions explain an old server and work when support is advertised", async () => {
-  const { page, close } = await launch();
+  const { app, page, close } = await launch();
   try {
     await seed(page);
+    await uiReactionFixture(app);
+    await page.route("https://experience.test/api/channels/dm-friend/crypto", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ channel: { active: true } }) }));
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         const i = s.instances.test, friend = { id: "friend", username: "bruna", displayName: "Bruna", avatarUrl: null };
         i.relationships = [{ user: friend, status: "friend" }];
         i.dms = [{ id: "dm-friend", recipients: [friend] }];
-        i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [] }], hasMore: false, loading: false };
+        i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [], protection: "e2ee", reactions: [{ emoji: "👍", userIds: ["friend"] }] }], hasMore: false, loading: false };
         s.view = { kind: "home", accountId: "test", dmId: "dm-friend" };
       });
     });
@@ -2001,16 +2003,13 @@ test("friend message reactions explain an old server and work when support is ad
     await message.getByRole("button", { name: "Adicionar reação", exact: true }).click();
     await expect(page.getByText("Esta instância ainda não oferece reações.", { exact: false })).toBeVisible();
     await page.screenshot({ path: join(capture, "reaction-server-requirement-dark.png") });
-    await page.route("http://experience.test/api/channels/dm-friend/messages/message/reactions/**", async (route) => {
-      const current = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.messages["dm-friend"].items[0]);
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...current, reactions: route.request().method() === "PUT" ? [{ emoji: "👍", userIds: ["friend", "person"] }] : [{ emoji: "👍", userIds: ["friend"] }] }) });
-    });
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
     await message.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
     const reaction = message.getByRole("button", { name: "👍: 2 reações", exact: true });
     await expect(reaction).toHaveAttribute("aria-pressed", "true");
     await reaction.click();
     await expect(message.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
+    expect(await app.evaluate(() => (globalThis as any).__uiReactionFixture.writes)).toEqual(["PUT", "DELETE"]);
   } finally { await close(); }
 });
 
@@ -2018,7 +2017,7 @@ test("compact reactions expand and search while library management lives in sett
   const { page, close } = await launch();
   try {
     await seed(page);
-    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; }); });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, reactions: true }; s.instances.test.messages.general.items[0].protection = "e2ee"; }); });
     const row = page.locator('[data-message-id="message"]');
     await row.hover();
     await row.getByRole("button", { name: "Adicionar reação", exact: true }).click();

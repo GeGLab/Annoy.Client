@@ -1,7 +1,7 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
-import { Api } from "./api.ts";
+import { Api, fetchInfo } from "./api.ts";
 import { previewText } from "./format.tsx";
 import { Gateway, type RecoveryEvent } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
@@ -9,10 +9,11 @@ import { emptyInstance, getState, setState, subscribe, toast, type Account, type
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
+import { callEncryptionSupported } from "./media-e2ee/call-encryption.ts";
 import { playStreamFeedback, playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/voice-feedback.ts";
 import { isMessageMuted, notificationKey } from "./lib/notification-preferences.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
-import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
+import { handleDirectCallEvent, handleDirectCallMedia, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
 import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
 import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport } from "../../shared/connectivity.ts";
@@ -111,6 +112,8 @@ function writeCache(accountId: string): void {
 
 export function reconnect(accountId?: string): void {
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
+  // Servers of the Annoy account not signed in yet retry the Annoy sign-in instead.
+  if (getState().accounts.some((a) => a.pending && (!accountId || a.id === accountId))) void import("./global.ts").then((g) => g.syncVault());
 }
 
 window.addEventListener("online", () => {
@@ -142,6 +145,11 @@ subscribe(() => {
 
 export function connectAccount(account: Account): void {
   if (live.has(account.id)) return;
+  if (account.pending) {
+    // Listed and shown as disconnected (red dot) until the Annoy sign-in succeeds there.
+    setState((s) => { s.instances[account.id] = { ...(s.instances[account.id] ?? emptyInstance()), status: account.pending! }; });
+    return;
+  }
   const api: Api = new Api(account.url, account.token, () => live.get(account.id)?.api === api && getState().instances[account.id]?.status === "ready", (result) => {
     if (live.get(account.id)?.api !== api) return;
     setState((s) => {
@@ -151,7 +159,7 @@ export function connectAccount(account: Account): void {
         : observeRequestFailure(inst.connection, result, Date.now(), s.connectivity.network);
     });
     if (result instanceof RequestError && result.status === 401) gateway.invalidateSession();
-  });
+  }, account.userId);
   const gateway = new Gateway(
     account.url,
     account.token,
@@ -160,6 +168,11 @@ export function connectAccount(account: Account): void {
       api.cancelPending();
       if (status !== "ready") clearAccountWork(account.id);
       if (status !== "ready") {
+        void window.distopic?.auth.logoutLocal(account.id,status === "invalid");
+        if (!window.distopic) setState(s => {
+          s.access.localAccounts = s.access.localAccounts.filter(id => id !== account.id);
+          s.access.allowed = s.access.global || s.access.localAccounts.length > 0;
+        });
         disconnectDirectCall(account.id);
         if (voice?.accountId === account.id || getState().voice?.accountId === account.id) leaveVoice(false);
       }
@@ -231,7 +244,9 @@ export function connectAccount(account: Account): void {
 
 export function addAccount(account: Account): void {
   setState((s) => {
-    s.accounts = s.accounts.filter((a) => a.id !== account.id);
+    // A real sign-in replaces the disconnected placeholder of the same server.
+    for (const stale of s.accounts.filter((a) => a.pending && a.url === account.url)) delete s.instances[stale.id];
+    s.accounts = s.accounts.filter((a) => a.id !== account.id && !(a.pending && a.url === account.url));
     s.accounts.push(account);
     s.modal = null;
     s.view = { kind: "home", accountId: account.id, dmId: null };
@@ -243,26 +258,53 @@ export function addAccount(account: Account): void {
   connectAccount(account);
 }
 
-/** Adds a server account in the background (servers coming back from the global vault). */
+/** Adds a server account in the background (servers coming back from the global vault).
+ * A real sign-in replaces the disconnected placeholder of the same server. */
 export function addAccountQuietly(account: Account): void {
-  if (getState().accounts.some((a) => a.url === account.url)) return;
+  const placeholder = getState().accounts.find((a) => a.url === account.url && a.pending);
+  if (getState().accounts.some((a) => a.url === account.url && !a.pending)) return;
+  if (placeholder && account.pending) {
+    if (placeholder.pending !== account.pending) setState((s) => {
+      const saved = s.accounts.find((a) => a.id === placeholder.id);
+      if (saved) saved.pending = account.pending;
+      if (s.instances[placeholder.id]) s.instances[placeholder.id]!.status = account.pending!;
+    });
+    return;
+  }
   setState((s) => {
+    if (placeholder) { s.accounts = s.accounts.filter((a) => a.id !== placeholder.id); delete s.instances[placeholder.id]; }
     s.accounts.push(account);
   });
   connectAccount(account);
 }
 
-export function removeAccount(accountId: string): void {
+/** Signs out of one account: it stays saved, with its user name (or Annoy e-mail) filled in;
+ * coming back always asks for the password again. */
+export function signOutAccount(accountId: string): void {
+  removeAccount(accountId, "signOut");
+}
+
+/**
+ * "signOut" keeps the account saved for a new sign-in with the password.
+ * "remove" leaves nothing behind: coming back needs the complete sign-in.
+ * "internal" is for the app's own cleanups (Annoy sign-out, migrations).
+ */
+export function removeAccount(accountId: string, mode: "signOut" | "remove" | "internal" = "remove"): void {
+  void window.distopic?.auth.logoutLocal(accountId);
+  if (!window.distopic) setState(s => { s.access.localAccounts = s.access.localAccounts.filter(id => id !== accountId); s.access.allowed = s.access.global || s.access.localAccounts.length > 0; });
   clearAccountChatState(accountId);
   const account = getState().accounts.find((item) => item.id === accountId);
   const user = getState().instances[accountId]?.user;
   disconnectDirectCall(accountId);
-  if (account && user) setState((s) => {
-    const { token: _token, ...remembered } = account;
-    s.rememberedAccounts = [...s.rememberedAccounts.filter((item) => item.id !== accountId), { ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }];
+  setState((s) => {
+    s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== accountId);
+    if (mode === "signOut" && account && user) {
+      const { token: _token, ...remembered } = account;
+      s.rememberedAccounts.push({ ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, ...(account.annoy && s.global && { annoyEmail: s.global.email }) });
+    }
   });
-  // Leaving on purpose: the global vault forgets it too, so it doesn't come back.
-  if (account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
+  // Removing on purpose: the Annoy account's server list forgets it too, so it doesn't come back.
+  if (mode === "remove" && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.api.dispose();
@@ -274,7 +316,8 @@ export function removeAccount(accountId: string): void {
   setState((s) => {
     s.accounts = s.accounts.filter((a) => a.id !== accountId);
     delete s.instances[accountId];
-    if ("accountId" in s.view && s.view.accountId === accountId) s.view = { kind: "home", accountId: null, dmId: null };
+    // Removing the account in use moves to the next one, never to an empty identity.
+    if ("accountId" in s.view && s.view.accountId === accountId) s.view = { kind: "home", accountId: s.accounts[0]?.id ?? null, dmId: null };
   });
 }
 
@@ -290,14 +333,14 @@ export function canRemoveServerConnection(accountId: string): boolean {
 
 export function removeServerConnection(accountId: string): void {
   if (!canRemoveServerConnection(accountId)) {
-    toast(translate("common.15c6425dd1d2"));
+    toast("Transfira a propriedade ou esteja sozinho para remover. Se o servidor estiver offline, aguarde 7 dias.");
     return;
   }
-  removeAccount(accountId);
+  removeAccount(accountId, "remove");
 }
 
 export function connectAll(): void {
-  for (const account of getState().accounts) connectAccount(account);
+  for (const account of getState().accounts) if(account.token)connectAccount(account);
 }
 
 // Navigation -----------------------------------------------------------------
@@ -364,6 +407,7 @@ export async function resumeRecoveredView(accountId: string): Promise<void> {
 
 /** Shows the native view of a browser service, or hides it for anything else. */
 export function showServiceView(view: View): void {
+  if (!getState().access.allowed) { window.distopic?.services.hide(); return; }
   const service = view.kind === "service" ? getState().services.find((sv) => sv.id === view.serviceId) : undefined;
   if (service && service.kind !== "teamspeak") window.distopic?.services.show(service);
   else window.distopic?.services.hide();
@@ -624,8 +668,15 @@ export function sendTyping(accountId: string, channelId: string): void {
 
 // Voice --------------------------------------------------------------------
 
-export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
+/** Server replies meaning this call cannot be end-to-end encrypted with this client. */
+const NO_CALL_E2EE = /apenas a criptografia de transporte|SFrame ainda não foi implementado|não suportada neste servidor/;
+
+export async function joinVoice(accountId: string, serverId: string, channelId: string, transportOnly = false): Promise<void> {
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
+  const account = getState().accounts.find((a) => a.id === accountId);
+  // Voice, camera and screen are sealed with SFrame by default; otherwise the call goes ahead with a visible "sem E2EE" notice.
+  const e2ee = !transportOnly && account && callEncryptionSupported() ? { url: account.url, token: account.token, userId: account.userId } : null;
+  if (!e2ee) toast(translate("common.5f4379372fc3"), 6000);
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
@@ -647,6 +698,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         12000,
       ),
     accountId,
+    e2ee,
   );
   voice = { accountId, serverId, session };
   setState((s) => {
@@ -659,13 +711,15 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
       if (s.voice) {
         s.voice.status = "connected";
         s.voice.canStream = session.canStream;
+        s.voice.e2ee = session.encrypted;
       }
     });
     playCallFeedback("join");
     if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
     if (voice?.session === session) leaveVoice();
-    toast(translate("common.5ece26b7ec6d",{p0:((err as Error).message)}));
+    if (e2ee && NO_CALL_E2EE.test((err as Error).message)) return joinVoice(accountId, serverId, channelId, true);
+    toast(`Voz: ${(err as Error).message}`);
   }
 }
 
@@ -747,7 +801,7 @@ export async function startScreenShare(sourceId: string | null): Promise<void> {
     updateVoiceSettings();
   } catch (err) {
     // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
-    if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
+    if ((err as DOMException).name !== "NotAllowedError") toast(`Tela: ${(err as Error).message}`);
   }
 }
 
@@ -777,8 +831,8 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
       return member ? displayNameOf(member) : (dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null))?.displayName;
     };
     const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
-    const body = previewText(message.content, nameOf, channelOf) || translate("common.c8c8bd816134");
-    const n = new Notification(message.author.displayName, { body, silent: true });
+    const body = message.protection === "e2ee" ? translate("common.e8cfd559e42e") : previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
+    const n = new Notification(message.protection === "e2ee" ? "Annoy" : message.author.displayName, { body, silent: true });
     n.onclick = () => window.focus();
   }
 }
@@ -790,7 +844,22 @@ function replaceUser(inst: InstanceState, user: User): void {
   for (const r of inst.relationships) if (r.user.id === user.id) r.user = user;
 }
 
-function onEvent(accountId: string, event: GatewayEvent): void {
+function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=false): void {
+  if(!authenticatedCrypto&&['MESSAGE_CREATE','MESSAGE_UPDATE','MESSAGE_DELETE'].includes(event.t)){
+    void(async()=>{
+      const account=getState().accounts.find(a=>a.id===accountId);if(!account)return;
+      const channel=(event.d as {channelId:string}).channelId;
+      try{
+        if(window.distopic?.crypto&&await window.distopic.crypto.guard(account.url,account.token,channel,account.userId))return;
+        try{const status=await apiFor(accountId).get<{channel:unknown}>(`/channels/${encodeURIComponent(channel)}/crypto`);if(status.channel)return;}
+        catch(error){if((error as {status?:number}).status!==404)return;}
+        if(event.t==='MESSAGE_CREATE'||event.t==='MESSAGE_UPDATE')onEvent(accountId,{...event,d:{...event.d,protection:'legacy_plaintext'}},true);
+        else onEvent(accountId,event,true);
+      }catch{/* Locked or unverifiable state cannot authorize plaintext gateway messages. */}
+    })();return;
+  }
+  if(event.t==='CRYPTO_DELIVERY'){void pullCrypto(accountId,event.d.channelId);return;}
+  if(event.t==='VOICE_MEDIA'&&event.d.channelId.startsWith('call:')){handleDirectCallMedia(accountId,event.d);return;}
   if (voice?.accountId === accountId) voice.session.handleEvent(event);
 
   switch (event.t) {
@@ -799,6 +868,28 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       void handleDirectCallEvent(accountId, event);
       return;
     case "READY": {
+      const account = getState().accounts.find(a => a.id === accountId);
+      if (account) {
+        // An Annoy account on this server: access comes from the Annoy sign-in, never from local credentials.
+        const annoyUser = event.d.user.global === true;
+        if (annoyUser && !account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = true; });
+        if (window.distopic?.auth) {
+          const bind = () => window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
+            // A new session lives only minutes until it is bound to this device's key (DPoP).
+            // Servers without MLS (older versions) have no device-bound sessions to set up.
+            if (!/MLS/.test(error.message)) toast(translate("common.5f0ce6405685",{p0:(error.message)}), 10000);
+          });
+          if (annoyUser) void bind();
+          else void window.distopic.auth.local(account).then(bind, () => undefined);
+        }
+        else void fetchInfo(account.url).then(async info => {
+          if (info.accountMode === "global") return;
+          const me = await apiFor(accountId).get<User>("/users/@me");
+          if (getState().instances[accountId]?.status === "ready" && me.id === account.userId) setState(s => {
+            s.access.localAccounts = [...new Set([...s.access.localAccounts, accountId])]; s.access.allowed = true;
+          });
+        }).catch(() => undefined);
+      }
       patchInstance(accountId, (inst) => {
         inst.user = event.d.user;
         inst.servers = event.d.servers;
@@ -1028,6 +1119,35 @@ function onEvent(accountId: string, event: GatewayEvent): void {
   }
 }
 
-
-
-
+// The cryptographic process emits plaintext only after authenticated local persistence.
+const cryptoPulls=new Map<string,Promise<void>>(),cryptoPullsAgain=new Set<string>();
+async function pullCrypto(accountId:string,channel:string):Promise<void>{
+ const key=accountId+':'+channel;if(cryptoPulls.has(key)){cryptoPullsAgain.add(key);return cryptoPulls.get(key);}
+ const task=(async()=>{
+  const account=getState().accounts.find(a=>a.id===accountId);if(!account||!window.distopic?.crypto)return;
+  try{
+   await window.distopic.crypto.guard(account.url,account.token,channel,account.userId);
+   const known=getState().instances[accountId]?.messages[channel]?.items.map(m=>m.id)??[];
+   const result=await window.distopic.crypto.reconcile(account.url,account.token,channel,known);
+   for(const message of result.items)if(result.newIds.includes(message.id))onEvent(accountId,{t:'MESSAGE_CREATE',d:message},true);
+   patchInstance(accountId,i=>{const list=i.messages[channel];if(!list)return;const messages=new Map([...list.items,...result.items].map(m=>[m.id,m]));list.items=[...messages.values()].filter(m=>!result.deletedIds.includes(m.id));});
+  }catch{/* Authorization, unlock or connectivity remains visible in the conversation banner. */}
+ })().finally(()=>{cryptoPulls.delete(key);if(cryptoPullsAgain.delete(key))void pullCrypto(accountId,channel);});cryptoPulls.set(key,task);return task;
+}
+window.addEventListener('annoy:crypto-message',event=>{
+ const {url,message}=(event as CustomEvent<{url:string;message:Message}>).detail;
+ const account=getState().accounts.find(a=>a.url===url);if(account)onEvent(account.id,{t:'MESSAGE_CREATE',d:message},true);
+});
+window.addEventListener('annoy:crypto-begin',event=>{
+ const marker=(event as CustomEvent<{url:string;channel:string;id:string;captured:boolean;previous:unknown}>).detail;
+ const account=getState().accounts.find(a=>a.url===marker.url);if(!account)return;
+ marker.previous=getState().instances[account.id]?.messages[marker.channel]?.items.find(m=>m.id===marker.id);marker.captured=true;
+});
+window.addEventListener('annoy:crypto-change',event=>{
+ const {url,channel,id,message,captured,previous}=(event as CustomEvent<{url:string;channel:string;id:string;message:Message|null;captured?:boolean;previous?:unknown}>).detail;
+ const account=getState().accounts.find(a=>a.url===url);if(!account)return;
+ // A newer authenticated sync may have replaced or deleted this message while
+ // the mutation awaited IPC/network. Its stale result must not replace it.
+ if(captured&&getState().instances[account.id]?.messages[channel]?.items.find(m=>m.id===id)!==previous)return;
+ onEvent(account.id,message?{t:'MESSAGE_UPDATE',d:message}:{t:'MESSAGE_DELETE',d:{channelId:channel,messageId:id}},true);
+});

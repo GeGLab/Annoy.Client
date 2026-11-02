@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Api, authenticate, findInstance } from "../../src/renderer/src/api.ts";
-import { abortableDelay, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../src/shared/requests.ts";
+import { abortableDelay, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, setRequestTransport, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../src/shared/requests.ts";
+
+// These tests cover scoping and deadlines; the renderer's secure transport has its own tests.
+setRequestTransport((input, init) => fetch(input, init));
 
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 const flush = async () => { for (let n = 0; n < 12; n++) await Promise.resolve(); };
@@ -137,38 +140,16 @@ test("poll delays release timers and listeners immediately on cancellation", asy
   t.mock.timers.tick(1500);
 });
 
-class FakeXHR {
-  static instances = [];
-  upload = {};
-  status = 200;
-  responseText = "{}";
-  aborted = 0;
-  constructor() { FakeXHR.instances.push(this); }
-  open() {}
-  setRequestHeader() {}
-  send() {}
-  abort() { this.aborted++; this.onabort?.(); }
-}
-
-test("uploads have their own deadline and release progress handlers after completion", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const previous = globalThis.XMLHttpRequest;
-  globalThis.XMLHttpRequest = FakeXHR;
-  t.after(() => { if (previous) globalThis.XMLHttpRequest = previous; else delete globalThis.XMLHttpRequest; });
-  const api = new Api("http://test", "token"), controller = new AbortController();
-  const pending = api.uploadMessage("channel", "", [], () => {}, controller.signal);
-  await flush();
-  const xhr = FakeXHR.instances.at(-1);
-  xhr.onload();
-  assert.deepEqual(await pending, {});
-  assert.equal(xhr.upload.onprogress, null);
+test("uploads go only through the desktop crypto service and honor cancellation", async (t) => {
+  const previous = globalThis.window;
+  globalThis.window = {};
+  t.after(() => { if (previous) globalThis.window = previous; else delete globalThis.window; });
+  const api = new Api("https://test", "token", () => true, undefined, "user");
+  const progress = [];
+  await assert.rejects(api.uploadMessage("channel", "", [], (value) => progress.push(value)), /serviço criptográfico/);
+  assert.deepEqual(progress, [0]);
+  const controller = new AbortController();
   controller.abort();
-  assert.equal(xhr.aborted, 0);
-  const timedOut = assert.rejects(api.uploadMessage("channel", "", [], () => {}), { kind: "timeout" });
-  await flush();
-  const stalled = FakeXHR.instances.at(-1);
-  t.mock.timers.tick(UPLOAD_TIMEOUT_MS);
-  await timedOut;
-  assert.equal(stalled.aborted, 1);
-  assert.equal(stalled.upload.onprogress, null);
+  await assert.rejects(api.uploadMessage("channel", "", [], () => {}, controller.signal), isCancellation);
+  assert.deepEqual(progress, [0]);
 });

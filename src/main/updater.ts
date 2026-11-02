@@ -1,279 +1,97 @@
-// Update policy: never force a regular update, always tell the user about it.
-// The single exception is a critical security advisory affecting the running
-// version; then the update downloads immediately and the renderer blocks the
-// app until the user restarts into the fixed version.
-import { app, ipcMain, Notification, type BrowserWindow } from "electron";
-import { localMainFrame } from "../shared/desktop.ts";
-import { singleFlight } from "../shared/single-flight.ts";
-import { t } from "../shared/localization/index.ts";
-import { join } from "node:path";
-import { readPreferences, writePreferences } from "./settings-file.ts";
+import {t as translate} from "../shared/localization/index.ts";
+import {trustedRenderer} from './trusted-renderer.ts';
+// Regular updates ask first; critical security releases download and restart automatically.
+import { app, ipcMain, powerMonitor,Notification, type BrowserWindow } from "electron";
+import {join} from "node:path";
+import {readPreferences,writePreferences} from "./settings-file.ts";
+import {singleFlight} from "../shared/single-flight.ts";
 import updaterPkg from "electron-updater";
-import {
-  blockingAdvisory,
-  compareVersions,
-  RELEASES_URL,
-  type Advisory,
-  type UpdateState,
-} from "../shared/update.ts";
+import { blockingAdvisory, type Advisory } from "../shared/update.ts";
+import { createUpdateController } from "./update-controller.ts";
+import {UPDATE_TRUST} from './update-trust.ts';
+import {authenticateUpdate,fetchUpdateManifest,matchUpdateMetadata,verifyUpdateFile,type SignedUpdate} from './update-signature.ts';
 
 const { autoUpdater } = updaterPkg;
+const POLICY_URL = process.env.ANNOY_UPDATE_POLICY_URL || "https://raw.githubusercontent.com/GeGLab/annoy-client/main/security/advisories.json";
+const CHECK_EVERY_MS = 6*60*60*1000;
 
-/** Public, versioned list of security advisories for the client. */
-const POLICY_URL =
-  process.env.ANNOY_UPDATE_POLICY_URL ||
-  "https://raw.githubusercontent.com/GeGLab/annoy-client/main/security/advisories.json";
-const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
-
-let win: BrowserWindow | null = null;
-let state: UpdateState = { status: "idle", currentVersion: app.getVersion() };
-let advisory: Advisory | null = null;
-let pendingVersion: string | null = null;
-let notifications = true;
-const notified = new Set<string>();
-function notifyVersion(version: string): void {
-  if (!notifications || notified.has(version) || !Notification.isSupported())
-    return;
-  try {
-    const notification = new Notification({
-      title: t("update.notificationTitle"),
-      body: t("update.notificationBody", { p0: version }),
-    });
-    notification.on("click", () => {
-      win?.show();
-      if (win?.isMinimized()) win.restore();
-      win?.focus();
-    });
-    notification.show();
-    notified.add(version);
-  } catch {}
-}
-function errorMessage(error: unknown): string {
-  return t(
-    /checksum|sha512|sha256|integrity/i.test(String(error))
-      ? "update.integrityError"
-      : "update.networkError",
-  );
-}
-
-const releaseUrl = (version: string) => `${RELEASES_URL}/tag/v${version}`;
-
-function publish(next: UpdateState): void {
-  state = next;
-  win?.webContents.send("update:state", state);
-}
-
-/** Only packaged AppImage (Linux) and NSIS (Windows) builds can replace themselves. */
 function updatable(): boolean {
   if (!app.isPackaged && !process.env.ANNOY_UPDATE_FEED) return false;
   if (process.platform === "linux" && !process.env.APPIMAGE) return false;
-  return true;
+  return process.platform === "linux" || process.platform === "win32";
 }
 
-/** A policy fetch failure means "no known advisory": updates stay optional, never silently forced. */
 async function loadAdvisory(): Promise<Advisory | null> {
   try {
-    const res = await fetch(POLICY_URL, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await fetch(POLICY_URL, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
     const body = (await res.json()) as { advisories?: Advisory[] };
-    return blockingAdvisory(
-      Array.isArray(body.advisories) ? body.advisories : [],
-      app.getVersion(),
-    );
-  } catch {
-    return null;
-  }
-}
-
-async function performCheck(): Promise<void> {
-  if (!updatable())
-    return publish({ status: "disabled", currentVersion: app.getVersion() });
-  if (state.status === "downloading" || state.status === "ready") return;
-  publish({ status: "checking", currentVersion: app.getVersion() });
-  advisory = await loadAdvisory();
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    const version = result?.updateInfo.version;
-    if (!version || compareVersions(version, app.getVersion()) <= 0) {
-      if (advisory)
-        publish({
-          status: "blocked",
-          currentVersion: app.getVersion(),
-          advisory,
-          releaseUrl: RELEASES_URL,
-        });
-      else publish({ status: "none", currentVersion: app.getVersion() });
-      return;
-    }
-    pendingVersion = version;
-    // An update that doesn't reach the fixed version can't clear the advisory.
-    const mandatory =
-      advisory !== null && compareVersions(version, advisory.fixedIn) >= 0;
-    publish({
-      status: "available",
-      currentVersion: app.getVersion(),
-      version,
-      mandatory,
-      advisory: mandatory ? advisory : null,
-      releaseUrl: releaseUrl(version),
-    });
-    notifyVersion(version);
-    if (mandatory) void download();
-    else if (advisory)
-      publish({
-        status: "blocked",
-        currentVersion: app.getVersion(),
-        advisory,
-        releaseUrl: RELEASES_URL,
-      });
-  } catch (err) {
-    publish({
-      status: "error",
-      currentVersion: app.getVersion(),
-      message: errorMessage(err),
-      mandatory: advisory !== null,
-      advisory,
-      releaseUrl: RELEASES_URL,
-    });
-  }
-}
-const check = singleFlight(performCheck);
-
-async function download(): Promise<void> {
-  if (
-    !pendingVersion ||
-    state.status === "downloading" ||
-    state.status === "ready"
-  )
-    return;
-  const version = pendingVersion;
-  const mandatory =
-    advisory !== null && compareVersions(version, advisory.fixedIn) >= 0;
-  publish({
-    status: "downloading",
-    currentVersion: app.getVersion(),
-    version,
-    mandatory,
-    advisory: mandatory ? advisory : null,
-    percent: 0,
-    releaseUrl: releaseUrl(version),
-  });
-  try {
-    await autoUpdater.downloadUpdate();
-  } catch (err) {
-    publish({
-      status: "error",
-      currentVersion: app.getVersion(),
-      message: errorMessage(err),
-      mandatory,
-      advisory: mandatory ? advisory : null,
-      releaseUrl: releaseUrl(version),
-    });
-  }
+    return blockingAdvisory(Array.isArray(body.advisories) ? body.advisories : [], app.getVersion());
+  } catch { return null; }
 }
 
 export function startUpdater(window: BrowserWindow): void {
-  win = window;
-  const preferencesFile = join(app.getPath("userData"), "updates.json");
-  notifications = readPreferences(preferencesFile, (value) =>
-    !!value &&
-    typeof value === "object" &&
-    "notifications" in value &&
-    typeof value.notifications === "boolean"
-      ? value.notifications
-      : true,
-  );
+  const preferencesFile=join(app.getPath("userData"),"updates.json");
+  let notifications=readPreferences(preferencesFile,value=>!!value&&typeof value==="object"&&"notifications"in value&&typeof value.notifications==="boolean"?value.notifications:true);
+  const notified=new Set<string>();
+  const notify=(version:string)=>{if(!notifications||notified.has(version)||!Notification.isSupported())return;try{const notice=new Notification({title:translate("update.notificationTitle"),body:translate("update.notificationBody",{p0:version})});notice.on("click",()=>{window.show();if(window.isMinimized())window.restore();window.focus();});notice.show();notified.add(version);}catch{}};
+  let verified:{path:string;manifest:SignedUpdate}|null=null,exiting=false;
   autoUpdater.autoDownload = false;
-  // Installation requires the explicit, guarded restart action in the renderer.
+  // Never let the updater install a cached artifact before our independent
+  // signature verification, including the automatic install-on-quit path.
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowDowngrade = false;
   autoUpdater.logger = null;
-  autoUpdater.on("error", (error) => {
-    if (state.status === "ready")
-      publish({
-        status: "error",
-        currentVersion: app.getVersion(),
-        message: errorMessage(error),
-        mandatory: state.mandatory,
-        advisory: state.advisory,
-        releaseUrl: state.releaseUrl,
-      });
-  });
-  // Lets self-hosters or tests point at a mirror (electron-builder "generic" layout).
   if (process.env.ANNOY_UPDATE_FEED) {
     autoUpdater.forceDevUpdateConfig = !app.isPackaged;
-    autoUpdater.setFeedURL({
-      provider: "generic",
-      url: process.env.ANNOY_UPDATE_FEED,
-    });
+    autoUpdater.setFeedURL({ provider: "generic", url: process.env.ANNOY_UPDATE_FEED });
   }
-
-  autoUpdater.on("download-progress", (p) => {
-    if (state.status === "downloading")
-      publish({ ...state, percent: Math.round(p.percent) });
+  const controller = createUpdateController({
+    currentVersion: app.getVersion(), updatable, loadAdvisory,
+    checkForUpdates: async () => (await autoUpdater.checkForUpdates())?.updateInfo.version ?? null,
+    downloadUpdate: () => autoUpdater.downloadUpdate(),
+    install: async () => {
+      if(!verified)throw new Error(translate("common.e107229013aa"));
+      await verifyUpdateFile(verified.path,verified.manifest);
+      exiting=true;autoUpdater.quitAndInstall(false,true);
+    },
+    publish: state => { if (!window.isDestroyed()) window.webContents.send("update:state", state);if(state.status==="available")notify(state.version); },
   });
-  autoUpdater.on("update-downloaded", (info) => {
-    if (state.status !== "downloading" || info.version !== pendingVersion)
-      return;
-    const mandatory = state.status === "downloading" && state.mandatory;
-    publish({
-      status: "ready",
-      currentVersion: app.getVersion(),
-      version: info.version,
-      mandatory,
-      advisory: mandatory ? advisory : null,
-      releaseUrl: releaseUrl(info.version),
+  const check=singleFlight(()=>controller.check());
+  const policyCheck=()=>void controller.check({policyOnly:true});
+  autoUpdater.on("download-progress", p => controller.progress(p.percent));
+  autoUpdater.on("update-downloaded", info => {
+    verified=null;autoUpdater.autoInstallOnAppQuit=false;
+    void (async()=>{
+      const expected={version:info.version,platform:process.platform,arch:process.arch};
+      const base=process.env.ANNOY_UPDATE_FEED||`https://github.com/GeGLab/annoy-client/releases/download/v${info.version}/`;
+      const manifest=authenticateUpdate(await fetchUpdateManifest(base,expected),UPDATE_TRUST,expected);
+      matchUpdateMetadata(manifest,info);await verifyUpdateFile(info.downloadedFile,manifest);
+      verified={path:info.downloadedFile,manifest};controller.downloaded(info.version);
+    })().catch(()=>controller.error(new Error(translate("common.61ff88422613"))));
+  });
+  app.on('before-quit',event=>{
+    if(exiting||!verified)return;
+    event.preventDefault();
+    void verifyUpdateFile(verified.path,verified.manifest).then(()=>{
+      exiting=true;autoUpdater.autoInstallOnAppQuit=true;app.quit();
+    }).catch(()=>{
+      verified=null;exiting=true;autoUpdater.autoInstallOnAppQuit=false;app.quit();
     });
   });
-
-  const secure = (event: Electron.IpcMainInvokeEvent) => {
-    if (!localMainFrame(event, win?.webContents))
-      throw new Error("Invalid updater sender");
-  };
-  ipcMain.handle("update:get", (event) => {
-    secure(event);
-    return state;
-  });
-  ipcMain.handle("update:configure", (event, values: unknown) => {
-    secure(event);
-    if (
-      !values ||
-      typeof values !== "object" ||
-      !("notifications" in values) ||
-      typeof values.notifications !== "boolean"
-    )
-      throw new Error("Invalid update preferences");
-    if (notifications !== values.notifications)
-      writePreferences(preferencesFile, {
-        notifications: values.notifications,
-      });
-    notifications = values.notifications;
-  });
-  ipcMain.handle("update:check", (event) => {
-    secure(event);
-    return check();
-  });
-  ipcMain.handle("update:download", (event) => {
-    secure(event);
-    return download();
-  });
-  ipcMain.handle("update:install", (event) => {
-    secure(event);
-    if (state.status === "ready") autoUpdater.quitAndInstall(false, true);
-  });
-
-  let initial: ReturnType<typeof setTimeout> | undefined;
-  win.webContents.once("did-finish-load", () => {
-    initial = setTimeout(() => void check(), 5000);
-    initial.unref();
-  });
-  const interval = setInterval(() => void check(), CHECK_EVERY_MS);
-  interval.unref();
-  win.once("closed", () => {
-    clearTimeout(initial);
-    clearInterval(interval);
-  });
+  autoUpdater.on("error", err => controller.error(err));
+  const trusted=(event:Electron.IpcMainInvokeEvent)=>trustedRenderer(event,window);
+  ipcMain.handle("update:get", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.getState();});
+  ipcMain.handle("update:configure",(event,values:unknown)=>{if(!trusted(event))throw new Error("Invalid update IPC sender");if(!values||typeof values!=="object"||!("notifications"in values)||typeof values.notifications!=="boolean")throw new Error("Invalid update preferences");if(values.notifications!==notifications)writePreferences(preferencesFile,{notifications:values.notifications});notifications=values.notifications;});
+  ipcMain.handle("update:check", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return check();});
+  ipcMain.handle("update:download", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.download();});
+  ipcMain.handle("update:install", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.install();});
+  let initial:ReturnType<typeof setTimeout>|undefined;
+  window.webContents.once("did-finish-load", () => {initial=setTimeout(()=>void check(),5000);initial.unref();});
+  window.on("focus",policyCheck);
+  powerMonitor.on("resume",policyCheck);
+  const regular=setInterval(()=>void check(),CHECK_EVERY_MS);regular.unref();
+  // Preserve the current security branch's minute/focus/resume policy checks.
+  const security=setInterval(policyCheck,60_000);security.unref();
+  window.once("closed",()=>{clearTimeout(initial);clearInterval(regular);clearInterval(security);powerMonitor.off("resume",policyCheck);});
 }

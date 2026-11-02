@@ -1,25 +1,30 @@
-import { test, expect, _electron as electron, type Page, type WebSocketRoute } from "@playwright/test";
+import {electron} from './fixtures/electron-launch.ts';
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
+import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join, dirname, basename } from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const origin = "http://workspace.test";
+const origin = "https://workspace.test";
 const screenshots = resolve(".impeccable/review");
 
 async function launch() {
   const tempRoot = resolve(tmpdir());
   const userData = await mkdtemp(join(tempRoot, "distopic-workspace-"));
-  const env = { ...process.env, DISTOPIC_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+  const auth = await globalAuthFixture();
+  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
   const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".welcome")).toBeVisible();
   await mkdir(screenshots, { recursive: true });
   const cleanup = async () => {
     await app.close();
+    await auth.close();
     if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("distopic-workspace-"))
       throw new Error("Unexpected test profile path");
     await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -28,7 +33,7 @@ async function launch() {
 }
 
 async function seed(page: Page) {
-  await page.routeWebSocket("ws://workspace.test/gateway", () => {});
+  await page.routeWebSocket("wss://workspace.test/gateway", () => {});
   await page.route(`${origin}/api/**`, (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
   await page.evaluate(async () => {
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -46,7 +51,7 @@ async function seed(page: Page) {
       overwrites: [],
     });
     const now = new Date().toISOString();
-    addAccount({ id: "workspace", url: "http://workspace.test", token: "synthetic", userId: "me", instanceName: "Instância de teste" });
+    addAccount({ id: "workspace", url: "https://workspace.test", token: "synthetic", userId: "me", instanceName: "Instância de teste" });
     setState((s: any) => {
       const inst = s.instances.workspace;
       inst.status = "ready";
@@ -299,7 +304,7 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await page.screenshot({ path: join(screenshots, "workspace-reconnecting.png") });
-    await page.routeWebSocket("ws://workspace.test/gateway", (ws) =>
+    await page.routeWebSocket("wss://workspace.test/gateway", (ws) =>
       ws.onMessage((raw) => {
         const message = JSON.parse(String(raw));
         if (message.op === "identify")
@@ -349,7 +354,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
       user: fixture.user, servers, dms: [], relationships: [], presences: { me: "online" },
       instance: { isAdmin: false, registration: "open", voiceBackend: "builtin" },
     } });
-    await page.routeWebSocket("ws://workspace.test/gateway", (ws) => {
+    await page.routeWebSocket("wss://workspace.test/gateway", (ws) => {
       active = ws;
       aConnections++;
       ws.onMessage((raw) => {
@@ -358,7 +363,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
         if (message.op === "heartbeat") ws.send(JSON.stringify({ t: "HEARTBEAT_ACK", d: null }));
       });
     });
-    await page.routeWebSocket("ws://healthy.test/gateway", (ws) => {
+    await page.routeWebSocket("wss://healthy.test/gateway", (ws) => {
       bConnections++;
       ws.onMessage((raw) => {
         const message = JSON.parse(String(raw));
@@ -367,7 +372,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
       });
     });
     await page.route(`${origin}/api/servers/server**`, (route) => route.fulfill({ json: fixture.state }));
-    await page.route("http://healthy.test/api/**", async (route) => {
+    await page.route("https://healthy.test/api/**", async (route) => {
       if (route.request().method() === "POST" && route.request().url().endsWith("/messages")) {
         expect(route.request().headers().authorization).toBe("Bearer healthy-token");
         sent.push(route.request().postDataJSON().content);
@@ -377,7 +382,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
     await page.evaluate(async () => {
       const { addAccount, reconnect } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
       reconnect("workspace");
-      addAccount({ id: "healthy", url: "http://healthy.test", token: "healthy-token", userId: "me", instanceName: "Instância saudável" });
+      addAccount({ id: "healthy", url: "https://healthy.test", token: "healthy-token", userId: "me", instanceName: "Instância saudável" });
     });
     await expect.poll(() => bConnections).toBe(1);
     await expect.poll(() => page.evaluate(async () => {
@@ -395,11 +400,18 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
     })).toBe("unavailable");
     await page.waitForTimeout(2200); // Longer than the recovery grace period.
     await expect(page.locator(".connection-recovery")).toHaveCount(0);
-    await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-    await expect.poll(() => sent).toEqual(["B continua utilizável"]);
-    await expect(composer).toHaveValue("");
+    // Sending is done by the desktop MLS service; B's own API still answering proves it stays usable.
+    await expect(composer).toBeEditable();
+    await expect(composer).toHaveValue("B continua utilizável");
+    expect(await page.evaluate(async () => {
+      const { apiFor } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      await apiFor("healthy").get("/servers/server");
+      return true;
+    })).toBe(true);
+    expect(sent).toEqual([]);
 
-    await page.getByRole("button", { name: "Comunidade de teste · Instância de teste", exact: true }).click();
+    // Only the selected account's servers are listed: switch back to the account that is down.
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openServer("workspace", "server"));
     await expect(page.getByRole("region", { name: "Reconectando ao seu espaço" })).toBeVisible();
     await expect(page.locator(".connection-account")).toContainText("Instância de teste");
     await expect(page.locator(".connection-account")).not.toContainText("Instância saudável");
@@ -415,8 +427,7 @@ test("connectivity isolates two live gateways, scopes retry and keeps navigation
       setState((s: any) => { s.settings.theme = "light"; });
     });
     await page.screenshot({ path: join(screenshots, "connectivity-scoped-light-minimum.png") });
-    await page.getByRole("button", { name: "Comunidade saudável · Instância saudável", exact: true }).focus();
-    await page.keyboard.press("Enter");
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openServer("healthy", "server"));
     await expect(page.locator(".connection-recovery")).toHaveCount(0);
     await expect(composer).toBeEditable();
 
@@ -488,7 +499,7 @@ test("new tab prioritizes Annoy communities and requires an explicit account for
     await seed(page);
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s: any) => { s.accounts.push({ id: "second", url: "http://second.test", token: "synthetic", userId: "me", instanceName: "Segunda instância" }); });
+      setState((s: any) => { s.accounts.push({ id: "second", url: "https://second.test", token: "synthetic", userId: "me", instanceName: "Segunda instância" }); });
     });
     await page.getByRole("button", { name: "Nova aba", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Nova aba" });
@@ -687,8 +698,9 @@ test("connectivity observes Global failures independently and preserves expired-
     });
     await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: login.salt, iterations: 1 } }));
     await page.route(`${globalUrl}/v1/auth/login`, (route) => route.fulfill({ json: {
-      token: "synthetic-global-session", wrappedKeys: login.wrappedKeys,
-      user: { id: "global-test", name: "Conta sintética", email: "synthetic@example.test" },
+      // The main process validates the session against the Global test fixture.
+      token: "synthetic-global-session-for-tests", wrappedKeys: login.wrappedKeys,
+      user: { id: "test-global", name: "Test Global", email: "test@example.com" },
     } }));
     await page.route(`${globalUrl}/v1/vault`, (route) => route.fulfill({ json: { version: 0, data: null } }));
     await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).signInGlobal("synthetic@example.test", "synthetic"));
@@ -697,7 +709,7 @@ test("connectivity observes Global failures independently and preserves expired-
       return getState().connectivity.global;
     })).toMatchObject({ availability: "available", authentication: "valid", cause: null });
     await expect(page.locator(".connection-recovery")).toHaveCount(0);
-    await page.routeWebSocket("ws://workspace.test/gateway", (ws) => { gateway = ws; connections++; });
+    await page.routeWebSocket("wss://workspace.test/gateway", (ws) => { gateway = ws; connections++; });
     await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).reconnect("workspace"));
     await expect.poll(() => connections).toBe(1);
     gateway!.close({ code: 4004, reason: "Synthetic expired session" });

@@ -25,7 +25,8 @@
 
 **Atualizações:** o app avisa quando sai uma versão nova e você decide quando
 atualizar. A única exceção é uma correção de segurança crítica, que é
-obrigatória. Veja o [SECURITY.md](SECURITY.md).
+obrigatória. Desde a 0.9.0, todo update exige um manifesto assinado (Ed25519),
+e o arquivo é conferido de novo antes de instalar. Veja o [SECURITY.md](SECURITY.md).
 
 ## Conexão com a instância
 
@@ -54,7 +55,17 @@ Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
   alguém ouvir. Veja as [medições](docs/noise-suppression.md).
 - **Moderação:** editor de cargos, permissões por canal, convites, expulsar e
   banir.
-- **Amigos e DMs:** pedidos de amizade, presença e mensagens diretas.
+- **Criptografia de ponta a ponta (0.9.0):** mensagens, anexos, edições e
+  reações novas são cifradas com OpenMLS; o servidor guarda só texto cifrado.
+  Canais de voz e chamadas privadas usam SFrame: o SFU só repassa mídia cifrada.
+  O histórico de antes do E2EE fica separado e somente leitura.
+- **Uma conta por vez:** cada servidor usa contas Annoy ou contas locais.
+  Trocar de conta troca os servidores que aparecem.
+- **Histórico longo:** carregamento sob demanda, posição de leitura
+  sincronizada, mensagens fixadas e tempo de vida definido pelo administrador
+  em cada canal.
+- **Amigos e DMs:** pedidos de amizade, presença, mensagens diretas e perfil
+  completo com público por campo.
 - **Importar do Discord** e **Entrar com Discord**, pela API oficial.
 - **Notificações** de menção e DM, e contadores de não lidas (inclusive os das
   abas de serviço).
@@ -65,7 +76,7 @@ Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
 | :---: | :---: |
 | <img src="docs/screenshots/chat-and-voice.png" alt="Chat e voz" width="420"><br>**Chat e voz, com WhatsApp, Telegram e Discord nas abas** | <img src="docs/screenshots/services.png" alt="Nova aba" width="420"><br>**Adicione serviços como abas** |
 | <img src="docs/screenshots/roles.png" alt="Cargos" width="420"><br>**Editor de cargos** | <img src="docs/screenshots/discord-import.png" alt="Importação" width="420"><br>**Importar do Discord escolhendo o que vem** |
-| <img src="docs/screenshots/channel-permissions.png" alt="Permissões" width="420"><br>**Permissões por canal** | <img src="docs/screenshots/sign-in.png" alt="Entrar" width="420"><br>**Entrar com Discord ou conta local** |
+| <img src="docs/screenshots/channel-permissions.png" alt="Permissões" width="420"><br>**Permissões por canal** | <img src="docs/screenshots/sign-in.png" alt="Entrar" width="420"><br>**Conta Annoy por padrão; conta local conforme a instância** |
 
 Mais capturas no [README em inglês](README.md#screenshots).
 
@@ -107,3 +118,18 @@ os servidores e abre o app oficial do TeamSpeak.
 ## Desenvolvimento da interface
 
 Veja [desenvolvimento](docs/development.md) para a preparação automática do Electron, componentes compartilhados e testes isolados. [Busca e atividades privadas](docs/search-activity.md) descreve os módulos e a integração com o servidor.
+
+A conta Annoy é obrigatória por padrão. Contas locais só são oferecidas quando a instância seleciona `ANNOY_ACCOUNT_MODE=local`. A migração mantém o histórico, as permissões e a propriedade dos servidores.
+
+O cliente também exige autenticação para abrir o navegador e os serviços. Ao sair
+da conta Annoy, as páginas nativas abertas são encerradas e a tela de login
+volta imediatamente. A exceção exige uma sessão local válida em uma instância
+com `ANNOY_ACCOUNT_MODE=local`; apenas conhecer o endereço não libera o cliente.
+
+## Segurança
+
+A 0.9.0 é uma atualização de segurança obrigatória: OpenMLS nas mensagens e
+anexos, SFrame nas chamadas, sessões ligadas ao dispositivo, modo de conta
+exclusivo por servidor, updates assinados e versão mínima do app informada pelo
+servidor. Compilar exige Rust/Cargo. Veja as [notas da versão](docs/releases/0.9.1.md)
+e o [SECURITY.md](SECURITY.md). Ainda não houve auditoria independente.

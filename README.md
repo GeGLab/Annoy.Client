@@ -34,10 +34,12 @@ protected your PC"*. Click **More info → Run anyway**.
 
 ### Updates
 
-The app checks for new versions on launch and every few hours, and **always
+The app checks for new versions on launch and every minute, and **always
 asks before updating**. A banner offers *Update* or *Later*. The one exception
 is a critical security fix: then the update downloads by itself and the app
-asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
+asks you to restart before continuing. Since 0.9.0 every update must carry a
+signed Ed25519 manifest, and the file is checked again before it installs.
+See [SECURITY.md](SECURITY.md).
 
 ## Features
 
@@ -66,7 +68,16 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
   and presence reconnect automatically; rejoining media requires your action.
 - **Moderation.** Role editor, per-channel permission overwrites
   (allow/inherit/deny), invites, kick, ban and ban list.
-- **Friends and DMs.** Friend requests, presence, direct messages.
+- **End-to-end encryption (0.9.0).** New messages, attachments, edits and
+  reactions are encrypted with OpenMLS; the server stores only ciphertext.
+  Voice channels and private calls use SFrame, so the SFU only forwards
+  encrypted media. History from before E2EE stays separate and read-only.
+- **One account at a time.** Each server uses either Annoy accounts or local
+  accounts. Switching accounts switches the servers you see.
+- **Long histories.** On-demand loading, synced read position, pinned
+  messages and per-channel message lifetime set by the server admins.
+- **Friends and DMs.** Friend requests, presence, direct messages and full
+  profiles with per-field audiences.
 - **Discord import wizard.** Choose the channels, history, roles and options,
   then watch the import progress live.
 - **Sign in with Discord.** Uses the official OAuth2 in your browser and pulls
@@ -84,7 +95,7 @@ asks you to restart before continuing. See [SECURITY.md](SECURITY.md).
 | <img src="docs/screenshots/chat-and-voice.png" alt="Chat and voice" width="420"><br>**Chat and voice channels** | <img src="docs/screenshots/voice-call.png" alt="Call with cameras" width="420"><br>**Calls with camera and screen sharing** |
 | <img src="docs/screenshots/member-card.png" alt="Member card" width="420"><br>**Member card with roles and moderation** | <img src="docs/screenshots/friends.png" alt="Friends" width="420"><br>**Friends and requests** |
 | <img src="docs/screenshots/roles.png" alt="Role editor" width="420"><br>**Role editor** | <img src="docs/screenshots/channel-permissions.png" alt="Channel permissions" width="420"><br>**Per-channel permissions** |
-| <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Sign in with Discord or a local account** |
+| <img src="docs/screenshots/discord-import.png" alt="Discord import" width="420"><br>**Import from Discord: pick what comes over** | <img src="docs/screenshots/sign-in.png" alt="Sign in" width="420"><br>**Annoy account sign-in by default; local accounts on opted-in hosts** |
 | <img src="docs/screenshots/services.png" alt="New tab menu with services" width="420"><br>**Add Discord, WhatsApp, Telegram, TeamSpeak and more as tabs** | <img src="docs/screenshots/direct-messages.png" alt="Direct messages" width="420"><br>**Direct messages** |
 
 ## Build from source
@@ -114,7 +125,7 @@ GitHub release is published.
 1. Choose **Conectar a um servidor Annoy** (Connect to an Annoy server) and type the server address, for
    example `192.168.0.10` or `chat.example.com`. Without a port, the client
    uses `8787`.
-2. Sign in with Discord (if the server enables it) or create a local account.
+2. Sign in or register with an Annoy account. Local accounts are available only when the host selects `ANNOY_ACCOUNT_MODE=local`. Existing local users on global hosts must migrate; their history and permissions stay with their original user.
 3. Create a server with **+**, or join one with an invite code.
 
 **Joining someone's community?** The client is all you need: no server
@@ -189,3 +200,11 @@ npm run build
 ## Desktop interface development
 
 See [development](docs/development.md) for automatic Electron binary preparation, shared UI components and isolated tests. [Search and private activity](docs/search-activity.md) documents client/server integration and opt-in friend activity.
+
+## Security
+
+0.9.0 is a mandatory security release: OpenMLS for messages and attachments,
+SFrame for calls, device-bound sessions, exclusive account modes per server,
+signed updates and a minimum client version announced by the server. Building
+from source needs Rust/Cargo. See [release notes](docs/releases/0.9.1.md) and
+[SECURITY.md](SECURITY.md). No independent audit has been done yet.

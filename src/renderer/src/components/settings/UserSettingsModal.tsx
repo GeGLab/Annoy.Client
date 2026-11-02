@@ -1,12 +1,12 @@
-import {rich} from "../../lib/localization.ts";
+import {configureLocalization,normalizeLocalization} from "../../../../shared/localization/index.ts";
+import {LocalizationSettings} from "./LocalizationSettings.tsx";
 import {DesktopSettings} from "./DesktopSettings.tsx";
 import type {DesktopPreferences,DesktopSnapshot} from "../../../../shared/desktop.ts";
-import {localizationPreferences} from "../../../../shared/localization/index.ts";
-import {t as translate,textForError,onLocalizationChange} from "../../../../shared/localization/index.ts";
+import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import {normalizeProfileField} from "@distopic/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
-import { confirmAction, promptText } from "../ui/action-dialog.tsx";
+import { confirmAction } from "../ui/action-dialog.tsx";
 import type { DiscordLoginBegin, User } from "@distopic/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
@@ -31,24 +31,25 @@ import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
-import { GLOBAL_URL, GlobalError, linkAccount, mergeAccount, signInGlobal, signOutGlobal } from "../../global.ts";
+import { SecuritySettings } from "../crypto/SecuritySettings.tsx";
+import { GLOBAL_URL, signOutGlobal } from "../../global.ts";
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
   {id:"localization",label:translate("settings.b7b7db231778"),icon:"globe",search:translate("settings.97bbf9167943")},
-  { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("settings.5d318cf0fef8") },
-  { id: "global", label: translate("settings.b3e099f43c2b"), icon: "shield", search: translate("settings.2cafab5b8b3d") },
+  { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("common.f1097b1bdaf9") },
   { id: "expressions", label: translate("expression.728001e6a865"), icon: "smile", search: translate("settings.8531d86304ac") },
   { id: "voice", label: translate("settings.7bb3eccdf5f8"), icon: "mic", search: translate("settings.7e1b71648e19") },
   { id: "appearance", label: translate("settings.04f9f0a78dbe"), icon: "palette", search: translate("settings.ae256cfcdedc") },
   { id: "tabs", label: translate("settings.0ac1d8649dc7"), icon: "sliders", search: translate("settings.1ae5d2bcf2c5") },
   { id: "activity", label: translate("common.a5121730503f"), icon: "radio", search: translate("settings.a19ddf531397") },
   { id: "notifications", label: translate("settings.6b8e9ecbc2ba"), icon: "message", search: translate("settings.95f1668c7abc") },
+  { id: "security", label: translate("common.797c0d01ff48"), icon: "lock", search: translate("common.fd32174ee399") },
   { id: "updates", label: translate("common.a1f09a31ad36"), icon: "download", search: translate("settings.89883f1fa251") },
 ];
-const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(localizationPreferences().region);
+const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
 function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold: number; filter: NoiseFilter }) {
@@ -104,7 +105,7 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
           setEnabled((value) => !value);
         }}
       >
-        {enabled ? translate("settings.50729949a7d2") : translate("settings.06ae64f429c4")}
+        {enabled ? "Parar teste" : "Testar microfone"}
       </Button>
       <label className="check">
         <Checkbox checked={monitor} onChange={(event) => setMonitor(event.target.checked)} />{translate("settings.df335610213e")}</label>
@@ -120,70 +121,16 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
 function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
   const requests = useRequestOwner(accountId);
   const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
-  const admin = useStore((s) => s.instances[accountId]?.instance?.isAdmin);
   const [discord, setDiscord] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const signedInGlobal = useStore((s) => s.global !== null);
-  const self = useStore((s) => s.instances[accountId]?.user);
-  /** This server's Global ID when it takes global accounts and this one doesn't use it yet. */
-  const [linkable, setLinkable] = useState<string | null>(null);
-  const [linking, setLinking] = useState(false);
   useEffect(() => {
     if (!account) return;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, requests.signal]);
-    void fetchInfo(account.url, signal).then(
-      async (info) => {
-        signal.throwIfAborted();
-        setDiscord(info.discordLogin);
-        if (!info.globalServerId) return setLinkable(null);
-        const me = await apiFor(accountId).get<{ global?: boolean }>("/users/@me", signal);
-        signal.throwIfAborted();
-        setLinkable(me.global ? null : info.globalServerId);
-      },
-    ).catch((error) => { if (!isCancellation(error)) { setDiscord(false); setLinkable(null); } });
+    void fetchInfo(account.url, signal).then((info) => { signal.throwIfAborted(); setDiscord(info.discordLogin); })
+      .catch((error) => { if (!isCancellation(error)) setDiscord(false); });
     return () => controller.abort();
-  }, [account?.url, signedInGlobal]);
-  const link = async () => {
-    if (!account || !linkable) return;
-    const signal = requests.signal;
-    setLinking(true);
-    try {
-      await linkAccount(account, linkable, signal);
-      signal.throwIfAborted();
-      setLinkable(null);
-      toast(translate("settings.0e1311cf259d",{p0:(account.instanceName)}));
-    } catch (error) {
-      if (isCancellation(error)) return;
-      if (error instanceof GlobalError && error.code === "global_in_use") await offerMerge(error.message);
-      else toast((error as Error).message);
-    } finally {
-      setLinking(false);
-    }
-  };
-  /** Item 1.9: two users of the same person on this server become this one. */
-  const offerMerge = async (reason: string) => {
-    if (!account || !linkable) return;
-    const signal = requests.signal;
-    const ok = await confirmAction(
-      translate("settings.957a020211d5",{p0:(reason),p1:(self?.username ?? translate("settings.a11d42b92c14"))}),
-      { confirmLabel: translate("settings.4732d98f0095") },
-    );
-    if (!ok || signal.aborted) return;
-    const password = await promptText(translate("common.f51e18af575c",{p0:(self?.username ?? translate("settings.a11d42b92c14")),p1:(account.instanceName)}), "", { confirmLabel: translate("settings.4732d98f0095"), secret: true });
-    if (password === null || signal.aborted) return;
-    try {
-      const removed = await mergeAccount(account, linkable, password, signal);
-      signal.throwIfAborted();
-      setLinkable(null);
-      // The other user is gone: drop it if this app also had it signed in.
-      const stale = getState().accounts.find((a) => a.url === account.url && a.userId === removed);
-      if (stale) removeAccount(stale.id);
-      toast(translate("settings.60e6b7df0de2",{p0:(account.instanceName)}));
-    } catch (error) {
-      if (!isCancellation(error)) toast((error as Error).message);
-    }
-  };
+  }, [account?.url]);
   const sync = async () => {
     if (!account || syncing) return;
     const signal = requests.signal;
@@ -195,7 +142,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         signal,
       );
       signal.throwIfAborted();
-      toast(translate("settings.c20a38d028a4"));
+      toast("Perfil do Discord sincronizado");
     } catch (error) {
       if (!isCancellation(error)) toast((error as Error).message);
     } finally {
@@ -207,91 +154,22 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       {discord && (
         <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>{translate("settings.70aae5a6660f")}</Button>
       )}
-      {linkable && signedInGlobal && (
-        <Button variant="secondary" size="sm" disabled={busy} loading={linking} onClick={() => void link()}>{translate("settings.db9bbfd49c47")}</Button>
-      )}
-      {admin && (
-        <Button variant="secondary" size="sm" disabled={busy} onClick={() => openModal({ kind: "instanceAdmin", accountId })}>{translate("settings.3856c2768e7e")}</Button>
-      )}
       <Button
         variant="ghost"
         size="sm"
         disabled={busy}
         onClick={() =>
           requestNavigation(async () => {
-            if (await confirmAction(translate("settings.70c1dc76f260",{p0:(account?.instanceName)}))) removeAccount(accountId);
+            if (await confirmAction(`Sair de ${account?.instanceName}? Para voltar, você digita a senha de novo.`)) removeAccount(accountId, "signOut");
           })
         }
       >{translate("settings.b73f3ff34b4b")}</Button>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
+      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>
+        <Icon name="trash" size={14} />{translate("common.8d9113221273")}</Button>
     </div>
   );
 }
 
-/**
- * Annoy Global: one account for many servers. Signing in happens here, right
- * away (not on "save"), since it's a login rather than a preference.
- */
-function GlobalAccountCard({ draft, update }: { draft: Settings; update: (patch: Partial<Settings>) => void }) {
-  const requests = useRequestOwner();
-  const account = useStore((s) => s.global);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    const signal = requests.signal;
-    setBusy(true);
-    setError(null);
-    try {
-      await signInGlobal(email, password, signal);
-      signal.throwIfAborted();
-      setPassword("");
-    } catch (err) {
-      if (!isCancellation(err)) setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="settings-section global-account-panel"><h3>{rich("common.25c88890e54c",{p0:(<Icon name="shield" size={24} />)})}</h3><p className="muted">{translate("settings.a2224acfbd0a")}</p>
-      {account ? (
-        <>
-          <p>{translate("settings.37ec41cff895")}<strong>{account.name}</strong> <span className="muted">({account.email})</span>.
-          </p>
-          <label className="check">
-            <Checkbox checked={draft.globalDefault} onChange={(event) => update({ globalDefault: event.target.checked })} />{translate("settings.8855863c5ce1")}</label>
-          <p className="muted small">{translate("settings.11bc72e66ccf")}</p>
-          <div className="global-account-actions">
-            <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
-            <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("settings.f8a84858a8cc")}</Button>
-          </div>
-        </>
-      ) : (
-        <form className="global-signin-form" onSubmit={(event) => void submit(event)}>
-          <div className="global-signin-fields">
-            <Field label={translate("settings.2550d962e536")}>
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" disabled={busy} required />
-            </Field>
-            <Field label={translate("common.d482c10b3d4d")}>
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" disabled={busy} required />
-            </Field>
-          </div>
-          {error && <p className="error small" role="alert">{error}</p>}
-          <div className="global-account-actions">
-            <Button type="submit" size="sm" loading={busy}>
-              {busy ? translate("settings.388d814c2efe") : translate("common.4105811890ae")}
-            </Button>
-            <a className="ui-button ui-button-outline ui-button-sm" href={`${GLOBAL_URL}/cadastro`} target="_blank" rel="noreferrer">{rich("common.9989f8b353b2",{p0:(<Icon name="external" size={14} />)})}</a>
-          </div>
-          <p className="muted small">{translate("settings.d0f8829f1bc4")}</p>
-        </form>
-      )}
-    </section>
-  );
-}
 
 export function UserSettingsModal() {
   const requests = useRequestOwner("user-settings");
@@ -302,7 +180,17 @@ export function UserSettingsModal() {
   const [search, setSearch] = useState("");
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
-  const profileUser = accounts[0] ? instances[accounts[0].id]?.user : undefined;
+  // "Editar perfil" opens on the account it was clicked from; the others follow.
+  // Settings belong to the selected account only: never another account's profile.
+  const [selected] = useState(() => {
+    const state = getState(), modal = state.modal;
+    const id = (modal?.kind === "userSettings" ? modal.accountId : undefined) ?? ("accountId" in state.view ? state.view.accountId : undefined);
+    return id ?? (state.global ? null : state.accounts[0]?.id ?? null);
+  });
+  const annoy = useStore((s) => s.global);
+  const annoyMode = selected === null && !!annoy;
+  const shownAccounts = accounts.filter((account) => account.id === selected);
+  const profileUser = annoyMode ? { id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null } : shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
   const [desktopStatus,setDesktopStatus]=useState<DesktopSnapshot|null>(null);
   const [desktopDraft,setDesktopDraft]=useState<DesktopPreferences|null>(null);
@@ -339,8 +227,8 @@ export function UserSettingsModal() {
   useEffect(() => registerNavigationGuard(leave), [dirty, saving]);
   const refreshDesktop=()=>{void window.distopic?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
   useEffect(()=>{refreshDesktop();},[]);
-  useEffect(() => { configureLocalization(draft); }, [draft.language,draft.region,draft.hourCycle,draft.fontSize,draft.underlineLinks]);
-  useEffect(() => () => configureLocalization(getState().settings), []);
+  useEffect(()=>{configureLocalization(draft);},[draft.language,draft.region,draft.hourCycle,draft.fontSize,draft.underlineLinks]);
+  useEffect(()=>()=>configureLocalization(getState().settings),[]);
   useEffect(() => {
     applyTheme(draft.theme, draft);
     return () => {
@@ -427,21 +315,16 @@ export function UserSettingsModal() {
           applyUserUpdate(account.id, updated);
         }
       }
-      const next = {...draft,previousLanguage:draft.language!==saved.language?saved.language:draft.previousLanguage};
-      if(desktopDirty&&desktopDraft){
-        try{const status=await window.distopic!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}
-        catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}
-      }
-      await window.distopic?.localization?.set(normalizeLocalization(next));
-      signal.throwIfAborted();
-      setState((s) => { Object.assign(s.settings, next); });
-      setDraft(next);
+      const next={...draft,previousLanguage:draft.language!==saved.language?saved.language:draft.previousLanguage};
+      if(desktopDirty&&desktopDraft){try{const status=await window.distopic!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}}
+      await window.distopic?.localization?.set(normalizeLocalization(next));signal.throwIfAborted();
+      setState((s)=>{Object.assign(s.settings,next);});setDraft(next);
       updateVoiceSettings();
       setProfiles({});
       toast(translate("settings.733e6e6b42e7"));
       return true;
     } catch (error) {
-      if (!isCancellation(error)) setError(textForError(error) || translate("settings.fcd0784e9779"));
+      if (!isCancellation(error)) setError((error as Error).message || translate("settings.fcd0784e9779"));
       return false;
     } finally {
       setSaving(false);
@@ -515,7 +398,7 @@ export function UserSettingsModal() {
           <div className="settings-content" key={page}>
             {page === "appearance" && (
               <section className="settings-section appearance-section">
-                <h3>{rich("common.bfc59a5015a7",{p0:(<Icon name="palette" size={24} />)})}</h3>
+                <h3><Icon name="palette" size={24} />{translate("settings.04f9f0a78dbe")}</h3>
                 <p className="muted">{translate("settings.1126123c9926")}</p>
                 <div className="theme-options" role="group" aria-label={translate("settings.eb88b483ea19")}>
                   {(["dark", "light", "system"] as const).map((theme) => (
@@ -528,7 +411,7 @@ export function UserSettingsModal() {
                       aria-label={theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}
                     >
                       <Icon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "monitor"} size={20} />
-                      <span><strong>{theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}</strong><small>{theme === "dark" ? translate("settings.c4cfc071d34a") : theme === "light" ? translate("settings.d67b88b35930") : translate("settings.7a74e2ab7eb5")}</small></span>
+                      <span><strong>{theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}</strong><small>{theme === "dark" ? "Menos brilho em ambientes escuros." : theme === "light" ? "Fundos claros para o dia a dia." : "Acompanha o tema do seu computador."}</small></span>
                       {draft.theme === theme && <Icon name="check" size={16} />}
                     </button>
                   ))}
@@ -536,21 +419,30 @@ export function UserSettingsModal() {
                 <AppearanceSettings settings={draft} update={update} />
               </section>
             )}
-            {page === "desktop" && <DesktopSettings status={desktopStatus} draft={desktopDraft} onChange={patch=>setDesktopDraft(current=>current?{...current,...patch}:current)} disabled={saving} loadError={desktopLoadError} refresh={refreshDesktop}/>}
-            {page === "localization" && <LocalizationSettings draft={draft} onChange={update} disabled={saving}/>}
+            {page === "localization"&&<LocalizationSettings draft={draft} onChange={update} disabled={saving}/>}
+            {page === "desktop"&&<DesktopSettings status={desktopStatus} draft={desktopDraft} onChange={patch=>setDesktopDraft(current=>current?{...current,...patch}:current)} disabled={saving} loadError={desktopLoadError} refresh={refreshDesktop}/>}
             {page === "expressions" && <MediaLibrarySettings />}
-            {page === "global" && <GlobalAccountCard draft={draft} update={update} />}
             {page === "profile" && (
               <section className="settings-section">
-                <h3>{rich("common.ce989b279c2d",{p0:(<Icon name="users" size={24} />)})}</h3>
+                <h3><Icon name="users" size={24} />{translate("settings.b9e5ce2ce127")}</h3>
                 <p className="muted">{translate("settings.10bdfb7e1dd7")}</p>
-                <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" />)})}</Button>
-
-                {accounts.map((account) => {
+                <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />{translate("common.cd405060935b")}</Button>
+                {annoyMode && (
+                  <div className="settings-account annoy-profile global-account-panel">
+                    <span className="account-badge"><Icon name="check" size={12} />{translate("common.21c5709ca7b8")}</span>
+                    <p><strong>{annoy!.name}</strong> <span className="muted">({annoy!.email})</span></p>
+                    <div className="account-actions global-account-actions">
+                      <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
+                      <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</Button>
+                    </div>
+                  </div>
+                )}
+                {shownAccounts.map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
                       <div className="settings-account" key={account.id}>
+                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}><Icon name="check" size={12} />{translate("common.21c5709ca7b8")}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
                         <ProfileEditor
                           account={account}
                           user={user}
@@ -563,12 +455,13 @@ export function UserSettingsModal() {
                     )
                   );
                 })}
-                <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>{rich("common.fb3340294ec1",{p0:(<Icon name="plus" size={16} />)})}</Button>
+                <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>
+                  <Icon name="plus" size={16} />{translate("settings.298dcfa479d1")}</Button>
               </section>
             )}
             {page === "voice" && (
               <section className="settings-section">
-                <h3>{rich("common.c1bea92367ca",{p0:(<Icon name="mic" size={24} />)})}</h3>
+                <h3><Icon name="mic" size={24} />{translate("settings.7bb3eccdf5f8")}</h3>
                 <p className="muted">{translate("settings.96d137a3a28e")}</p>
                 <PreferenceCard icon="headphones" title={translate("settings.a70a1e628334")} description={translate("settings.d0ae58087657")}>
                 <div className="grid-2">
@@ -616,11 +509,11 @@ export function UserSettingsModal() {
                   <Field label={translate("settings.2150611eb025")} hint={translate("settings.49ed8a146867")}>
                     <Button variant="secondary" onClick={() => setCapturing(true)}>
                       {capturing
-                        ? translate("settings.72309e21e517")
+                        ? "Pressione uma tecla… (Esc cancela)"
                         : draft.pttKey
                             .replace(/^Key/, "")
                             .replace(/^Digit/, "")
-                            .replace("Backquote", translate("common.bd7a26c7e1b1"))}
+                            .replace("Backquote", "` (crase)")}
                     </Button>
                   </Field>
                 ) : (
@@ -640,6 +533,12 @@ export function UserSettingsModal() {
                 </PreferenceCard>
               </section>
             )}
+            {page === "security" && (
+              <section className="settings-section">
+                <h3><Icon name="lock" size={24} />{translate("common.797c0d01ff48")}</h3>
+                <SecuritySettings accountId={selected} />
+              </section>
+            )}
             {page === "updates" && (
               <section className="settings-section">
                 <h3>{translate("common.a1f09a31ad36")}</h3>
@@ -648,10 +547,10 @@ export function UserSettingsModal() {
             )}
             {page === "tabs" && (
               <section className="settings-section">
-                <h3>{rich("common.03789960fb4a",{p0:(<Icon name="sliders" size={24} />)})}</h3>
+                <h3><Icon name="sliders" size={24} />{translate("settings.0ac1d8649dc7")}</h3>
                 <p className="muted">{translate("settings.1b4b4fb880f0")}</p>
                 <label className="switch-setting">
-                  <span><strong>{rich("common.1d8a0d5f58f8",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.59d7fb0b1556")}</small></span>
+                  <span><strong><Icon name="radio" />{translate("settings.c6f9a3603fdf")}</strong><small>{translate("settings.59d7fb0b1556")}</small></span>
                   <Switch aria-label={translate("settings.c6f9a3603fdf")} checked={draft.showVoiceBar} onCheckedChange={(checked) => update({ showVoiceBar: checked })} />
                 </label>
                 {draft.showVoiceBar && <Field label={translate("settings.fd31f56b4f4e")}><RadioGroup label={translate("settings.fd31f56b4f4e")} cards value={draft.voiceBarMode} onValueChange={(value) => update({ voiceBarMode: value as Settings["voiceBarMode"] })} options={[{ value: "external", label: translate("settings.d66988647bf3"), hint: translate("settings.1b145e07da21") }, { value: "always", label: translate("settings.dd0ab3e4c0ec"), hint: translate("settings.b3b6b99a5856") }]} /></Field>}
@@ -695,18 +594,18 @@ export function UserSettingsModal() {
             )}
             {page === "activity" && (
               <section className="settings-section">
-                <h3>{rich("common.5b986d904c4a",{p0:(<Icon name="radio" size={24} />)})}</h3>
+                <h3><Icon name="radio" size={24} />{translate("settings.fa8f42c66740")}</h3>
                 <p className="muted">{translate("settings.ef3f1976270b")}</p>
                 {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
-                      <span><strong>{rich("common.7d846bb586da",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.90aac47f7432")}</small></span>
+                      <span><strong><Icon name="radio" />{translate("settings.08b8c2ca2393")}</strong><small>{translate("settings.90aac47f7432")}</small></span>
                       <Switch aria-label={translate("settings.08b8c2ca2393")} checked={draft.shareActivity} onCheckedChange={(checked) => update({ shareActivity: checked })} />
                     </label>
                     <p className="muted small">{translate("settings.6f93545e241c")}</p>
                     <h4>{translate("settings.8b563d2943c9")}</h4>
                     {(desktopActivity?.activities ?? []).map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
-                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? translate("common.f557b5cdcc29") : translate("settings.81e785d7823f")}</p>}
+                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? "Nenhuma atividade detectada agora." : translate("settings.81e785d7823f")}</p>}
                     {desktopActivity?.error && (
                       <p className="error" role="status">
                         {desktopActivity.error}
@@ -717,16 +616,16 @@ export function UserSettingsModal() {
                   <p className="muted">{translate("settings.c7a6df285e2a")}</p>
                 )}
                 {accounts.some((account) => instances[account.id]?.instance?.steamConnection) && <h4>{translate("settings.3985bcd7ade0")}</h4>}
-                {accounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
+                {shownAccounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
               </section>
             )}
             {page === "notifications" && (
               <section className="settings-section">
-                <h3>{rich("common.2ae3a369075f",{p0:(<Icon name="bell" size={24} />)})}</h3>
+                <h3><Icon name="bell" size={24} />{translate("settings.c3ddc6b3337b")}</h3>
                 <p className="muted">{translate("settings.c05f1116c786")}</p>
-                <label className="switch-setting preference-toggle"><span><strong>{rich("common.613407297568",{p0:(<Icon name="bell" />)})}</strong><small>{translate("settings.20cd2a81ec1f")}</small></span><Switch aria-label={translate("settings.3ac6c1438f09")} checked={draft.notifications} onCheckedChange={(value) => update({ notifications: value })} /></label>
-                <label className="switch-setting preference-toggle"><span><strong>{rich("common.6f89516786d0",{p0:(<Icon name="speaker" />)})}</strong><small>{translate("settings.cd4d42344247")}</small></span><Switch aria-label={translate("settings.0595fc0bec52")} checked={draft.messageSounds} onCheckedChange={(value) => update({ messageSounds: value })} /></label>
-                <PreferenceCard icon="clock" title={translate("settings.e2fe024908b1")} description={translate("settings.c1a3106d619e")}><Field label={translate("settings.abe1619e9eba")}><Select aria-label={translate("settings.dedad3948705")} value={String(draft.awayMinutes)} onChange={(event) => update({ awayMinutes: Number(event.target.value) })}>{[1, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>{rich("common.565c188e5706",{p0:(minutes)})}</option>)}<option value="0">{translate("settings.44c195bf1e9c")}</option></Select></Field></PreferenceCard>
+                <label className="switch-setting preference-toggle"><span><strong><Icon name="bell" />{translate("settings.3ac6c1438f09")}</strong><small>{translate("settings.20cd2a81ec1f")}</small></span><Switch aria-label={translate("settings.3ac6c1438f09")} checked={draft.notifications} onCheckedChange={(value) => update({ notifications: value })} /></label>
+                <label className="switch-setting preference-toggle"><span><strong><Icon name="speaker" />{translate("settings.0595fc0bec52")}</strong><small>{translate("settings.cd4d42344247")}</small></span><Switch aria-label={translate("settings.0595fc0bec52")} checked={draft.messageSounds} onCheckedChange={(value) => update({ messageSounds: value })} /></label>
+                <PreferenceCard icon="clock" title={translate("settings.e2fe024908b1")} description={translate("settings.c1a3106d619e")}><Field label={translate("settings.abe1619e9eba")}><Select aria-label={translate("settings.dedad3948705")} value={String(draft.awayMinutes)} onChange={(event) => update({ awayMinutes: Number(event.target.value) })}>{[1, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes}{translate("settings.65bdafd5f6fe")}</option>)}<option value="0">{translate("settings.44c195bf1e9c")}</option></Select></Field></PreferenceCard>
                 <p className="muted small">{translate("settings.30b14b976fdc")}</p>
               </section>
             )}
@@ -763,21 +662,17 @@ export function UserSettingsModal() {
     </>
   );
 }
-import {configureLocalization,normalizeLocalization} from "../../../../shared/localization/index.ts";
-import {LocalizationSettings} from "./LocalizationSettings.tsx";
 
 onLocalizationChange(()=>{SETTINGS_PAGES=[
   {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
   {id:"localization",label:translate("settings.b7b7db231778"),icon:"globe",search:translate("settings.97bbf9167943")},
-  { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("settings.5d318cf0fef8") },
-  { id: "global", label: translate("settings.b3e099f43c2b"), icon: "shield", search: translate("settings.2cafab5b8b3d") },
+  { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("common.f1097b1bdaf9") },
   { id: "expressions", label: translate("expression.728001e6a865"), icon: "smile", search: translate("settings.8531d86304ac") },
   { id: "voice", label: translate("settings.7bb3eccdf5f8"), icon: "mic", search: translate("settings.7e1b71648e19") },
   { id: "appearance", label: translate("settings.04f9f0a78dbe"), icon: "palette", search: translate("settings.ae256cfcdedc") },
   { id: "tabs", label: translate("settings.0ac1d8649dc7"), icon: "sliders", search: translate("settings.1ae5d2bcf2c5") },
   { id: "activity", label: translate("common.a5121730503f"), icon: "radio", search: translate("settings.a19ddf531397") },
   { id: "notifications", label: translate("settings.6b8e9ecbc2ba"), icon: "message", search: translate("settings.95f1668c7abc") },
+  { id: "security", label: translate("common.797c0d01ff48"), icon: "lock", search: translate("common.fd32174ee399") },
   { id: "updates", label: translate("common.a1f09a31ad36"), icon: "download", search: translate("settings.89883f1fa251") },
 ];});
-
-

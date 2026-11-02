@@ -202,3 +202,23 @@ A integração com upstream 0.4.4 preserva áudio de sistema no Windows, captura
 com resolução nativa/FPS sem limite, orçamento por transmissão e recuperação
 de sala após reinícios. Preferências antigas de FPS são migradas para o seletor
 novo. Os valores zero de qualidade indicam resolução nativa ou FPS sem limite.
+
+## Criptografia nativa e validação de segurança
+
+Instale Rust/Cargo antes de compilar: `npm run build` agora também compila o serviço OpenMLS em release. Use `cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml` para protocolo e `npm run test:crypto` para cofre/outbox. A validação integrada exige os checkouts irmãos do servidor e Global, Node >=24.7 para esses backends e um ambiente gráfico para Electron.
+
+O relatório, modelo de ameaças, testes e limitações estão em `annoy-server/docs/security/README.md` no workspace irmão. A execução completa é `node annoy-server/scripts/validate-security.mjs DIRETORIO_DE_RESULTADOS` a partir do workspace. Não publica nem instala releases. `ANNOY_REQUIRE_NATIVE=1` impede que um binário ausente produza sucesso com skip.
+
+A base de mídia usa um `MlsService` separado por chamada, domínio `media`, ID de armazenamento `media:...` e snapshot nativo v2. O exporter é interno, sem IPC para o renderer e sem cifra de frames habilitada; ver `MEDIA-KEYS.md`. Para um ensaio nativo limitado, `cargo run --release --locked --manifest-path native/annoy-crypto/Cargo.toml --example benchmark_group -- 256 100` mede o coordenador e o último receptor, com as demais folhas offline. Não mede uma chamada real.
+
+O pacote distribuído desabilita RunAsNode, NODE_OPTIONS/NODE_EXTRA_CA_CERTS e inspector do main, e carrega a aplicação somente de ASAR. O SDK de desenvolvimento usado pelo Playwright permanece separado. `node scripts/verify-native-package.mjs DIRETORIO_LINUX_UNPACKED` verifica bytes dos bundles, runtime de criptografia, serviço Rust e fuses. Ver `LINUX-PACKAGE.md` para reprodução e incompatibilidades; não representa assinatura de produção ou aprovação para publicar.
+
+A instalação de updates exige manifesto Ed25519 e chaves públicas embutidas em `src/main/update-trust.ts`; a lista está vazia até a revisão da chave de produção. Ver a documentação `UPDATE-SIGNING.md` do servidor. Não alterar avisos obrigatórios nem publicar artefatos como parte dos testes.
+
+## Monitor dedicado para os testes locais
+
+Em Linux/Hyprland, `tests/display.local.json` (ignorado pelo Git) pode conter `{"monitor":"DP-5"}`. O Playwright descobre a sessão ativa e aplica uma regra temporária exclusiva da classe `annoy-security-tests`: abre nesse monitor, flutuante, sem roubar foco. Se o monitor não estiver conectado, aborta antes de abrir janelas. Não altera arquivos pessoais do Hyprland ou o monitor principal.
+
+A fixture mantém perfil temporário, usa Xwayland e passa classe/backend antes da inicialização do Electron. O nome específico da fixture requer informar a versão real do package ao atualizador, sem desabilitar qualquer verificação. Sem esse arquivo local, inclusive em CI, o launcher normal é preservado. Testes Chromium sem janela continuam headless. Para desativar a preferência, remova o arquivo local; a regra só alcança a classe exclusiva dos testes. A validação de segurança deve registrar esse modo e distinguir Xwayland de ensaios Wayland nativos.
+
+Nesse modo o Hyprland não confirma o estado de maximização das janelas Xwayland flutuantes. Apenas o passo `native maximize/restore state` fica explicitamente marcado como não executado; o restante do teste de navegação/anexos continua. A verificação nativa de maximizar/restaurar permanece habilitada nas execuções normais e no Windows. Isso não desabilita controles na aplicação distribuída.

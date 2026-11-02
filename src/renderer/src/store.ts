@@ -1,3 +1,4 @@
+import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
 import type {
   ChannelReadState,
   DmChannel,
@@ -13,6 +14,7 @@ import type {
 } from "@distopic/protocol";
 import { produce, type Draft } from "immer";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
+import { LOCKED_ACCESS, type AppAccessState } from "../../shared/app-access.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
 import { useSyncExternalStore } from "react";
@@ -25,10 +27,15 @@ export interface Account {
   token: string;
   userId: string;
   instanceName: string;
+  /** Signed in through the Annoy account (never true for a server's local account). */
+  annoy?: boolean;
+  /** A server of the Annoy account that this device could not sign in to yet (no token):
+   * "offline" while it fails, "invalid" when the server needs a username first. */
+  pending?: "offline" | "invalid";
   /** First observed connection failure; cleared as soon as the server responds. */
   offlineSince?: number;
 }
-export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null };
+export type RememberedAccount = Omit<Account, "token"> & { username: string; displayName: string; avatarUrl: string | null; /** Annoy accounts: the e-mail filled in for the next sign-in. */ annoyEmail?: string };
 
 export interface ChannelMessages {
   lastAccessed?: number;
@@ -47,7 +54,7 @@ export interface ChannelMessages {
 }
 
 export interface InstanceState {
-  status: TransportStatus;
+  status: TransportStatus | "outdated";
   connection: EndpointObservation;
   user: User | null;
   servers: ServerSummary[];
@@ -81,7 +88,7 @@ export type View =
 export type CreatableChannel = "text" | "voice" | "category" | "files" | "code" | "theater" | "song";
 
 export type Modal =
-  | { kind: "addAccount"; rememberedId?: string }
+  | { kind: "addAccount"; rememberedId?: string; accountId?: string; address?: string }
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId?: string; initialMode?: "create" | "join" }
@@ -90,7 +97,7 @@ export type Modal =
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
-  | { kind: "userSettings"; section?: "voice" | "expressions" }
+  | { kind: "userSettings"; section?: "voice" | "expressions" | "security" | "updates"; accountId?: string }
   | { kind: "screenPicker" }
   | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }
@@ -103,6 +110,8 @@ export interface VoiceUi {
   channelId: string;
   status: "connecting" | "connected";
   canStream: boolean;
+  /** Every frame of this call is end-to-end encrypted with SFrame. */
+  e2ee?: boolean;
   camera: boolean;
   screen: boolean;
 }
@@ -136,8 +145,6 @@ export interface Settings extends LocalizationPreferences {
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
-  /** "Usar como conta padrão" (Annoy Global): new servers sign in with it first. */
-  globalDefault: boolean;
   shareActivity: boolean;
   showVoiceBar: boolean;
   voiceBarMode: "external" | "always";
@@ -149,6 +156,7 @@ export interface Settings extends LocalizationPreferences {
 }
 
 export interface AppState {
+  access: AppAccessState;
   directCall: { accountId: string; call: import("@distopic/protocol").DirectCall } | null;
   rememberedAccounts: RememberedAccount[];
   recentMessages: Record<string, { own: boolean; at: number }>;
@@ -172,11 +180,12 @@ export interface AppState {
   chatNavigation: number;
   messageFocus: { accountId: string; channelId: string; messageId: string } | null;
   desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
-  /** The signed-in Annoy Global account, if any (keys stay in global.ts, never in the store). */
+  /** The signed-in Annoy account, if any (keys stay in global.ts, never in the store). */
   global: GlobalAccount | null;
 }
 
 export interface GlobalAccount {
+  cryptoMigrationRequired?: boolean;
   id: string;
   name: string;
   email: string;
@@ -186,6 +195,22 @@ const ACCOUNTS_KEY = "distopic.accounts";
 export const EMPTY_ACTIVITIES: readonly import("@distopic/protocol").UserActivity[] = [];
 const SETTINGS_KEY = "distopic.settings";
 const VIEW_KEY = "distopic.view";
+/** The identity in use survives views without an account (services, news) and restarts. */
+const ACTIVE_KEY = "annoy.activeAccount";
+
+/**
+ * Accounts of the identity in use. Switching user switches servers: an identity never
+ * shows another identity's servers or conversations. The Annoy account is one identity
+ * with all the server accounts that sign in through it; every local account is its own.
+ */
+export function identityAccountIds(s: AppState): string[] {
+  let id: string | null | undefined = "accountId" in s.view ? s.view.accountId : undefined;
+  if (id === undefined) { try { id = JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? "null"); } catch { id = null; } }
+  const account = s.accounts.find((a) => a.id === id);
+  if (account) return account.annoy && s.global ? s.accounts.filter((a) => a.annoy).map((a) => a.id) : [account.id];
+  if (s.global) return s.accounts.filter((a) => a.annoy).map((a) => a.id);
+  return s.accounts.slice(0, 1).map((a) => a.id);
+}
 const SERVICES_KEY = "distopic.services";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -215,7 +240,6 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
-  globalDefault: false,
   shareActivity: true,
   showVoiceBar: true,
   voiceBarMode: "external",
@@ -235,7 +259,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? normalizeLocalization(saved, navigator.language) : {}) } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? normalizeLocalization(saved,navigator.language) : {}) } as T;
   } catch {
     return fallback;
   }
@@ -289,6 +313,7 @@ function initialView(): View {
 }
 
 let state: AppState = {
+  access: LOCKED_ACCESS,
   directCall: null,
   rememberedAccounts: loadArray<RememberedAccount>("distopic.rememberedAccounts"),
   recentMessages: {},
@@ -310,6 +335,23 @@ let state: AppState = {
   global: null,
 };
 
+
+let savedAccountWrite:Promise<unknown>=Promise.resolve();
+function persistAccounts(accounts:Account[]):void {
+  // Connection metadata may persist in localStorage; bearer credentials never do.
+  localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(accounts.map(a=>({...a,token:""}))));
+  const value=JSON.stringify(accounts);
+  savedAccountWrite=savedAccountWrite.catch(()=>{}).then(()=>window.distopic?.secrets.set('accounts',value)).catch(()=>false);
+}
+export async function restoreSavedAccounts():Promise<void>{
+  const legacy=state.accounts;
+  const saved=await window.distopic?.secrets.get('accounts').catch(()=>null);
+  let restored=legacy;
+  if(saved){try{const value=JSON.parse(saved);if(Array.isArray(value))restored=value;}catch{}}
+  state=produce(state,s=>{s.accounts=restored;});
+  persistAccounts(restored);
+  for(const listener of listeners)listener();
+}
 const listeners = new Set<() => void>();
 
 export const getState = () => state;
@@ -319,11 +361,14 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   const prev = state;
   state = produce(state, recipe);
   if (state === prev) return;
-  if (state.accounts !== prev.accounts) localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(state.accounts));
+  if (state.accounts !== prev.accounts) persistAccounts(state.accounts);
   if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
-  if (JSON.stringify(normalizeLocalization(state.settings)) !== JSON.stringify(normalizeLocalization(prev.settings))) configureLocalization(state.settings);
-  if (state.view !== prev.view) localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
+  if(JSON.stringify(normalizeLocalization(state.settings))!==JSON.stringify(normalizeLocalization(prev.settings)))configureLocalization(state.settings);
+  if (state.view !== prev.view) {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(state.view));
+    if ("accountId" in state.view) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.view.accountId));
+  }
   if (state.services !== prev.services) localStorage.setItem(SERVICES_KEY, JSON.stringify(state.services));
   for (const l of listeners) l();
 }
@@ -358,4 +403,3 @@ export function toast(text: string, durationMs = 4500): void {
 export function instanceOf(s: AppState, accountId: string): InstanceState | undefined {
   return s.instances[accountId];
 }
-import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";

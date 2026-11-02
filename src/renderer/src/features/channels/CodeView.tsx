@@ -1,5 +1,4 @@
-import {rich} from "../../lib/localization.ts";
-import {compareText,localizationPreferences} from "../../../../shared/localization/index.ts";
+import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { has, Permission, type Channel, type CodeEntry, type CodeFile, type CodeRepo, type CodeStatus, type ServerState } from "@distopic/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -43,7 +42,7 @@ function buildTree(entries: CodeEntry[]): TreeNode[] {
     if (node.dir) dirs.set(entry.path, node);
   }
   const sort = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => (a.dir === b.dir ? compareText(a.name,b.name) : a.dir ? -1 : 1));
+    nodes.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, "en", { numeric: true }) : a.dir ? -1 : 1));
     nodes.forEach((n) => sort(n.children));
   };
   sort(root.children);
@@ -68,6 +67,7 @@ function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Ch
     <form className="code-link form" onSubmit={submit}>
       <Icon name="branch" size={36} />
       <h2>{translate("common.e612b77a1579")}</h2>
+      <p role="note">{translate("common.f78c48919194")}</p>
       <p className="muted">{translate("common.579cd0476ab0")}</p>
       <label className="field">
         <span>{translate("common.9dcfbaed6ced")}</span>
@@ -78,7 +78,7 @@ function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Ch
         <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={translate("common.289fca5b8fff")} autoComplete="off" />
       </label>
       <button className="btn" disabled={busy || !url.trim()}>
-        {busy ? translate("common.19bfa772aabe") : repo.url ? translate("common.91fe96077d92") : translate("common.990c1a987872")}
+        {busy ? translate("common.19bfa772aabe") : repo.url ? "Clonar de novo" : translate("common.990c1a987872")}
       </button>
     </form>
   );
@@ -261,9 +261,9 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
       model: null,
     });
     editor.current = instance;
-    const stopTextPreferences=onLocalizationChange(()=>instance.updateOptions({fontSize:localizationPreferences().fontSize}));
+    const stopText=onLocalizationChange(()=>instance.updateOptions({fontSize:localizationPreferences().fontSize}));
     return () => {
-      stopTextPreferences();
+      stopText();
       instance.dispose();
       editor.current = null;
     };
@@ -295,7 +295,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
       } catch (err) {
         if (err instanceof RequestError && err.status === 409) {
           patchFile(path, { stale: true });
-          toast(translate("common.d12acb44a12c"));
+          toast("Outra pessoa salvou este arquivo. Recarregue ou sobrescreva.");
         } else toast((err as Error).message);
       }
     },
@@ -412,7 +412,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
     } catch {
       // Private mode: the address is just not remembered.
     }
-    if (await git("commit", () => api.post(`${base}/commit`, { message, email: email.trim() || undefined }), translate("common.635a2eed142e"))) setMessage("");
+    if (await git("commit", () => api.post(`${base}/commit`, { message, email: email.trim() || undefined }), "Commit feito")) setMessage("");
   };
 
   const push = async () => {
@@ -452,7 +452,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
           {repo.status === "cloning" ? (
             <>
               <Icon name="loader" size={36} />
-              <h2>{rich("common.5c740cf40928",{p0:(repo.url)})}</h2>
+              <h2>{translate("common.13e0280fac43")}{repo.url}</h2>
               <p className="muted">{translate("common.e56d714b10ba")}</p>
             </>
           ) : canLink ? (
@@ -474,6 +474,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
 
   return (
     <section className="chat code-room">
+      <p className="connection-notice">{translate("common.1a14de17cfd9")}</p>
       <header className="chat-header">
         <Icon name="code" size={20} />
         <h1 className="truncate">{channel.name}</h1>
@@ -495,7 +496,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
         )}
       </header>
       <div className="code-body">
-        {loadError && <div className="code-load-banner" role="alert"><span>{rich("common.79eb7af9c068",{p0:(loadError)})}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? translate("common.84e496a080f7") : translate("common.b9e10688be01")}</button></div>}
+        {loadError && <div className="code-load-banner" role="alert"><span>{translate("common.99681f51affc")}{loadError}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? translate("common.84e496a080f7") : "Tentar novamente"}</button></div>}
         <nav className="code-activity" aria-label={translate("common.36e168ed8dd3")}>
           <button className={panel === "files" ? "active" : ""} title={translate("common.d5120059860d")} onClick={() => setPanel("files")}>
             <Icon name="file" size={20} />
@@ -586,7 +587,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={translate("common.12c70b2dacba")} />
                   <button className="btn" disabled={!!busy || !message.trim() || !status?.files.length}>
                     <Icon name="check" size={16} />
-                    {busy === "commit" ? translate("common.a84378880cc6") : translate("common.82a9c46ffa47")}
+                    {busy === "commit" ? "Fazendo commit…" : translate("common.82a9c46ffa47")}
                   </button>
                   <div className="code-sync">
                     <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void pull()} title={translate("common.ba0930737a3f")}>
@@ -600,7 +601,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                   </div>
                 </form>
               )}
-              <h3 className="code-section">{rich("common.4171a2ef4381",{p0:(status?.files.length ?? 0)})}</h3>
+              <h3 className="code-section">{translate("common.8da4b79184ca")}{status?.files.length ?? 0})</h3>
               <ul className="code-changes">
                 {status?.files.map((f) => (
                   <li key={f.path} className={`git-${statusLetter(f.code)}`}>
@@ -615,7 +616,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                         className="icon-btn tiny"
                         title={translate("common.a350912ad6ee")}
                         onClick={async () => {
-                          if (await confirmAction(translate("common.295e4e1e645e",{p0:(f.path)}), { title: translate("common.a350912ad6ee"), confirmLabel: translate("common.1a878a55c594") })) {
+                          if (await confirmAction(`As mudanças em "${f.path}" serão perdidas para todos.`, { title: translate("common.a350912ad6ee"), confirmLabel: translate("common.1a878a55c594") })) {
                             await git("discard", () => api.post(`${base}/discard`, { path: f.path }));
                             if (files.some((x) => x.path === f.path)) void fetchFile(f.path, true).catch(() => closeFile(f.path));
                           }
@@ -630,7 +631,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
               <h3 className="code-section">{translate("common.972b0c4c2d39")}</h3>
               <ul className="code-log">
                 {status?.log.map((c) => (
-                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle}))})}>
+                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString("pt-BR"))})}>
                     <Icon name="commit" size={12} />
                     <span className="truncate">{c.subject}</span>
                     <small className="muted">{c.author}</small>
@@ -660,7 +661,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
             ))}
             {diff && (
               <div className="code-tab active diff">
-                <span className="truncate">{rich("common.f8be101caa77",{p0:(diff.split("/").pop())})}</span>
+                <span className="truncate">{diff.split("/").pop()}{translate("common.7c7a08508949")}</span>
                 <button className="icon-btn tiny" aria-label={translate("common.938b40200ca4")} onClick={() => setDiff(null)}>
                   <Icon name="x" size={12} />
                 </button>
@@ -700,7 +701,8 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                 <span>{activeFile.dirty ? translate("common.28424d39e33d") : translate("common.db14b511e33a")}</span>
                 <span>{monaco?.languageOf(activeFile.path)}</span>
                 {canEdit && activeFile.dirty && (
-                  <button className="code-save" onClick={() => void save()}>{rich("common.f8a58a64aa6d",{p0:(<Icon name="save" size={12} />)})}</button>
+                  <button className="code-save" onClick={() => void save()}>
+                    <Icon name="save" size={12} />{translate("common.c44b39160f33")}</button>
                 )}
               </>
             )}
@@ -711,7 +713,5 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
     </section>
   );
 }
-
-onLocalizationChange(()=>{STATUS_LABEL={ M: translate("common.079552d3fad4"), A: translate("common.d88febcb6438"), D: translate("common.e660ce34d4df"), R: translate("common.fe24c71a62f0"), "?": translate("common.2b1d9b4b4ba4"), U: translate("common.6d6f698328c5") };});
 
 onLocalizationChange(()=>{STATUS_LABEL={ M: translate("common.079552d3fad4"), A: translate("common.d88febcb6438"), D: translate("common.e660ce34d4df"), R: translate("common.fe24c71a62f0"), "?": translate("common.2b1d9b4b4ba4"), U: translate("common.6d6f698328c5") };});

@@ -1,3 +1,4 @@
+import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
 import {t as translate} from "../../shared/localization/index.ts";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { SongDock } from "./features/channels/PlaybackRooms.tsx";
@@ -11,11 +12,14 @@ import { VoiceStatusBar } from "./components/VoiceStatusBar.tsx";
 import { SettingsGuard } from "./components/settings/SettingsGuard.tsx";
 import { useDesktopActivity } from "./features/activity/use-activity.ts";
 import { useAwayStatus } from "./features/activity/use-away.ts";
+import { disconnectDirectCall } from "./features/direct-calls.ts";
 import { DirectCallPanel } from "./components/DirectCallPanel.tsx";
 import { News } from "./components/News.tsx";
 import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
-import { connectAll, navigate, setPushToTalk, showServiceView } from "./client.ts";
+import { connectAll, leaveVoice, navigate, setPushToTalk, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
+import { fetchInfo } from "./api.ts";
+import { AuthGate } from "./components/AuthGate.tsx";
 import { Home } from "./components/Home.tsx";
 import { ServerView } from "./components/ServerView.tsx";
 import { AddTabModal, ServicePlaceholder, ServiceSettingsModal, TeamSpeakView } from "./components/Services.tsx";
@@ -46,7 +50,7 @@ function Modals() {
     case "switchAccount": return <SwitchAccountModal />;
     case "search": return <SearchDialog accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId}/>;
     case "addAccount":
-      return <AddAccountModal />;
+      return <AddAccountModal key={modal.address ?? modal.accountId ?? modal.rememberedId ?? "new"} />;
     case "createServer":
       return <CreateServerModal accountId={modal.accountId} initialMode={modal.initialMode} />;
     case "serverSettings":
@@ -74,11 +78,40 @@ function Modals() {
   }
 }
 
+/** Existing sessions show the migration notice as soon as the host changes policy. */
+function AccountPolicyNotice() {
+  const accounts = useStore(s => s.accounts);
+  const instances = useStore(s => s.instances);
+  const modal = useStore(s => s.modal);
+  const shown = useRef(new Set<string>());
+  useEffect(() => {
+    if (modal) return;
+    const account = accounts.find(a => instances[a.id]?.status === "invalid" && !shown.current.has(a.id));
+    if (!account) return;
+    let active = true;
+    void fetchInfo(account.url).then(info => {
+      if (!active || !info.accountMode) return;
+      shown.current.add(account.id);
+      setState(s => { if (!s.modal) s.modal = { kind: "addAccount", accountId: account.id }; });
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [accounts, instances, modal]);
+  return null;
+}
+
+function WorkspaceActivity() {
+  useDesktopActivity();
+  useAwayStatus();
+  useEffect(() => () => { void window.distopic?.activity.configure({ games: false, music: false, development: false }); }, []);
+  return null;
+}
+
 const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
-  const localization = useLocalization();
-  useEffect(() => applyTextPreferences(localization), [localization]);
+  const localization=useLocalization();
+  useEffect(()=>applyTextPreferences(localization),[localization]);
+  const access = useStore(s => s.access.allowed);
   const view = useStore((s) => s.view);
   const service = useStore((s) => (s.view.kind === "service" ? s.services.find((sv) => sv.id === (s.view as { serviceId: string }).serviceId) : undefined));
   const modalOpen = useStore((s) => s.modal !== null || s.directCall !== null);
@@ -93,8 +126,6 @@ export function App() {
   const barPosition = useStore((s) => s.settings.barPosition);
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
-  useDesktopActivity();
-  useAwayStatus();
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor });
@@ -105,8 +136,28 @@ export function App() {
   }, [theme, accentColor, surfaceColor]);
 
   useEffect(() => {
-    connectAll();
-    void import("./global.ts").then((g) => g.initGlobal());
+    const auth = window.distopic?.auth;
+    let revision = 0;
+    let active = true;
+    const update = (next: import("../../shared/app-access.ts").AppAccessState) => {
+      if (!active) return;
+      const revoked = getState().access.global && !next.global;
+      if (getState().access.allowed && !next.allowed) {
+        leaveVoice();
+        for (const account of getState().accounts) disconnectDirectCall(account.id);
+        setState(s => { s.modal = null; });
+      }
+      setState(s => { s.access = next; if (!next.global) s.global = null; });
+      if (revoked) void import("./global.ts").then(g => g.signOutGlobal(false));
+    };
+    const off = auth?.onState(next => { revision++; update(next); });
+    const started = revision;
+    void auth?.get().then(next => { if (revision === started) update(next); });
+    return () => { active = false; off?.(); };
+  }, []);
+
+  useEffect(() => {
+    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>{connectAll();void import("./global.ts").then(g=>g.initGlobal());});
     if (getState().view.kind !== "home") navigate(getState().view);
     return window.distopic?.services.onBadge((id, badge) =>
       setState((s) => {
@@ -118,9 +169,9 @@ export function App() {
   // Browser services are a native layer above the page; hide it while a modal is open.
   useEffect(() => {
     if (view.kind !== "service") return;
-    if (modalOpen || blocking) window.distopic?.services.hide();
+    if (!access || modalOpen || blocking) window.distopic?.services.hide();
     else showServiceView(view);
-  }, [modalOpen, blocking, view]);
+  }, [access, modalOpen, blocking, view]);
 
   // Keep the update banner visible above service views.
   useEffect(() => {
@@ -135,7 +186,7 @@ export function App() {
     const observer = new ResizeObserver(report);
     observer.observe(main);
     return () => observer.disconnect();
-  }, [barPosition, bannerVisible, inVoice]);
+  }, [access, barPosition, bannerVisible, inVoice]);
 
   // Push-to-talk while the window has focus.
   useEffect(() => {
@@ -165,6 +216,8 @@ export function App() {
     <MotionConfig reducedMotion="user"><LazyMotion features={motionFeatures} strict><TooltipProvider delayDuration={300}>
     <div className={`app bar-${barPosition}`}>
       <TitleBar />
+      {!access ? <AuthGate /> : <>
+      <WorkspaceActivity />
       <div className="workspace">
       <TopBar />
       <div className="content">
@@ -193,10 +246,11 @@ export function App() {
       </main>
       </div>
       </div>
-      <Suspense fallback={<div className="overlay-loading" role="status">{translate("common.0911dfa616da")}</div>}><Modals /></Suspense>
+      </>}
+      <Suspense fallback={<div className="overlay-loading" role="status">{translate("common.0911dfa616da")}</div>}><AccountPolicyNotice /><Modals /></Suspense>
       <MandatoryUpdate />
       <ActionDialogHost />
-      <DirectCallPanel />
+      {access && <DirectCallPanel />}
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}
@@ -206,6 +260,3 @@ export function App() {
     </TooltipProvider></LazyMotion></MotionConfig>
   );
 }
-import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
-
-

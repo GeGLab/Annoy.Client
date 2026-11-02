@@ -1,4 +1,3 @@
-import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { useEffect, useRef } from "react";
 import { useStore } from "../store.ts";
@@ -62,18 +61,16 @@ export function DirectCallPanel() {
   const other = friend?.user ?? instance.dms.flatMap((dm) => dm.recipients).find((user) => user.id === otherId);
   const name = friend?.nickname || other?.displayName || translate("common.dfdf1ff8c702");
   if (ringing) return <Modal title={incoming ? translate("common.93947904c31c") : translate("common.c330e6eab743")} onClose={() => callAction(incoming ? "reject" : "end")} className="direct-call-invite">
-    <div className="call-invite-person">{other && <Avatar user={other} size={80} />}<h3>{name}</h3><p className="muted">{incoming ? translate("common.b691e187af93") : translate("common.74d16463d404")} · {entry.call.video ? translate("common.63fb625e5405") : translate("common.195c60bb2325")}</p></div>
-    <div className="call-invite-actions"><Button variant="secondary" onClick={() => callAction(incoming ? "reject" : "end")}><Icon name="hangup" />{incoming ? translate("common.ce432849d60e") : translate("common.bb9dbb406dcb")}</Button>{incoming && <Button onClick={() => callAction("accept")}>{rich("common.c783dd737e63",{p0:(<Icon name={entry.call.video ? "camera" : "phone"} />)})}</Button>}</div>
+    <p role="note">{translate("common.783d0ed94ded")}</p>
+    <div className="call-invite-person">{other && <Avatar user={other} size={80} />}<h3>{name}</h3><p className="muted">{incoming ? translate("common.b691e187af93") : "Aguardando atender"} · {entry.call.video ? translate("common.63fb625e5405") : translate("common.195c60bb2325")}</p></div>
+    <div className="call-invite-actions"><Button variant="secondary" onClick={() => callAction(incoming ? "reject" : "end")}><Icon name="hangup" />{incoming ? translate("common.ce432849d60e") : translate("common.bb9dbb406dcb")}</Button>{incoming && <Button onClick={() => callAction("accept")}><Icon name={entry.call.video ? "camera" : "phone"} />{translate("common.6c8f62906884")}</Button>}</div>
   </Modal>;
   return <section className="direct-call-panel" aria-label={translate("common.395edaa78986",{p0:(name)})}>
     <header>{other && <Avatar user={other} size={32} />}<div><strong>{name}</strong><small>{media.connected ? translate("common.77a41191fcc1") : translate("common.c059f8b22580")}</small></div><Icon name={entry.call.video ? "camera" : "phone"} /></header>
+    <p role="note">{entry.call.protection === "sframe" ? <><Icon name="lock" size={12} />{translate("common.fb4c00977d0d")}</> : translate("common.f593b114ffe6")}</p>
     <UserVolumeControl accountId={entry.accountId} userId={otherId} name={name} />
     <audio ref={audio} autoPlay />
     {entry.call.video && <div className="direct-call-video"><CallVideo stream={media.remote} /><CallVideo stream={media.local} local /></div>}
-    <footer><button className={`icon-btn${settings.selfMute ? " danger" : ""}`} aria-label={settings.selfMute ? translate("common.52d69c135ad9") : translate("common.b07117293797")} onClick={() => toggleVoiceSetting("selfMute")}><Icon name={settings.selfMute ? "micOff" : "mic"} /></button><button className="icon-btn" aria-label={settings.selfDeaf ? translate("common.0490315480b4") : translate("common.7080663704f1")} onClick={() => toggleVoiceSetting("selfDeaf")}><Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} /></button><Button variant="destructive" onClick={() => callAction("end")}>{rich("common.05c882069cb5",{p0:(<Icon name="hangup" />)})}</Button></footer>
+    <footer><button className={`icon-btn${settings.selfMute ? " danger" : ""}`} aria-label={settings.selfMute ? translate("common.52d69c135ad9") : "Silenciar microfone da chamada"} onClick={() => toggleVoiceSetting("selfMute")}><Icon name={settings.selfMute ? "micOff" : "mic"} /></button><button className="icon-btn" aria-label={settings.selfDeaf ? translate("common.0490315480b4") : translate("common.7080663704f1")} onClick={() => toggleVoiceSetting("selfDeaf")}><Icon name={settings.selfDeaf ? "headphonesOff" : "headphones"} /></button><Button variant="destructive" onClick={() => callAction("end")}><Icon name="hangup" />{translate("common.4d52b41ea63a")}</Button></footer>
   </section>;
 }
-
-
-
-

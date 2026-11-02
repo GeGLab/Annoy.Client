@@ -6,9 +6,15 @@ export const UPLOAD_TIMEOUT_MS = 120_000;
 
 export type RequestFailure = "network" | "timeout" | "unauthorized" | "forbidden" | "service" | "http" | "invalid-response";
 export class RequestError extends Error {
-  constructor(readonly status: number, message: string, readonly kind: RequestFailure = status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status >= 500 ? "service" : "http", readonly code?: string) {
+  readonly status: number;
+  readonly kind: RequestFailure;
+  readonly code?: string;
+  constructor(status: number, message: string, kind: RequestFailure = status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status >= 500 ? "service" : "http", code?: string) {
     super(message);
     this.name = "RequestError";
+    this.status = status;
+    this.kind = kind;
+    this.code = code;
   }
 }
 
@@ -105,9 +111,9 @@ export async function parseResponse<T>(response: Response): Promise<T> {
   try { body = text ? JSON.parse(text) : {}; }
   catch { if (response.ok) throw new RequestError(response.status, translate("common.680a61415826"), "invalid-response"); }
   if (!response.ok) {
-    const remote = typeof body === "object" && body !== null && "message" in body && typeof body.message === "string" ? body.message : null;
-    const localized = remote ? textForError(remote) : null;
-    const message = remote && (localizationPreferences().language === "pt-BR" || localized !== remote) ? localized!
+    const remote=typeof body === "object" && body !== null && "message" in body && typeof body.message === "string" ? body.message:null;
+    const localized=remote?textForError(remote):null;
+    const message = remote&&(localizationPreferences().language==="pt-BR"||localized!==remote)?localized!
       : response.status === 401 ? translate("common.f134d8076fce")
       : response.status === 403 ? translate("common.a3bbc2853f1c")
       : response.status >= 500 ? translate("common.dfaf3c810ae2")
@@ -118,15 +124,22 @@ export async function parseResponse<T>(response: Response): Promise<T> {
   return body as T;
 }
 
+type Transport = (input: string, init: RequestInit) => Promise<Response>;
+let transport: Transport = (input, init) => fetch(input, init);
+/** The renderer routes every request through its secure transport (HTTPS, device proofs, no redirects). */
+export function setRequestTransport(next: Transport): void { transport = next; }
+
 export async function fetchJson<T>(url: string, init: RequestInit, signal: AbortSignal): Promise<{ data: T; status: number }> {
   try {
-    const response = await fetch(url, { ...init, signal });
+    const response = await transport(url, { ...init, signal });
     const data = await parseResponse<T>(response);
     signal.throwIfAborted();
     return { data, status: response.status };
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof RequestError || isCancellation(error)) throw error;
+    // A refusal by the secure transport (HTTP, redirect, missing proof) keeps its own explanation.
+    if (!(error instanceof TypeError) && error instanceof Error) throw new RequestError(0, error.message, "network");
     throw new RequestError(0, translate("common.adaaa0fcc09f"), "network");
   }
 }
@@ -140,7 +153,3 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", abort, { once: true });
   });
 }
-
-
-
-

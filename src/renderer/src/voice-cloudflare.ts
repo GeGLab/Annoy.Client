@@ -11,6 +11,7 @@ import { toast, type Settings } from "./store.ts";
 import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
 import { userVolume } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
+import { CallEncryption, needsEncodedStreamsFlag } from "./media-e2ee/call-encryption.ts";
 
 interface Remote {
   source: MediaSource;
@@ -37,6 +38,8 @@ export class CloudflareVoiceSession {
   private mixer = new RemoteAudioMixer();
   private closed = false;
   private capturedTracks = new Set<MediaStreamTrack>();
+  private crypt: CallEncryption | null = null;
+  private protectedReceivers = new WeakSet<RTCRtpReceiver>();
   canSpeak = false;
   canStream = false;
 
@@ -48,7 +51,18 @@ export class CloudflareVoiceSession {
     private readonly onLocalMedia: () => void,
     private readonly onMediaFailed: () => void,
     private readonly accountId: string,
+    /** Set when the call is end-to-end encrypted (SFrame); null only after an explicit transport-only consent. */
+    private readonly e2ee: { url: string; token: string; userId: string } | null = null,
   ) {}
+
+  /** True when every frame of this call is sealed with SFrame before it leaves this device. */
+  get encrypted(): boolean {
+    return this.crypt !== null;
+  }
+
+  mediaStats() {
+    return this.crypt?.stats() ?? Promise.resolve(null);
+  }
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
     const run = this.queue.then(task, task);
@@ -62,16 +76,23 @@ export class CloudflareVoiceSession {
       canSpeak: boolean;
       canStream: boolean;
       screenAudio?: boolean;
+      media?: { callId: string | null };
     }>("join", {
       channelId: this.channelId,
+      protection: this.e2ee ? "sframe" : "transport_only_acknowledged",
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
     });
+    if (this.e2ee) {
+      const crypt = await CallEncryption.start(this.gw, this.e2ee, this.channelId, joined.media ?? { callId: null }, (message) => toast(message, 10000));
+      if (this.closed) return crypt.close();
+      this.crypt = crypt;
+    }
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
     if (this.closed) return;
-    const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle" });
+    const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle", ...(this.crypt && needsEncodedStreamsFlag && { encodedInsertableStreams: true }) } as RTCConfiguration);
     this.pc = pc;
     pc.addEventListener("connectionstatechange", () => {
       if (pc.connectionState === "failed" && !this.closed) this.onMediaFailed();
@@ -92,6 +113,11 @@ export class CloudflareVoiceSession {
       if (this.closed || !this.pc) throw new Error(translate("common.99e2847d16e5"));
       const pc = this.pc;
       const transceiver = pc.addTransceiver(track, { direction: "sendonly", ...(maxBitrate && { sendEncodings: [{ maxBitrate }] }) });
+      if (this.crypt) {
+        // Before the offer: no frame of this track is ever sent without SFrame.
+        this.crypt.protectSender(transceiver.sender, source, kind);
+        if (kind === "video") preferVp8(transceiver);
+      }
       await pc.setLocalDescription(await pc.createOffer());
       if (opus && transceiver.mid) this.opus.set(transceiver.mid, opus);
       const res = await this.gw.voice<{ producerId: string; sdp: string }>("publish", {
@@ -120,12 +146,14 @@ export class CloudflareVoiceSession {
       const res = await this.gw.voice<{ mid: string; kind: "audio" | "video"; sdp?: string; renegotiate: boolean }>("subscribe", { producerId });
       if (res.renegotiate && res.sdp) {
         await this.setRemote(pc, "offer", res.sdp);
+        this.protectReceiver(pc, res.mid, res.kind);
         await pc.setLocalDescription(await pc.createAnswer());
         await this.gw.voice("renegotiate", { sdp: pc.localDescription!.sdp });
       }
       if (this.closed) return;
       const transceiver = pc.getTransceivers().find((t) => t.mid === res.mid);
       if (!transceiver) throw new Error(translate("common.f0cc45c67996"));
+      this.protectReceiver(pc, res.mid, res.kind);
       const track = transceiver.receiver.track;
       let audio: HTMLAudioElement | null = null;
       let amplified: AmplifiedAudio | null = null;
@@ -144,6 +172,14 @@ export class CloudflareVoiceSession {
       }
       this.remote.set(producerId, { source, mid: res.mid, audio, amplified, userId });
     });
+  }
+
+  /** Before the answer is applied, so frames of this section are only ever opened by SFrame. */
+  private protectReceiver(pc: RTCPeerConnection, mid: string, kind: "audio" | "video"): void {
+    const receiver = pc.getTransceivers().find((t) => t.mid === mid)?.receiver;
+    if (!this.crypt || !receiver || this.protectedReceivers.has(receiver)) return;
+    this.protectedReceivers.add(receiver);
+    this.crypt.protectReceiver(receiver, kind);
   }
 
   /**
@@ -177,6 +213,8 @@ export class CloudflareVoiceSession {
       void this.subscribeSoon(event.d.producerId, event.d.userId, event.d.source);
     } else if (event.t === "VOICE_PRODUCER_CLOSED") {
       this.dropRemote(event.d.producerId);
+    } else if (event.t === "VOICE_MEDIA") {
+      this.crypt?.handleEvent(event.d);
     }
   }
 
@@ -201,7 +239,7 @@ export class CloudflareVoiceSession {
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
     if (withAudio && !sound) toast(translate("common.5cd6dd99a676"), 10000);
-    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error(translate("common.5641e70d7b1b")); }
+    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error("Nenhuma imagem capturada"); }
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {
@@ -295,7 +333,13 @@ export class CloudflareVoiceSession {
     clearTiles();
     this.mic?.stop();
     this.pc?.close();
+    this.crypt?.close();
   }
 }
 
-
+/** SFrame keeps only the VP8 frame header readable, so the call must not negotiate H264. */
+function preferVp8(transceiver: RTCRtpTransceiver): void {
+  const codecs = RTCRtpSender.getCapabilities("video")?.codecs ?? [];
+  const allowed = codecs.filter((c) => /^video\/(vp8|rtx|red|ulpfec)$/i.test(c.mimeType));
+  if (allowed.some((c) => /vp8$/i.test(c.mimeType))) transceiver.setCodecPreferences(allowed);
+}

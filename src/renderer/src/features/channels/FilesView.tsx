@@ -1,5 +1,6 @@
-import {rich} from "../../lib/localization.ts";
-import {t as translate,plural} from "../../../../shared/localization/index.ts";
+import {t as translate} from "../../../../shared/localization/index.ts";
+import {SecureAttachment} from "../../components/SecureAttachment.tsx";
+import {CryptoStatus} from "../../components/CryptoStatus.tsx";
 import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { apiFor } from "../../client.ts";
@@ -183,9 +184,10 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       <header className="chat-header">
         <Icon name="folder" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{channel.topic || plural({one:"counts.files.one",other:"counts.files.other"},total,{p0:files.length,p1:formatSize(totalSize)})}</span>
+        <span className="chat-topic">{channel.topic || `${files.length} de ${total} arquivo(s) · ${formatSize(totalSize)} carregados`}</span>
       </header>
 
+      <CryptoStatus accountId={accountId} channelId={channel.id}/>
       <div className="files-toolbar">
         <label className="files-search">
           <Icon name="search" size={16} />
@@ -199,7 +201,8 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         {canUpload && (
           <>
             <input className="files-note" value={note} onChange={(e) => { setNote(e.target.value); writeChatDraft(accountId, channel.id, { ...readChatDraft(accountId, channel.id), text: e.target.value, replyToId: null, attachmentCount: 0 }); }} placeholder={translate("common.3c26d4a09e8d")} maxLength={LIMITS.messageMax} />
-            <button className="btn" onClick={() => input.current?.click()}>{rich("common.0c07ad3a6d42",{p0:(<Icon name="upload" size={16} />)})}</button>
+            <button className="btn" onClick={() => input.current?.click()}>
+              <Icon name="upload" size={16} />{translate("common.298feda4c7ef")}</button>
             <input
               ref={input}
               type="file"
@@ -222,7 +225,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
               <Icon name={u.error ? "x" : "upload"} size={16} />
               <span className="truncate">{u.names}</span>
               {u.error ? <span className="danger-text">{u.error}</span> : <progress value={u.progress} max={1} />}
-              <button className="icon-btn tiny" aria-label={u.error ? translate("common.0a2fe40efa3c") : translate("common.f51ecbdbd18a")} onClick={() => (u.error ? setUploads((x) => x.filter((y) => y.id !== u.id)) : u.abort.abort())}>
+              <button className="icon-btn tiny" aria-label={u.error ? translate("common.0a2fe40efa3c") : "Cancelar envio"} onClick={() => (u.error ? setUploads((x) => x.filter((y) => y.id !== u.id)) : u.abort.abort())}>
                 <Icon name="x" size={14} />
               </button>
             </li>
@@ -236,13 +239,14 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         {files.length === 0 && !loadingFiles && !filesError && (
           <div className="files-empty">
             <Icon name="folderOpen" size={40} />
-            <h2>{query ? translate("common.ec58f70ee770") : translate("common.b46cf68777c9")}</h2>
+            <h2>{query ? "Nada encontrado" : "Nenhum arquivo ainda"}</h2>
             <p className="muted">{query ? translate("common.ee16d8e09c42") : canUpload ? translate("common.b9d4b2dfdbec") : translate("common.346bd9f389c1")}</p>
           </div>
         )}
         {files.map((file) => {
           const { attachment, message } = file;
           const mine = message.author.id === me;
+          if(attachment.url.startsWith('annoy-encrypted:')||attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={translate("common.58727ecc46f1",{p0:(attachment.filename)})} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
           return (
             <div key={attachment.id} className="file-row" role="listitem">
               <button className="file-open" onClick={() => open(file)} title={attachment.contentType.startsWith("image/") || /^(audio|video)\//.test(attachment.contentType) ? translate("common.a01a5fce396e") : translate("expression.b45ae836a031")}>
@@ -269,7 +273,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
                   className="icon-btn"
                   title={translate("desktop.c19488a05564")}
                   aria-label={translate("common.1eff1239da35",{p0:(attachment.filename)})}
-                  onClick={() => void navigator.clipboard.writeText(api.resolve(attachment.url)).then(() => toast(translate("common.18695c70c605")))}
+                  onClick={() => void navigator.clipboard.writeText(api.resolve(attachment.url)).then(() => toast("Link copiado"))}
                 >
                   <Icon name="link" size={16} />
                 </button>
@@ -284,7 +288,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         })}
         {nextOffset !== null && (
           <button className="btn btn-ghost files-more" disabled={loadingFiles} onClick={() => void fetchFiles(nextOffset, true)}>
-            {loadingFiles ? translate("common.6cc1bbba0f84") : translate("common.4c0eb21a3854",{p0:(Math.max(0, total - files.length))})}
+            {loadingFiles ? translate("common.6cc1bbba0f84") : `Carregar mais arquivos (${Math.max(0, total - files.length)} restantes)`}
           </button>
         )}
       </div>
@@ -292,7 +296,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       {dragging && (
         <div className="files-drop" aria-hidden>
           <Icon name="upload" size={36} />
-          <strong>{rich("common.c58ba7385539",{p0:(channel.name)})}</strong>
+          <strong>{translate("common.41366e935fad")}{channel.name}</strong>
         </div>
       )}
       {image !== null && image >= 0 && (
@@ -308,7 +312,3 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
     </section>
   );
 }
-
-
-
-

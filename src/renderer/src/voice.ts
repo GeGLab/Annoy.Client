@@ -10,6 +10,7 @@ import { toast, type Settings } from "./store.ts";
 import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
 import { userVolume } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
+import { CallEncryption, needsEncodedStreamsFlag } from "./media-e2ee/call-encryption.ts";
 
 type TransportInfo = {
   id: string;
@@ -46,6 +47,7 @@ export class VoiceSession {
   private micGate: MicGate | null = null;
   private closed = false;
   private capturedTracks = new Set<MediaStreamTrack>();
+  private crypt: CallEncryption | null = null;
   canSpeak = true;
   canStream = false;
 
@@ -59,14 +61,31 @@ export class VoiceSession {
     /** Media can't reach the server even though signaling works: almost always the announced IP or a closed port. */
     private readonly onMediaFailed: () => void,
     private readonly accountId: string,
+    /** Set when the call is end-to-end encrypted (SFrame); null only after an explicit transport-only consent. */
+    private readonly e2ee: { url: string; token: string; userId: string } | null = null,
   ) {}
 
+  /** True when every frame of this call is sealed with SFrame before it leaves this device. */
+  get encrypted(): boolean {
+    return this.crypt !== null;
+  }
+
+  mediaStats() {
+    return this.crypt?.stats() ?? Promise.resolve(null);
+  }
+
   async start(): Promise<void> {
-    const joined = await this.gw.voice<{ rtpCapabilities: ms.RtpCapabilities; canSpeak: boolean; canStream: boolean; screenAudio?: boolean }>("join", {
+    const joined = await this.gw.voice<{ rtpCapabilities: ms.RtpCapabilities; canSpeak: boolean; canStream: boolean; screenAudio?: boolean; media?: { callId: string | null } }>("join", {
       channelId: this.channelId,
+      protection: this.e2ee ? "sframe" : "transport_only_acknowledged",
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
     });
+    if (this.e2ee) {
+      const crypt = await CallEncryption.start(this.gw, this.e2ee, this.channelId, joined.media ?? { callId: null }, (message) => toast(message, 10000));
+      if (this.closed) return crypt.close();
+      this.crypt = crypt;
+    }
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
@@ -78,13 +97,13 @@ export class VoiceSession {
 
     const receiveInfo = await this.gw.voice<TransportInfo>("createTransport");
     if (this.closed) return;
-    this.recv = this.device.createRecvTransport(receiveInfo);
+    this.recv = this.device.createRecvTransport({ ...receiveInfo, additionalSettings: this.transportSettings() });
     this.wireConnect(this.recv);
 
     if (this.canSpeak || this.canStream) {
       const sendInfo = await this.gw.voice<TransportInfo>("createTransport");
       if (this.closed) return;
-      this.send = this.device.createSendTransport(sendInfo);
+      this.send = this.device.createSendTransport({ ...sendInfo, additionalSettings: this.transportSettings() });
       this.wireConnect(this.send);
       this.send.on("produce", ({ kind, rtpParameters, appData }, callback, errback) => {
         this.gw
@@ -96,6 +115,20 @@ export class VoiceSession {
 
     const { producers } = await this.gw.voice<{ producers: { producerId: string; userId: string; source: MediaSource }[] }>("getProducers");
     await Promise.all(producers.map((p) => this.consume(p.producerId, p.userId, p.source)));
+  }
+
+  private transportSettings(): Record<string, unknown> | undefined {
+    return this.crypt && needsEncodedStreamsFlag ? { encodedInsertableStreams: true } : undefined;
+  }
+
+  /** SFrame needs a codec whose packetizer only reads the clear frame prefix: VP8. */
+  private videoCodec(): ms.RtpCodecCapability | undefined {
+    return this.crypt ? this.device?.rtpCapabilities.codecs?.find((c) => c.mimeType.toLowerCase() === "video/vp8") : undefined;
+  }
+
+  private protect(source: MediaSource, kind: "audio" | "video"): ((sender: RTCRtpSender) => void) | undefined {
+    const crypt = this.crypt;
+    return crypt ? (sender) => crypt.protectSender(sender, source, kind) : undefined;
   }
 
   private wireConnect(transport: ms.Transport): void {
@@ -115,6 +148,7 @@ export class VoiceSession {
       track,
       codecOptions: { opusDtx: true, opusFec: true, opusMaxAverageBitrate: OPUS_VOICE.maxaveragebitrate },
       stopTracks: false,
+      onRtpSender: this.protect("mic", "audio"),
       appData: { source: "mic" },
     });
     if (this.closed) { producer.close(); track.stop(); return; }
@@ -182,6 +216,8 @@ export class VoiceSession {
       track,
       encodings: [{ maxBitrate: profile.maxBitrate }],
       codecOptions: { videoGoogleStartBitrate: 1000 },
+      codec: this.videoCodec(),
+      onRtpSender: this.protect(source, "video"),
       appData: { source },
     });
     if (this.closed) { producer.close(); stream.getTracks().forEach((captured) => captured.stop()); return; }
@@ -191,6 +227,7 @@ export class VoiceSession {
         const audio = await this.send.produce({
           track: sound,
           codecOptions: { opusStereo: true, opusDtx: false, opusFec: true, opusMaxAverageBitrate: OPUS_SCREEN.maxaveragebitrate },
+          onRtpSender: this.protect("screen_audio", "audio"),
           appData: { source: "screen_audio" },
         });
         if (this.closed) { audio.close(); sound.stop(); return; }
@@ -235,7 +272,8 @@ export class VoiceSession {
       kind: ms.MediaKind;
       rtpParameters: ms.RtpParameters;
     }>("consume", { producerId, transportId: this.recv.id, rtpCapabilities: this.device.rtpCapabilities });
-    const consumer = await this.recv.consume(params);
+    const crypt = this.crypt;
+    const consumer = await this.recv.consume({ ...params, onRtpReceiver: crypt ? (receiver) => crypt.protectReceiver(receiver, params.kind) : undefined });
     if (this.closed) { consumer.close(); return; }
     let audio: HTMLAudioElement | null = null;
     let amplified: AmplifiedAudio | null = null;
@@ -270,6 +308,8 @@ export class VoiceSession {
       void this.consume(event.d.producerId, event.d.userId, event.d.source).catch((err: unknown) => console.warn("consume failed", err));
     } else if (event.t === "VOICE_PRODUCER_CLOSED") {
       this.dropConsumer(event.d.producerId);
+    } else if (event.t === "VOICE_MEDIA") {
+      this.crypt?.handleEvent(event.d);
     }
   }
 
@@ -295,6 +335,7 @@ export class VoiceSession {
     this.send?.close();
     this.recv?.close();
     this.micGate?.stop();
+    this.crypt?.close();
   }
 }
 
