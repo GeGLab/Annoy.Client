@@ -135,7 +135,7 @@ export class Api {
     return this.fetch<T>(path, {
       method,
       headers: {
-        authorization: translate("common.69c9d7985d22",{p0:(this.token)}),
+        authorization: `Bearer ${this.token}`,
         ...(body !== undefined && { "content-type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -151,13 +151,13 @@ export class Api {
   async uploadServerIcon<T>(serverId: string, photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("icon", photo, "icon");
-    return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) }, body }, signal, WRITE_TIMEOUT_MS);
+    return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
   async uploadAvatar<T>(photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");
-    return this.fetch("/users/@me/avatar", { method: "POST", headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) }, body }, signal, WRITE_TIMEOUT_MS);
+    return this.fetch("/users/@me/avatar", { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
   async sendMessage<T>(channelId: string, content: string, files: File[], replyToId: string | null, signal?: AbortSignal): Promise<T> {
@@ -169,7 +169,7 @@ export class Api {
     for (const f of files) form.append("files", f, f.name);
     return this.fetch<T>(`/channels/${channelId}/messages`, {
       method: "POST",
-      headers: { authorization: translate("common.69c9d7985d22",{p0:(this.token)}) },
+      headers: { authorization: `Bearer ${this.token}` },
       body: form,
     }, signal, UPLOAD_TIMEOUT_MS);
   }
@@ -193,7 +193,7 @@ export class Api {
       };
       const abort = () => { xhr.abort(); finish(() => reject(active.reason)); };
       xhr.open("POST", `${this.baseUrl}/api/channels/${channelId}/messages`);
-      xhr.setRequestHeader("authorization", translate("common.69c9d7985d22",{p0:(this.token)}));
+      xhr.setRequestHeader("authorization", `Bearer ${this.token}`);
       xhr.upload.onprogress = (e) => !active.aborted && e.lengthComputable && onProgress(e.loaded / e.total);
       xhr.onload = () => void parseResponse<T>(new Response(xhr.responseText || null, { status: xhr.status })).then(
         (data) => finish(() => active.aborted ? reject(active.reason) : resolve({ data, status: xhr.status })),

@@ -46,7 +46,7 @@ async function request<T>(base: string, path: string, init: { method?: string; b
   try {
     const result = await requests.run((active) => fetchJson<T>(base + path, {
       method,
-      headers: { ...(init.body !== undefined && { "content-type": "application/json" }), ...(init.token && { authorization: translate("common.69c9d7985d22",{p0:(init.token)}) }) },
+      headers: { ...(init.body !== undefined && { "content-type": "application/json" }), ...(init.token && { authorization: `Bearer ${init.token}` }) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     }, active), { signal: init.signal, timeoutMs: method === "GET" ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS, key: method === "GET" ? base + path : undefined });
     if (observesGlobal && generation === requests.generation) setState((s) => {
