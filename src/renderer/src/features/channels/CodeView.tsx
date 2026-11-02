@@ -1,5 +1,5 @@
 import {rich} from "../../lib/localization.ts";
-import {localizationPreferences} from "../../../../shared/localization/index.ts";
+import {compareText,localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { has, Permission, type Channel, type CodeEntry, type CodeFile, type CodeRepo, type CodeStatus, type ServerState } from "@distopic/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -43,7 +43,7 @@ function buildTree(entries: CodeEntry[]): TreeNode[] {
     if (node.dir) dirs.set(entry.path, node);
   }
   const sort = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, "en", { numeric: true }) : a.dir ? -1 : 1));
+    nodes.sort((a, b) => (a.dir === b.dir ? compareText(a.name,b.name) : a.dir ? -1 : 1));
     nodes.forEach((n) => sort(n.children));
   };
   sort(root.children);
@@ -78,7 +78,7 @@ function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Ch
         <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={translate("common.289fca5b8fff")} autoComplete="off" />
       </label>
       <button className="btn" disabled={busy || !url.trim()}>
-        {busy ? "Vinculando…" : repo.url ? translate("common.91fe96077d92") : translate("common.990c1a987872")}
+        {busy ? translate("common.19bfa772aabe") : repo.url ? translate("common.91fe96077d92") : translate("common.990c1a987872")}
       </button>
     </form>
   );
@@ -254,14 +254,16 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
       theme: monaco.editorTheme(),
       automaticLayout: true,
       minimap: { enabled: true },
-      fontSize: 13,
+      fontSize: localizationPreferences().fontSize,
       fontLigatures: true,
       scrollBeyondLastLine: false,
       readOnly: !canEdit,
       model: null,
     });
     editor.current = instance;
+    const stopTextPreferences=onLocalizationChange(()=>instance.updateOptions({fontSize:localizationPreferences().fontSize}));
     return () => {
+      stopTextPreferences();
       instance.dispose();
       editor.current = null;
     };
@@ -493,7 +495,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
         )}
       </header>
       <div className="code-body">
-        {loadError && <div className="code-load-banner" role="alert"><span>{rich("common.79eb7af9c068",{p0:(loadError)})}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? "Atualizando…" : translate("common.b9e10688be01")}</button></div>}
+        {loadError && <div className="code-load-banner" role="alert"><span>{rich("common.79eb7af9c068",{p0:(loadError)})}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? translate("common.84e496a080f7") : translate("common.b9e10688be01")}</button></div>}
         <nav className="code-activity" aria-label={translate("common.36e168ed8dd3")}>
           <button className={panel === "files" ? "active" : ""} title={translate("common.d5120059860d")} onClick={() => setPanel("files")}>
             <Icon name="file" size={20} />
@@ -584,7 +586,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={translate("common.12c70b2dacba")} />
                   <button className="btn" disabled={!!busy || !message.trim() || !status?.files.length}>
                     <Icon name="check" size={16} />
-                    {busy === "commit" ? translate("common.a84378880cc6") : "Commit"}
+                    {busy === "commit" ? translate("common.a84378880cc6") : translate("common.82a9c46ffa47")}
                   </button>
                   <div className="code-sync">
                     <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void pull()} title={translate("common.ba0930737a3f")}>
@@ -628,7 +630,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
               <h3 className="code-section">{translate("common.972b0c4c2d39")}</h3>
               <ul className="code-log">
                 {status?.log.map((c) => (
-                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString(localizationPreferences().region))})}>
+                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle}))})}>
                     <Icon name="commit" size={12} />
                     <span className="truncate">{c.subject}</span>
                     <small className="muted">{c.author}</small>

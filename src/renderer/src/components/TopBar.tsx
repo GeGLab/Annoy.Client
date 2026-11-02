@@ -1,5 +1,5 @@
 import {rich} from "../lib/localization.ts";
-import {t as translate} from "../../../shared/localization/index.ts";
+import {t as translate,plural} from "../../../shared/localization/index.ts";
 import type { ServerSummary } from "@distopic/protocol";
 import * as Popover from "@radix-ui/react-popover";
 import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
@@ -133,7 +133,7 @@ export function UserPanel() {
           </Tooltip>
           <DeviceMenu kind="output" />
         </div>
-        <Tooltip content="Configurações" side="top">
+        <Tooltip content={translate("common.76b0fb6ad189")} side="top">
           <button className="icon-btn" onClick={openSettings} aria-label={translate("common.76b0fb6ad189")}>
             <Icon name="gear" size={17} />
           </button>
@@ -164,7 +164,7 @@ export function TopBar() {
 
   return (
     <header className="topbar clean-rail">
-      <Tooltip content="Mensagens diretas">
+      <Tooltip content={translate("common.53c413d8aae2")}>
         <button className={`rail-brand rail-home tab-item${view.kind === "home" ? " active" : ""}`} aria-label={translate("common.53c413d8aae2")} aria-current={view.kind === "home" ? "page" : undefined} onClick={() => navigate({ kind: "home", accountId: "accountId" in view ? view.accountId ?? accounts[0]?.id ?? null : accounts[0]?.id ?? null, dmId: null })}>
           <Brand size={settings.barPosition === "top" ? 30 : 44} />
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
@@ -172,12 +172,12 @@ export function TopBar() {
       </Tooltip>
       <span className="rail-divider rail-home-divider" aria-hidden="true" />
       <nav className="tabs-strip" aria-label={translate("common.0beb691c8956")}>
-        <Tooltip content="Todos os servidores"><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label={translate("common.c1158df03518")} aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">{translate("common.c1158df03518")}</span></button></Tooltip>
+        <Tooltip content={translate("common.1f43b76f4112")}><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label={translate("common.c1158df03518")} aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">{translate("common.c1158df03518")}</span></button></Tooltip>
         {directMessages.map(({ account, dm, unread }) => {
           const user = dm.recipients[0];
           if (!user) return null;
           const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
-          return <Tooltip key={`${account.id}-${dm.id}`} content={`${nickname} · ${unread} novas mensagens`}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(unread)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
+          return <Tooltip key={`${account.id}-${dm.id}`} content={plural({one:"counts.unreadName.one",other:"counts.unreadName.other"},unread,{p0:nickname})}><button className="tab-item dm-shortcut" aria-label={plural({one:"counts.unreadConversation.one",other:"counts.unreadConversation.other"},unread,{p0:nickname})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
         })}
         {before.map((service) => <ServiceTab key={service.id} service={service} />)}
         {before.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
@@ -190,10 +190,10 @@ export function TopBar() {
         })}
         {after.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {after.map((service) => <ServiceTab key={service.id} service={service} />)}
-        <Tooltip content="Adicionar servidor ou serviço"><button className="tabbar-add" title={translate("common.07281181367c")} aria-label={translate("common.32db25cd960a")} onClick={() => openModal({ kind: "addTab" })}><span className="tab-tile"><Icon name="plus" size={18} /></span><span className="rail-label">{translate("common.32db25cd960a")}</span></button></Tooltip>
+        <Tooltip content={translate("common.66f065f8c2d3")}><button className="tabbar-add" title={translate("common.07281181367c")} aria-label={translate("common.32db25cd960a")} onClick={() => openModal({ kind: "addTab" })}><span className="tab-tile"><Icon name="plus" size={18} /></span><span className="rail-label">{translate("common.32db25cd960a")}</span></button></Tooltip>
       </nav>
       <div className="rail-footer">
-        <Tooltip content="Novidades do Annoy"><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label={translate("common.e9e2484c356c")} aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
+        <Tooltip content={translate("common.e9e2484c356c")}><button className={`rail-news icon-btn${view.kind === "news" ? " active" : ""}`} aria-label={translate("common.e9e2484c356c")} aria-current={view.kind === "news" ? "page" : undefined} onClick={() => navigate({ kind: "news" })}><Icon name="info" size={19} /></button></Tooltip>
       </div>
     </header>
   );

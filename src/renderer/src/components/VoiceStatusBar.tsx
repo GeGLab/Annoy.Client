@@ -19,13 +19,13 @@ export function VoiceStatusBar() {
         <Icon name={voice.status === "connected" ? "radio" : "loader"} size={16} />
       </span>
       <div className="voice-status-copy">
-        <span role="status">{voice.status === "connected" ? translate("common.e58c700521d2") : "Conectando…"}</span>
+        <span role="status">{voice.status === "connected" ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}</span>
         <strong className="truncate">
           {channel?.name ?? translate("common.b9bd50cb65eb")}
           <span>
             {" "}
             · {state?.server.name ?? translate("common.05e427a291c2")}
-            {count > 0 && ` · ${count} na sala`}
+            {count > 0 && translate("common.f175b180fb81",{p0:(count)})}
           </span>
         </strong>
       </div>

@@ -292,7 +292,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
                   </Select>
                 </Field>
                 <button className="btn btn-ghost" disabled={!ownershipSupported || !nextOwner || transferring} onClick={() => void transfer()}>
-                  {transferring ? "Transferindo…" : translate("settings.2ffa385a1bc4")}
+                  {transferring ? translate("common.25135fc46d48") : translate("settings.2ffa385a1bc4")}
                 </button>
                 <p className="muted small">{ownershipSupported ? translate("settings.ad208b966e27") : translate("settings.675043339ee8")}</p>
               </>}
@@ -646,7 +646,7 @@ export function CreateChannelModal({
         <div className="form-actions">
           <button type="button" className="btn btn-ghost" onClick={closeModal}>{translate("common.bb9dbb406dcb")}</button>
           <button className="btn" disabled={!name.trim() || creating}>
-            {creating ? "Criando…" : translate("common.49ba5d18d8c4")}
+            {creating ? translate("common.c2bfeb573530") : translate("common.49ba5d18d8c4")}
           </button>
         </div>
       </form>
@@ -721,7 +721,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
       </div>
       <div className="form-actions">
         <button className="btn btn-ghost" disabled={creating} onClick={() => void create()}>
-          {creating ? "Gerando…" : invite ? translate("settings.911b7023c02d") : translate("settings.3d461f35dfb4")}
+          {creating ? translate("common.7bf220a3c328") : invite ? translate("settings.911b7023c02d") : translate("settings.3d461f35dfb4")}
         </button>
       </div>
     </Modal>

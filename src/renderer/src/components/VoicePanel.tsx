@@ -93,12 +93,12 @@ export function VoicePanel() {
           onClick={() => openChannel(voice.accountId, voice.serverId, voice.channelId)}
           aria-label={translate("common.9c0c279ac93f")}
         >
-          <strong>{connected ? translate("common.e58c700521d2") : "Conectando…"}</strong>
+          <strong>{connected ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}</strong>
           <span className="truncate">
             {channel?.name ?? translate("settings.c9566ca43bdc")} / {server?.server.name ?? translate("common.05e427a291c2")}
           </span>
         </button>
-        <Tooltip content="Sair da chamada" side="top">
+        <Tooltip content={translate("common.df851ef5297e")} side="top">
           <button className="icon-btn danger" aria-label={translate("common.e047771bf38f")} onClick={() => leaveVoice()}>
             <Icon name="hangup" size={18} />
           </button>

@@ -62,7 +62,7 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
       <div className="form-actions">
         <button type="button" className="btn btn-ghost" onClick={closeModal}>{translate("common.bb9dbb406dcb")}</button>
         <button className="btn" disabled={busy || token.trim().length < 30}>
-          {busy ? "Verificando…" : translate("common.63e2bbaf1c92")}
+          {busy ? translate("update.checking") : translate("common.63e2bbaf1c92")}
         </button>
       </div>
     </form>
@@ -340,7 +340,7 @@ function SelectStep({
           onClick={() => void start()}
           disabled={busy || channelIds.size === 0 || (target === "existing" && !serverId)}
         >
-          {busy ? "Iniciando…" : translate("common.e7f0e6d956c1")}
+          {busy ? translate("common.d86987681ea3") : translate("common.e7f0e6d956c1")}
         </button>
       </div>
     </div>
@@ -366,7 +366,7 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       <div className="progress">
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported.toLocaleString(localizationPreferences().region)),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? ` · agora em #${job.currentChannel}` : "")})}</p>
+      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported.toLocaleString(localizationPreferences().region)),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? translate("common.405beaea7ce4",{p0:(job.currentChannel)}) : "")})}</p>
       {job.error && <p className="error">{job.error}</p>}
       {(job.phase === "cancelled" || job.phase === "failed") && job.serverId && (
         <p className="muted small">{translate("common.ea9c5c602d8b")}</p>

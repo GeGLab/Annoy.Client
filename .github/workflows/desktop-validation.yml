@@ -1,0 +1,44 @@
+name: desktop-validation
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win --x64
+            executable: dist/win-unpacked/Annoy.exe
+          - os: ubuntu-latest
+            target: --linux --x64
+            executable: dist/Annoy-x86_64.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgbm1 libnss3 libasound2t64
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Unit tests
+        shell: bash
+        run: node --experimental-transform-types --test scripts/tests/*.test.mjs
+      - run: npm run build
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Validate packaged application
+        shell: bash
+        env:
+          ANNOY_PACKAGED_EXECUTABLE: ${{ matrix.executable }}
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a node scripts/validate-packaged.mjs
+          else
+            node scripts/validate-packaged.mjs
+          fi

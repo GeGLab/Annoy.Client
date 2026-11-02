@@ -54,7 +54,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
       <button
         className="icon-btn danger"
         disabled={!connected}
-        title={rel.status === "friend" ? translate("common.517ae8f44afa") : "Recusar/cancelar"}
+        title={rel.status === "friend" ? translate("common.517ae8f44afa") : translate("common.b3a927e0711a")}
         onClick={async () =>
           (rel.status !== "friend" || (await confirmAction(translate("common.b51f90451a7a",{p0:(rel.user.displayName)})))) &&
           void act(api.del(`/relationships/${rel.user.id}`))

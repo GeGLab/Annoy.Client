@@ -1,6 +1,8 @@
 import {t as translate} from "../shared/localization/index.ts";
-import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {onLocalizationChange} from "../shared/localization/index.ts";
+import {desktopController,supportsTray} from "./desktop.ts";
+import { appendFileSync, existsSync, mkdirSync,readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { join,isAbsolute } from "node:path";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
@@ -8,9 +10,13 @@ import { registerActivity } from "./activity/index.ts";
 import { registerTheater } from "./theater.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
+// Honor an explicitly selected profile before any preference/OS adapter reads it.
+const selectedProfile=app.commandLine.getSwitchValue("user-data-dir");
+if(selectedProfile){if(!isAbsolute(selectedProfile)||selectedProfile.includes("\0"))throw new Error("Invalid profile path");mkdirSync(selectedProfile,{recursive:true});app.setPath("userData",selectedProfile);}
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let trayCapable = false;
 let quitting = false;
 app.on("before-quit", () => { quitting = true; });
 function restoreWindow(): void {
@@ -20,18 +26,21 @@ function restoreWindow(): void {
   win.focus();
 }
 function createTray(): void {
-  if (process.platform !== "win32") return;
-  tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));
+  if (!trayCapable || !desktop.preferences().closeToTray) {
+    tray?.destroy();tray=null;
+    if(win&&!win.isVisible())restoreWindow();
+    return;
+  }
+  if(!tray){try{tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
     { type: "separator" },
-    { label: translate("desktop.b08423738547"), click: () => app.quit() },
+    { label: translate("desktop.b08423738547"), click: () => {restoreWindow();app.quit();} },
   ]));
-  tray.on("double-click", restoreWindow);
 }
 const stopActivity = registerActivity(ipcMain, () => win);
-app.on("before-quit", stopActivity);
+app.on("will-quit", stopActivity);
 /** One sandboxed view per browser service, created on first open and kept alive. */
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
@@ -40,7 +49,7 @@ let serviceArea = { x: 0, y: 0, width: 0, height: 0 };
 
 // 0.3 renamed the app from Distopic to Annoy; keep the existing profile (accounts, Discord login).
 const legacyProfile = join(app.getPath("appData"), "Distopic");
-if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
+if (!selectedProfile && !existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
   try {
     renameSync(legacyProfile, app.getPath("userData"));
   } catch {
@@ -49,6 +58,8 @@ if (!existsSync(app.getPath("userData")) && existsSync(legacyProfile)) {
 }
 
 registerLocalization(ipcMain, () => win);
+const desktop=desktopController(()=>win,createTray,()=>!!tray&&!tray.isDestroyed(),()=>trayCapable,()=>{trayCapable=supportsTray();createTray();});
+onLocalizationChange(()=>{if(tray)createTray();});
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
 // Chromium picks the keychain by desktop name and falls back to no encryption
 // on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
@@ -245,6 +256,7 @@ function createWindow(): void {
     height: 840,
     minWidth: 940,
     minHeight: 560,
+    show: false,
     backgroundColor: "#171621",
     title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
@@ -270,6 +282,7 @@ function createWindow(): void {
     }
   });
   win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
+  win.webContents.on("will-prevent-unload",()=>{quitting=false;});
   // A crashed or killed renderer leaves an empty window; bring the app back.
   win.webContents.on("render-process-gone", (_event, details) => {
     logError(`renderer gone: ${details.reason} (exit ${details.exitCode})`);
@@ -280,7 +293,7 @@ function createWindow(): void {
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
   win.on("close", (event) => {
-    if (process.platform === "win32" && tray && !quitting) {
+    if (desktop.preferences().closeToTray && tray && !tray.isDestroyed() && !quitting) {
       event.preventDefault();
       win?.hide();
     }
@@ -290,6 +303,7 @@ function createWindow(): void {
     views.clear();
     shownService = null;
   });
+  win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
 
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
@@ -387,6 +401,7 @@ ipcMain.on("window:flash", () => {
 });
 
 app.whenReady().then(() => {
+  trayCapable=supportsTray();
   createWindow();
   createTray();
   if (win) startUpdater(win);

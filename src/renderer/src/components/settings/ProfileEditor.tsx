@@ -1,5 +1,5 @@
 import {rich} from "../../lib/localization.ts";
-import {t as translate} from "../../../../shared/localization/index.ts";
+import {t as translate,textForError} from "../../../../shared/localization/index.ts";
 import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@distopic/protocol";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { type Account } from "../../store.ts";
@@ -134,7 +134,7 @@ export function ProfileEditor({
           {!profile.supported?<p className="muted small">{translate("settings.d06344b0b31c")}</p>:profile.loading&&!details?<p role="status">{translate("settings.dc5ddb06911f")}</p>:profile.error&&!details?<div role="alert"><p>{profile.error}</p><Button variant="secondary" onClick={profile.retry}>{translate("common.b9e10688be01")}</Button></div>:details&&<>
             {PROFILE_FIELD_KINDS.map(kind=>{
               const field=details.fields.find(item=>item.kind===kind);
-              let validation="";try{normalizeProfileField(kind,field?.value??"");}catch(error){validation=(error as Error).message;}
+              let validation="";try{normalizeProfileField(kind,field?.value??"");}catch(error){validation=textForError(error);}
               return <div className="profile-field-editor" key={kind}>
                 <label className="field"><span className="field-label"><ProfileFieldIcon kind={kind}/>{PROFILE_LABELS[kind]}</span><Input aria-label={PROFILE_LABELS[kind]} value={field?.value??""} placeholder={PROFILE_PLACEHOLDERS[kind]} maxLength={2048} disabled={disabled||!profile.connected} aria-invalid={!!validation} onChange={event=>changeField(kind,{value:event.target.value})} onBlur={()=>{if(field?.value&&!validation)changeField(kind,{value:normalizeProfileField(kind,field.value)});}}/>{validation&&<span className="error small">{validation}</span>}{kind==="email"&&<span className="field-hint">{translate("settings.a003af875e0d")}</span>}{kind==="phone"&&<span className="field-hint">{translate("settings.fcd094aacecc")}</span>}</label>
                 <Select aria-label={translate("settings.2e0b86907bf6",{p0:(PROFILE_LABELS[kind])})} value={field?.audience??"self"} disabled={disabled||!profile.connected||!field?.value} onChange={event=>changeField(kind,{audience:event.target.value as ProfileField["audience"]})}>{Object.entries(AUDIENCE_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select>
@@ -146,7 +146,7 @@ export function ProfileEditor({
             <Button variant="secondary" size="sm" disabled={disabled||deleting||!profile.connected} onClick={async()=>{
               if(!await confirmAction(translate("settings.a98a312a03c8")))return;
               setDeleting(true);try{await apiFor(account.id).del("/users/@me/activity-history");profile.retry();toast(translate("settings.46d1a7cbaa39"));}catch(error){toast((error as Error).message);}finally{setDeleting(false);}
-            }}>{deleting?"Apagando…":translate("settings.84abdb96ed02")}</Button>
+            }}>{deleting?translate("common.29e916fc8cbd"):translate("settings.84abdb96ed02")}</Button>
           </>}
         </section>
       </div>

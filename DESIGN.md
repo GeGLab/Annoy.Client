@@ -69,7 +69,7 @@ typography:
     letterSpacing: "-.02em"
   body:
     fontFamily: "\"Segoe UI Variable\", \"Segoe UI\", system-ui, sans-serif"
-    fontSize: "14px"
+    fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.65
   label:
@@ -405,3 +405,7 @@ Tailwind v4 provides semantic utilities through the official Vite plugin; shadcn
 - **Don't** reintroduce channel collapse, duplicate member toggles or autosaving settings forms.
 - **Don't** add native selects, browser confirm/prompt dialogs or separate unshared form controls.
 - **Don't** infer activity access from a shared server/DM or populate activity when detection is unavailable.
+
+Accessibility (M5): the base is 16px, explicitly adjustable to 24px. Own UI text
+uses rem units; compact dialog headings use a fluid minimum of 1.125rem for the
+minimum window at 200% zoom. Link underlining is independently configurable.

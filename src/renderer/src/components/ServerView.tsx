@@ -547,7 +547,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       <div className="member-directory-search">
         <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.61fd3b555f75")} aria-label={translate("common.fb0fd14d5bbb")} />
       </div>
-      <p className="member-directory-status" aria-live="polite">{query.trim() ? `${members.length} de ${searchTotal ?? "…"} resultados` : `${state.members.length} de ${state.membersTotal ?? state.members.length} membros carregados`}</p>
+      <p className="member-directory-status" aria-live="polite">{query.trim() ? translate("common.fc202db56242",{p0:(members.length),p1:(searchTotal ?? "…")}) : translate("common.58ab7ca8771a",{p0:(state.members.length),p1:(state.membersTotal ?? state.members.length)})}</p>
       {activeFriends.length > 0 && !query.trim() && (
         <section className="friend-activities">
           <h3>{rich("common.2c4be32b2e13",{p0:(activeFriends.length)})}</h3>
@@ -566,7 +566,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       {loading && <p className="member-directory-status" role="status">{translate("common.b386ed87083a")}</p>}
       {error && <div className="member-directory-error" role="alert"><span>{error}</span><button className="btn btn-ghost btn-small" onClick={() => setQuery((value) => `${value} `)}>{translate("common.b9e10688be01")}</button></div>}
       {!loading && !error && query.trim() && members.length === 0 && <p className="member-directory-status">{translate("common.eb9caaa65f99")}</p>}
-      {nextCursor && <button className="btn btn-ghost btn-small member-load-more" disabled={loading} onClick={() => void loadMoreMembers()}>{loading ? "Carregando…" : translate("common.3298a7dab87a",{p0:(Math.max(0, (query.trim() ? searchTotal ?? members.length : state.membersTotal ?? state.members.length) - members.length))})}</button>}
+      {nextCursor && <button className="btn btn-ghost btn-small member-load-more" disabled={loading} onClick={() => void loadMoreMembers()}>{loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, (query.trim() ? searchTotal ?? members.length : state.membersTotal ?? state.members.length) - members.length))})}</button>}
       {card && (
         <MemberCard
           accountId={accountId}
@@ -594,7 +594,7 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
     <div className="offline-icon"><Icon name="wifiOff" size={26} /></div>
     <h2>{error.includes(translate("common.57d7c91d286c")) ? translate("common.aadc570a2dde") : translate("common.374445d30133")}</h2>
     <p className="muted">{error}</p>
-    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? "Carregando…" : translate("common.be839d7fb474")}</button>
+    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? translate("common.6cc1bbba0f84") : translate("common.be839d7fb474")}</button>
     <button className="btn btn-ghost" disabled={loading} onClick={() => navigate({ kind: "servers" })}>{translate("common.f6a51589282a")}</button>
   </div>;
   return (
@@ -678,7 +678,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           {has(state.permissions, Permission.MANAGE_CHANNELS) && <button className="btn" onClick={() => openModal({ kind: "createChannel", accountId, serverId, parentId: null, type: "text" })}>{translate("common.600bb4f4d3f6")}</button>}
         </div>
       ) : (
-        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>{translate("common.ebfcb5dae749")}</h2><p>{rich("common.a47f3201bae2",{p0:(state.channels.some((c) => c.type === "voice") ? " ou entre em uma sala de voz" : "")})}</p></div>
+        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>{translate("common.ebfcb5dae749")}</h2><p>{rich("common.a47f3201bae2",{p0:(state.channels.some((c) => c.type === "voice") ? translate("common.487adc0ddb1c") : "")})}</p></div>
       )}
       {channel && <MemberList accountId={accountId} state={state} me={me} />}
     </div>

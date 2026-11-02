@@ -7,10 +7,12 @@ import { dirname, basename, resolve, join } from "node:path";
 const require = createRequire(import.meta.url);
 const capture = resolve(".impeccable/review");
 async function fullyInside(page: Page, selector: string, top = 12) {
+  let observed:unknown;
   await expect
     .poll(async () => {
       const box = await page.locator(selector).boundingBox(),
         viewport = page.viewportSize();
+      observed={selector,box,viewport,top};
       return (
         !!box &&
         !!viewport &&
@@ -20,7 +22,7 @@ async function fullyInside(page: Page, selector: string, top = 12) {
         box.y + box.height <= viewport.height - 12
       );
     })
-    .toBe(true);
+    .toBe(true).catch(error=>{throw new Error(`${error.message}\n${JSON.stringify(observed)}`);});
 }
 async function launch({ fakeMedia = false, packaged = false } = {}) {
   const root = resolve(tmpdir()),

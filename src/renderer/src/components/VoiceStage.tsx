@@ -99,7 +99,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
           <Icon name={channel.temporary ? "hourglass" : "speaker"} size={20} />
           <h1 className="truncate">{channel.name}</h1>
           <span className="chat-topic">
-            {people.size === 0 ? translate("common.f5c42021d624") : `${people.size} na chamada`}
+            {people.size === 0 ? translate("common.f5c42021d624") : translate("common.dc3f6b2c7d4d",{p0:(people.size)})}
             {channel.temporary ? translate("common.e2eac5d491f9") : ""}
           </span>
         </header>

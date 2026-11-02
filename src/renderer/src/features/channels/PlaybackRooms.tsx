@@ -119,7 +119,7 @@ function Controls({ playback, canControl, canSkip }: { playback: Playback; canCo
 function PlaybackFeedback({ playback }: { playback: Playback }) {
   if (playback.loading && !playback.state) return <div className="playback-feedback" role="status">{translate("common.de8ebfb32da9")}</div>;
   if (!playback.error) return null;
-  return <div className="playback-feedback error" role="alert"><span>{rich("common.3e66b8012f4a",{p0:(playback.error)})}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? "Tentando…" : translate("common.b9e10688be01")}</button></div>;
+  return <div className="playback-feedback error" role="alert"><span>{rich("common.3e66b8012f4a",{p0:(playback.error)})}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? translate("common.5da1f0aee3ad") : translate("common.b9e10688be01")}</button></div>;
 }
 
 function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean }) {
@@ -303,7 +303,7 @@ export function TheaterView({ accountId, state, channel, perms }: { accountId: s
           <button role="tab" aria-selected={mode === "player"} className={mode === "player" ? "active" : ""} onClick={() => setMode("player")}>{translate("common.64aee8c6cbd0")}</button>
           <button role="tab" aria-selected={mode === "screen"} className={mode === "screen" ? "active" : ""} onClick={() => setMode("screen")}>{rich("common.4acd7eeb327c",{p0:(sharing ? " •" : "")})}</button>
         </div>
-        <span className="chat-topic">{inCall.length === 0 ? translate("common.f5c42021d624") : `${inCall.length} na chamada`}</span>
+        <span className="chat-topic">{inCall.length === 0 ? translate("common.f5c42021d624") : translate("common.dc3f6b2c7d4d",{p0:(inCall.length)})}</span>
         {connected ? (
           <button className="btn btn-ghost" onClick={() => leaveVoice()}>{rich("common.5cf06e6bd5ed",{p0:(<Icon name="hangup" size={16} />)})}</button>
         ) : (

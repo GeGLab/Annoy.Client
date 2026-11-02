@@ -6,17 +6,18 @@ button, input, textarea, select { font: inherit; }
 .btn, .ui-select-trigger { white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 2.25rem; }
 .icon-button, .titlebar-button { flex-shrink: 0; }
 .field, .settings-section, .modal-header > h2 { min-width: 0; overflow-wrap: anywhere; }
-.modal { max-width: calc(100vw - 24px); max-height: calc(100dvh - 48px); }
+.modal { max-width: calc(100vw - 24px); max-height: calc(100dvh - var(--topbar-height) - 24px); }
 .modal-header, .modal-footer, .form-actions, .settings-savebar { flex-wrap: wrap; flex-shrink: 0; }
-.modal-header h2 { font-size: clamp(1.1rem, 3vw, 1.5rem); line-height: 1.25; overflow-wrap: anywhere; }
+.modal-header h2 { font-size: clamp(1.125rem, 3vw, 1.5rem); line-height: 1.25; overflow-wrap: anywhere; }
 .modal-body { min-height: 0; overflow-y: auto; }
 .settings-savebar { gap: .6rem; padding-block: .75rem; max-height: 42%; overflow-y: auto; }
-.localization-preview, .localization-notice { border-inline-start: 3px solid var(--accent); padding: .8rem 1rem; background: var(--bg-hover); line-height: 1.6; }
+.localization-preview, .localization-notice { border: 1px solid var(--border); padding: .8rem 1rem; background: var(--bg-hover); line-height: 1.6; }
 .localization-settings .check-row { display: flex; align-items: center; gap: .75rem; }
 .localization-settings .check-row > button { flex: none; }
 .localization-settings h3 { display: flex; align-items: center; gap: .6rem; }
 .settings-sidebar button { width: 100%; }
 .ui-select-content, .ui-dropdown-content, .calendar-popover { max-width: calc(100vw - 24px); max-height: min(80dvh, var(--radix-select-content-available-height, 80dvh)); overflow: auto; }
+.calendar-popover { max-height: min(80dvh, var(--radix-popover-content-available-height, 80dvh)); }
 @media (max-width: 70rem) {
  .user-settings-modal { width: calc(100vw - 24px); height: calc(100dvh - 48px); }
  .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -31,10 +32,10 @@ button, input, textarea, select { font: inherit; }
  .update-banner { height: auto !important; min-height: 40px; flex-wrap: wrap; }
 }
 @media (max-width: 36rem) {
- .user-settings-modal { height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
+ .user-settings-modal { height: calc(100dvh - var(--topbar-height) - 24px); max-height: calc(100dvh - var(--topbar-height) - 24px); }
  .settings-sidebar { max-height: 22dvh; }
  .settings-content { padding: .65rem; }
- .settings-content .settings-section h3 { font-size: 1.1rem; }
+ .settings-content .settings-section h3 { font-size: 1.125rem; }
  .modal-header { padding: .65rem; }
  .modal-body { padding: .75rem; }
  .settings-sidebar nav button { flex-basis: 7rem; }

@@ -1,6 +1,8 @@
 import {rich} from "../../lib/localization.ts";
+import {DesktopSettings} from "./DesktopSettings.tsx";
+import type {DesktopPreferences,DesktopSnapshot} from "../../../../shared/desktop.ts";
 import {localizationPreferences} from "../../../../shared/localization/index.ts";
-import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
+import {t as translate,textForError,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import {normalizeProfileField} from "@distopic/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
@@ -34,6 +36,7 @@ import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
+  {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
   {id:"localization",label:translate("settings.b7b7db231778"),icon:"globe",search:translate("settings.97bbf9167943")},
   { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("settings.5d318cf0fef8") },
   { id: "global", label: translate("settings.b3e099f43c2b"), icon: "shield", search: translate("settings.2cafab5b8b3d") },
@@ -167,7 +170,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
       { confirmLabel: translate("settings.4732d98f0095") },
     );
     if (!ok || signal.aborted) return;
-    const password = await promptText(`Para confirmar, digite a senha de @${self?.username ?? translate("settings.a11d42b92c14")} em ${account.instanceName}.`, "", { confirmLabel: translate("settings.4732d98f0095"), secret: true });
+    const password = await promptText(translate("common.f51e18af575c",{p0:(self?.username ?? translate("settings.a11d42b92c14")),p1:(account.instanceName)}), "", { confirmLabel: translate("settings.4732d98f0095"), secret: true });
     if (password === null || signal.aborted) return;
     try {
       const removed = await mergeAccount(account, linkable, password, signal);
@@ -301,6 +304,10 @@ export function UserSettingsModal() {
   const instances = useStore((s) => s.instances);
   const profileUser = accounts[0] ? instances[accounts[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
+  const [desktopStatus,setDesktopStatus]=useState<DesktopSnapshot|null>(null);
+  const [desktopDraft,setDesktopDraft]=useState<DesktopPreferences|null>(null);
+  const [desktopLoadError,setDesktopLoadError]=useState(false);
+  const desktopDirty=!!desktopDraft&&!!desktopStatus&&JSON.stringify(desktopDraft)!==JSON.stringify(desktopStatus.saved);
   const filteredPages = SETTINGS_PAGES.filter((item) => normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
   const desktopActivity = useStore((s) => s.desktopActivity);
   const [draft, setDraft] = useState<Settings>(() => ({ ...getState().settings }));
@@ -316,9 +323,10 @@ export function UserSettingsModal() {
       user = instances[account.id]?.user;
     return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? "") || change.details !== undefined);
   });
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0 || desktopDirty;
   const update = (patch: Partial<Settings>) => setDraft((current) => ({ ...current, ...patch }));
   const reset = () => {
+    setDesktopDraft(desktopStatus?.saved??null);
     setDraft({ ...getState().settings });
     setProfiles({});
     setError(null);
@@ -329,6 +337,8 @@ export function UserSettingsModal() {
     else action();
   };
   useEffect(() => registerNavigationGuard(leave), [dirty, saving]);
+  const refreshDesktop=()=>{void window.distopic?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
+  useEffect(()=>{refreshDesktop();},[]);
   useEffect(() => { configureLocalization(draft); }, [draft.language,draft.region,draft.hourCycle,draft.fontSize,draft.underlineLinks]);
   useEffect(() => () => configureLocalization(getState().settings), []);
   useEffect(() => {
@@ -418,6 +428,10 @@ export function UserSettingsModal() {
         }
       }
       const next = {...draft,previousLanguage:draft.language!==saved.language?saved.language:draft.previousLanguage};
+      if(desktopDirty&&desktopDraft){
+        try{const status=await window.distopic!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}
+        catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}
+      }
       await window.distopic?.localization?.set(normalizeLocalization(next));
       signal.throwIfAborted();
       setState((s) => { Object.assign(s.settings, next); });
@@ -427,7 +441,7 @@ export function UserSettingsModal() {
       toast(translate("settings.733e6e6b42e7"));
       return true;
     } catch (error) {
-      if (!isCancellation(error)) setError((error as Error).message || translate("settings.fcd0784e9779"));
+      if (!isCancellation(error)) setError(textForError(error) || translate("settings.fcd0784e9779"));
       return false;
     } finally {
       setSaving(false);
@@ -522,6 +536,7 @@ export function UserSettingsModal() {
                 <AppearanceSettings settings={draft} update={update} />
               </section>
             )}
+            {page === "desktop" && <DesktopSettings status={desktopStatus} draft={desktopDraft} onChange={patch=>setDesktopDraft(current=>current?{...current,...patch}:current)} disabled={saving} loadError={desktopLoadError} refresh={refreshDesktop}/>}
             {page === "localization" && <LocalizationSettings draft={draft} onChange={update} disabled={saving}/>}
             {page === "expressions" && <MediaLibrarySettings />}
             {page === "global" && <GlobalAccountCard draft={draft} update={update} />}
@@ -605,7 +620,7 @@ export function UserSettingsModal() {
                         : draft.pttKey
                             .replace(/^Key/, "")
                             .replace(/^Digit/, "")
-                            .replace("Backquote", "` (crase)")}
+                            .replace("Backquote", translate("common.bd7a26c7e1b1"))}
                     </Button>
                   </Field>
                 ) : (
@@ -752,6 +767,7 @@ import {configureLocalization,normalizeLocalization} from "../../../../shared/lo
 import {LocalizationSettings} from "./LocalizationSettings.tsx";
 
 onLocalizationChange(()=>{SETTINGS_PAGES=[
+  {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
   {id:"localization",label:translate("settings.b7b7db231778"),icon:"globe",search:translate("settings.97bbf9167943")},
   { id: "profile", label: translate("settings.b9e5ce2ce127"), icon: "users", search: translate("settings.5d318cf0fef8") },
   { id: "global", label: translate("settings.b3e099f43c2b"), icon: "shield", search: translate("settings.2cafab5b8b3d") },

@@ -1,5 +1,5 @@
 import {rich} from "../../lib/localization.ts";
-import {t as translate} from "../../../../shared/localization/index.ts";
+import {t as translate,plural} from "../../../../shared/localization/index.ts";
 import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { apiFor } from "../../client.ts";
@@ -183,7 +183,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
       <header className="chat-header">
         <Icon name="folder" size={20} />
         <h1 className="truncate">{channel.name}</h1>
-        <span className="chat-topic">{channel.topic || `${files.length} de ${total} arquivo(s) · ${formatSize(totalSize)} carregados`}</span>
+        <span className="chat-topic">{channel.topic || plural({one:"counts.files.one",other:"counts.files.other"},total,{p0:files.length,p1:formatSize(totalSize)})}</span>
       </header>
 
       <div className="files-toolbar">
@@ -284,7 +284,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         })}
         {nextOffset !== null && (
           <button className="btn btn-ghost files-more" disabled={loadingFiles} onClick={() => void fetchFiles(nextOffset, true)}>
-            {loadingFiles ? "Carregando…" : translate("common.4c0eb21a3854",{p0:(Math.max(0, total - files.length))})}
+            {loadingFiles ? translate("common.6cc1bbba0f84") : translate("common.4c0eb21a3854",{p0:(Math.max(0, total - files.length))})}
           </button>
         )}
       </div>

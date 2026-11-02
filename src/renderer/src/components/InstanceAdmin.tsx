@@ -229,7 +229,7 @@ function InvitesTab({ accountId }: { accountId: string }) {
             <div key={inv.code} className={`list-row${dead ? " dim" : ""}`}>
               <span>
                 <code className="invite-code">{inv.code}</code>
-                <span className="muted small">{rich("common.8ac354e7a31b",{p0:(inv.uses),p1:(inv.maxUses ?? "∞"),p2:(inv.expiresAt ? `expira ${formatTime(inv.expiresAt)}` : translate("common.3d0f8cf7c58c")),p3:(dead ? " · encerrado" : "")})}</span>
+                <span className="muted small">{rich("common.8ac354e7a31b",{p0:(inv.uses),p1:(inv.maxUses ?? "∞"),p2:(inv.expiresAt ? `expira ${formatTime(inv.expiresAt)}` : translate("common.3d0f8cf7c58c")),p3:(dead ? translate("common.30d1317fe1fb") : "")})}</span>
               </span>
               <span className="row-actions">
                 <button className="icon-btn" title={translate("desktop.39dcf1cbeb5a")} onClick={() => void navigator.clipboard.writeText(inv.code).then(() => toast(translate("common.8ef745e3e496")))}>

@@ -4,13 +4,19 @@ import { useEffect } from "react";
 import type { UpdateState } from "../../../shared/update.ts";
 import { setState, useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
+import {requestNavigation} from "../lib/navigation-guard.ts";
+import {flushChatState} from "../chat-state.ts";
+import {toast} from "../store.ts";
 
 export const BANNER_HEIGHT = 40;
 
 const updates = () => window.distopic?.updates;
+const install=()=>requestNavigation(()=>{flushChatState();void updates()?.install().catch(()=>toast(translate("update.installError")));});
 
 /** Mirrors the main process's update state into the store. */
 export function useUpdateState(): void {
+  const notifications=useStore(s=>s.settings.notifications);
+  useEffect(()=>{void updates()?.configure({notifications}).catch(()=>{});},[notifications]);
   useEffect(() => {
     const api = updates();
     if (!api) return;
@@ -35,18 +41,19 @@ export function useBannerVisible(): boolean {
   const dismissed = useStore((s) => s.updateDismissed);
   if (!update || isBlocking(update)) return false;
   if (update.status === "available") return dismissed !== update.version;
-  return update.status === "downloading" || update.status === "ready";
+  return update.status === "downloading" || update.status === "ready" || update.status === "error";
 }
 
 export function UpdateBanner() {
   const update = useStore((s) => s.update);
   const visible = useBannerVisible();
-  if (!visible || !update || !("version" in update)) return null;
+  if (!visible || !update) return null;
   const api = updates();
 
   return (
     <div className="update-banner" role="status" style={{ height: BANNER_HEIGHT }}>
       <Icon name="refresh" size={16} />
+      {update.status === "error"&&<><span role="alert">{update.message}</span><button className="btn btn-small" onClick={()=>void api?.check()}>{translate("common.6bb3150b9757")}</button></>}
       {update.status === "available" && (
         <>
           <span>{rich("common.52f4bec0a96c",{p0:(<strong>{translate("common.6e91c30b997b")}{update.version}</strong>),p1:(update.currentVersion)})}</span>
@@ -76,7 +83,7 @@ export function UpdateBanner() {
         <>
           <span>{rich("common.9279639e8398",{p0:(<strong>{translate("common.6e91c30b997b")}{update.version}</strong>)})}</span>
           <span className="spacer" />
-          <button className="btn btn-small" onClick={() => void api?.install()}>{translate("common.5f7d7589a60e")}</button>
+          <button className="btn btn-small" onClick={install}>{translate("common.5f7d7589a60e")}</button>
         </>
       )}
     </div>
@@ -120,7 +127,7 @@ export function MandatoryUpdate() {
             </>
           )}
           {update.status === "ready" && (
-            <button className="btn" onClick={() => void api?.install()}>{rich("common.4d4c567d2917",{p0:(update.version)})}</button>
+            <button className="btn" onClick={install}>{rich("common.4d4c567d2917",{p0:(update.version)})}</button>
           )}
           {update.status === "error" && (
             <>
@@ -148,9 +155,9 @@ export function MandatoryUpdate() {
 
 let STATUS_TEXT: Partial<Record<UpdateState["status"], string>> = {
   idle: "",
-  checking: "Verificando…",
+  checking: translate("update.checking"),
   none: translate("common.a12a64faa955"),
-  disabled: translate("common.30a7c8c715d0"),
+  disabled: translate("update.disabled"),
 };
 
 /** Version line and manual check, for the settings screen. */
@@ -172,6 +179,7 @@ export function UpdateSettings() {
             : "");
   return (
     <div className="update-settings">
+      <p className="muted small">{translate("update.unsigned")}</p>
       <div>
         <strong>{rich("common.ec484e0600f8",{p0:(update.currentVersion)})}</strong>
         {text && <div className="muted small">{text}</div>}
@@ -180,7 +188,7 @@ export function UpdateSettings() {
         <button className="btn" onClick={() => void api?.download()}>{translate("common.dafb59613e12")}</button>
       )}
       {update.status === "ready" && (
-        <button className="btn" onClick={() => void api?.install()}>{translate("common.5f7d7589a60e")}</button>
+        <button className="btn" onClick={install}>{translate("common.5f7d7589a60e")}</button>
       )}
       {update.status !== "disabled" && update.status !== "available" && update.status !== "ready" && (
         <button className="btn btn-ghost" disabled={busy} onClick={() => void api?.check()}>{rich("common.f949db786b0b",{p0:(<Icon name="refresh" size={16} />)})}</button>
@@ -191,9 +199,9 @@ export function UpdateSettings() {
 
 onLocalizationChange(()=>{STATUS_TEXT={
   idle: "",
-  checking: "Verificando…",
+  checking: translate("update.checking"),
   none: translate("common.a12a64faa955"),
-  disabled: translate("common.30a7c8c715d0"),
+  disabled: translate("update.disabled"),
 };});
 
 

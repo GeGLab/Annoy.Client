@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type {DesktopPreferences,DesktopSnapshot} from "../shared/desktop.ts";
 import type { Service } from "../shared/services.ts";
 import type { UpdateState } from "../shared/update.ts";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../shared/activity.ts";
@@ -12,6 +13,11 @@ export interface TheaterEvents {
 }
 
 const bridge = {
+  desktop: {
+    get:()=>ipcRenderer.invoke("desktop:get") as Promise<DesktopSnapshot>,
+    set:(values:DesktopPreferences)=>ipcRenderer.invoke("desktop:set",values) as Promise<DesktopSnapshot>,
+    restart:()=>ipcRenderer.invoke("desktop:restart") as Promise<void>,
+  },
   localization: {
     get: () => ipcRenderer.invoke("localization:get") as Promise<{saved:LocalizationPreferences;systemLocale:string}>,
     set: (values:LocalizationPreferences) => ipcRenderer.invoke("localization:set",values) as Promise<LocalizationPreferences>,
@@ -87,6 +93,7 @@ const bridge = {
     choose: (id: string) => ipcRenderer.send("screen:choose", id),
   },
   updates: {
+    configure:(values:{notifications:boolean})=>ipcRenderer.invoke("update:configure",values) as Promise<void>,
     get: () => ipcRenderer.invoke("update:get") as Promise<UpdateState>,
     check: () => ipcRenderer.invoke("update:check") as Promise<void>,
     download: () => ipcRenderer.invoke("update:download") as Promise<void>,

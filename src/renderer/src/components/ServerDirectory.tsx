@@ -14,7 +14,7 @@ import { Button } from "./ui/button.tsx";
 import { Select } from "./ui/select.tsx";
 
 const checkedLabel = (at: number | null) => at === null ? translate("common.88bad3263261")
-  : new Intl.DateTimeFormat(localizationPreferences().region, { dateStyle: "short", timeStyle: "short" }).format(at);
+  : new Intl.DateTimeFormat(localizationPreferences().region, { dateStyle: "short", timeStyle: "short",hourCycle:localizationPreferences().hourCycle }).format(at);
 type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: number; loading: boolean; error: string | null; cached: boolean };
 
 export function ServerDirectory() {
@@ -127,7 +127,7 @@ export function ServerDirectory() {
         return <section className="server-directory-group" key={account.id} aria-labelledby={`server-account-${account.id}`}>
           <header><div className="server-directory-instance-icon" aria-hidden="true">{initials(account.instanceName)}</div>
             <div className="server-directory-instance-copy"><h2 id={`server-account-${account.id}`}>{account.instanceName}</h2>
-              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? "Conectado" : invalid ? translate("common.69883ff8a543") : translate("common.879b012449c1")}</span>
+              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? translate("common.7444e37ea660") : invalid ? translate("common.69883ff8a543") : translate("common.879b012449c1")}</span>
             </div>
             {!ready && (invalid
               ? <Button variant="secondary" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}>{translate("common.05d410b61f11")}</Button>
@@ -138,14 +138,14 @@ export function ServerDirectory() {
           {page?.error && <p className="server-directory-no-results" role="alert">{rich("common.4fde0860898a",{p0:(page.error)})}</p>}
           <p className="server-directory-freshness"><Icon name={ready ? "check" : "clock"} size={14} />
             {ready && !page?.cached ? translate("common.5433ece37ba2",{p0:(checkedLabel(instance?.serversObservedAt ?? null))}) : translate("common.120413bc8326",{p0:(checkedLabel(instance?.serversObservedAt ?? null))})}
-            {page?.cached ? " · cache local" : ""}
+            {page?.cached ? translate("common.a5d5aede1a0c") : ""}
           </p>
           {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
             servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
               <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
               <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</small></span><Icon name="right" size={17} />
             </button>)}</div>
-            {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? "Carregando…" : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
+            {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
               : <p className="server-directory-no-results">{translate("common.e0365f8a1ebe")}</p>}
         </section>;
       })}

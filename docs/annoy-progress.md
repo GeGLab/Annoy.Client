@@ -26,7 +26,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | M3 — mensagens/leitura/pins | concluído | Histórico indexado/virtualizado, cursor privado persistido e pins autorizados; validação com um milhão de mensagens e duas sessões. |
 | M4 — social/perfis | concluído | Perfis sob demanda, contatos por audiência e histórico consentido/limitado; matriz de privacidade e interface validadas. Próximo: M5. |
 | M5 — idiomas/acessibilidade | em andamento | Implementação em commit próprio: sete catálogos locais, preferências independentes, prévia/save/discard, Intl e escala 16–24 px. Regressão e confirmação visual finais junto do M6. |
-| M6 — desktop/updates | pendente | Requer validação de pacotes Windows/Linux. |
+| M6 — desktop/updates | em andamento | Preferências main, autostart, bandeja e atualizador implementados; Windows validado. AppImage local bloqueado por symlink EPERM; integração com main atual pendente. |
 | M7 — loja licenciada | pendente | Reutiliza padrões e biblioteca local; sem dependência de emoji.gg. |
 
 ## Status por requisito
@@ -472,13 +472,30 @@ Estado: **concluído e validado localmente**.
 Iniciar **M5 — localização e acessibilidade** (R14–R16), na ordem do plano.
 Não iniciar M5 nesta execução autorizada para M3/M4.
 
-## M5 ? 01/11/2026
+## M5 e M6 — 01/11/2026
 
-- Catalogs are local at runtime. External machine translation was explicitly authorized
-  for public static UI text only; no user content was sent. Main flows, brand names,
-  keys and placeholders were reviewed. Professional linguistic review remains useful.
-- Initial validation: typecheck/build and four localization/persistence tests passed;
-  Electron scenario covers all seven languages, preview/discard/save/reload, keyboard,
-  24px text and 200% zoom. Two initial test failures used incorrect button labels;
-  corrected selectors passed without changing application behavior.
-- Full regression and final visual confirmation remain scheduled after M6.
+- Implementação de M5 em `fbe9b0b`, com correção de transporte em `91762ca`:
+  sete catálogos locais, prévia/save/discard, região/hora independentes, fonte
+  16–24px, links e calendários. Tradução externa autorizada somente dos textos
+  estáticos públicos; marcas, fluxos principais e slots revisados. Nenhum conteúdo
+  do usuário foi enviado. Revisão profissional por falantes nativos continua útil.
+- M6 implementa preferências JSON versionadas/atômicas no main, IPC restrita ao
+  frame principal local, aceleração antes de ready, salvo/aplicado/reinício,
+  autostart Windows/XDG, início minimizado, bandeja com detecção SNI no Linux,
+  notificações persistidas e checagens coalescidas. Reinícios passam pela guarda
+  de edições e preservam o estado recuperável de conversa.
+- Validação da branch baseada em 0.8.0: typecheck/build, **69 unitários e 77
+  Playwright aprovados**. Dois defeitos de geometria introduzidos na adaptação
+  foram corrigidos (calendário e modal na janela mínima). A regressão completa
+  passou após as correções. Detector executado; avisos mecânicos corrigidos.
+- Pacote NSIS Windows gerado sem publicação. Executável empacotado testado com
+  perfis temporários, GPU ligada/desligada, vídeo sintético, captura e persistência.
+  Feed HTTP local exercita atualização opcional/crítica, erro/retry, notificação
+  única e checksum inválido; instaladores de teste nunca são executados.
+- Linux unpacked/ELF/asar gerado e inspecionado; AppImage falhou com `EPERM` na
+  criação de symlink neste Windows. Sem runtime Linux disponível localmente.
+  Workflow de validação de pacotes Windows/Linux preparado, sem publicação.
+- A PR #7 foi fechada; a main incorporou seu conteúdo manualmente e avançou para
+  0.9.3 com alterações de segurança. Antes da nova PR, integrar essa base e repetir
+  as validações afetadas. Não substituir criptografia nem política de segurança
+  pelo atualizador da branch anterior. M7 permanece fora desta execução.

@@ -1,3 +1,4 @@
+import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { User } from "@distopic/protocol";
@@ -155,9 +156,9 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
                     <li key={entry.id}>
                       <strong>{entry.name}</strong>
                       <span className="muted">
-                        {new Date(entry.startedAt).toLocaleString()} ·{" "}
+                        {new Date(entry.startedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})} ·{" "}
                         {entry.endedAt
-                          ? `${Math.max(0, Math.floor((Date.parse(entry.endedAt) - Date.parse(entry.startedAt)) / 60_000))} min observados`
+                          ? translate("common.c4e0a84b834b",{p0:(Math.max(0, Math.floor((Date.parse(entry.endedAt) - Date.parse(entry.startedAt)) / 60_000)))})
                           : translate("common.9b57f20158cc")}
                       </span>
                     </li>

@@ -102,7 +102,7 @@ export function ConnectionOverlay({ accountId, onContinue }: { accountId: string
           </div>
           {!invalid && <div className="connection-diagnostics" aria-live="polite">
             <span>{rich("common.4261b35ba05e",{p0:(connection?.attempt ?? 0)})}</span>
-            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>{rich("common.e78f7b755e30",{p0:(new Intl.DateTimeFormat(localizationPreferences().region, { timeStyle: "medium" }).format(connection.observedAt))})}</span>}
+            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>{rich("common.e78f7b755e30",{p0:(new Intl.DateTimeFormat(localizationPreferences().region, { timeStyle: "medium",hourCycle:localizationPreferences().hourCycle }).format(connection.observedAt))})}</span>}
             {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>{rich("common.bfa16702b965",{p0:(Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000)))})}</span>}
             {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>{rich("common.eb694674cce5",{p0:(Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000)))})}</span>}
           </div>}

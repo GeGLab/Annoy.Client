@@ -19,7 +19,7 @@ export function EntityPicker({
   value,
   onValueChange,
   label,
-  placeholder = "Selecionar…",
+  placeholder = translate("common.bc47be7b044e"),
   disabled = false,
 }: {
   items: PickerEntity[];

@@ -139,7 +139,7 @@ export function AddAccountModal() {
           <div className="form-actions">
             <Button type="button" variant="secondary" onClick={closeModal}>{translate("common.bb9dbb406dcb")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Conectando…" : translate("common.63e2bbaf1c92")}
+              {busy ? translate("common.cc190ab9f5ec") : translate("common.63e2bbaf1c92")}
             </Button>
           </div>
         </form>
@@ -161,7 +161,7 @@ export function AddAccountModal() {
           <div className="form-actions">
             <Button type="button" variant="secondary" onClick={() => setGlobalFirst(false)}>{translate("common.59dc926760d0")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Aguarde…" : translate("common.4105811890ae")}
+              {busy ? translate("common.02cd97f15be8") : translate("common.4105811890ae")}
             </Button>
           </div>
         </form>
@@ -234,7 +234,7 @@ export function AddAccountModal() {
           <div className="form-actions">
             <Button type="button" variant="secondary" onClick={() => setInfo(null)}>{translate("common.59dc926760d0")}</Button>
             <Button type="submit" loading={busy}>
-              {busy ? "Aguarde…" : mode === "login" ? translate("common.4105811890ae") : translate("common.8cb3525e3b7e")}
+              {busy ? translate("common.02cd97f15be8") : mode === "login" ? translate("common.4105811890ae") : translate("common.8cb3525e3b7e")}
             </Button>
           </div>
         </form>

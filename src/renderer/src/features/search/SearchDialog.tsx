@@ -172,7 +172,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             <div>
               <header>
                 <strong>{message.author.displayName}</strong>
-                <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region)}</time>
+                <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time>
               </header>
               <p>{message.content || `${message.attachments.length} anexo(s)`}</p>
               <small>
