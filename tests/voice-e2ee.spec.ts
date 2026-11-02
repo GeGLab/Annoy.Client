@@ -33,7 +33,7 @@ test('two Electron clients hold an SFrame call through mediasoup; the SFU only f
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-voice-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve('../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;tap:string;alice:string;bob:string}>((done,fail)=>{
@@ -138,7 +138,7 @@ test('two Electron clients hold an SFrame call through the real Cloudflare Realt
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-voice-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve('../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178',...cloudflare},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178',...cloudflare},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;tap:string;alice:string;bob:string}>((done,fail)=>{
@@ -214,7 +214,7 @@ test('a private call between two Electron clients is sealed with SFrame end to e
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-call-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve('../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;alice:string;bob:string}>((done,fail)=>{

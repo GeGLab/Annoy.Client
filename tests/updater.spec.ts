@@ -100,6 +100,7 @@ for (const critical of [false, true])
         window.distopic!.updates.configure({ notifications: false }),
       );
       policyEnabled = true;
+      const beforeChecks = checks;
       await page.evaluate(() =>
         Promise.all([
           window.distopic!.updates.check(),
@@ -107,7 +108,7 @@ for (const critical of [false, true])
           window.distopic!.updates.check(),
         ]),
       );
-      expect(checks).toBe(1);
+      expect(checks - beforeChecks).toBe(1);
       if (critical) {
         await expect
           .poll(

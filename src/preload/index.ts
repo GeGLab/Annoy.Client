@@ -28,6 +28,8 @@ const bridge = {
     get:()=>ipcRenderer.invoke("desktop:get") as Promise<DesktopSnapshot>,
     set:(values:DesktopPreferences)=>ipcRenderer.invoke("desktop:set",values) as Promise<DesktopSnapshot>,
     restart:()=>ipcRenderer.invoke("desktop:restart") as Promise<void>,
+    quit:()=>ipcRenderer.invoke("desktop:quit") as Promise<void>,
+    onQuitRequested(listener:()=>void):()=>void{const handler=()=>listener();ipcRenderer.on("desktop:quit-requested",handler);return()=>{ipcRenderer.off("desktop:quit-requested",handler);};},
   },
   localization: {
     get: () => ipcRenderer.invoke("localization:get") as Promise<{saved:LocalizationPreferences;systemLocale:string}>,

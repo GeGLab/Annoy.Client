@@ -42,7 +42,7 @@ function createTray(): void {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
     { type: "separator" },
-    { label: translate("desktop.b08423738547"), click: () => {restoreWindow();app.quit();} },
+    { label: translate("desktop.b08423738547"), click: () => {restoreWindow();if(!win||win.webContents.isCrashed()||win.webContents.isLoadingMainFrame())app.quit();else win.webContents.send("desktop:quit-requested");} },
   ]));
 }
 const stopActivity = registerActivity(ipcMain, () => win, () => appAccess.getState().allowed, event => trustedRenderer(event, win));

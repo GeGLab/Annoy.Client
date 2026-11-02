@@ -1,4 +1,6 @@
 import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
+import {requestNavigation} from "./lib/navigation-guard.ts";
+import {flushChatState} from "./chat-state.ts";
 import {t as translate} from "../../shared/localization/index.ts";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { SongDock } from "./features/channels/PlaybackRooms.tsx";
@@ -109,6 +111,7 @@ function WorkspaceActivity() {
 const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
+  useEffect(()=>window.distopic?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.distopic?.desktop?.quit().catch(()=>{});})),[]);
   const localization=useLocalization();
   useEffect(()=>applyTextPreferences(localization),[localization]);
   const access = useStore(s => s.access.allowed);

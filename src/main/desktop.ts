@@ -138,6 +138,7 @@ export function desktopController(
     app.relaunch();
     app.exit(0);
   });
+  ipcMain.handle("desktop:quit",event=>{secure(event);app.quit();});
   return { preferences: () => saved, snapshot };
 }
 /** A successful DBus watcher probe is required before offering Linux tray hiding. */

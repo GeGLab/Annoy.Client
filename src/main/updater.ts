@@ -33,8 +33,9 @@ async function loadAdvisory(): Promise<Advisory | null> {
 export function startUpdater(window: BrowserWindow): void {
   const preferencesFile=join(app.getPath("userData"),"updates.json");
   let notifications=readPreferences(preferencesFile,value=>!!value&&typeof value==="object"&&"notifications"in value&&typeof value.notifications==="boolean"?value.notifications:true);
+  let notificationsReady=false;
   const notified=new Set<string>();
-  const notify=(version:string)=>{if(!notifications||notified.has(version)||!Notification.isSupported())return;try{const notice=new Notification({title:translate("update.notificationTitle"),body:translate("update.notificationBody",{p0:version})});notice.on("click",()=>{window.show();if(window.isMinimized())window.restore();window.focus();});notice.show();notified.add(version);}catch{}};
+  const notify=(version:string)=>{if(!notificationsReady||!notifications||notified.has(version)||!Notification.isSupported())return;try{const notice=new Notification({title:translate("update.notificationTitle"),body:translate("update.notificationBody",{p0:version})});notice.on("click",()=>{window.show();if(window.isMinimized())window.restore();window.focus();});notice.show();notified.add(version);}catch{}};
   let verified:{path:string;manifest:SignedUpdate}|null=null,exiting=false;
   autoUpdater.autoDownload = false;
   // Never let the updater install a cached artifact before our independent
@@ -58,8 +59,15 @@ export function startUpdater(window: BrowserWindow): void {
     },
     publish: state => { if (!window.isDestroyed()) window.webContents.send("update:state", state);if(state.status==="available")notify(state.version); },
   });
-  const check=singleFlight(()=>controller.check());
-  const policyCheck=()=>void controller.check({policyOnly:true});
+  let policyPending:Promise<void>|null=null,fullPending=false;
+  const check=singleFlight(async()=>{
+    fullPending=true;
+    try{await policyPending;await controller.check();}finally{fullPending=false;}
+  });
+  const policyCheck=()=>{
+    if(fullPending||policyPending)return;
+    policyPending=controller.check({policyOnly:true}).finally(()=>{policyPending=null;});
+  };
   autoUpdater.on("download-progress", p => controller.progress(p.percent));
   autoUpdater.on("update-downloaded", info => {
     verified=null;autoUpdater.autoInstallOnAppQuit=false;
@@ -83,7 +91,14 @@ export function startUpdater(window: BrowserWindow): void {
   autoUpdater.on("error", err => controller.error(err));
   const trusted=(event:Electron.IpcMainInvokeEvent)=>trustedRenderer(event,window);
   ipcMain.handle("update:get", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.getState();});
-  ipcMain.handle("update:configure",(event,values:unknown)=>{if(!trusted(event))throw new Error("Invalid update IPC sender");if(!values||typeof values!=="object"||!("notifications"in values)||typeof values.notifications!=="boolean")throw new Error("Invalid update preferences");if(values.notifications!==notifications)writePreferences(preferencesFile,{notifications:values.notifications});notifications=values.notifications;});
+  ipcMain.handle("update:configure",(event,values:unknown)=>{
+    if(!trusted(event))throw new Error("Invalid update IPC sender");
+    if(!values||typeof values!=="object"||!("notifications"in values)||typeof values.notifications!=="boolean")throw new Error("Invalid update preferences");
+    const changed=values.notifications!==notifications;
+    notifications=values.notifications;notificationsReady=true;
+    const state=controller.getState();if(state.status==="available")notify(state.version);
+    if(changed)writePreferences(preferencesFile,{notifications});
+  });
   ipcMain.handle("update:check", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return check();});
   ipcMain.handle("update:download", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.download();});
   ipcMain.handle("update:install", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.install();});

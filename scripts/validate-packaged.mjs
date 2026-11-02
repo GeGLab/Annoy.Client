@@ -62,6 +62,7 @@ try {
         `--user-data-dir=${profile}`,
         "--remote-debugging-port=0",
         "--mute-audio",
+        ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
         "--use-fake-device-for-media-stream",
         "--use-fake-ui-for-media-stream",
         ...(process.env.CI && process.platform === "linux"

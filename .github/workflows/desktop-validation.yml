@@ -26,7 +26,7 @@ jobs:
           node-version: 24
           cache: npm
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgbm1 libnss3 libasound2t64
+        run: sudo apt-get update && sudo apt-get install -y xvfb openbox libgbm1 libnss3 libasound2t64
       - run: npm ci
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -63,7 +63,7 @@ jobs:
           ANNOY_PACKAGED_EXECUTABLE: ${{ matrix.executable }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
-            xvfb-run -a node scripts/validate-packaged.mjs
+            xvfb-run -a -s '-screen 0 1920x1080x24' bash -c 'openbox >/tmp/annoy-test-window-manager.log 2>&1 & node scripts/validate-packaged.mjs'
           else
             node scripts/validate-packaged.mjs
           fi

@@ -89,6 +89,17 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
     await page
       .getByRole("button", { name: "Continuar editando", exact: true })
       .click();
+    // Tray quit shares the renderer's save/discard guard; cancellation must
+    // also leave the ordinary close-to-tray path active.
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.webContents.send(
+        "desktop:quit-requested",
+      ),
+    );
+    await expect(page.getByRole("dialog").last()).toContainText("alterações");
+    await page
+      .getByRole("button", { name: "Continuar editando", exact: true })
+      .click();
     await page
       .locator(".settings-savebar")
       .getByRole("button", { name: "Redefinir", exact: true })
@@ -125,6 +136,15 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
       (await page.evaluate(() => window.distopic!.desktop.get())).saved
         .hardwareAcceleration,
     ).toBe(false);
+    const closed = app.waitForEvent("close");
+    await app
+      .evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.webContents.send(
+          "desktop:quit-requested",
+        ),
+      )
+      .catch(() => {});
+    await closed;
   } finally {
     await app
       .evaluate(({ BrowserWindow }) =>
