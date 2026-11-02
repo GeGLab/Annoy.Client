@@ -297,7 +297,10 @@ async function proofFor(url: string, serverId: string, signal?: AbortSignal) {
     assertSession(generation, signal);
     const signature = await kdf.signForServer(identity.privateKey, challenge);
     assertSession(generation, signal);
-    return { identity: identity.id, challenge, signature, token: await kdf.finalizeToken(pending, issued.signatures[0]!) };
+    // Global vouches for this account's public ID, so the server can link it to an existing user.
+    const attestation = await global<{ publicId: string; expires: number; signature: string }>("/v1/attest", { body: { identity: identity.id }, signal }).catch(() => undefined);
+    assertSession(generation, signal);
+    return { identity: identity.id, challenge, signature, token: await kdf.finalizeToken(pending, issued.signatures[0]!), ...(attestation && { attestation }) };
   }
 }
 
