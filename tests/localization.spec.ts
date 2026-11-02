@@ -1,3 +1,4 @@
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdtemp, rm, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -6,9 +7,11 @@ import { join, resolve } from "node:path";
 const require = createRequire(import.meta.url);
 test("seven languages update live; preview discards, save persists, maximum text and zoom remain operable", async () => {
   const data = await mkdtemp(join(tmpdir(), "annoy-localization-"));
+  const auth = await globalAuthFixture();
   const env = {
     ...process.env,
-    DISTOPIC_TEST_DATA: data,
+    ANNOY_TEST_DATA: data,
+    ANNOY_GLOBAL_URL: auth.url,
     ELECTRON_RENDERER_URL: "http://127.0.0.1:5178",
   };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -18,6 +21,7 @@ test("seven languages update live; preview discards, save persists, maximum text
     env,
   });
   const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   try {
@@ -122,6 +126,7 @@ test("seven languages update live; preview discards, save persists, maximum text
       )
       .catch(() => {});
     await app.close();
+    await auth.close();
     await rm(data, {
       recursive: true,
       force: true,

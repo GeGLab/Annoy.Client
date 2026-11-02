@@ -48,6 +48,7 @@ export function startUpdater(window: BrowserWindow): void {
   }
   const controller = createUpdateController({
     currentVersion: app.getVersion(), updatable, loadAdvisory,
+    formatError:error=>/checksum|sha512|sha256/i.test(String(error))?translate("update.integrityError"):error instanceof Error&&/autenticad|assinatura/i.test(error.message)?error.message:translate("update.networkError"),
     checkForUpdates: async () => (await autoUpdater.checkForUpdates())?.updateInfo.version ?? null,
     downloadUpdate: () => autoUpdater.downloadUpdate(),
     install: async () => {

@@ -8,6 +8,7 @@ interface UpdateIO {
   downloadUpdate(): Promise<unknown>;
   install(): void | Promise<void>;
   publish(state: UpdateState): void;
+  formatError?(error:unknown):string;
 }
 
 /** Platform-independent state machine; electron-updater owns file verification/install. */
@@ -22,7 +23,7 @@ export function createUpdateController(io: UpdateIO) {
   const mandatory = () => advisory !== null;
   function error(err: unknown) {
     installing = false;
-    publish({ status: "error", currentVersion: io.currentVersion, message: err instanceof Error ? err.message : String(err), mandatory: mandatory(), advisory, releaseUrl: RELEASES_URL });
+    publish({ status: "error", currentVersion: io.currentVersion, message: io.formatError?.(err)??(err instanceof Error ? err.message : String(err)), mandatory: mandatory(), advisory, releaseUrl: RELEASES_URL });
   }
   async function download() {
     if (!pendingVersion || state.status === "downloading" || state.status === "ready") return;

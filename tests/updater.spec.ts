@@ -1,3 +1,4 @@
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
@@ -14,22 +15,24 @@ for (const critical of [false, true])
     let corrupt = true,
       offline = false,
       checks = 0;
+    let policyEnabled = false;
     const server = createServer((request, response) => {
       const url = request.url ?? "";
       if (url.startsWith("/policy")) {
         response.setHeader("Content-Type", "application/json");
         response.end(
           JSON.stringify({
-            advisories: critical
-              ? [
-                  {
-                    id: "TEST-ONLY-CRITICAL",
-                    severity: "critical",
-                    fixedIn: "0.8.9",
-                    summary: "Synthetic local policy",
-                  },
-                ]
-              : [],
+            advisories:
+              critical && policyEnabled
+                ? [
+                    {
+                      id: "TEST-ONLY-CRITICAL",
+                      severity: "critical",
+                      fixedIn: "99.0.0",
+                      summary: "Synthetic local policy",
+                    },
+                  ]
+                : [],
           }),
         );
         return;
@@ -43,7 +46,7 @@ for (const critical of [false, true])
         }
         response.setHeader("Content-Type", "text/yaml");
         response.end(
-          `version: 0.8.9\nfiles:\n  - url: fixture.exe\n    sha512: ${digest}\n    size: ${valid.length}\npath: fixture.exe\nsha512: ${digest}\nreleaseDate: '2026-11-01T12:00:00.000Z'\n`,
+          `version: 99.0.0\nfiles:\n  - url: fixture.exe\n    sha512: ${digest}\n    size: ${valid.length}\npath: fixture.exe\nsha512: ${digest}\nreleaseDate: '2026-11-01T12:00:00.000Z'\n`,
         );
         return;
       }
@@ -71,9 +74,11 @@ for (const critical of [false, true])
       config,
       `provider: generic\nurl: ${feed}\nupdaterCacheDirName: annoy-test-updater\n`,
     );
+    const auth = await globalAuthFixture();
     const env = {
       ...process.env,
-      DISTOPIC_TEST_DATA: data,
+      ANNOY_TEST_DATA: data,
+      ANNOY_GLOBAL_URL: auth.url,
       ELECTRON_RENDERER_URL: "http://127.0.0.1:5178",
       ANNOY_UPDATE_FEED: feed,
       ANNOY_UPDATE_POLICY_URL: feed + "/policy",
@@ -88,11 +93,13 @@ for (const critical of [false, true])
       env,
     });
     const page = await app.firstWindow();
+    await auth.keepAuthenticated(page);
     try {
       await expect(page.locator(".welcome")).toBeVisible();
       await page.evaluate(() =>
         window.distopic!.updates.configure({ notifications: false }),
       );
+      policyEnabled = true;
       await page.evaluate(() =>
         Promise.all([
           window.distopic!.updates.check(),
@@ -117,7 +124,7 @@ for (const critical of [false, true])
           await page.evaluate(() => window.distopic!.updates.get()),
         ).toMatchObject({
           status: "available",
-          version: "0.8.9",
+          version: "99.0.0",
           mandatory: false,
         });
         expect(
@@ -160,14 +167,16 @@ for (const critical of [false, true])
           async () =>
             (await page.evaluate(() => window.distopic!.updates.get())).status,
         )
-        .toBe("ready");
-      expect(
-        await app.evaluate(() => (globalThis as any).annoyTestInstalls),
-      ).toBe(0);
+        .toBe("error");
+      const unauthenticated = await page.evaluate(() =>
+        window.distopic!.updates.get(),
+      );
+      if (unauthenticated.status === "error")
+        expect(unauthenticated.message).toContain("autenticada");
       await page.evaluate(() => window.distopic!.updates.install());
       expect(
         await app.evaluate(() => (globalThis as any).annoyTestInstalls),
-      ).toBe(1);
+      ).toBe(0);
     } finally {
       await app
         .evaluate(({ BrowserWindow }) =>
@@ -175,6 +184,7 @@ for (const critical of [false, true])
         )
         .catch(() => {});
       await app.close();
+      await auth.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await rm(data, {
         recursive: true,

@@ -1,3 +1,4 @@
+import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdtemp, writeFile, readFile, rm, mkdir } from "node:fs/promises";
@@ -6,9 +7,11 @@ import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 const require = createRequire(import.meta.url);
 async function launch(data: string) {
+  const auth = await globalAuthFixture();
   const env = {
     ...process.env,
-    DISTOPIC_TEST_DATA: data,
+    ANNOY_TEST_DATA: data,
+    ANNOY_GLOBAL_URL: auth.url,
     ELECTRON_RENDERER_URL: "http://127.0.0.1:5178",
   };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -17,7 +20,17 @@ async function launch(data: string) {
     args: [resolve("tests/fixtures/electron.cjs")],
     env,
   });
-  return { app, page: await app.firstWindow(), env };
+  const page = await app.firstWindow();
+  await auth.keepAuthenticated(page);
+  const close = app.close.bind(app);
+  app.close = async () => {
+    try {
+      await close();
+    } finally {
+      await auth.close();
+    }
+  };
+  return { app, page, env };
 }
 test("desktop preview/save/reload, applied acceleration, unsupported autostart and tray restoration", async () => {
   const data = await mkdtemp(join(tmpdir(), "annoy-desktop-"));

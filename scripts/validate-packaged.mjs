@@ -1,30 +1,33 @@
-// Run against the actual packaged executable with an isolated, explicit profile.
-// No login registration, installation, release publication, or existing profile is touched.
-import { _electron as electron } from "@playwright/test";
+// Renderer-only CDP validation. Production main-process inspector fuses stay disabled.
+// Uses explicit disposable profiles; never installs/registers login items or publishes.
+import { chromium } from "@playwright/test";
+import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
+import { globalAuthFixture } from "../tests/fixtures/global-auth.ts";
 const executable = resolve(
   process.env.ANNOY_PACKAGED_EXECUTABLE || "dist/win-unpacked/Annoy.exe",
 );
 assert.ok(existsSync(executable), "Packaged executable is required");
-const version = JSON.parse(await readFile("package.json", "utf8")).version;
-const server = createServer((request, response) => {
+const auth = await globalAuthFixture(),
+  metadata = JSON.parse(await readFile("package.json", "utf8"));
+const feedServer = createServer((request, response) => {
   if (request.url?.startsWith("/policy")) {
     response.setHeader("Content-Type", "application/json");
-    response.end(JSON.stringify({ advisories: [] }));
+    response.end('{"advisories":[]}');
     return;
   }
   response.setHeader("Content-Type", "text/yaml");
   response.end(
-    `version: ${version}\nfiles:\n  - url: fixture.exe\n    sha512: Zml4dHVyZQ==\npath: fixture.exe\nsha512: Zml4dHVyZQ==\n`,
+    `version: ${metadata.version}\nfiles:\n  - url: fixture.exe\n    sha512: Zml4dHVyZQ==\npath: fixture.exe\nsha512: Zml4dHVyZQ==\n`,
   );
 });
-await new Promise((done) => server.listen(0, "127.0.0.1", done));
-const feed = `http://127.0.0.1:${server.address().port}`;
+await new Promise((done) => feedServer.listen(0, "127.0.0.1", done));
+const feed = `http://127.0.0.1:${feedServer.address().port}`;
 try {
   for (const hardwareAcceleration of [true, false]) {
     const profile = await mkdtemp(join(tmpdir(), "annoy-packaged-"));
@@ -46,100 +49,130 @@ try {
     );
     const env = {
       ...process.env,
+      ANNOY_GLOBAL_URL: auth.url,
       ANNOY_UPDATE_FEED: feed,
       ANNOY_UPDATE_POLICY_URL: feed + "/policy",
       APPIMAGE_EXTRACT_AND_RUN: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
     delete env.ELECTRON_RENDERER_URL;
-    const app = await electron.launch({
-      executablePath: executable,
-      args: [
+    const child = spawn(
+      executable,
+      [
         `--user-data-dir=${profile}`,
+        "--remote-debugging-port=0",
+        "--mute-audio",
         "--use-fake-device-for-media-stream",
         "--use-fake-ui-for-media-stream",
+        ...(process.env.CI && process.platform === "linux"
+          ? ["--no-sandbox"]
+          : []),
       ],
-      env,
-    });
+      { env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let browser,
+      page,
+      diagnostics = "";
     try {
-      const page = await app.firstWindow();
+      const endpoint = await new Promise((done, reject) => {
+        const timeout = setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Renderer CDP not available: " + diagnostics.slice(-1500),
+              ),
+            ),
+          30000,
+        );
+        child.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+        child.stderr.on("data", (chunk) => {
+          diagnostics += String(chunk);
+          const match = diagnostics.match(
+            /DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[\w-]+)/,
+          );
+          if (match) {
+            clearTimeout(timeout);
+            done(match[1]);
+          }
+        });
+      });
+      browser = await chromium.connectOverCDP(endpoint);
+      const context = browser.contexts()[0];
+      page = context.pages()[0] ?? (await context.waitForEvent("page"));
+      await auth.keepAuthenticated(page);
       await page.locator(".welcome").waitFor();
-      const native = await app.evaluate(({ app }) => ({
-        packaged: app.isPackaged,
-        profile: app.getPath("userData"),
-        acceleration: app.isHardwareAccelerationEnabled(),
-        version: app.getVersion(),
-      }));
-      assert.equal(native.packaged, true);
-      assert.equal(resolve(native.profile), resolve(profile));
-      assert.equal(native.acceleration, hardwareAcceleration);
-      assert.equal(
-        native.version,
-        JSON.parse(await readFile("package.json", "utf8")).version,
-      );
       const status = await page.evaluate(() => window.distopic.desktop.get());
       assert.equal(status.applied.hardwareAcceleration, hardwareAcceleration);
       assert.equal(status.restartRequired, false);
-      await page.evaluate(async (saved) => {
-        await window.distopic.desktop.set({ ...saved, startMinimized: true });
-      }, status.saved);
+      await page.evaluate(
+        (saved) =>
+          window.distopic.desktop.set({ ...saved, startMinimized: true }),
+        status.saved,
+      );
       assert.equal(
         JSON.parse(await readFile(join(profile, "desktop.json"), "utf8")).values
           .startMinimized,
         true,
       );
-      const size = await app.evaluate(async ({ BrowserWindow }) =>
-        (await BrowserWindow.getAllWindows()[0].capturePage()).getSize(),
-      );
-      assert.ok(size.width > 0 && size.height > 0);
-      const media = await page.evaluate(async () => {
+      assert.ok((await page.screenshot()).length > 0);
+      const width = await page.evaluate(async () => {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
         });
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        await video.play();
-        const width = video.videoWidth;
-        stream.getTracks().forEach((track) => track.stop());
-        return width;
+        try {
+          const video = document.createElement("video");
+          video.srcObject = stream;
+          await video.play();
+          return video.videoWidth;
+        } finally {
+          stream.getTracks().forEach((track) => track.stop());
+        }
       });
-      assert.ok(media > 0);
-      const sources = await page.evaluate(() =>
-        window.distopic.screen.sources(),
+      assert.ok(width > 0);
+      assert.ok(
+        (await page.evaluate(() => window.distopic.screen.sources())).length >
+          0,
       );
-      assert.ok(sources.length > 0);
       await page.evaluate(() => window.distopic.updates.check());
-      assert.equal(
-        (await page.evaluate(() => window.distopic.updates.get())).status,
-        "none",
-      );
+      const update = await page.evaluate(() => window.distopic.updates.get());
+      assert.equal(update.currentVersion, metadata.version);
+      assert.equal(update.status, "none");
       console.log(
         JSON.stringify({
           executable,
           hardwareAcceleration,
-          packaged: true,
           isolatedProfile: true,
           rendering: true,
           video: true,
           screenCapture: true,
           persistence: true,
+          mainInspectorEnabled: false,
         }),
       );
     } finally {
-      await app
-        .evaluate(({ BrowserWindow }) =>
-          BrowserWindow.getAllWindows().forEach((window) => window.destroy()),
-        )
+      await page
+        ?.evaluate(() => window.distopic.window.close())
         .catch(() => {});
-      await app.close();
+      await browser?.close().catch(() => {});
+      if (child.exitCode === null) {
+        child.kill();
+        await new Promise((done) => {
+          child.once("exit", done);
+          setTimeout(done, 3000);
+        });
+      }
       await rm(profile, {
         recursive: true,
         force: true,
-        maxRetries: 5,
-        retryDelay: 200,
+        maxRetries: 10,
+        retryDelay: 300,
       });
     }
   }
 } finally {
-  await new Promise((done) => server.close(done));
+  await new Promise((done) => feedServer.close(done));
+  await auth.close();
 }
