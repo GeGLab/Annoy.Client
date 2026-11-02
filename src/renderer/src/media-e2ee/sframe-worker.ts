@@ -5,7 +5,7 @@ import wasmUrl from "./generated/annoy_sframe.wasm?url";
 
 export type StreamKind = "audio" | "video";
 export interface TransformOptions { direction: "send" | "recv"; kind: StreamKind; context: number }
-export interface FrameStats { sealed: number; opened: number; dropped: Record<string, number>; epoch: string | null; streams: { send: number; recv: number } }
+export interface FrameStats { sealed: number; opened: number; dropped: Record<string, number>; epoch: string | null; streams: { send: number; recv: number }; byKind: Record<StreamKind, { sealed: number; opened: number; dropped: Record<string, number> }> }
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -37,7 +37,7 @@ const ERRORS: Record<number, string> = { [-1]: "no_key", [-2]: "invalid_key", [-
 let wasm: Exports | null = null;
 let input = { ptr: 0, len: 0 };
 let current: bigint | null = null;
-const stats: FrameStats = { sealed: 0, opened: 0, dropped: {}, epoch: null, streams: { send: 0, recv: 0 } };
+const stats: FrameStats = { sealed: 0, opened: 0, dropped: {}, epoch: null, streams: { send: 0, recv: 0 }, byKind: {audio:{sealed:0,opened:0,dropped:{}},video:{sealed:0,opened:0,dropped:{}}} };
 
 const ready = (async () => {
   const module = await WebAssembly.compileStreaming(fetch(wasmUrl));
@@ -61,8 +61,9 @@ const ready = (async () => {
   wasm.__wbindgen_start?.();
 })();
 
-function drop(reason: string): void {
+function drop(reason: string, kind?: StreamKind): void {
   stats.dropped[reason] = (stats.dropped[reason] ?? 0) + 1;
+  if(kind)stats.byKind[kind].dropped[reason]=(stats.byKind[kind].dropped[reason]??0)+1;
 }
 
 /** VP8 packetizers and depacketizers read the frame tag and, on key frames, the dimensions. */
@@ -72,7 +73,7 @@ function clearBytes(kind: StreamKind, data: Uint8Array): number {
 }
 
 function transformFrame(options: TransformOptions, frame: EncodedFrame): boolean {
-  if (!wasm) return drop("not_ready"), false;
+  if (!wasm) return drop("not_ready", options.kind), false;
   const data = new Uint8Array(frame.data);
   if (data.length > input.len) {
     if (input.ptr) wasm.sf_free(input.ptr, input.len);
@@ -84,7 +85,7 @@ function transformFrame(options: TransformOptions, frame: EncodedFrame): boolean
   const result = options.direction === "send" ? wasm.sf_encrypt(options.context, input.ptr, data.length, clear) : wasm.sf_decrypt(input.ptr, data.length, clear);
   new Uint8Array(wasm.memory.buffer, input.ptr, data.length).fill(0);
   if (result < 0) {
-    drop(ERRORS[result] ?? "error");
+    drop(ERRORS[result] ?? "error", options.kind);
     return false;
   }
   const out = new Uint8Array(result);
@@ -92,8 +93,8 @@ function transformFrame(options: TransformOptions, frame: EncodedFrame): boolean
   wasm.sf_wipe_output();
   if (options.direction === "recv") data.fill(0);
   frame.data = out.buffer;
-  if (options.direction === "send") stats.sealed++;
-  else stats.opened++;
+  if (options.direction === "send") {stats.sealed++;stats.byKind[options.kind].sealed++;}
+  else {stats.opened++;stats.byKind[options.kind].opened++;}
   return true;
 }
 
@@ -109,7 +110,7 @@ function attach(readable: ReadableStream<EncodedFrame>, writable: WritableStream
       }),
     )
     .pipeTo(writable)
-    .catch(() => undefined);
+    .catch((error: Error) => { drop(`pipeline_${error.name}`, options.kind); scope.postMessage({type:"stream-failed"}); });
 }
 
 function installKey(message: { epoch?: unknown; senderIndex?: unknown; key?: unknown }): void {

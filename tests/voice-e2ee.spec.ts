@@ -1,3 +1,5 @@
+import {syntheticCamera} from './fixtures/synthetic-camera.ts';
+import {serverRoot} from './fixtures/server-root.ts';
 import {electron} from './fixtures/electron-launch.ts';
 import {test,expect,type ElectronApplication,type Page} from '@playwright/test';
 import {createRequire} from 'node:module';
@@ -33,13 +35,13 @@ test('two Electron clients hold an SFrame call through mediasoup; the SFU only f
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-voice-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:serverRoot(),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;tap:string;alice:string;bob:string}>((done,fail)=>{
    const timer=setTimeout(()=>fail(new Error('Backend timeout: '+stderr)),20000);
    createInterface({input:backend.stdout}).on('line',line=>{try{const value=JSON.parse(line);if(value.tap){clearTimeout(timer);done(value);}}catch{/* server log line */}});
-   backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
+   backend.once('error',fail);backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
   });
   const pages:Page[]=[];
   for(const name of ['alice','bob'] as const){
@@ -47,7 +49,7 @@ test('two Electron clients hold an SFrame call through mediasoup; the SFU only f
    const env={...process.env,ANNOY_GLOBAL_URL:'http://127.0.0.1:1',ANNOY_TEST_DATA:join(dir,name),ELECTRON_RENDERER_URL:'http://127.0.0.1:5178'};delete env.ELECTRON_RUN_AS_NODE;
    const app=await electron.launch({executablePath:require('electron'),args:['--mute-audio','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',resolve('tests/fixtures/electron.cjs')],env});clients.push(app);
    await app.evaluate(({app,webContents})=>{for(const contents of webContents.getAllWebContents())contents.setAudioMuted(true);app.on('web-contents-created',(_event,contents)=>contents.setAudioMuted(true));});
-   const page=await app.firstWindow();pages.push(page);
+   const page=await app.firstWindow();pages.push(page);await page.waitForLoadState("load");await syntheticCamera(page);
    expect(await app.evaluate(({webContents})=>webContents.getAllWebContents().every(c=>c.isAudioMuted()))).toBe(true);
    await page.evaluate(async({url,token,name})=>{
     await window.distopic!.auth.local({id:name,url,token,userId:name});
@@ -87,7 +89,7 @@ test('two Electron clients hold an SFrame call through mediasoup; the SFU only f
    let frames=0;await new Promise<void>(done=>{const tick=()=>{frames++;if(frames>=30)done();else video.requestVideoFrameCallback(tick);};video.requestVideoFrameCallback(tick);setTimeout(done,15000);});
    const width=video.videoWidth;video.remove();return {frames,width};
   });
-  expect(rendered.frames).toBeGreaterThanOrEqual(30);expect(rendered.width).toBeGreaterThan(0);
+  expect(rendered.frames,JSON.stringify({rendered,alice:await stats(pages[0]!),bob:await stats(pages[1]!)})).toBeGreaterThanOrEqual(30);expect(rendered.width).toBeGreaterThan(0);
   // What the SFU forwards: SFrame headers whose KID encodes stream context, sender leaf and epoch.
   const tapped=await (await fetch(info.tap)).json() as {source:string;kind:string;payloads:string[]}[];
   for(const source of ['mic','camera']){
@@ -138,13 +140,13 @@ test('two Electron clients hold an SFrame call through the real Cloudflare Realt
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-voice-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178',...cloudflare},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:serverRoot(),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178',...cloudflare},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;tap:string;alice:string;bob:string}>((done,fail)=>{
    const timer=setTimeout(()=>fail(new Error('Backend timeout: '+stderr)),20000);
    createInterface({input:backend.stdout}).on('line',line=>{try{const value=JSON.parse(line);if(value.tap){clearTimeout(timer);done(value);}}catch{/* server log line */}});
-   backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
+   backend.once('error',fail);backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
   });
   const pages:Page[]=[];
   for(const name of ['alice','bob'] as const){
@@ -152,7 +154,7 @@ test('two Electron clients hold an SFrame call through the real Cloudflare Realt
    const env={...process.env,ANNOY_GLOBAL_URL:'http://127.0.0.1:1',ANNOY_TEST_DATA:join(dir,name),ELECTRON_RENDERER_URL:'http://127.0.0.1:5178'};delete env.ELECTRON_RUN_AS_NODE;
    const app=await electron.launch({executablePath:require('electron'),args:['--mute-audio','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',resolve('tests/fixtures/electron.cjs')],env});clients.push(app);
    await app.evaluate(({app,webContents})=>{for(const contents of webContents.getAllWebContents())contents.setAudioMuted(true);app.on('web-contents-created',(_event,contents)=>contents.setAudioMuted(true));});
-   const page=await app.firstWindow();pages.push(page);
+   const page=await app.firstWindow();pages.push(page);await page.waitForLoadState("load");await syntheticCamera(page);
    expect(await app.evaluate(({webContents})=>webContents.getAllWebContents().every(c=>c.isAudioMuted()))).toBe(true);
    await page.evaluate(async({url,token,name})=>{
     await window.distopic!.auth.local({id:name,url,token,userId:name});
@@ -214,13 +216,13 @@ test('a private call between two Electron clients is sealed with SFrame end to e
  test.setTimeout(150_000);
  const dir=await mkdtemp(join(tmpdir(),'annoy-call-e2ee-'));
  const [port,voicePort]=[await freePort(),await freePort()];
- const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:resolve(process.env.ANNOY_SERVER_TEST_ROOT??'../annoy-server'),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
+ const backend=spawn(process.execPath,['--import','tsx','tests/fixtures/voice-desktop.ts'],{cwd:serverRoot(),env:{...process.env,ANNOY_ACCOUNT_MODE:'local',ANNOY_DATA_DIR:join(dir,'server'),ANNOY_PORT:String(port),ANNOY_HOST:'127.0.0.1',ANNOY_VOICE_PORT:String(voicePort),ANNOY_ANNOUNCED_IP:'127.0.0.1',ANNOY_ALLOWED_ORIGINS:'http://127.0.0.1:5178'},stdio:['ignore','pipe','pipe']});
  const clients:ElectronApplication[]=[];let stderr='';backend.stderr.on('data',b=>{stderr+=b.toString();});
  try{
   const info=await new Promise<{url:string;alice:string;bob:string}>((done,fail)=>{
    const timer=setTimeout(()=>fail(new Error('Backend timeout: '+stderr)),20000);
    createInterface({input:backend.stdout}).on('line',line=>{try{const value=JSON.parse(line);if(value.tap){clearTimeout(timer);done(value);}}catch{/* server log line */}});
-   backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
+   backend.once('error',fail);backend.once('exit',()=>{clearTimeout(timer);fail(new Error('Backend stopped: '+stderr));});
   });
   const pages:Page[]=[];
   for(const name of ['alice','bob'] as const){
@@ -228,7 +230,7 @@ test('a private call between two Electron clients is sealed with SFrame end to e
    const env={...process.env,ANNOY_GLOBAL_URL:'http://127.0.0.1:1',ANNOY_TEST_DATA:join(dir,name),ELECTRON_RENDERER_URL:'http://127.0.0.1:5178'};delete env.ELECTRON_RUN_AS_NODE;
    const app=await electron.launch({executablePath:require('electron'),args:['--mute-audio','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',resolve('tests/fixtures/electron.cjs')],env});clients.push(app);
    await app.evaluate(({app,webContents})=>{for(const contents of webContents.getAllWebContents())contents.setAudioMuted(true);app.on('web-contents-created',(_event,contents)=>contents.setAudioMuted(true));});
-   const page=await app.firstWindow();pages.push(page);
+   const page=await app.firstWindow();pages.push(page);await page.waitForLoadState("load");await syntheticCamera(page);
    await page.evaluate(async({url,token,name})=>{
     await window.distopic!.auth.local({id:name,url,token,userId:name});
     await window.distopic!.crypto.unlock('synthetic-local-vault-password-for-tests');
@@ -251,7 +253,7 @@ test('a private call between two Electron clients is sealed with SFrame end to e
   expect(a!.epoch).toBe('1');expect(b!.epoch).toBe('1');
   // No frame fails authentication. The P2P stack occasionally delivers a frame twice
   // (redundant audio after loss); anti-replay discards that copy, as RFC 9605 9.3 requires.
-  expect((a!.dropped.rejected??0)+(b!.dropped.rejected??0)).toBe(0);
+  expect((a!.dropped.rejected??0)+(b!.dropped.rejected??0),JSON.stringify({alice:a,bob:b})).toBe(0);
   expect((a!.dropped.replay??0)+(b!.dropped.replay??0)).toBeLessThanOrEqual(Math.ceil((a!.opened+b!.opened)/100));
   for(const page of pages){
    expect((await page.evaluate(async()=>(await import(location.origin+'/src/store.ts')).getState().directCall?.call.protection))).toBe('sframe');
