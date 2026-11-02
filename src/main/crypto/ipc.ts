@@ -9,15 +9,13 @@ import {existsSync,readFileSync,writeFileSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {LIMITS} from '@distopic/protocol';
 import {EncryptedVault} from './vault.ts';
+import {osStorage} from '../safe-storage.ts';
 import {VaultKeyProtector} from "./key-protector.ts";
 import {CryptoController} from './controller.ts';
 
 export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean):(()=>void)&{proof:(url:string,token:string,method:string,path:string,nonce?:string)=>Promise<string|null>} {
  const directory=join(app.getPath('userData'),'crypto-v1');
- const protector=new VaultKeyProtector(directory,{
-  available:()=>safeStorage.isEncryptionAvailable() && (process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text'),
-  encrypt:value=>safeStorage.encryptString(value),decrypt:sealed=>safeStorage.decryptString(sealed),
- });
+ const protector=new VaultKeyProtector(directory,osStorage(safeStorage));
  const vault=new EncryptedVault(directory,protector);
  const exe='annoy-crypto'+(process.platform==='win32'?'.exe':'');
  const developmentRoot=join(import.meta.dirname,'../..');
@@ -42,7 +40,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
  handle('crypto:local-messages',(event,raw)=>{const p=localPayload(event,raw);if(typeof p.channel!=='string'||p.channel.length>100||!['messages','legacy'].includes(p.kind??'')||(p.before!==undefined&&(typeof p.before!=='string'||p.before.length>100)))throw new Error(translate("common.df427ff3e465"));return controller.localMessages(p.url,p.userId,p.channel,p.kind as 'messages'|'legacy',p.before);});
  handle('crypto:local-file-save',async(event,raw)=>{
   const p=localPayload(event,raw);if(typeof p.channel!=='string'||p.channel.length>100||typeof p.messageId!=='string'||p.messageId.length>100||typeof p.fileId!=='string'||!/^[a-f0-9]{32}$/.test(p.fileId))throw new Error(translate("common.664aef6024ed"));
-  const file=controller.localLegacyFile(p.url,p.userId,p.channel,p.messageId,p.fileId);
+  const file=await controller.localLegacyFile(p.url,p.userId,p.channel,p.messageId,p.fileId);
   try{const selected=await dialog.showSaveDialog(window()!,{title:translate("common.f5e49b9acad2"),defaultPath:file.name.replace(/[/\\\0]/g,'_')});if(!selected.filePath)return {saved:false};writeFileSync(selected.filePath,file.bytes,{flag:'wx',mode:0o600,flush:true});return {saved:true};}finally{file.bytes.fill(0);}
  });
  handle('crypto:local-backup',async event=>{
@@ -65,7 +63,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
  handle('crypto:unlock',async(event,raw)=>{
   const win=window();if(!trustedRenderer(event,win) || typeof raw!=='string')throw new Error(translate("common.146a2e98a2ba"));
   if(unlocking)throw new Error(translate("common.f3e0b2b91b13"));unlocking=true;
-  try{await protector.unlockPassword(raw);vault.unlock();return {unlocked:true};}finally{unlocking=false;}
+  try{await protector.unlockPassword(raw);await vault.unlock();return {unlocked:true};}finally{unlocking=false;}
  });
  handle('crypto:proof',(event,raw)=>{
   const win=window();const value=raw as Record<string,unknown>;
@@ -116,7 +114,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
   const directory=format.response===0;
   const selected=await dialog.showOpenDialog(window()!,{title:translate("common.e6c43b9f3745"),properties:[directory?'openDirectory':'openFile'],...(!directory?{filters:[{name:'Annoy',extensions:['annoy-backup']}]}:{})});if(!selected.filePaths[0])return {restored:false};
   if(directory)await controller.importBackupDirectory(selected.filePaths[0],p.raw.recoveryKey);
-  else{if(statSync(selected.filePaths[0]).size>64*1024*1024)throw new Error('Backup excede o limite');controller.importBackup(readFileSync(selected.filePaths[0]),p.raw.recoveryKey);}
+  else{if(statSync(selected.filePaths[0]).size>64*1024*1024)throw new Error('Backup excede o limite');await controller.importBackup(readFileSync(selected.filePaths[0]),p.raw.recoveryKey);}
   return {restored:true};
  });
  handle('crypto:devices',(event,raw)=>{const p=payload(event,raw);return controller.devices(p.url,p.token);});

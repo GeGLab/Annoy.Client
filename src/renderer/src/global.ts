@@ -256,7 +256,7 @@ export const toAccount = (url: string, info: InstanceInfo, auth: AuthResponse): 
   token: auth.token,
   userId: auth.user.id,
   instanceName: info.name,
-  annoy: true,
+  annoy: info.accountMode === "global" || auth.user.global === true,
 });
 
 // --- Signing in to servers ------------------------------------------------------------

@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash,hkdfSync, randomBytes } fr
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join,dirname } from 'node:path';
 
-export interface KeyProtector { available(): boolean; seal(key: Buffer): Buffer; open(sealed: Buffer): Buffer }
+export interface KeyProtector { available(): boolean | Promise<boolean>; seal(key: Buffer): Buffer | Promise<Buffer>; open(sealed: Buffer): Buffer | Promise<Buffer>; shouldReEncrypt?(): boolean }
 interface Entry { blob: string; key: Buffer; expiresAt: number | null; backup: boolean }
 interface Shard {blob:string;key:Buffer}
 interface SavedEntry { blob: string; key: string; expiresAt: number | null; backup: boolean }
@@ -42,6 +42,8 @@ function rootOpen(master:Buffer,ciphertext:Buffer):Buffer {
 /** Trusted-main-only vault. Protocol snapshots are never included in exported backups. */
 export class EncryptedVault {
   private master: Buffer | null=null;
+  private unlocking: Promise<void> | null=null;
+  private generation=0;
   private entries=new Map<string,Entry>();
   private batchEntries:Entry[]|null=null;
   private shards=new Map<number,Shard>();private dirty=new Set<number>();private buckets=new Map<string,number>();private pinnedBlobs=new Map<string,number>();
@@ -50,17 +52,34 @@ export class EncryptedVault {
   private protector:KeyProtector;
   constructor(directory:string,protector:KeyProtector) {this.directory=directory;this.protector=protector;}
   exists():boolean {return existsSync(join(this.directory,'master.sealed'));}
-  unlock(): void {
+  async unlock(): Promise<void> {
     if(this.master) return;
-    if(!this.protector.available()) throw new Error('Secure OS storage unavailable; unlock with a supported key protector');
+    if(this.unlocking)return this.unlocking;
+    const operation=this.loadMaster(this.generation);this.unlocking=operation;
+    try{await operation;}finally{if(this.unlocking===operation)this.unlocking=null;}
+  }
+  private async loadMaster(generation:number):Promise<void> {
+    if(!await this.protector.available()) throw new Error('Secure OS storage unavailable; unlock with a supported key protector');
+    if(generation!==this.generation)throw new Error('Vault locked');
     mkdirSync(this.directory,{recursive:true,mode:0o700});
     const masterPath=join(this.directory,'master.sealed');
-    if(existsSync(masterPath)) this.master=this.protector.open(readFileSync(masterPath));
-    else {
-      if(existsSync(join(this.directory,'index.enc'))) throw new Error('Missing vault key; refusing to overwrite encrypted history');
-      this.master=randomBytes(32);atomic(masterPath,this.protector.seal(this.master));
-    }
-    if(this.master.length!==32) {this.lock();throw new Error('Invalid vault key');}
+    let master:Buffer|null=null;
+    try{
+      const existing=existsSync(masterPath);
+      if(existing)master=await this.protector.open(readFileSync(masterPath));
+      else{
+        if(existsSync(join(this.directory,'index.enc'))) throw new Error('Missing vault key; refusing to overwrite encrypted history');
+        master=randomBytes(32);
+      }
+      if(master.length!==32)throw new Error('Invalid vault key');
+      if(generation!==this.generation)throw new Error('Vault locked');
+      if(!existing||this.protector.shouldReEncrypt?.()){
+        const sealed=await this.protector.seal(master);
+        if(generation!==this.generation)throw new Error('Vault locked');
+        atomic(masterPath,sealed);
+      }
+      this.master=master;
+    }catch(error){master?.fill(0);throw error;}
     try {
       if(existsSync(join(this.directory,'index.enc'))) {
         const plain=rootOpen(this.master,readFileSync(join(this.directory,'index.enc')));
@@ -89,7 +108,7 @@ export class EncryptedVault {
       for(const file of readdirSync(this.directory))if(/^[a-f0-9]{64}\.enc$/.test(file)&&!live.has(file)&&!this.pinnedBlobs.has(file.slice(0,-4))){try{unlinkSync(join(this.directory,file));}catch{/* No indexed key remains for the orphan. */}}
     } catch(error) {this.lock();throw error;}
   }
-  lock():void {this.master?.fill(0);this.master=null;for(const entry of [...this.entries.values(),...this.shards.values()])entry.key.fill(0);this.entries.clear();this.shards.clear();this.dirty.clear();this.buckets.clear();}
+  lock():void {++this.generation;this.master?.fill(0);this.master=null;for(const entry of [...this.entries.values(),...this.shards.values()])entry.key.fill(0);this.entries.clear();this.shards.clear();this.dirty.clear();this.buckets.clear();}
   private requireKey():Buffer {if(!this.master) throw new Error('Vault locked');return this.master;}
   private path(blob:string):string {return join(this.directory,blob+'.enc');}
   private persist():void {

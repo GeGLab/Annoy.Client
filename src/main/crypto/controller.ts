@@ -78,7 +78,7 @@ export class CryptoController {
   if(this.restoring)throw new Error(translate("common.08b715132e43"));
   const generation=this.epoch;
   const url=new URL(raw);if(url.username || url.password || (url.protocol!=='https:' && !(url.protocol==='http:' && ['127.0.0.1','localhost','[::1]'].includes(url.hostname))))throw new Error('E2EE exige HTTPS fora do loopback');
-  this.vault.unlock();
+  await this.vault.unlock();
   const [user,info]=await Promise.all([this.request<{id:string;displayName:string}>(url.origin,token,'/users/@me'),this.request<{crypto?:{instanceId:string;version:number;protocol:string}}>(url.origin,token,'/info')]);
   if(generation!==this.epoch)throw new Error(translate("common.78382ccf3d5b"));
   if(!user.id || info.crypto?.version!==1 || info.crypto.protocol!=='MLS-RFC9420')throw new Error(translate("common.0d4b217e9b4b"));
@@ -350,7 +350,7 @@ export class CryptoController {
  async proof(url:string,token:string,method:string,path:string,overrideNonce?:string):Promise<string|null>{
   // Absence of a saved binding is a bootstrap session, never a downgrade of a known binding.
   if(!this.vault.exists())return null;
-  this.vault.unlock();const binding=this.sessionBinding(new URL(url).origin,token);if(!binding)return null;
+  await this.vault.unlock();const binding=this.sessionBinding(new URL(url).origin,token);if(!binding)return null;
   const target=new URL(path,url),origin=new URL(url).origin;
   if(binding.url!==origin || target.origin!==origin || !['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method.toUpperCase()) || (!target.pathname.startsWith('/api/') && target.pathname!=='/gateway'))throw new Error(translate("common.342a833bb18b"));
   const keys=this.read<DeviceKeys>('device:'+binding.id);if(!keys||keys.id!==binding.deviceId)throw new Error(translate("common.fcc9d78f9d03"));
@@ -365,8 +365,8 @@ export class CryptoController {
   return deviceProof(keys.pub,keys.private,token,method,target.toString(),nonce.value);
  }
 
- guardChannel(url:string,userId:string,channel:string):boolean {
-  if(!this.vault.exists())return false;this.vault.unlock();const id=hash(new URL(url).origin+'\0'+userId);
+ async guardChannel(url:string,userId:string,channel:string):Promise<boolean> {
+  if(!this.vault.exists())return false;await this.vault.unlock();const id=hash(new URL(url).origin+'\0'+userId);
   const instance=this.read<{instance:string}>('instance:'+id);return !!instance && !!this.read<{active:boolean}>('active:'+instance.instance+':'+channel)?.active;
  }
  async membershipReview(url:string,token:string,channel:string):Promise<{userId:string;code:string}[]>{return this.serial(url,async()=>{
@@ -527,25 +527,25 @@ export class CryptoController {
   this.write('legacy-meta:'+a.instance+':'+a.user.id+':'+channel,{source:'legacy_plaintext',complete:true,fingerprint:manifest.fingerprint,fileDigest,messages:manifest.messages,attachments:manifest.attachments},true);
   return {complete:true,messages:manifest.messages,attachments:manifest.attachments};
  });}
- localChannels(url:string,userId:string):{id:string;kind:'messages'|'legacy';count:number}[]{
-  this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)return [];
+ async localChannels(url:string,userId:string):Promise<{id:string;kind:'messages'|'legacy';count:number}[]>{
+  await this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)return [];
   const result:{id:string;kind:'messages'|'legacy';count:number}[]=[];
   for(const kind of ['messages','legacy'] as const){const prefix=kind+':'+instance.instance+':'+userId+':';for(const key of this.vault.recordIds(prefix).filter(k=>!k.includes(':entry:'))){const ids=this.read<string[]>(key);if(Array.isArray(ids))result.push({id:key.slice(prefix.length),kind,count:ids.filter(id=>this.vault.has(key+':entry:'+id)).length});}}
   return result;
  }
- localMessages(url:string,userId:string,channel:string,kind:'messages'|'legacy',before?:string):Message[]{
-  this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)return [];
+ async localMessages(url:string,userId:string,channel:string,kind:'messages'|'legacy',before?:string):Promise<Message[]>{
+  await this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)return [];
   const base=kind+':'+instance.instance+':'+userId+':'+channel,ids=(this.read<string[]>(base)??[]).filter(id=>this.vault.has(base+':entry:'+id)&&!this.vault.has('tombstone:'+base+':entry:'+id));
   const end=before?ids.indexOf(before):ids.length;return ids.slice(Math.max(0,end-50),Math.max(0,end)).map(id=>this.read<Message>(base+':entry:'+id)).filter((m):m is Message=>!!m).map(m=>this.publicMessage(m));
  }
- localLegacyFile(url:string,userId:string,channel:string,messageId:string,fileId:string):{bytes:Buffer;name:string}{
-  this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)throw new Error(translate("common.349203bcb65b"));
+ async localLegacyFile(url:string,userId:string,channel:string,messageId:string,fileId:string):Promise<{bytes:Buffer;name:string}>{
+  await this.vault.unlock();const instance=this.read<{instance:string}>('instance:'+hash(new URL(url).origin+'\0'+userId));if(!instance)throw new Error(translate("common.349203bcb65b"));
   const base='legacy:'+instance.instance+':'+userId+':'+channel,message=this.read<Message>(base+':entry:'+messageId);
   if(!message||this.vault.has('tombstone:'+base+':entry:'+messageId))throw new Error(translate("common.7fbdc9ff9bae"));const file=message.attachments.find(f=>f.id===fileId);if(!file)throw new Error(translate("common.7ead18a19218"));
   const bytes=this.vault.get('legacy-file:'+instance.instance+':'+userId+':'+channel+':'+fileId);if(!bytes||bytes.length!==file.size){bytes?.fill(0);throw new Error(translate("common.664aef6024ed"));}return {bytes,name:file.filename};
  }
  async exportLocalBackupDirectory(directory:string):Promise<{key:string}>{
-  if(!this.vault.exists())throw new Error(translate("common.6c784de7e52b"));this.vault.unlock();const key=randomBytes(32),snapshot=this.vault.pinPermanent();
+  if(!this.vault.exists())throw new Error(translate("common.6c784de7e52b"));await this.vault.unlock();const key=randomBytes(32),snapshot=this.vault.pinPermanent();
   try{await writeBackupDirectory(directory,snapshot.records,key,this.abort.signal);return {key:key.toString('base64url')};}finally{snapshot.release();key.fill(0);}
  }
  async refresh(url:string,token:string,channel:string):Promise<void>{return this.serial(url,async()=>{
@@ -612,7 +612,7 @@ export class CryptoController {
   if(!/^[A-Za-z0-9_-]{43}$/.test(keyText))throw new Error(translate("common.c5bef090217e"));
   if(this.restoring)throw new Error(translate("common.b69f6e5ffb93"));this.restoring=true;this.stop();const key=Buffer.from(keyText,'base64url');
   try{
-   this.vault.unlock();
+   await this.vault.unlock();
    const count=await readBackupDirectory(directory,key,(id,plain)=>this.vault.restorePermanentRecord(id,plain),this.abort.signal);
    for(const record of this.vault.recordIds('recovery:'))this.write('restore-authorization:'+record.slice('recovery:'.length),{at:Date.now()});
    return count;
@@ -621,10 +621,10 @@ export class CryptoController {
  async exportBackup(url:string,token:string):Promise<{data:Buffer;key:string}>{return this.serial(url,async()=>{
   await this.account(url,token);const key=randomBytes(32);try{return {data:this.vault.exportPermanent(key),key:key.toString('base64url')};}finally{key.fill(0);}
  });}
- importBackup(data:Buffer,keyText:string):void {
+ async importBackup(data:Buffer,keyText:string):Promise<void> {
   if(!/^[A-Za-z0-9_-]{43}$/.test(keyText))throw new Error(translate("common.c5bef090217e"));
-  const key=Buffer.from(keyText,'base64url');this.vault.unlock();try{
-   this.vault.importPermanent(data,key);this.stop();this.vault.unlock();
+  const key=Buffer.from(keyText,'base64url');await this.vault.unlock();try{
+   this.vault.importPermanent(data,key);this.stop();await this.vault.unlock();
    for(const record of this.vault.recordIds('recovery:'))this.write('restore-authorization:'+record.slice('recovery:'.length),{at:Date.now()});
   }finally{key.fill(0);}
  }
