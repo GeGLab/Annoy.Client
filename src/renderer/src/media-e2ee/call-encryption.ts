@@ -35,7 +35,7 @@ function awaitPort(handle: Promise<{ handle: string }>): Promise<{ handle: strin
     const finish = (error: Error | null, port?: MessagePort) => {
       clearTimeout(timer);
       window.removeEventListener("message", listener);
-      if (error || !port) reject(error ?? new Error("Canal de chaves ausente"));
+      if (error || !port) reject(error ?? new Error(translate("common.13d000d62f13")));
       else resolve({ handle: wanted!, port });
     };
     window.addEventListener("message", listener);

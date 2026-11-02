@@ -1,4 +1,5 @@
-import {t as translate} from "../../../shared/localization/index.ts";
+import {rich} from "../lib/localization.ts";
+import {t as translate,time} from "../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
 import { navigate, reconnect, removeAccount } from "../client.ts";
 import { getState, setState, useStore } from "../store.ts";
@@ -53,7 +54,7 @@ export function ConnectionNotice({ accountId }: { accountId: string }) {
   if (status === "ready") return null;
   return <div className="connection-notice" role="status">
     <Icon name="wifiOff" size={18} />
-    <span>{status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)})}{translate("common.b3ec323d72f2")}</span>
+    <span>{rich("common.beda4b70d735",{p0:(status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)}))})}</span>
   </div>;
 }
 
@@ -99,17 +100,16 @@ export function ConnectionOverlay({ accountId, onContinue }: { accountId: string
             </small></span>
           </div>
           {!invalid && <div className="connection-diagnostics" aria-live="polite">
-            <span>{translate("common.d65a698a5b99")}{connection?.attempt ?? 0}</span>
-            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>{translate("common.461204ac5a44")}{new Intl.DateTimeFormat("pt-BR", { timeStyle: "medium" }).format(connection.observedAt)}</span>}
-            {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>{translate("common.7b144faaab74")}{Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000))}{translate("common.403d5f23d149")}</span>}
-            {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>{translate("common.7d109ee5386d")}{Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000))}{translate("common.403d5f23d149")}</span>}
+            <span>{rich("common.4261b35ba05e",{p0:(connection?.attempt ?? 0)})}</span>
+            {connection?.observedAt !== null && connection?.observedAt !== undefined && <span>{rich("common.e78f7b755e30",{p0:time(connection.observedAt,{timeStyle:"medium"})})}</span>}
+            {connection?.nextRetryAt !== null && connection?.nextRetryAt !== undefined && <span>{rich("common.bfa16702b965",{p0:(Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000)))})}</span>}
+            {connection?.recoveryDeadline !== null && connection?.recoveryDeadline !== undefined && <span>{rich("common.eb694674cce5",{p0:(Math.max(0, Math.ceil((connection.recoveryDeadline - now) / 1000)))})}</span>}
           </div>}
         </div>
         <div className="form-actions center">
-          {invalid ? <Button variant="secondary" onClick={() => setState((s) => { s.modal = { kind: "addAccount", accountId }; })}>{translate("common.05d410b61f11")}</Button> : <Button variant="secondary" onClick={() => reconnect(accountId)}>
-            <Icon name="refresh" size={16} />{translate("common.1bff678f4f0f")}</Button>}
+          {invalid ? <Button variant="secondary" onClick={() => setState((s) => { s.modal = { kind: "addAccount", accountId }; })}>{translate("common.05d410b61f11")}</Button> : <Button variant="secondary" onClick={() => reconnect(accountId)}>{rich("common.3237985e8c9b",{p0:(<Icon name="refresh" size={16} />)})}</Button>}
           <Button variant="ghost" onClick={async () => {
-            if (await confirmAction(`Desconectar a conta de ${account.instanceName} deste cliente? Você poderá adicioná-la novamente.`)) removeAccount(accountId, "signOut");
+            if (await confirmAction(translate("common.49bfbc7a4bca",{p0:(account.instanceName)}))) removeAccount(accountId, "signOut");
           }}>{translate("common.c7bb27862498")}</Button>
           <Button variant="ghost" onClick={onContinue}>{translate("common.ab4ed7a4199c")}</Button>
         </div>

@@ -333,7 +333,7 @@ export function canRemoveServerConnection(accountId: string): boolean {
 
 export function removeServerConnection(accountId: string): void {
   if (!canRemoveServerConnection(accountId)) {
-    toast("Transfira a propriedade ou esteja sozinho para remover. Se o servidor estiver offline, aguarde 7 dias.");
+    toast(translate("common.15c6425dd1d2"));
     return;
   }
   removeAccount(accountId, "remove");
@@ -719,7 +719,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   } catch (err) {
     if (voice?.session === session) leaveVoice();
     if (e2ee && NO_CALL_E2EE.test((err as Error).message)) return joinVoice(accountId, serverId, channelId, true);
-    toast(`Voz: ${(err as Error).message}`);
+    toast(translate("common.5ece26b7ec6d",{p0:((err as Error).message)}));
   }
 }
 
@@ -801,7 +801,7 @@ export async function startScreenShare(sourceId: string | null): Promise<void> {
     updateVoiceSettings();
   } catch (err) {
     // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
-    if ((err as DOMException).name !== "NotAllowedError") toast(`Tela: ${(err as Error).message}`);
+    if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
   }
 }
 

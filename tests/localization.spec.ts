@@ -54,6 +54,7 @@ test("seven languages update live; preview discards, save persists, maximum text
         })
         .click();
       await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await expect(page.locator(".brand-wordmark").first()).toHaveText("annoy.");
       await expect(page.locator(".localization-settings h3")).not.toBeEmpty();
     }
     await page.getByRole("slider", { name: "Tamanho do texto" }).focus();

@@ -1,3 +1,4 @@
+import {rich} from "../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
@@ -42,12 +43,8 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
     <form className="form" onSubmit={submit}>
       <p className="muted">{translate("common.d2cccc3bfc19")}</p>
       <ol className="steps">
-        <li>{translate("common.1ea442a134b2")}{" "}
-          <a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>{translate("common.a6267017103b")}<strong>{translate("common.6386dc360341")}</strong>).
-        </li>
-        <li>{translate("common.0dfdfa31ff44")}<strong>{translate("common.41e35ba1a1fd")}</strong>{translate("common.b0d63c46c652")}<strong>{translate("common.e24b44ae6f40")}</strong>{translate("common.35a6c044139b")}{" "}
-          <strong>{translate("common.74b3ca264e52")}</strong>.
-        </li>
+        <li>{rich("common.78076469b576",{p0:(<a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>),p1:(<strong>{translate("common.6386dc360341")}</strong>)})}</li>
+        <li>{rich("common.29602d85caaf",{p0:(<strong>{translate("common.41e35ba1a1fd")}</strong>),p1:(<strong>{translate("common.e24b44ae6f40")}</strong>),p2:(<strong>{translate("common.74b3ca264e52")}</strong>)})}</li>
         <li>{translate("common.607cd4cd05aa")}</li>
       </ol>
       <Field label={translate("common.973157512cfd")} hint={translate("common.ed96d8977e3f")}>
@@ -108,7 +105,7 @@ function GuildStep({
   };
   return (
     <div className="form">
-      <p className="muted">{translate("common.e05bd7aba80f")}<strong>{list.bot.username}</strong>{translate("common.be0ff2deb677")}</p>
+      <p className="muted">{rich("common.1b4c81917852",{p0:(<strong>{list.bot.username}</strong>)})}</p>
       <div className="guild-grid">
         {list.guilds.map((g) => (
           <button key={g.id} className="guild-card" onClick={() => void pick(g)} disabled={busy !== null}>
@@ -120,10 +117,8 @@ function GuildStep({
         {list.guilds.length === 0 && <p className="muted">{translate("common.2fcbda924218")}</p>}
       </div>
       <div className="form-actions">
-        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">
-          <Icon name="userPlus" size={16} />{translate("common.18a75191f5df")}</a>
-        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>
-          <Icon name="refresh" size={16} />{translate("common.d039c022beb4")}</button>
+        <a className="btn btn-ghost" href={list.inviteUrl} target="_blank" rel="noreferrer">{rich("common.74e527cc852e",{p0:(<Icon name="userPlus" size={16} />)})}</a>
+        <button className="btn btn-ghost" onClick={() => void refresh()} disabled={busy !== null}>{rich("common.ea6b1b832c3c",{p0:(<Icon name="refresh" size={16} />)})}</button>
       </div>
     </div>
   );
@@ -338,8 +333,7 @@ function SelectStep({
         </div>
       </section>
 
-      <p className="muted small">
-        {channelIds.size}{translate("common.713f46e91b98")}{selectedHistory.length}{translate("common.65a9ef5232d8")}{[...roleIds].filter((id) => id !== guild.id).length}{" "}{translate("common.28de34bbfbc1")}</p>
+      <p className="muted small">{rich("common.96e9752d1c77",{p0:(channelIds.size),p1:(selectedHistory.length),p2:([...roleIds].filter((id) => id !== guild.id).length)})}</p>
       <div className="form-actions">
         <button
           className="btn"
@@ -372,16 +366,14 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       <div className="progress">
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small">
-        {job.channelsDone}/{job.channelsTotal}{translate("common.3c3e8cc8716c")}{job.messagesImported.toLocaleString("pt-BR")}{translate("common.fe42bde17035")}{job.attachmentsImported}{" "}{translate("common.78edfd3d2513")}{job.currentChannel && running ? ` · agora em #${job.currentChannel}` : ""}
-      </p>
+      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? translate("common.405beaea7ce4",{p0:job.currentChannel}) : "")})}</p>
       {job.error && <p className="error">{job.error}</p>}
       {(job.phase === "cancelled" || job.phase === "failed") && job.serverId && (
         <p className="muted small">{translate("common.ea9c5c602d8b")}</p>
       )}
       {job.warnings.length > 0 && (
         <details className="warnings" open={!running}>
-          <summary>{job.warnings.length}{translate("common.fcca156c4938")}</summary>
+          <summary>{rich("common.0046ab6cd135",{p0:(job.warnings.length)})}</summary>
           <ul>
             {job.warnings.map((w) => (
               <li key={w}>{w}</li>

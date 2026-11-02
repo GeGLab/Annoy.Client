@@ -662,7 +662,7 @@ export function CreateChannelModal({
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={type === "category" ? translate("settings.bd2af681513d") : (CHANNEL_KINDS.find((k) => k.type === type)?.placeholder ?? "novo-canal")}
+            placeholder={type === "category" ? translate("settings.bd2af681513d") : (CHANNEL_KINDS.find((k) => k.type === type)?.placeholder ?? translate("common.f118f1738f1c"))}
             required
             maxLength={100}
           />

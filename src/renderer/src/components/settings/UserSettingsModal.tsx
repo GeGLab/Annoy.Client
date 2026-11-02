@@ -1,8 +1,10 @@
+import {rich} from "../../lib/localization.ts";
+import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {configureLocalization,normalizeLocalization} from "../../../../shared/localization/index.ts";
 import {LocalizationSettings} from "./LocalizationSettings.tsx";
 import {DesktopSettings} from "./DesktopSettings.tsx";
 import type {DesktopPreferences,DesktopSnapshot} from "../../../../shared/desktop.ts";
-import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
+import {t as translate,textForError,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import {normalizeProfileField} from "@distopic/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
@@ -49,7 +51,7 @@ let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string 
   { id: "security", label: translate("common.797c0d01ff48"), icon: "lock", search: translate("common.fd32174ee399") },
   { id: "updates", label: translate("common.a1f09a31ad36"), icon: "download", search: translate("settings.89883f1fa251") },
 ];
-const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(localizationPreferences().region);
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
 function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold: number; filter: NoiseFilter }) {
@@ -105,7 +107,7 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
           setEnabled((value) => !value);
         }}
       >
-        {enabled ? "Parar teste" : "Testar microfone"}
+        {enabled ? translate("settings.50729949a7d2") : translate("settings.06ae64f429c4")}
       </Button>
       <label className="check">
         <Checkbox checked={monitor} onChange={(event) => setMonitor(event.target.checked)} />{translate("settings.df335610213e")}</label>
@@ -142,7 +144,7 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         signal,
       );
       signal.throwIfAborted();
-      toast("Perfil do Discord sincronizado");
+      toast(translate("settings.c20a38d028a4"));
     } catch (error) {
       if (!isCancellation(error)) toast((error as Error).message);
     } finally {
@@ -160,12 +162,11 @@ function AccountActions({ accountId, busy }: { accountId: string; busy: boolean 
         disabled={busy}
         onClick={() =>
           requestNavigation(async () => {
-            if (await confirmAction(`Sair de ${account?.instanceName}? Para voltar, você digita a senha de novo.`)) removeAccount(accountId, "signOut");
+            if (await confirmAction(translate("common.4acd3c09c649",{p0:(account?.instanceName)}))) removeAccount(accountId, "signOut");
           })
         }
       >{translate("settings.b73f3ff34b4b")}</Button>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>
-        <Icon name="trash" size={14} />{translate("common.8d9113221273")}</Button>
+      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
     </div>
   );
 }
@@ -324,7 +325,7 @@ export function UserSettingsModal() {
       toast(translate("settings.733e6e6b42e7"));
       return true;
     } catch (error) {
-      if (!isCancellation(error)) setError((error as Error).message || translate("settings.fcd0784e9779"));
+      if (!isCancellation(error)) setError(textForError(error) || translate("settings.fcd0784e9779"));
       return false;
     } finally {
       setSaving(false);
@@ -398,7 +399,7 @@ export function UserSettingsModal() {
           <div className="settings-content" key={page}>
             {page === "appearance" && (
               <section className="settings-section appearance-section">
-                <h3><Icon name="palette" size={24} />{translate("settings.04f9f0a78dbe")}</h3>
+                <h3>{rich("common.bfc59a5015a7",{p0:(<Icon name="palette" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.1126123c9926")}</p>
                 <div className="theme-options" role="group" aria-label={translate("settings.eb88b483ea19")}>
                   {(["dark", "light", "system"] as const).map((theme) => (
@@ -411,7 +412,7 @@ export function UserSettingsModal() {
                       aria-label={theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}
                     >
                       <Icon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "monitor"} size={20} />
-                      <span><strong>{theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}</strong><small>{theme === "dark" ? "Menos brilho em ambientes escuros." : theme === "light" ? "Fundos claros para o dia a dia." : "Acompanha o tema do seu computador."}</small></span>
+                      <span><strong>{theme === "dark" ? translate("settings.fde8bb83362a") : theme === "light" ? translate("settings.2f3e8dcc2464") : translate("settings.f150afd3c599")}</strong><small>{theme === "dark" ? translate("settings.c4cfc071d34a") : theme === "light" ? translate("settings.d67b88b35930") : translate("settings.7a74e2ab7eb5")}</small></span>
                       {draft.theme === theme && <Icon name="check" size={16} />}
                     </button>
                   ))}
@@ -424,12 +425,12 @@ export function UserSettingsModal() {
             {page === "expressions" && <MediaLibrarySettings />}
             {page === "profile" && (
               <section className="settings-section">
-                <h3><Icon name="users" size={24} />{translate("settings.b9e5ce2ce127")}</h3>
+                <h3>{rich("common.ce989b279c2d",{p0:(<Icon name="users" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.10bdfb7e1dd7")}</p>
-                <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" />{translate("common.cd405060935b")}</Button>
+                <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" />)})}</Button>
                 {annoyMode && (
                   <div className="settings-account annoy-profile global-account-panel">
-                    <span className="account-badge"><Icon name="check" size={12} />{translate("common.21c5709ca7b8")}</span>
+                    <span className="account-badge">{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span>
                     <p><strong>{annoy!.name}</strong> <span className="muted">({annoy!.email})</span></p>
                     <div className="account-actions global-account-actions">
                       <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
@@ -442,7 +443,7 @@ export function UserSettingsModal() {
                   return (
                     user && (
                       <div className="settings-account" key={account.id}>
-                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}><Icon name="check" size={12} />{translate("common.21c5709ca7b8")}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
+                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}>{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
                         <ProfileEditor
                           account={account}
                           user={user}
@@ -455,13 +456,12 @@ export function UserSettingsModal() {
                     )
                   );
                 })}
-                <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>
-                  <Icon name="plus" size={16} />{translate("settings.298dcfa479d1")}</Button>
+                <Button variant="secondary" disabled={saving} onClick={() => openModal({ kind: "addAccount" })}>{rich("common.fb3340294ec1",{p0:(<Icon name="plus" size={16} />)})}</Button>
               </section>
             )}
             {page === "voice" && (
               <section className="settings-section">
-                <h3><Icon name="mic" size={24} />{translate("settings.7bb3eccdf5f8")}</h3>
+                <h3>{rich("common.c1bea92367ca",{p0:(<Icon name="mic" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.96d137a3a28e")}</p>
                 <PreferenceCard icon="headphones" title={translate("settings.a70a1e628334")} description={translate("settings.d0ae58087657")}>
                 <div className="grid-2">
@@ -509,7 +509,7 @@ export function UserSettingsModal() {
                   <Field label={translate("settings.2150611eb025")} hint={translate("settings.49ed8a146867")}>
                     <Button variant="secondary" onClick={() => setCapturing(true)}>
                       {capturing
-                        ? "Pressione uma tecla… (Esc cancela)"
+                        ? translate("settings.72309e21e517")
                         : draft.pttKey
                             .replace(/^Key/, "")
                             .replace(/^Digit/, "")
@@ -535,7 +535,7 @@ export function UserSettingsModal() {
             )}
             {page === "security" && (
               <section className="settings-section">
-                <h3><Icon name="lock" size={24} />{translate("common.797c0d01ff48")}</h3>
+                <h3>{rich("common.fcad23d8694d",{p0:(<Icon name="lock" size={24} />)})}</h3>
                 <SecuritySettings accountId={selected} />
               </section>
             )}
@@ -547,10 +547,10 @@ export function UserSettingsModal() {
             )}
             {page === "tabs" && (
               <section className="settings-section">
-                <h3><Icon name="sliders" size={24} />{translate("settings.0ac1d8649dc7")}</h3>
+                <h3>{rich("common.03789960fb4a",{p0:(<Icon name="sliders" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.1b4b4fb880f0")}</p>
                 <label className="switch-setting">
-                  <span><strong><Icon name="radio" />{translate("settings.c6f9a3603fdf")}</strong><small>{translate("settings.59d7fb0b1556")}</small></span>
+                  <span><strong>{rich("common.1d8a0d5f58f8",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.59d7fb0b1556")}</small></span>
                   <Switch aria-label={translate("settings.c6f9a3603fdf")} checked={draft.showVoiceBar} onCheckedChange={(checked) => update({ showVoiceBar: checked })} />
                 </label>
                 {draft.showVoiceBar && <Field label={translate("settings.fd31f56b4f4e")}><RadioGroup label={translate("settings.fd31f56b4f4e")} cards value={draft.voiceBarMode} onValueChange={(value) => update({ voiceBarMode: value as Settings["voiceBarMode"] })} options={[{ value: "external", label: translate("settings.d66988647bf3"), hint: translate("settings.1b145e07da21") }, { value: "always", label: translate("settings.dd0ab3e4c0ec"), hint: translate("settings.b3b6b99a5856") }]} /></Field>}
@@ -594,18 +594,18 @@ export function UserSettingsModal() {
             )}
             {page === "activity" && (
               <section className="settings-section">
-                <h3><Icon name="radio" size={24} />{translate("settings.fa8f42c66740")}</h3>
+                <h3>{rich("common.5b986d904c4a",{p0:(<Icon name="radio" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.ef3f1976270b")}</p>
                 {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
-                      <span><strong><Icon name="radio" />{translate("settings.08b8c2ca2393")}</strong><small>{translate("settings.90aac47f7432")}</small></span>
+                      <span><strong>{rich("common.7d846bb586da",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.90aac47f7432")}</small></span>
                       <Switch aria-label={translate("settings.08b8c2ca2393")} checked={draft.shareActivity} onCheckedChange={(checked) => update({ shareActivity: checked })} />
                     </label>
                     <p className="muted small">{translate("settings.6f93545e241c")}</p>
                     <h4>{translate("settings.8b563d2943c9")}</h4>
                     {(desktopActivity?.activities ?? []).map((activity) => <ActivityCard key={activity.kind} activity={activity} />)}
-                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? "Nenhuma atividade detectada agora." : translate("settings.81e785d7823f")}</p>}
+                    {!desktopActivity?.activities.length && <p className="muted small">{saved.shareActivity ? translate("common.f557b5cdcc29") : translate("settings.81e785d7823f")}</p>}
                     {desktopActivity?.error && (
                       <p className="error" role="status">
                         {desktopActivity.error}
@@ -621,11 +621,11 @@ export function UserSettingsModal() {
             )}
             {page === "notifications" && (
               <section className="settings-section">
-                <h3><Icon name="bell" size={24} />{translate("settings.c3ddc6b3337b")}</h3>
+                <h3>{rich("common.2ae3a369075f",{p0:(<Icon name="bell" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.c05f1116c786")}</p>
-                <label className="switch-setting preference-toggle"><span><strong><Icon name="bell" />{translate("settings.3ac6c1438f09")}</strong><small>{translate("settings.20cd2a81ec1f")}</small></span><Switch aria-label={translate("settings.3ac6c1438f09")} checked={draft.notifications} onCheckedChange={(value) => update({ notifications: value })} /></label>
-                <label className="switch-setting preference-toggle"><span><strong><Icon name="speaker" />{translate("settings.0595fc0bec52")}</strong><small>{translate("settings.cd4d42344247")}</small></span><Switch aria-label={translate("settings.0595fc0bec52")} checked={draft.messageSounds} onCheckedChange={(value) => update({ messageSounds: value })} /></label>
-                <PreferenceCard icon="clock" title={translate("settings.e2fe024908b1")} description={translate("settings.c1a3106d619e")}><Field label={translate("settings.abe1619e9eba")}><Select aria-label={translate("settings.dedad3948705")} value={String(draft.awayMinutes)} onChange={(event) => update({ awayMinutes: Number(event.target.value) })}>{[1, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes}{translate("settings.65bdafd5f6fe")}</option>)}<option value="0">{translate("settings.44c195bf1e9c")}</option></Select></Field></PreferenceCard>
+                <label className="switch-setting preference-toggle"><span><strong>{rich("common.613407297568",{p0:(<Icon name="bell" />)})}</strong><small>{translate("settings.20cd2a81ec1f")}</small></span><Switch aria-label={translate("settings.3ac6c1438f09")} checked={draft.notifications} onCheckedChange={(value) => update({ notifications: value })} /></label>
+                <label className="switch-setting preference-toggle"><span><strong>{rich("common.6f89516786d0",{p0:(<Icon name="speaker" />)})}</strong><small>{translate("settings.cd4d42344247")}</small></span><Switch aria-label={translate("settings.0595fc0bec52")} checked={draft.messageSounds} onCheckedChange={(value) => update({ messageSounds: value })} /></label>
+                <PreferenceCard icon="clock" title={translate("settings.e2fe024908b1")} description={translate("settings.c1a3106d619e")}><Field label={translate("settings.abe1619e9eba")}><Select aria-label={translate("settings.dedad3948705")} value={String(draft.awayMinutes)} onChange={(event) => update({ awayMinutes: Number(event.target.value) })}>{[1, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>{rich("common.565c188e5706",{p0:(minutes)})}</option>)}<option value="0">{translate("settings.44c195bf1e9c")}</option></Select></Field></PreferenceCard>
                 <p className="muted small">{translate("settings.30b14b976fdc")}</p>
               </section>
             )}

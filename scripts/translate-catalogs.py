@@ -6,7 +6,7 @@ if '--public-ui-only' not in sys.argv:
     raise SystemExit('Explicit --public-ui-only is required')
 directory = pathlib.Path('src/shared/localization/catalogs')
 source = json.loads((directory / 'pt-BR.json').read_text(encoding='utf8'))
-brands = sorted(['Annoy.Server','Annoy','Discord','Steam','Spotify','WhatsApp','Telegram','TeamSpeak','GIPHY','OpenMoji','YouTube','LinkedIn','GitHub','Instagram','Facebook','Matrix','Slack','Element','Apple Music','VS Code','IntelliJ','DBeaver','SQL Server'],key=len,reverse=True)
+brands = sorted(['Annoy.Server','Annoy','annoy-server','annoy','Discord','Steam','Spotify','WhatsApp','Telegram','TeamSpeak','GIPHY','OpenMoji','YouTube','LinkedIn','GitHub','Instagram','Facebook','Matrix','Slack','Element','Apple Music','VS Code','IntelliJ','DBeaver','SQL Server'],key=len,reverse=True)
 def protect(value):
     value=value.replace('{count}','{p999}')
     for i,brand in enumerate(brands): value=value.replace(brand,'{p%d}'%(900+i))

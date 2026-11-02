@@ -15,6 +15,7 @@ import {
   counted,
   messageTemplate,
   onLocalizationChange,
+  textForError,
 } from "../../src/shared/localization/index.ts";
 import {
   readPreferences,
@@ -91,6 +92,20 @@ test("language, region and clock are independent; fallback and safe interpolatio
   configureLocalization(defaultLocalization());
   assert.equal(changes, 1);
 });
+test("known native diagnostics localize at the UI boundary without changing unknown messages", () => {
+  configureLocalization({ ...defaultLocalization(), language: "en" });
+  try {
+    assert.equal(textForError(new Error("Resposta vazia")), "Empty response");
+    assert.equal(textForError(new Error("server_mismatch")), "server_mismatch");
+    assert.equal(
+      textForError("Remote diagnostic with user content"),
+      "Remote diagnostic with user content",
+    );
+  } finally {
+    configureLocalization(defaultLocalization());
+  }
+});
+
 test("versioned atomic preferences round trip and recover from corrupt/unknown versions", () => {
   const root = mkdtempSync(join(tmpdir(), "annoy-preferences-"));
   try {

@@ -52,7 +52,7 @@ export async function callAction(action: "accept" | "reject" | "end") {
 export async function startDirectCall(accountId: string, userId: string, video: boolean) {
   if (getState().instances[accountId]?.status !== "ready") return toast(translate("common.94c2e2f7ad46"));
   if (!getState().instances[accountId]?.instance?.directCalls) return toast(translate("common.15fbe9001510"));
-  if (getState().directCall) return toast("Encerre a chamada privada atual primeiro.");
+  if (getState().directCall) return toast(translate("common.f56448863241"));
   let encrypted = callEncryptionSupported();
   if (!encrypted) toast(translate("common.c8d9842c8940"), 6000);
   try {
@@ -145,7 +145,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       const existed = getState().directCall?.call;
       if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
         window.distopic?.flashWindow();
-        if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: `${getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? translate("common.9980aa129514")} está chamando você.`, silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
+        if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: translate("common.beceda3adc2f",{p0:(getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName ?? translate("common.9980aa129514"))}), silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }
       setState((s) => { s.directCall = { accountId, call }; });
       if (call.status === "active" && existed?.status !== "active") {

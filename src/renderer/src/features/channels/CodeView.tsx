@@ -1,3 +1,4 @@
+import {rich} from "../../lib/localization.ts";
 import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { has, Permission, type Channel, type CodeEntry, type CodeFile, type CodeRepo, type CodeStatus, type ServerState } from "@distopic/protocol";
@@ -78,7 +79,7 @@ function LinkRepo({ accountId, channel, repo }: { accountId: string; channel: Ch
         <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={translate("common.289fca5b8fff")} autoComplete="off" />
       </label>
       <button className="btn" disabled={busy || !url.trim()}>
-        {busy ? translate("common.19bfa772aabe") : repo.url ? "Clonar de novo" : translate("common.990c1a987872")}
+        {busy ? translate("common.19bfa772aabe") : repo.url ? translate("common.91fe96077d92") : translate("common.990c1a987872")}
       </button>
     </form>
   );
@@ -295,7 +296,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
       } catch (err) {
         if (err instanceof RequestError && err.status === 409) {
           patchFile(path, { stale: true });
-          toast("Outra pessoa salvou este arquivo. Recarregue ou sobrescreva.");
+          toast(translate("common.d12acb44a12c"));
         } else toast((err as Error).message);
       }
     },
@@ -452,7 +453,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
           {repo.status === "cloning" ? (
             <>
               <Icon name="loader" size={36} />
-              <h2>{translate("common.13e0280fac43")}{repo.url}</h2>
+              <h2>{rich("common.5c740cf40928",{p0:(repo.url)})}</h2>
               <p className="muted">{translate("common.e56d714b10ba")}</p>
             </>
           ) : canLink ? (
@@ -496,7 +497,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
         )}
       </header>
       <div className="code-body">
-        {loadError && <div className="code-load-banner" role="alert"><span>{translate("common.99681f51affc")}{loadError}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? translate("common.84e496a080f7") : "Tentar novamente"}</button></div>}
+        {loadError && <div className="code-load-banner" role="alert"><span>{rich("common.79eb7af9c068",{p0:(loadError)})}</span><button className="btn btn-ghost btn-small" disabled={loading} onClick={() => void refresh()}>{loading ? translate("common.84e496a080f7") : translate("common.b9e10688be01")}</button></div>}
         <nav className="code-activity" aria-label={translate("common.36e168ed8dd3")}>
           <button className={panel === "files" ? "active" : ""} title={translate("common.d5120059860d")} onClick={() => setPanel("files")}>
             <Icon name="file" size={20} />
@@ -587,21 +588,21 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={translate("common.12c70b2dacba")} />
                   <button className="btn" disabled={!!busy || !message.trim() || !status?.files.length}>
                     <Icon name="check" size={16} />
-                    {busy === "commit" ? "Fazendo commit…" : translate("common.82a9c46ffa47")}
+                    {busy === "commit" ? translate("common.a84378880cc6") : translate("common.82a9c46ffa47")}
                   </button>
                   <div className="code-sync">
                     <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void pull()} title={translate("common.ba0930737a3f")}>
                       <Icon name="pull" size={16} />
-                      {busy === "pull" ? "…" : `Pull${status?.behind ? ` (${status.behind})` : ""}`}
+                      {busy === "pull" ? "…" : translate("common.67c53b51e2c4",{p0:(status?.behind ? ` (${status.behind})` : "")})}
                     </button>
                     <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void push()} title={translate("common.45328e9739bf")}>
                       <Icon name="push" size={16} />
-                      {busy === "push" ? "…" : `Push${status?.ahead ? ` (${status.ahead})` : ""}`}
+                      {busy === "push" ? "…" : translate("common.6f5cafa1a337",{p0:(status?.ahead ? ` (${status.ahead})` : "")})}
                     </button>
                   </div>
                 </form>
               )}
-              <h3 className="code-section">{translate("common.8da4b79184ca")}{status?.files.length ?? 0})</h3>
+              <h3 className="code-section">{rich("common.4171a2ef4381",{p0:(status?.files.length ?? 0)})}</h3>
               <ul className="code-changes">
                 {status?.files.map((f) => (
                   <li key={f.path} className={`git-${statusLetter(f.code)}`}>
@@ -616,7 +617,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                         className="icon-btn tiny"
                         title={translate("common.a350912ad6ee")}
                         onClick={async () => {
-                          if (await confirmAction(`As mudanças em "${f.path}" serão perdidas para todos.`, { title: translate("common.a350912ad6ee"), confirmLabel: translate("common.1a878a55c594") })) {
+                          if (await confirmAction(translate("common.295e4e1e645e",{p0:(f.path)}), { title: translate("common.a350912ad6ee"), confirmLabel: translate("common.1a878a55c594") })) {
                             await git("discard", () => api.post(`${base}/discard`, { path: f.path }));
                             if (files.some((x) => x.path === f.path)) void fetchFile(f.path, true).catch(() => closeFile(f.path));
                           }
@@ -631,7 +632,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
               <h3 className="code-section">{translate("common.972b0c4c2d39")}</h3>
               <ul className="code-log">
                 {status?.log.map((c) => (
-                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString("pt-BR"))})}>
+                  <li key={c.hash} title={translate("common.61791a3671b0",{p0:(c.hash),p1:(c.author),p2:(new Date(c.date).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle}))})}>
                     <Icon name="commit" size={12} />
                     <span className="truncate">{c.subject}</span>
                     <small className="muted">{c.author}</small>
@@ -661,7 +662,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
             ))}
             {diff && (
               <div className="code-tab active diff">
-                <span className="truncate">{diff.split("/").pop()}{translate("common.7c7a08508949")}</span>
+                <span className="truncate">{rich("common.f8be101caa77",{p0:(diff.split("/").pop())})}</span>
                 <button className="icon-btn tiny" aria-label={translate("common.938b40200ca4")} onClick={() => setDiff(null)}>
                   <Icon name="x" size={12} />
                 </button>
@@ -701,8 +702,7 @@ export function CodeView({ accountId, channel, perms }: { accountId: string; sta
                 <span>{activeFile.dirty ? translate("common.28424d39e33d") : translate("common.db14b511e33a")}</span>
                 <span>{monaco?.languageOf(activeFile.path)}</span>
                 {canEdit && activeFile.dirty && (
-                  <button className="code-save" onClick={() => void save()}>
-                    <Icon name="save" size={12} />{translate("common.c44b39160f33")}</button>
+                  <button className="code-save" onClick={() => void save()}>{rich("common.f8a58a64aa6d",{p0:(<Icon name="save" size={12} />)})}</button>
                 )}
               </>
             )}

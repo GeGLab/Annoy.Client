@@ -1,3 +1,4 @@
+import {rich} from "../lib/localization.ts";
 import {requestNavigation} from "../lib/navigation-guard.ts";
 import {flushChatState} from "../chat-state.ts";
 import {toast} from "../store.ts";
@@ -55,9 +56,7 @@ export function UpdateBanner() {
       {update.status==="error"&&<><span role="alert">{update.message}</span><button className="btn btn-small" onClick={()=>void api?.check()}>{translate("common.6bb3150b9757")}</button></>}
       {update.status === "available" && (
         <>
-          <span>
-            <strong>{translate("common.6e91c30b997b")}{update.version}</strong>{translate("common.1a11f46b854a")}{update.currentVersion}).
-          </span>
+          <span>{rich("common.52f4bec0a96c",{p0:(<strong>{translate("common.6e91c30b997b")}{update.version}</strong>),p1:(update.currentVersion)})}</span>
           <a href={update.releaseUrl} target="_blank" rel="noreferrer">{translate("common.2d0576acd91e")}</a>
           <span className="spacer" />
           <button className="btn btn-small" onClick={() => void api?.download()}>{translate("common.dafb59613e12")}</button>
@@ -73,7 +72,7 @@ export function UpdateBanner() {
       )}
       {update.status === "downloading" && (
         <>
-          <span>{translate("common.2bdff6f3d08d")}{update.version}…</span>
+          <span>{rich("common.933f80fccebe",{p0:(update.version)})}</span>
           <div className="update-progress">
             <div style={{ width: `${update.percent}%` }} />
           </div>
@@ -82,8 +81,7 @@ export function UpdateBanner() {
       )}
       {update.status === "ready" && (
         <>
-          <span>
-            <strong>{translate("common.6e91c30b997b")}{update.version}</strong>{translate("common.92bf5b469978")}</span>
+          <span>{rich("common.9279639e8398",{p0:(<strong>{translate("common.6e91c30b997b")}{update.version}</strong>)})}</span>
           <span className="spacer" />
           <button className="btn btn-small" onClick={install}>{translate("common.5f7d7589a60e")}</button>
         </>
@@ -107,7 +105,7 @@ export function MandatoryUpdate() {
             <Icon name="lock" size={28} />
           </div>
           <h2 id="mandatory-title">{translate("common.dd5560a13e62")}</h2>
-          <p>{translate("common.3daeff6994cf")}{update.currentVersion}{translate("common.d139397d0763")}</p>
+          <p>{rich("common.029a96a6cc6d",{p0:(update.currentVersion)})}</p>
           {advisory && (
             <div className="advisory">
               <strong>{advisory.id}</strong>: {advisory.summary}
@@ -125,13 +123,13 @@ export function MandatoryUpdate() {
               <div className="update-progress large">
                 <div style={{ width: `${update.percent}%` }} />
               </div>
-              <p className="muted small">{translate("common.a69f254c7c8b")}{update.version}: {update.percent}%</p>
+              <p className="muted small">{rich("common.bfc4d37dc0f8",{p0:(update.version),p1:(update.percent)})}</p>
             </>
           )}
-          {update.status === "ready" && <p>{translate("common.b0f0090c205b")}{update.version}{translate("common.4bee2b63581a")}</p>}
+          {update.status === "ready" && <p>{rich("common.1399903e063a",{p0:(update.version)})}</p>}
           {update.status === "error" && (
             <>
-              <p className="error">{translate("common.1d353ab6e336")}{update.message}</p>
+              <p className="error">{rich("common.3c911cd5c2c5",{p0:(update.message)})}</p>
               <div className="form-actions">
                 <a className="btn btn-ghost" href={update.releaseUrl} target="_blank" rel="noreferrer">{translate("common.1cc3470af5d1")}</a>
                 <button className="btn" onClick={() => void api?.check()}>{translate("common.6bb3150b9757")}</button>
@@ -180,7 +178,7 @@ export function UpdateSettings() {
   return (
     <div className="update-settings">
       <div>
-        <strong>{translate("common.6e91c30b997b")}{update.currentVersion}</strong>
+        <strong>{rich("common.ec484e0600f8",{p0:(update.currentVersion)})}</strong>
         {text && <div className="muted small">{text}</div>}
       </div>
       {update.status === "available" && (
@@ -190,8 +188,7 @@ export function UpdateSettings() {
         <button className="btn" onClick={install}>{translate("common.5f7d7589a60e")}</button>
       )}
       {update.status !== "disabled" && update.status !== "available" && update.status !== "ready" && (
-        <button className="btn btn-ghost" disabled={busy} onClick={() => void api?.check()}>
-          <Icon name="refresh" size={16} />{translate("common.2262334984e2")}</button>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => void api?.check()}>{rich("common.f949db786b0b",{p0:(<Icon name="refresh" size={16} />)})}</button>
       )}
     </div>
   );

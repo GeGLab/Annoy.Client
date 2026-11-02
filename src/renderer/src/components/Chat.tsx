@@ -1,4 +1,6 @@
-import {t as translate} from "../../../shared/localization/index.ts";
+import {rich} from "../lib/localization.ts";
+import {localizationPreferences} from "../../../shared/localization/index.ts";
+import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { SecureAttachment } from "./SecureAttachment.tsx";
 import { CryptoStatus } from "./CryptoStatus.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
@@ -252,7 +254,7 @@ function MessageRow({
   };
 
   const remove = async () => {
-    if (await confirmAction("Excluir esta mensagem?"))
+    if (await confirmAction(translate("chat.791408c2831d")))
       void act(apiFor(accountId).del(`/channels/${message.channelId}/messages/${message.id}`));
   };
 
@@ -264,7 +266,7 @@ function MessageRow({
           {replyTo ? (
             <>
               <strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
-              <span className="truncate">{replyTo.content || "anexo"}</span>
+              <span className="truncate">{replyTo.content || translate("common.be9ae4ef7a22")}</span>
             </>
           ) : (
             <span className="muted">{translate("chat.aee2220f75f2")}</span>
@@ -276,7 +278,7 @@ function MessageRow({
           {formatClock(message.createdAt)}
         </time>
         <div className="message-body">
-          {message.sharedBy&&<small className="muted">{translate("common.8de07bd0c957")}{nameOf(message.sharedBy)??message.sharedBy}{translate("common.ad1eb9c4186b")}</small>}
+          {message.sharedBy&&<small className="muted">{rich("common.4ed74142d755",{p0:(nameOf(message.sharedBy)??message.sharedBy)})}</small>}
           {!compact && (
             <div className="message-head">
               <Avatar user={message.author} size={22} />
@@ -323,7 +325,7 @@ function MessageRow({
           <button className="icon-btn tiny" title={translate("chat.8630a0dc25e2")} onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
-          {canPin && <button className="icon-btn tiny" title={isPinned ? "Desafixar mensagem" : "Fixar mensagem"} aria-pressed={isPinned} onClick={async () => {
+          {canPin && <button className="icon-btn tiny" title={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-pressed={isPinned} onClick={async () => {
             try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
             catch(error){toast((error as Error).message);}
           }}><Icon name="pin" size={16} /></button>}
@@ -544,12 +546,12 @@ function Composer({
         </div>
       )}
       {replyToId && !replyTo && <div className="reply-bar" role="status">
-        <span>{replyValid ? "Mensagem original validada" : replyStatus === "checking" ? "Validando mensagem original…" : translate("chat.555f78669b82")}</span>
+        <span>{replyValid ? translate("chat.daa628ee773b") : replyStatus === "checking" ? translate("chat.32ece7067212") : translate("chat.555f78669b82")}</span>
         <button className="btn btn-ghost" disabled={replyValid || replyStatus === "checking"} onClick={onRetryReply}>{translate("chat.861c025f8735")}</button>
         <button className="icon-btn tiny" onClick={onClearReply} title={translate("chat.c5336a205266")}><Icon name="x" size={14} /></button>
       </div>}
       {draft.attachmentCount > files.length && <div className="draft-attachment-notice" role="status">
-        <span>{translate("chat.ad3326fdc555")}{draft.attachmentCount - files.length}{translate("chat.de4d713c2702")}</span>
+        <span>{rich("common.4802686b44c1",{p0:(draft.attachmentCount - files.length)})}</span>
         <button className="btn btn-ghost" type="button" onClick={() => fileInput.current?.click()}>{translate("chat.914cb0637e75")}</button>
         <button className="btn btn-ghost" type="button" onClick={() => { writePendingFiles(accountId, channelId, files); onDraftChange({ attachmentCount: files.length }); }}>{translate("chat.7704baaeda1c")}</button>
       </div>}
@@ -614,7 +616,7 @@ function Composer({
           <Icon name="send" size={19} />
         </Button>
         {(text.length > 0 || replyToId !== null || files.length > 0 || draft.attachmentCount > files.length) && <button className="icon-btn" type="button" disabled={sending} onClick={async () => {
-          if (await confirmAction("Descartar o texto, a resposta e os anexos deste rascunho?", { title: translate("chat.a09075a45b43"), confirmLabel: translate("common.1a878a55c594") })) {
+          if (await confirmAction(translate("chat.62a896f8437b"), { title: translate("chat.a09075a45b43"), confirmLabel: translate("common.1a878a55c594") })) {
             onDiscard();
             setFiles([]);
             writePendingFiles(accountId, channelId, []);
@@ -643,7 +645,7 @@ const TTL_LABELS: Record<number, string> = { 3_600_000: "1 hora", 86_400_000: "1
 function RetentionNotice({ accountId, channelId }: { accountId: string; channelId: string }) {
   const ttl = useMessageTtl(accountId, channelId);
   if (!ttl) return null;
-  return <div className="connection-notice" role="note"><Icon name="clock" size={14} /><span>{translate("common.d751b45cf0b7")}{TTL_LABELS[ttl] ?? Math.round(ttl / 3_600_000) + " horas"}.</span></div>;
+  return <div className="connection-notice" role="note"><Icon name="clock" size={14} /><span>{rich("common.bf4871117816",{p0:(TTL_LABELS[ttl] ?? Math.round(ttl / 3_600_000) + " horas")})}</span></div>;
 }
 
 const EMPTY_UNREAD={count:0,mention:false};
@@ -884,7 +886,7 @@ export function Chat(props: ChatProps) {
       </header>
       {pinsOpen && <div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
         <div className="pins-panel-title"><strong>{translate("chat.dd5705122a58")}</strong><button className="icon-btn tiny" aria-label={translate("chat.0f2cac634ffa")} onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
-        {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString()}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
+        {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
         {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>{translate("chat.d4d0696420fd")}</button>}
       </div>}
       <ConnectionNotice accountId={accountId} />
@@ -894,7 +896,7 @@ export function Chat(props: ChatProps) {
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
             <div className="channel-start">
-              <h2>{translate("chat.1f39a2342570")}{props.icon === "hash" ? `#${props.title}` : props.title}</h2>
+              <h2>{rich("common.57721d7e9cd7",{p0:(props.icon === "hash" ? `#${props.title}` : props.title)})}</h2>
               <p className="muted">{translate("chat.b5d86dab8396")}</p>
             </div>
           )}
@@ -950,7 +952,7 @@ export function Chat(props: ChatProps) {
       </div>
       {(focus || entry?.hasMoreAfter || unread.count>0) && (
         <button className="return-latest" onClick={() => returnToLatest(accountId, channelId)}>
-          {focus ? translate("chat.d284ad0cf8d8") : unread.count?`${unread.count} nova${unread.count===1?"":"s"} · Mais recentes`:"Mais recentes"}
+          {focus ? translate("chat.d284ad0cf8d8") : unread.count?counted(unread.count,"counts.unread.one","counts.unread.other"):translate("common.ade822bf50f9")}
         </button>
       )}
       <Composer

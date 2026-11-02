@@ -5,7 +5,7 @@ import { Field } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 
-export function GlobalSignIn({ onSignedIn, intro = "Entre ou cadastre uma conta Annoy para continuar.", email: savedEmail = "" }: { onSignedIn?: () => void; intro?: string; email?: string } = {}) {
+export function GlobalSignIn({ onSignedIn, intro = translate("common.3e5e4aa4b996"), email: savedEmail = "" }: { onSignedIn?: () => void; intro?: string; email?: string } = {}) {
   const [email, setEmail] = useState(savedEmail);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

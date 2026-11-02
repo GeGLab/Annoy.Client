@@ -186,7 +186,7 @@ async function readVault(): Promise<{ version: number; servers: VaultEntry[] }> 
 /** Read, change, write; on a conflict another device saved first, so start over from its copy. */
 async function updateVault(change: (servers: VaultEntry[]) => VaultEntry[] | null): Promise<void> {
   if (!keys || !session) return;
-  if (getState().global?.cryptoMigrationRequired) throw new Error("Migre o cofre legado antes de sincronizar novos servidores");
+  if (getState().global?.cryptoMigrationRequired) throw new Error(translate("common.02bd1a1ee971"));
   const generation = sessionGeneration, unlocked = keys;
   for (let attempt = 0; attempt < 3; attempt++) {
     const { version, servers } = await readVault();

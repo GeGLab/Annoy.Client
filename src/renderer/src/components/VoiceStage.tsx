@@ -196,7 +196,7 @@ export function ScreenPickerModal() {
       <p className="muted small">{translate("common.cf987bb7e740")}</p>
       <div className="grid-2 screen-quality-options">
         <Field label={translate("common.742773f345e2")}><Select aria-label={translate("common.431d2cdd9597")} value={String(settings.screenHeight)} onChange={(event) => setState((s) => { s.settings.screenHeight = Number(event.target.value); })}>{SCREEN_RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field>
-        <Field label={translate("common.00cd80cc7714")}><Select aria-label={translate("common.309c8286f5f5")} value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? `${fps} FPS` : translate("common.b669ba5781e9")}</option>)}</Select></Field>
+        <Field label={translate("common.00cd80cc7714")}><Select aria-label={translate("common.309c8286f5f5")} value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? translate("common.31007b4e277a",{p0:(fps)}) : translate("common.b669ba5781e9")}</option>)}</Select></Field>
       </div>
       {system ? <button className="btn" onClick={() => { closeModal(); void startScreenShare(null); }}>{rich("common.bbbccb1b874e",{p0:(<Icon name="monitor" />)})}</button> : <>
       <div className="tabs">

@@ -156,7 +156,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
                     <li key={entry.id}>
                       <strong>{entry.name}</strong>
                       <span className="muted">
-                        {new Date(entry.startedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})} ·{" "}
+                        {new Date(entry.startedAt).toLocaleString(localizationPreferences().region,{...({hourCycle:localizationPreferences().hourCycle}),hourCycle:localizationPreferences().hourCycle})} ·{" "}
                         {entry.endedAt
                           ? translate("common.c4e0a84b834b",{p0:(Math.max(0, Math.floor((Date.parse(entry.endedAt) - Date.parse(entry.startedAt)) / 60_000)))})
                           : translate("common.9b57f20158cc")}

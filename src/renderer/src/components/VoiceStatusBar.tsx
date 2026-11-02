@@ -28,16 +28,16 @@ export function VoiceStatusBar() {
               title={voice.e2ee ? translate("common.8b4213cd6fe0") : translate("common.4e56a0bc7800")}
             >
               {" "}
-              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : "sem E2EE"}
+              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : translate("common.fd5d785ecbef")}
             </span>
           )}
         </span>
         <strong className="truncate">
-          {channel?.name ?? "Canal de voz"}
+          {channel?.name ?? translate("common.b9bd50cb65eb")}
           <span>
             {" "}
             · {state?.server.name ?? translate("common.05e427a291c2")}
-            {count > 0 && ` · ${count} na sala`}
+            {count > 0 && translate("common.f175b180fb81",{p0:(count)})}
           </span>
         </strong>
       </div>

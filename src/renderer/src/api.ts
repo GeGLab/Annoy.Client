@@ -85,7 +85,7 @@ export async function discordLogin(url: string, begin: () => Promise<DiscordLogi
     if (result.status === "done") return result;
     if (result.status === "error") throw new Error(result.message);
   }
-  throw new Error("Tempo esgotado esperando o Discord");
+  throw new Error(translate("common.5af56b62db97"));
 }
 
 export async function beginDiscordLogin(url: string, inviteCode?: string, signal?: AbortSignal): Promise<DiscordLoginBegin> {
@@ -182,7 +182,7 @@ export class Api {
         const status = await response.json() as { channel: unknown };
         if(!status.channel&&pinned)throw new Error(translate("common.7dbf1fd8ddb2"));
         if (status.channel) {
-          if (!window.distopic?.crypto) throw new Error("Abra o cliente desktop para ler mensagens E2EE");
+          if (!window.distopic?.crypto) throw new Error(translate("common.9432125c40ba"));
           const query=new URLSearchParams(messagePath[2]??"");const before=query.get("before");
           return await window.distopic.crypto.sync(this.baseUrl,this.token,channel,before??undefined) as T;
         }
@@ -230,7 +230,7 @@ export class Api {
     }finally{signal?.removeEventListener('abort',cancel);for(const file of encryptedFiles)new Uint8Array(file.bytes).fill(0);}
   }
   async attachment(channel:string,messageId:string,id:string){return (await this.nativeCrypto()).attachment(this.baseUrl,this.token,channel,messageId,id);}
-  downloadLegacy(file:import('@distopic/protocol').Attachment){if(!window.distopic)throw new Error('Abra o cliente desktop');return window.distopic.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
+  downloadLegacy(file:import('@distopic/protocol').Attachment){if(!window.distopic)throw new Error(translate("common.3968f81630af"));return window.distopic.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
   async legacyAttachment(file:import('@distopic/protocol').Attachment):Promise<{bytes:ArrayBuffer;type:string;name:string}>{
     const url=new URL(file.url,this.baseUrl);
     if(url.origin!==new URL(this.baseUrl).origin||!/^\/api\/uploads\/[a-f0-9]{32}\//.test(url.pathname))throw new Error(translate("common.c26cf0c38f84"));

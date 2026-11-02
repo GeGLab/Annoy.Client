@@ -1,3 +1,4 @@
+import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import * as Dialog from '@radix-ui/react-dialog';
 import {useEffect,useRef,useState} from 'react';
@@ -26,6 +27,6 @@ export function LegacyArchive({accountId,channelId,onClose}:{accountId:string;ch
   {error&&<p role="alert">{error}</p>}{loading&&<p role="status">{translate("common.7c27daca9e72")}</p>}
   {more&&messages.length>0&&<Button disabled={loading} onClick={()=>void read(messages[0]!.id)}>{translate("common.2b4a1aa908f0")}</Button>}
   {!loading&&!messages.length&&!error&&<p>{translate("common.5c51f5b00642")}</p>}
-  {messages.map(message=><article key={message.id} style={{marginBlock:20}}><strong>{message.author.displayName}</strong> <time>{new Date(message.createdAt).toLocaleString('pt-BR')}</time><p style={{whiteSpace:'pre-wrap'}}>{message.content}</p>{message.attachments.map(file=><SecureAttachment key={file.id} accountId={accountId} message={message} file={file}/>)}</article>)}
+  {messages.map(message=><article key={message.id} style={{marginBlock:20}}><strong>{message.author.displayName}</strong> <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time><p style={{whiteSpace:'pre-wrap'}}>{message.content}</p>{message.attachments.map(file=><SecureAttachment key={file.id} accountId={accountId} message={message} file={file}/>)}</article>)}
  </Dialog.Content></Dialog.Portal></Dialog.Root>;
 }

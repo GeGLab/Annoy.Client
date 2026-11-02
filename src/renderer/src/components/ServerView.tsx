@@ -1,3 +1,4 @@
+import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import {FullProfileButton} from "./FullProfile.tsx";
 import { SearchButton } from "../features/search/SearchButton.tsx";
@@ -77,7 +78,7 @@ function VoiceUsers({
             <UserProfile user={member.user} accountId={accountId}><span className="voice-user-name" title={displayNameOf(member)}>{displayNameOf(member)}</span></UserProfile>
             <span className="voice-user-status">
             {(v.serverMute || v.selfMute) && (
-              <VoiceFlag icon="micOff" server={v.serverMute} label={v.serverMute ? "Silenciado pelo servidor" : "Microfone desativado"} />
+              <VoiceFlag icon="micOff" server={v.serverMute} label={v.serverMute ? translate("common.7ae3e0888c68") : translate("common.d86004fdf05a")} />
             )}
             {v.video && <VoiceFlag icon="camera" label={translate("common.eebc796702a9")} />}
             {v.screen && <VoiceFlag icon="monitor" label={translate("common.f3f0b5cea141")} />}
@@ -154,11 +155,11 @@ function ChannelRow({
             if (!connected) void joinVoice(accountId, state.server.id, channel.id);
             openChannel(accountId, state.server.id, channel.id);
           }}
-          title={theater ? translate("common.84e3a10b7e63") : channel.temporary ? translate("common.cb5b2f065da6") : canConnect ? "Clique para entrar" : translate("common.ef08de31ea80")}
+          title={theater ? translate("common.84e3a10b7e63") : channel.temporary ? translate("common.cb5b2f065da6") : canConnect ? translate("common.85058122c6e0") : translate("common.ef08de31ea80")}
         >
           <Icon name={theater ? "theater" : !canConnect ? "lock" : channel.temporary ? "hourglass" : "speaker"} size={16} />
           <span className="channel-name">{channel.name}</span>
-          {connected && <span className={`voice-here ${voice.status}`}>{voice.status === "connected" ? "Na sala" : translate("common.236615ad8069")}</span>}
+          {connected && <span className={`voice-here ${voice.status}`}>{voice.status === "connected" ? translate("common.3ebd9160b485") : translate("common.236615ad8069")}</span>}
           {canManage && <span className="channel-voice-actions">{gear}</span>}
         </div>
         {inChannel.length > 0 && (
@@ -181,7 +182,7 @@ function ChannelRow({
         <span className="channel-text-actions" onClick={(event) => event.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><button className="icon-btn tiny" aria-label={translate("common.d914457a16f5",{p0:(channel.name)})}><Icon name="more" size={14} /></button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => toggleMessageMute("channel", accountId, channel.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.7188378d54aa") : "Silenciar canal"}</DropdownMenuItem></DropdownMenuContent>
+            <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => toggleMessageMute("channel", accountId, channel.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.7188378d54aa") : translate("common.53963dd070f0")}</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           {gear}
         </span>
@@ -246,44 +247,37 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="server-menu" align="start">
-          <DropdownMenuItem onSelect={() => toggleMessageMute("server", accountId, state.server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.615490f2cb43") : "Silenciar servidor"}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => toggleMessageMute("server", accountId, state.server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.615490f2cb43") : translate("common.b60be554ff31")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           {has(perms, Permission.CREATE_INVITE) && (
-            <DropdownMenuItem onSelect={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}>
-              <Icon name="userPlus" />{translate("common.78d2d476af72")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}>{rich("common.64074706bf95",{p0:(<Icon name="userPlus" />)})}</DropdownMenuItem>
           )}
           {canSettings && (
-            <DropdownMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId, serverId: state.server.id })}>
-              <Icon name="gear" />{translate("common.4475068595a8")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId, serverId: state.server.id })}>{rich("common.a86cf2b71570",{p0:(<Icon name="gear" />)})}</DropdownMenuItem>
           )}
           {canChannels && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "text" })}
-              >
-                <Icon name="hash" />{translate("common.710092c64ff1")}</DropdownMenuItem>
+              >{rich("common.df6ff3015259",{p0:(<Icon name="hash" />)})}</DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>
                   openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "category" })
                 }
-              >
-                <Icon name="plus" />{translate("common.81e041a9dd1e")}</DropdownMenuItem>
+              >{rich("common.4d8d42aa234f",{p0:(<Icon name="plus" />)})}</DropdownMenuItem>
             </>
           )}
           {has(perms, Permission.CONNECT) && (
-            <DropdownMenuItem onSelect={() => void createTempRoom(accountId, state)}>
-              <Icon name="hourglass" />{translate("common.118669234e21")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void createTempRoom(accountId, state)}>{rich("common.c9347fda4e36",{p0:(<Icon name="hourglass" />)})}</DropdownMenuItem>
           )}
           {isOwner && (
-            <DropdownMenuItem onSelect={() => openModal({ kind: "importDiscord", accountId, serverId: state.server.id })}>
-              <Icon name="refresh" />{translate("common.022e40704be5")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openModal({ kind: "importDiscord", accountId, serverId: state.server.id })}>{rich("common.39c9cd54472d",{p0:(<Icon name="refresh" />)})}</DropdownMenuItem>
           )}
           {!isOwner && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onSelect={leave}>
-                <Icon name="hangup" />{translate("common.46cfdbc41810")}</DropdownMenuItem>
+              <DropdownMenuItem destructive onSelect={leave}>{rich("common.2acd3120ded4",{p0:(<Icon name="hangup" />)})}</DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>
@@ -404,7 +398,7 @@ function MemberCard({
           <FullProfileButton accountId={accountId} user={member.user}/>
           {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
-              <div className="section-label">{isSelf ? "Minha atividade" : rel?.status === "friend" ? translate("common.a5121730503f") : translate("common.a5121730503f")}</div>
+              <div className="section-label">{isSelf ? translate("common.c539537cdd76") : rel?.status === "friend" ? translate("common.a5121730503f") : translate("common.a5121730503f")}</div>
               <ActivityStack activities={activities} />
             </div>
           )}
@@ -445,20 +439,18 @@ function MemberCard({
           {!isSelf && <UserVolume accountId={accountId} userId={member.user.id} name={displayNameOf(member)} />}
           {!isSelf && (
             <div className="member-card-actions">
-              <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>
-                <Icon name="message" size={16} />{translate("common.94c1986b76e6")}</button>
+              <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>{rich("common.034692b8029f",{p0:(<Icon name="message" size={16} />)})}</button>
               {!rel && (
                 <button
                   className="btn btn-ghost"
                   onClick={() => void act(api.post("/relationships", { username: member.user.username }), "Pedido de amizade enviado")}
-                >
-                  <Icon name="userPlus" size={16} />{translate("common.e6c84db53f38")}</button>
+                >{rich("common.65f4ed364cc0",{p0:(<Icon name="userPlus" size={16} />)})}</button>
               )}
               {outranks && has(perms, Permission.KICK_MEMBERS) && (
                 <button
                   className="btn btn-danger"
                   onClick={async () =>
-                    (await confirmAction(`Expulsar ${displayNameOf(member)}?`)) &&
+                    (await confirmAction(translate("common.c722514df782",{p0:(displayNameOf(member))}))) &&
                     void act(api.del(`/servers/${sid}/members/${member.user.id}`)).then(onClose)
                   }
                 >{translate("common.ffb1a9c946e7")}</button>
@@ -467,7 +459,7 @@ function MemberCard({
                 <button
                   className="btn btn-danger"
                   onClick={async () => {
-                    const reason = await promptText(`Banir ${displayNameOf(member)}? Motivo (opcional):`);
+                    const reason = await promptText(translate("common.e8b8dc7785ff",{p0:(displayNameOf(member))}));
                     if (reason !== null) void act(api.put(`/servers/${sid}/bans/${member.user.id}`, { reason })).then(onClose);
                   }}
                 >{translate("common.903303033882")}</button>
@@ -555,10 +547,10 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       <div className="member-directory-search">
         <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.61fd3b555f75")} aria-label={translate("common.fb0fd14d5bbb")} />
       </div>
-      <p className="member-directory-status" aria-live="polite">{query.trim() ? `${members.length} de ${searchTotal ?? "…"} resultados` : `${state.members.length} de ${state.membersTotal ?? state.members.length} membros carregados`}</p>
+      <p className="member-directory-status" aria-live="polite">{query.trim() ? translate("common.fc202db56242",{p0:(members.length),p1:(searchTotal ?? "…")}) : translate("common.58ab7ca8771a",{p0:(state.members.length),p1:(state.membersTotal ?? state.members.length)})}</p>
       {activeFriends.length > 0 && !query.trim() && (
         <section className="friend-activities">
-          <h3>{translate("common.c0f042a7ee82")}{activeFriends.length}</h3>
+          <h3>{rich("common.2c4be32b2e13",{p0:(activeFriends.length)})}</h3>
           {activeFriends.map((m) => (
             <button key={m.user.id} onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}>
               <strong>{displayNameOf(m)}</strong>
@@ -574,7 +566,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
       {loading && <p className="member-directory-status" role="status">{translate("common.b386ed87083a")}</p>}
       {error && <div className="member-directory-error" role="alert"><span>{error}</span><button className="btn btn-ghost btn-small" onClick={() => setQuery((value) => `${value} `)}>{translate("common.b9e10688be01")}</button></div>}
       {!loading && !error && query.trim() && members.length === 0 && <p className="member-directory-status">{translate("common.eb9caaa65f99")}</p>}
-      {nextCursor && <button className="btn btn-ghost btn-small member-load-more" disabled={loading} onClick={() => void loadMoreMembers()}>{loading ? translate("common.6cc1bbba0f84") : `Carregar mais (${Math.max(0, (query.trim() ? searchTotal ?? members.length : state.membersTotal ?? state.members.length) - members.length)} restantes)`}</button>}
+      {nextCursor && <button className="btn btn-ghost btn-small member-load-more" disabled={loading} onClick={() => void loadMoreMembers()}>{loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, (query.trim() ? searchTotal ?? members.length : state.membersTotal ?? state.members.length) - members.length))})}</button>}
       {card && (
         <MemberCard
           accountId={accountId}
@@ -602,7 +594,7 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
     <div className="offline-icon"><Icon name="wifiOff" size={26} /></div>
     <h2>{error.includes(translate("common.57d7c91d286c")) ? translate("common.aadc570a2dde") : translate("common.374445d30133")}</h2>
     <p className="muted">{error}</p>
-    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? translate("common.6cc1bbba0f84") : "Tentar carregar novamente"}</button>
+    <button className="btn" disabled={loading} onClick={() => void ensureServer(accountId, serverId, true)}>{loading ? translate("common.6cc1bbba0f84") : translate("common.be839d7fb474")}</button>
     <button className="btn btn-ghost" disabled={loading} onClick={() => navigate({ kind: "servers" })}>{translate("common.f6a51589282a")}</button>
   </div>;
   return (
@@ -613,11 +605,11 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
       <h2>{status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)})}</h2>
       <p className="muted">
         {status === "invalid"
-          ? "Entre de novo para continuar."
+          ? translate("common.5a3f23aabc32")
           : translate("common.d83ab6d4e968")}
       </p>
       <button className="btn" onClick={() => (status === "invalid" ? openModal({ kind: "addAccount", accountId }) : reconnect(accountId))}>
-        {status === "invalid" ? "Entrar de novo" : "Tentar agora"}
+        {status === "invalid" ? translate("common.63034958f0db") : translate("common.1bff678f4f0f")}
       </button>
     </div>
   );
@@ -686,7 +678,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           {has(state.permissions, Permission.MANAGE_CHANNELS) && <button className="btn" onClick={() => openModal({ kind: "createChannel", accountId, serverId, parentId: null, type: "text" })}>{translate("common.600bb4f4d3f6")}</button>}
         </div>
       ) : (
-        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>{translate("common.ebfcb5dae749")}</h2><p>{translate("common.e3a4ca7b07e7")}{state.channels.some((c) => c.type === "voice") ? " ou entre em uma sala de voz" : ""}.</p></div>
+        <div className="empty-main channel-unavailable" role="status"><Icon name="hash" size={28} /><h2>{translate("common.ebfcb5dae749")}</h2><p>{rich("common.a47f3201bae2",{p0:(state.channels.some((c) => c.type === "voice") ? " ou entre em uma sala de voz" : "")})}</p></div>
       )}
       {channel && <MemberList accountId={accountId} state={state} me={me} />}
     </div>

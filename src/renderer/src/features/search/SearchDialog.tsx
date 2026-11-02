@@ -1,3 +1,4 @@
+import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useRef, useState } from "react";
 import { Search, SlidersHorizontal, FileSearch, ArrowUpRight } from "lucide-react";
@@ -71,7 +72,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
   };
   return (
     <Modal
-      title={serverId ? translate("common.340ea158fc1e",{p0:(instance?.serverStates[serverId]?.server.name ?? "servidor")}) : "Buscar mensagens"}
+      title={serverId ? translate("common.340ea158fc1e",{p0:(instance?.serverStates[serverId]?.server.name ?? "servidor")}) : translate("common.a85a80ba87f5")}
       wide
       className="search-modal"
     >
@@ -171,12 +172,12 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             <div>
               <header>
                 <strong>{message.author.displayName}</strong>
-                <time>{new Date(message.createdAt).toLocaleString("pt-BR")}</time>
+                <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time>
               </header>
-              <p>{message.content || `${message.attachments.length} anexo(s)`}</p>
+              <p>{message.content || translate("common.36c4a07428f6",{p0:(message.attachments.length)})}</p>
               <small>
-                {resultServer ? `#${channelName}` : "Mensagem direta"}
-                {message.attachments.length > 0 ? ` · ${message.attachments.length} anexo(s)` : ""}
+                {resultServer ? `#${channelName}` : translate("common.4e19907ae2f0")}
+                {message.attachments.length > 0 ? translate("common.97098c55fd0c",{p0:(message.attachments.length)}) : ""}
               </small>
             </div>
             <ArrowUpRight size={17} />

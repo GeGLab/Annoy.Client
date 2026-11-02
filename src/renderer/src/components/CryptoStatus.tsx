@@ -1,3 +1,4 @@
+import {t as translate} from "../../../shared/localization/index.ts";
 import {useEffect,useRef} from 'react';
 import {apiFor} from '../client.ts';
 import {getState,toast,setState} from '../store.ts';
@@ -8,7 +9,7 @@ export function CryptoStatus({accountId,channelId}:{accountId:string;channelId:s
  const setError=(message:string)=>{
   // Lost connectivity is shown by the connection indicators, not as an encryption problem.
   if(/net::|fetch|network|Conta desconectada|timed out|tempo esgotado/i.test(message)||getState().instances[accountId]?.status!=='ready')return;
-  if(message&&message!==reported.current)toast('Envio seguro indisponível: '+message+'. Veja Configurações → Privacidade e segurança.',8000);reported.current=message;};
+  if(message&&message!==reported.current)toast(translate("common.790883cb28dd",{p0:message}),8000);reported.current=message;};
  useEffect(()=>{
   let active=true,running=false;
   const poll=async()=>{

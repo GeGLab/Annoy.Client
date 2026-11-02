@@ -31,7 +31,7 @@ export function ChannelEncryption({ accountId, channels, members }: { accountId:
           {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}</option>)}
         </Select>
       </Field>
-      <p className="muted">{active === null ? translate("update.checking") : active ? "Mensagens novas cifradas de ponta a ponta (OpenMLS)." : "Ainda sem grupo cifrado: a primeira mensagem segura cria o grupo."}</p>
+      <p className="muted">{active === null ? translate("update.checking") : active ? translate("common.2d2922c321a0") : translate("common.0b47963a3ffe")}</p>
       <PreferenceCard icon="users" title={translate("common.aff4a93487ce")} description={translate("common.ed93093cef1e")}>
         <Button variant="secondary" onClick={() => void authorizeMembers(accountId, channelId)}>{translate("common.929575d76c04")}</Button>
       </PreferenceCard>

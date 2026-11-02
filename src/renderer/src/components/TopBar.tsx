@@ -1,3 +1,4 @@
+import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { ServerSummary } from "@distopic/protocol";
 import * as Popover from "@radix-ui/react-popover";
@@ -81,7 +82,7 @@ export function UserPanel() {
             {user ? <Avatar user={user} size={32} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={32} /> : <Brand size={32} />}
             <span className="user-identity-text">
               <strong className="truncate">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>
-              <span>{user ? `@${user.username}` : annoyMode ? translate("common.21c5709ca7b8") : "Vamos conversar?"}</span>
+              <span>{user ? `@${user.username}` : annoyMode ? translate("common.21c5709ca7b8") : translate("common.423f69a38f8e")}</span>
             </span>
           </button>
           </Popover.Trigger>
@@ -89,32 +90,32 @@ export function UserPanel() {
             <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label={translate("common.9edbcdb31d91")}>
               <div className="member-card-head">
                 {user ? <Avatar user={user} size={56} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={56} /> : <Brand size={48} />}
-                <div><strong className="member-card-name">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>{user ? <div className="muted">@{user.username}</div> : annoyMode && <div className="muted">{translate("common.3540090f1a7a")}{annoy!.email}</div>}</div>
+                <div><strong className="member-card-name">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>{user ? <div className="muted">@{user.username}</div> : annoyMode && <div className="muted">{rich("common.9084c4085ca7",{p0:(annoy!.email)})}</div>}</div>
               </div>
               {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
               <label className="profile-status-choice">{translate("common.87c9043c582f")}<Select aria-label={translate("common.87c9043c582f")} value={settings.manualPresence} onChange={(event) => setState((s) => { s.settings.manualPresence = event.target.value as ManualPresence; })}>
                   {(["online", "idle", "dnd", "offline"] as const).map((status) => <option key={status} value={status}>{presenceLabel(status)}</option>)}
                 </Select>
               </label>
-              <p className="muted small">{settings.manualPresence === "online" ? translate("common.6b422f6d024f") : settings.manualPresence === "idle" ? translate("common.905d1c0b9f78") : settings.manualPresence === "dnd" ? "Silencia avisos de mensagens e chamadas." : translate("common.d78216f5ca21")}</p>
+              <p className="muted small">{settings.manualPresence === "online" ? translate("common.6b422f6d024f") : settings.manualPresence === "idle" ? translate("common.905d1c0b9f78") : settings.manualPresence === "dnd" ? translate("common.84b97bf196c0") : translate("common.d78216f5ca21")}</p>
               {user && !manualSupported && settings.manualPresence !== "online" && <p className="muted small">{translate("common.41f9f802ad4b")}</p>}
               <div className="self-profile-activity">
                 <h3>{translate("common.c539537cdd76")}</h3>
                 <ActivityStack activities={activities} />
-                {!activities.length && <p className="muted">{!settings.shareActivity ? translate("common.c9d1b9e3ba94") : snapshot?.error ?? "Nenhuma atividade detectada agora."}</p>}
-                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? "Compartilhada com amigos e membros dos seus servidores." : translate("common.7bda91a1a79b")}</p>}
+                {!activities.length && <p className="muted">{!settings.shareActivity ? translate("common.c9d1b9e3ba94") : snapshot?.error ?? translate("common.f557b5cdcc29")}</p>}
+                {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? translate("common.57415ffd7b3b") : translate("common.7bda91a1a79b")}</p>}
               </div>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}><Icon name="edit" size={16} />{translate("common.c10011b93f9c")}</button></Popover.Close>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}><Icon name="users" size={16} />{translate("common.cd405060935b")}</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}>{rich("common.fdea9c93093b",{p0:(<Icon name="edit" size={16} />)})}</button></Popover.Close>
+              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" size={16} />)})}</button></Popover.Close>
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
         <div className="user-control-pair">
-          <Tooltip content={settings.selfMute ? translate("common.2c42f42f33a1") : "Silenciar microfone"} side="top">
+          <Tooltip content={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")} side="top">
             <button
               className={`icon-btn${settings.selfMute ? " danger" : ""}`}
               onClick={() => toggleVoiceSetting("selfMute")}
-              aria-label={settings.selfMute ? translate("common.2c42f42f33a1") : "Silenciar microfone"}
+              aria-label={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.d8cdc34ee6fe")}
               aria-pressed={settings.selfMute}
             >
               <Icon name={settings.selfMute ? "micOff" : "mic"} size={17} />

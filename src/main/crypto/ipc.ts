@@ -1,4 +1,4 @@
-import {t as translate} from "../../shared/localization/index.ts";
+import {t as translate,textForError} from "../../shared/localization/index.ts";
 import {trustedRenderer} from '../trusted-renderer.ts';
 import {nativeApiFetch} from '../native-api-fetch.ts';
 import {rm} from 'node:fs/promises';
@@ -26,7 +26,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
  const controller=new CryptoController(vault,binary,nativeApiFetch);
  const handle=(name:string,handler:(event:Electron.IpcMainInvokeEvent,raw:unknown)=>unknown)=>ipcMain.handle(name,async(event,raw)=>{
   try{return {ok:true,value:await handler(event,raw)};}
-  catch(error){return {ok:false,name:error instanceof Error?error.name:'Error',message:error instanceof SyntaxError?translate("common.48383576cf6e"):error instanceof Error?error.message.slice(0,200):translate("common.807761b6f314")};}
+  catch(error){return {ok:false,name:error instanceof Error?error.name:'Error',message:error instanceof SyntaxError?translate("common.48383576cf6e"):error instanceof Error?textForError(error).slice(0,200):translate("common.807761b6f314")};}
  });
  const payload=(event:Electron.IpcMainInvokeEvent,raw:unknown)=>{
   const win=window();if(!trustedRenderer(event,win) || !allowed())throw new Error(translate("common.827eba1fe1b3"));
@@ -49,7 +49,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
   if(!trustedRenderer(event,window()))throw new Error(translate("common.4a39f011da38"));
   const selected=await dialog.showOpenDialog(window()!,{title:translate("common.918f19b9432a"),properties:['openDirectory','createDirectory']});if(!selected.filePaths[0])return {saved:false};
   const target=join(selected.filePaths[0],'annoy-backup-'+new Date().toISOString().slice(0,10)+'-'+randomBytes(4).toString('hex')),backup=await controller.exportLocalBackupDirectory(target);
-  const confirmed=await dialog.showMessageBox(window()!,{type:'info',message:translate("common.394d5fa9eb42"),detail:backup.key+'\nSem esta chave o backup não pode ser recuperado. Inclui histórico permanente e anexos já locais; sessões MLS e conteúdo temporário são excluídos.',buttons:[translate("common.6ce3a3b4678b"),translate("common.bb9dbb406dcb")],cancelId:1});
+  const confirmed=await dialog.showMessageBox(window()!,{type:'info',message:translate("common.394d5fa9eb42"),detail:translate("common.0e499a361834",{p0:backup.key}),buttons:[translate("common.6ce3a3b4678b"),translate("common.bb9dbb406dcb")],cancelId:1});
   if(confirmed.response!==0){await rm(target,{recursive:true,force:true});return {saved:false};}clipboard.writeText(backup.key);setTimeout(()=>{void(async()=>{if(await clipboard.readText()===backup.key)await clipboard.writeText('');})().catch(()=>{});},60000).unref();return {saved:true};
  });
  handle('crypto:import-legacy',async(event,raw)=>{
@@ -95,7 +95,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
  handle('crypto:attachment',(event,raw)=>{const p=payload(event,raw);if(typeof p.raw.messageId!=='string'||p.raw.messageId.length>100||typeof p.raw.id!=='string'||!/^[a-f0-9]{32}$/.test(p.raw.id))throw new Error(translate("common.e386fc809e69"));return controller.attachment(p.url,p.token,p.channel,p.raw.messageId,p.raw.id);});
  handle('crypto:authorize',async(event,raw)=>{
   const p=payload(event,raw),review=await controller.membershipReview(p.url,p.token,p.channel);
-  const confirmation=await dialog.showMessageBox(window()!,{type:'question',message:translate("common.a1c5287b43d0"),detail:review.map(r=>r.userId+' — '+r.code).join('\n')+'\nCompare códigos por outro canal para verificar a identidade. A administração da instância não recebe chaves privadas.',buttons:[translate("common.bb9dbb406dcb"),'Autorizar participantes'],defaultId:0,cancelId:0});
+  const confirmation=await dialog.showMessageBox(window()!,{type:'question',message:translate("common.a1c5287b43d0"),detail:translate("common.b2f0290e4809",{p0:review.map(r=>r.userId+' — '+r.code).join('\n')}),buttons:[translate("common.bb9dbb406dcb"),translate("common.6fbd01c2e1cb")],defaultId:0,cancelId:0});
   if(confirmation.response===1)await controller.authorizeMembers(p.url,p.token,p.channel,review);
   return {authorized:confirmation.response===1};
  });
@@ -105,7 +105,7 @@ export function registerCrypto(window:()=>BrowserWindow|null,allowed:()=>boolean
   let target:string,backup:{key:string;data?:Buffer};const directory=format.response===0;
   if(directory){const selected=await dialog.showOpenDialog(win,{title:translate("common.f0f9a67d7bd9"),properties:['openDirectory','createDirectory']});if(!selected.filePaths[0])return {saved:false};target=join(selected.filePaths[0],'annoy-backup-'+new Date().toISOString().slice(0,10)+'-'+randomBytes(4).toString('hex'));backup=await controller.exportBackupDirectory(p.url,p.token,target);}
   else{const saved=await dialog.showSaveDialog(win,{title:translate("common.eb177a3d84f8"),defaultPath:'annoy.annoy-backup',filters:[{name:'Annoy',extensions:['annoy-backup']}]});if(!saved.filePath)return {saved:false};target=saved.filePath;backup=await controller.exportBackup(p.url,p.token);}
-  const confirmed=await dialog.showMessageBox(win,{type:'info',message:translate("common.19f78ec0a04f"),detail:backup.key+'\n\nSem esta chave, perder os dispositivos pode causar perda permanente dos dados. Estados MLS e conteúdo temporário não estão no backup.',buttons:[translate("common.6ce3a3b4678b"),translate("common.bb9dbb406dcb")],cancelId:1});
+  const confirmed=await dialog.showMessageBox(win,{type:'info',message:translate("common.19f78ec0a04f"),detail:translate("common.890c17b3f652",{p0:backup.key}),buttons:[translate("common.6ce3a3b4678b"),translate("common.bb9dbb406dcb")],cancelId:1});
   if(confirmed.response!==0){if(directory)await rm(target,{recursive:true,force:true});return {saved:false};}
   clipboard.writeText(backup.key);if(!directory)writeFileSync(target,backup.data!,{mode:0o600,flush:true});
   setTimeout(()=>{void(async()=>{if(await clipboard.readText()===backup.key)await clipboard.writeText('');})().catch(()=>{});},60000).unref();return {saved:true};

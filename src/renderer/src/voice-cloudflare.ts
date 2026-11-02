@@ -239,7 +239,7 @@ export class CloudflareVoiceSession {
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];
     if (withAudio && !sound) toast(translate("common.5cd6dd99a676"), 10000);
-    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error("Nenhuma imagem capturada"); }
+    if (!track) { stream.getTracks().forEach((captured) => captured.stop()); throw new Error(translate("common.5641e70d7b1b")); }
     // Games move a lot: keep the frame rate and let detail drop, unlike text and slides.
     if (source === "screen") track.contentHint = this.settings.screenFps > 0 && this.settings.screenFps <= 30 ? "detail" : "motion";
     if (this.closed) {

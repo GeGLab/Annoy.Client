@@ -30,7 +30,7 @@ export function SecureAttachment({accountId,message,file}:{accountId:string;mess
  };
  const viewer=zoom&&url&&<Suspense fallback={null}><ImageViewer images={[{id:file.id,url,filename:file.filename,size:file.size}]} initialIndex={0} onClose={()=>setZoom(false)}/></Suspense>;
  if(image)return <><button type="button" className="attachment-image" aria-label={translate("chat.5ed9aabafd14",{p0:(file.filename)})} onClick={()=>url&&setZoom(true)}>
-  {url?<img src={url} alt={file.filename} decoding="async"/>:<span className="attachment-loading">{loading?'Carregando imagem…':file.filename}</span>}
+  {url?<img src={url} alt={file.filename} decoding="async"/>:<span className="attachment-loading">{loading?translate("common.c7ad73ae4ace"):file.filename}</span>}
   {url&&<span className="attachment-expand"><Icon name="maximize" size={16}/></span>}
  </button>{viewer}</>;
  if(media&&url)return file.contentType.startsWith('video/')?<video className="attachment-video" controls src={url}/>:<audio controls src={url}/>;

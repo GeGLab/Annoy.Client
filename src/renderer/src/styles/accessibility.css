@@ -1,10 +1,11 @@
 /* Own application surfaces; embedded third-party services retain their styles. */
-:root { font-size: 1.14286rem; }
+:root { font-size: 16px; }
 html[data-underline-links="true"] a[href] { text-decoration: underline; text-underline-offset: .16em; }
 html[data-underline-links="false"] a[href]:not(:hover):not(:focus-visible) { text-decoration: none; }
 button, input, textarea, select { font: inherit; }
 .btn, .ui-select-trigger { white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 2.25rem; }
 .icon-button, .titlebar-button { flex-shrink: 0; }
+.voice-user:has(.voice-mod) { grid-template-columns: 28px minmax(0,1fr) auto 20px; }
 .field, .settings-section, .modal-header > h2 { min-width: 0; overflow-wrap: anywhere; }
 .modal { max-width: calc(100vw - 24px); max-height: calc(100dvh - var(--topbar-height) - 24px); }
 .modal-header, .modal-footer, .form-actions, .settings-savebar { flex-wrap: wrap; flex-shrink: 0; }

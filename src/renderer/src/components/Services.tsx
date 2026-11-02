@@ -277,7 +277,7 @@ export function TeamSpeakView({ service }: { service: Service }) {
               <span>
                 {server.address}
                 {server.channel && ` · ${server.channel}`}
-                {server.nickname && ` · como ${server.nickname}`}
+                {server.nickname && translate("common.884db61cf183",{p0:(server.nickname)})}
               </span>
             </span>
             <button className="btn" onClick={() => window.distopic?.openTeamSpeak(teamspeakLink(server))}>{translate("common.4105811890ae")}</button>
