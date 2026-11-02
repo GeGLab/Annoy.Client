@@ -1,4 +1,4 @@
-import {t as translate} from "../../../shared/localization/index.ts";
+import {t as translate,number} from "../../../shared/localization/index.ts";
 import {lazy,Suspense,useEffect,useRef,useState} from 'react';
 const ImageViewer=lazy(()=>import('./ImageViewer.tsx'));
 import type {Message,Attachment} from '@distopic/protocol';
@@ -8,7 +8,7 @@ import {Icon} from './ui.tsx';
 import {Button} from './ui/button.tsx';
 
 const IMAGE=/^image\/(png|jpeg|gif|webp|avif)$/i;
-const formatSize=(bytes:number)=>bytes<1024*1024?`${Math.max(1,Math.ceil(bytes/1024))} KiB`:`${(bytes/1024/1024).toFixed(1)} MiB`;
+const formatSize=(bytes:number)=>bytes<1024*1024?`${number(Math.max(1,Math.ceil(bytes/1024)))} KiB`:`${number(bytes/1024/1024,{minimumFractionDigits:1,maximumFractionDigits:1})} MiB`;
 
 /** Encrypted and authenticated (legacy) attachments, shown like any other attachment.
  * Object URLs exist only while this authorized message is mounted. */

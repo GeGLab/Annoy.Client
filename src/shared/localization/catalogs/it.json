@@ -2154,11 +2154,11 @@
   "common.d09116d4149f": "Invito senza questo dispositivo",
   "common.cb93fc5e104c": "Download rifiutato",
   "common.c5980fa1c81d": "Limite di download",
-  "common.790883cb28dd": "Spedizione sicura non disponibile: {p0}. Vedi Impostazioni → Privacy e sicurezza.",
+  "common.790883cb28dd": "Invio sicuro non disponibile: {p0}. Vedi Impostazioni → Privacy e sicurezza.",
   "common.ec3615b972f4": "Il tuo codice di sicurezza: {p0}. Condividi tramite un altro canale. Inserisci l'ID della persona che desideri verificare:",
   "common.76ac747bdef3": " (revocato)",
   "common.d21af0eda418": "Dispositivi:\n{p0}\nInserisci l'ID che desideri revocare. Tutte le sessioni dell'account verranno chiuse.",
-  "common.0e499a361834": "{p0}\nSenza questa chiave il backup non può essere ripristinato. Include storia permanente e annessi locali; Le sessioni MLS e il contenuto temporaneo vengono eliminati.",
+  "common.0e499a361834": "{p0}\nSenza questa chiave non è possibile ripristinare il backup. Include la cronologia permanente e gli allegati salvati localmente; le sessioni MLS e i contenuti temporanei sono esclusi dal backup.",
   "common.b2f0290e4809": "{p0}\nConfronta i codici tramite un altro canale per verificare l'identità. L'amministrazione dell'istanza non riceve chiavi private.",
   "common.890c17b3f652": "{p0}\n\nSenza questa chiave, la perdita dei dispositivi può causare la perdita permanente dei dati. Non viene eseguito il backup degli stati MLS e del contenuto temporaneo."
 }

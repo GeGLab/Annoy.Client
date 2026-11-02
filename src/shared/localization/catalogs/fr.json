@@ -2158,7 +2158,7 @@
   "common.ec3615b972f4": "Votre code de sécurité : {p0}. Partagez via un autre canal. Saisissez l'identifiant de la personne que vous souhaitez vérifier :",
   "common.76ac747bdef3": " (révoqué)",
   "common.d21af0eda418": "Appareils :\n{p0}\nSaisissez l'identifiant que vous souhaitez révoquer. Toutes les sessions de compte seront fermées.",
-  "common.0e499a361834": "{p0}\nSans cette clé, la sauvegarde ne peut pas être récupérée. Comprend une histoire permanente et des annexes locales ; Les sessions MLS et le contenu temporaire sont supprimés.",
+  "common.0e499a361834": "{p0}\nSans cette clé, la sauvegarde ne peut pas être restaurée. Elle comprend l’historique permanent et les pièces jointes enregistrées localement ; les sessions MLS et le contenu temporaire sont exclus de la sauvegarde.",
   "common.b2f0290e4809": "{p0}\nComparez les codes via un autre canal pour vérifier l'identité. L'administration de l'instance ne reçoit pas de clés privées.",
   "common.890c17b3f652": "{p0}\n\nSans cette clé, la perte d'appareils peut entraîner une perte permanente de données. Les états MLS et le contenu temporaire ne sont pas sauvegardés."
 }

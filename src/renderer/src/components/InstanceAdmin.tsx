@@ -1,5 +1,5 @@
 import {rich} from "../lib/localization.ts";
-import {localizationPreferences} from "../../../shared/localization/index.ts";
+import {localizationPreferences,number} from "../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
@@ -43,7 +43,7 @@ function VoiceUsageBar({ usage }: { usage: VoiceUsage }) {
       </div>
       <span className="muted">
         {gb(usage.bytes)}
-        {usage.limitBytes > 0 && translate("common.c2e31d388b06",{p0:(gb(usage.limitBytes)),p1:(pct.toFixed(1))})}
+        {usage.limitBytes > 0 && translate("common.c2e31d388b06",{p0:(gb(usage.limitBytes)),p1:(number(pct,{minimumFractionDigits:1,maximumFractionDigits:1}))})}
       </span>
     </Field>
   );
