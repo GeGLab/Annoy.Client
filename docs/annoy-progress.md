@@ -35,7 +35,7 @@ não significa requisito concluído; bloqueio deve nomear a dependência concret
 | --- | --- | --- | --- | --- |
 | R01 | Listagem e disponibilidade | concluído em M1 | M1.4 validado: destino agrupado, busca, filtro por conta, cache com instante observado, erros recuperáveis; Playwright cobre agrupamento, busca, filtro e abertura pela conta correta. | M1 |
 | R02 | Reconexão e retorno | concluído em M1 | M1.3/M1.5 validados: backoff com jitter, pausa offline, prazo de primeiro plano condicionado à área atual, retorno explícito e preservação da conversa. | M1 |
-| R03 | Feedback assíncrono | auditoria inicial concluída; contínuo | M1 revisa autenticação, abertura de comunidade/DM, configurações e uploads; M1.5 cancela trabalhos obsoletos e preserva edições. Cada novo fluxo segue os critérios do seu marco. | M1–M7 |
+| R03 | Feedback assíncrono | concluído localmente | Inventário em `annoy-async-audit.md`; autenticação/IPC, código, salas de mídia e disputa de chaves cobertos por regressões. Evidências e limites de ambiente abaixo. | M1–M7 |
 | R04 | Conectividade global | concluído em M1 | M1.1–M1.3 validados: observações por camada, scheduler com causa/tentativa/próximo retry, jitter e pausa offline; isolamento confirmado em testes unitários e Playwright. | M1 |
 | R05 | Seis layouts de canal | concluído em M2 | Estados de loading/erro/vazio/permissão, recuperação, pesquisa paginada de membros/arquivos e detalhes de comunidades sob demanda; testes integrados aprovados. | M2 |
 | R06 | Nova Aba | concluído em M2 | Comunidades e conexão priorizadas, serviços em seção própria, descoberta progressiva e escolha explícita da instância com várias contas; testes integrados aprovados. | M2 |
@@ -609,9 +609,79 @@ Estado: **concluído e validado localmente**.
   aviso ResizeObserver. Sem publicação de release, alterações de Server ou instaladores.
 
 
+## Fechamento local do plano — 02/11/2026
+
+- Primeiro foram corrigidos os avisos do Electron e o erro de `auth:local`:
+  `isAsyncEncryptionAvailable`, `encryptStringAsync` e `decryptStringAsync`
+  substituem todas as chamadas síncronas obsoletas. O resultado da descriptografia
+  é extraído de `.result`; indicação de rotação renova a cifra preservando os
+  formatos existentes. Linux `basic_text`/backend desconhecido não habilita
+  armazenamento inseguro: permanece o desbloqueio explícito por senha.
+- Credenciais global/contas têm fila serial e escrita atômica, impedindo perda
+  de uma chave quando duas operações assíncronas concorrem. Falha temporária do
+  keychain não apaga a cifra salva. O desbloqueio do cofre é assíncrono e
+  coalescido; lock durante a espera invalida a operação e limpa a chave candidata.
+  Controladores, backup/restauração e testes foram adaptados com `await`.
+- Recusas esperadas de autenticação local retornam envelope de erro pelo IPC,
+  sem stack do handler do Electron; o preload conserva a rejeição tratável.
+  `toAccount` distingue contas locais/Annoy e READY conserva a identificação
+  compatível com servidores legados. A verificação de política/sessão no main
+  continua obrigatória; respostas antigas não vinculam conta removida.
+- R03: [inventário final](annoy-async-audit.md). O editor cancela leituras ao sair,
+  evita saves/Git duplicados, mantém edição feita durante um save, protege a
+  navegação com trabalho sujo e não faz commit após falha de save. Erros de diff
+  só representam arquivo vazio quando o servidor confirma 404. Modelos/diffs
+  são liberados. Filme/Música coalescem ações e preservam a URL após falha ou
+  edição durante a espera; navegação invalida respostas antigas.
+- O dispositivo virtual do Chromium não entregava vídeo estável; os testes
+  SFrame agora usam quadros sintéticos de canvas. Encoder, RTP, mediasoup/P2P,
+  SFrame, decoder e quadros renderizados continuam reais, inclusive checagem
+  de ciphertext no SFU, rotação de epoch e revogação. A suíte completa inicial
+  encontrou uma corrida adicional na criação simultânea de grupos da chamada
+  privada: a chave provisória perdedora podia chegar ao worker. Sua entrega
+  agora espera a confirmação do servidor; o grupo perdedor é descartado.
+  Duas regressões controlam os resultados da disputa e três repetições da
+  chamada real passaram sem falhas de autenticação. Os testes também esperam
+  o carregamento do renderer antes de autenticar. Nenhuma mudança na cifra
+  Rust/WASM. Diagnósticos separam áudio/vídeo e sinalizam falhas de transform.
+- Checkouts renomeados são descobertos em testes Client/Server, com overrides
+  explícitos para CI. O serviço nativo é localizado em release/debug. O Server
+  executou 94 testes com sucesso, zero falhas e dois ignorados no Windows:
+  symlink de arquivo sem privilégio e SIGTERM. A proteção por junction e o
+  restante do cenário de código foram exercitados. Typechecks de ambos passaram.
+- Client: 113 testes unitários aprovados, sem skips, exigindo o serviço nativo
+  real de OpenMLS. A API Global foi obtida no checkout privado acessível e seus
+  16 testes reais passaram; nenhum código Global foi alterado. Protocolo Client
+  e Server conserva SHA-256 idêntico. Build do Client aprovado.
+- Pacote Windows x64/NSIS gerado sem publicar nem instalar. Comparação do ASAR
+  confirmou código compilado e serviço OpenMLS iguais aos validados, sem
+  arquivos sensíveis de teste; fuses de proteção conferidos. O aplicativo
+  empacotado passou com aceleração ligada/desligada em perfis descartáveis:
+  renderização, vídeo sintético, enumeração de fontes de captura, persistência
+  das preferências e atualização por feed local. Inspector do main permanece
+  desabilitado. O instalador local não tem assinatura Authenticode configurada.
+- Playwright: a execução completa terminou com 102 aprovados, dois com falha
+  e um ignorado (Cloudflare real sem credenciais). Os dois casos restantes
+  foram corrigidos e repetidos, junto ao cenário crítico do atualizador:
+  **nove execuções aprovadas** (três repetições de cada cenário). Isso conclui
+  a validação dos 104 cenários distintos executáveis localmente, entre a suíte
+  completa e os retestes focados; não representa uma nova execução completa
+  com todos verdes em um único comando.
+- No atualizador, a preferência de notificações agora é gravada antes de
+  iniciar o main; configurar depois da tela carregar permitia uma notificação
+  legítima de startup antes da asserção. Na chamada privada, foi removido o
+  limite arbitrário de 1% para retransmissões. Zero falhas de autenticação e
+  vídeo decifrado nos dois lados continuam obrigatórios. O novo teste direto
+  do WASM distribuído confirma bytes originais, recusa do replay exato e de
+  tag adulterada, sem modificar a proteção criptográfica.
+- O usuário optou por concluir **a validação local por enquanto**. O workflow
+  de segurança informa e usa `ANNOY_GLOBAL_READ_TOKEN` somente no checkout
+  privado, com `persist-credentials: false`. Nenhum token pessoal foi copiado
+  para secrets do GitHub; execução desse workflow depende de configurar o secret.
+
 ## Próxima tarefa recomendada
 
-M0–M7 implementados. Não há M8 definido neste plano. A próxima etapa é fechar a
-auditoria transversal de R03, homologar a entrega integrada e tratar as limitações
-externas registradas em M5/M6, incluindo os cenários SFrame, as credenciais
-Cloudflare e o acesso do CI ao repositório Annoy Global.
+Não há M8 definido. Após o fechamento local de R03/M0–M7, restam verificações de
+ambiente: CI com acesso privado ao Global, Cloudflare real com credenciais,
+matriz Linux para esta revisão e testes manuais de SO/dispositivos/leitor de tela.
+Essas verificações não são apresentadas como executadas neste Windows.

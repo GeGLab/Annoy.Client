@@ -1,6 +1,6 @@
 # Annoy — plano de implementação
 
-Atualizado em 30/10/2026. Referências: [especificação](annoy-product-spec.md) e
+Atualizado em 02/11/2026. Referências: [especificação](annoy-product-spec.md) e
 [progresso](annoy-progress.md). Executar um marco em tarefas pequenas; não tentar
 implementar os 20 requisitos em uma única execução.
 
@@ -15,8 +15,10 @@ implementar os 20 requisitos em uma única execução.
 - `packages/protocol`: contrato TypeScript de entidades, permissões e eventos.
   A origem é o servidor; `scripts/sync-protocol.mjs` copia para o cliente. As
   duas cópias são idênticas na análise inicial.
-- Backend da Conta Global não foi localizado nos diretórios examinados. M1
-  observa chamadas existentes, sem inventar endpoint central ou depender de sua alteração.
+- Na análise inicial, o backend da Conta Global não estava nos diretórios
+  examinados; M1 preservou os contratos existentes. No fechamento local,
+  `../Annoy-api-global` foi obtido e seus testes reais foram executados,
+  sem alteração de endpoints ou código desse serviço.
 
 ### Estado, autenticação e comunicação
 
@@ -425,9 +427,13 @@ produção, Linux, leitor de tela e instâncias publicadas.
 M5 (R14–R16) e M6 (R17, R18, R20) foram concluídos e integrados à base 0.9.3.
 M7 (R07) também está implementado e integrado sobre essa base. Não há M8 definido
 neste plano. Evidências e limites da regressão estão em `annoy-progress.md`.
-O próximo trabalho é validar a entrega integrada e tratar os problemas externos
-já registrados: vídeo SFrame, acesso do CI ao Annoy Global e validações manuais
-em ambientes reais. Não presumir que concluir os marcos elimina esses limites.
+O fechamento local inclui a auditoria de [R03](annoy-async-audit.md), autenticação,
+armazenamento assíncrono e validação integrada de mídia. Os cenários SFrame
+renderizam vídeo com captura sintética determinística, sem alterar a cifra.
+CI privado, Cloudflare real e validações manuais em outros ambientes exigem suas
+respectivas credenciais/infraestrutura. Em 02/11/2026 o usuário escolheu concluir
+a validação local por enquanto; essas verificações externas não são declaradas
+aprovadas nem substituídas por mocks.
 
 ## 10. Entrega M3/M4 (30/10/2026)
 
@@ -467,4 +473,5 @@ em ambientes reais. Não presumir que concluir os marcos elimina esses limites.
   código/fuses Linux, renderização, vídeo/captura e persistência nos dois modos
   de aceleração. Validação usa CDP do renderer com inspector do main desabilitado.
 - Evidências, commits, PR e limites da validação estão em `annoy-progress.md`.
-  M7 não foi iniciado nesta execução.
+  A entrega posterior de M7 e o fechamento local de R03 também estão registrados
+  no progresso atualizado.
