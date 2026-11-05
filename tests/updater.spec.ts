@@ -9,6 +9,8 @@ import { join, resolve } from "node:path";
 const require = createRequire(import.meta.url);
 for (const critical of [false, true])
   test(`local updater feed: ${critical ? "critical policy" : "optional update"}, coalescing, notifications, recovery and checksum rejection`, async () => {
+    // The Linux updater runs only inside an AppImage; this feed test drives the Windows updater.
+    test.skip(process.platform !== "win32", "Updater feed test runs on Windows");
     const data = await mkdtemp(join(tmpdir(), "annoy-feed-"));
     // Disable notifications before the main-process startup check can run.
     await writeFile(join(data, "updates.json"), JSON.stringify({version:1,values:{notifications:false}}));
