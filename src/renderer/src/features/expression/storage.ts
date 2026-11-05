@@ -179,17 +179,21 @@ export async function readPacks(): Promise<MediaPack[]> {
   } while (after);
   return packs;
 }
-export function cachedCatalog<T>(key: string): Promise<T | undefined> {
+/** Small cache for remote data (the Annoy emoji set and its images). Store name kept for existing databases. */
+export function readCache<T>(key: string): Promise<T | undefined> {
   return transaction(["catalog-cache"], "readonly", (tx, result) => {
     const request = tx.objectStore("catalog-cache").get(key);
     request.onsuccess = () => result(request.result?.data);
   });
 }
-export async function cacheCatalog(key: string, data: unknown): Promise<void> {
+export async function writeCache(key: string, data: unknown): Promise<void> {
+  await transaction<void>(["catalog-cache"], "readwrite", (tx) => { tx.objectStore("catalog-cache").put({ key, data }); });
+}
+/** Deletes every entry except the ones in keep (old catalog pages included). */
+export async function pruneCache(keep: Set<string>): Promise<void> {
   await transaction<void>(["catalog-cache"], "readwrite", (tx) => {
     const store = tx.objectStore("catalog-cache");
-    store.put({ key, data });
     const keys = store.getAllKeys();
-    keys.onsuccess = () => { for (const old of keys.result.filter((old) => old !== key).slice(0, Math.max(0, keys.result.length - 16))) store.delete(old); };
+    keys.onsuccess = () => { for (const key of keys.result) if (!keep.has(String(key))) store.delete(key); };
   });
 }

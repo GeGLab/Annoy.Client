@@ -61,3 +61,25 @@ test('native credential verification rejects remote HTTP before any request',asy
  await assert.rejects(access.verifyLocal({...local,url:'http://local.test'}),/HTTPS/);
  assert.equal(requests,0);assert.equal(access.getState().allowed,false);
 });
+
+test('network failures, timeouts and restarting services never end an accepted session',async()=>{
+  let mode='ok';
+  const access=createAppAccess('https://global.test',()=>{},async url=>{
+    if(mode==='down')throw new TypeError('fetch failed');
+    if(mode==='502')return response({},502);
+    if(url.endsWith('/v1/me'))return response(profile);
+    return url.endsWith('/info')?response({accountMode:'local'}):response({id:'u'});
+  });
+  await access.verifyGlobal('global-token'); await access.verifyLocal(local);
+  for(mode of ['down','502']){await access.revalidate(); assert.deepEqual(access.getState(),{allowed:true,global:true,localAccounts:['a']});}
+  // A refusal from the server itself still ends it.
+  mode='ok';
+  const refuse=createAppAccess('https://global.test',()=>{},async()=>response({},401));
+  await assert.rejects(refuse.verifyGlobal('x'));
+  assert.equal(refuse.getState().global,false);
+});
+test('an unreachable server does not grant a new session',async()=>{
+  const access=createAppAccess('https://global.test',()=>{},async()=>{throw new TypeError('fetch failed');});
+  await assert.rejects(access.verifyGlobal('new-token'));
+  assert.equal(access.getState().allowed,false);
+});

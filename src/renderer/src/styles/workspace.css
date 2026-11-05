@@ -14,6 +14,8 @@
 .personal-colors { margin-top: 20px; }
 .personal-colors > p { line-height: 1.6; margin: 0 0 12px; }
 .personal-colors > .ui-button { margin-top: 12px; }
+.app-icon-field { display: grid; gap: 8px; margin-bottom: 20px; font-size: 0.85714rem; }
+.app-icon-options img { flex: none; border-radius: 9px; }
 .color-field { display: grid; grid-template-columns: 1fr 44px; gap: 8px 12px; align-items: center; min-width: 0; font-size: 0.85714rem; }
 .color-field > span:last-child { grid-column: 1 / -1; font-size: 0.78571rem; }
 .color-field input { padding: 3px; width: 44px; height: 34px; min-height: 34px; cursor: pointer; }

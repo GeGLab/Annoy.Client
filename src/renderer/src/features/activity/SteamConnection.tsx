@@ -74,7 +74,7 @@ export function SteamConnection({ accountId }: { accountId: string }) {
   };
   if (!account || !supported) return null;
   return <PreferenceCard icon="radio" title={translate("activity.c85c3636aafe",{p0:(account.instanceName)})} description={translate("activity.c01de0aeccbc")}>
-    {status?.connection && <p className="row"><ProviderIcon provider="steam" /><a href={status.connection.profileUrl} target="_blank" rel="noreferrer">{rich("common.13e868e9ba0d",{p0:(status.connection.steamId)})}</a></p>}
+    {status?.connection && <p className="row"><ProviderIcon provider="steam" /><a href={status.connection.profileUrl} target="_blank" rel="noreferrer">{rich("common.13e868e9ba0d",{p0:(status.connection.personaName || status.connection.steamId)})}</a></p>}
     {status?.connection && ownGame && <ActivityCard activity={ownGame} />}
     {status && <p className="muted small">{status.onlineActivityAvailable ? translate("activity.53b4251b7285") : translate("activity.f309480a1c0d")}</p>}
     <div className="row">

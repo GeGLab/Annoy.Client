@@ -142,8 +142,11 @@ export function App() {
   const { accountId: blockedAccountId, continueOffline } = useConnectionBlocked();
   const inVoice = useStore(s => s.voice !== null);
   const barPosition = useStore((s) => s.settings.barPosition);
+  const appIcon = useStore((s) => s.settings.appIcon);
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
+  // The window and tray icon live in the main process; keep them on the chosen icon.
+  useEffect(() => { void window.distopic?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor });
@@ -166,7 +169,8 @@ export function App() {
         setState(s => { s.modal = null; });
       }
       setState(s => { s.access = next; if (!next.global) s.global = null; });
-      if (revoked) void import("./auth/session.ts").then(g => g.signOut(false));
+      // The server refused the session: back to sign-in, nothing is deleted. Only "Sair" wipes.
+      if (revoked) void import("./auth/session.ts").then(g => g.endSession());
     };
     const off = auth?.onState(next => { revision++; update(next); });
     const started = revision;

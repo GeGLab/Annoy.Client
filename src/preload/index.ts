@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type {DesktopPreferences,DesktopSnapshot} from "../shared/desktop.ts";
 import type { Service } from "../shared/services.ts";
+import type { AppIcon } from "../shared/app-icon.ts";
 import type { AppAccessState } from "../shared/app-access.ts";
 import type { UpdateState } from "../shared/update.ts";
 import type { UpdateChannel, UpdateChannelInfo } from "../shared/update-channels.ts";
@@ -21,6 +22,9 @@ const bridge = {
     restart:()=>ipcRenderer.invoke("desktop:restart") as Promise<void>,
     quit:()=>ipcRenderer.invoke("desktop:quit") as Promise<void>,
     onQuitRequested(listener:()=>void):()=>void{const handler=()=>listener();ipcRenderer.on("desktop:quit-requested",handler);return()=>{ipcRenderer.off("desktop:quit-requested",handler);};},
+  },
+  appIcon: {
+    set: (icon: AppIcon) => ipcRenderer.invoke("app-icon:set", icon) as Promise<AppIcon>,
   },
   localization: {
     get: () => ipcRenderer.invoke("localization:get") as Promise<{saved:LocalizationPreferences;systemLocale:string}>,

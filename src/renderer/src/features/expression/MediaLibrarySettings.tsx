@@ -2,22 +2,19 @@ import { t as translate } from "../../../../shared/localization/index.ts";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Download, Trash2, Upload, ImagePlus } from "lucide-react";
 import { Button } from "../../components/ui/button.tsx";
-import { Input } from "../../components/ui/input.tsx";
 import { Icon } from "../../components/ui.tsx";
 import { setState, toast } from "../../store.ts";
 import { requestNavigation } from "../../lib/navigation-guard.ts";
 import { confirmAction } from "../../components/ui/action-dialog.tsx";
 import { exportPack, installPack, parsePack, readPack, readPackPage, removePack, savePack, type PackMetadata } from "./library.ts";
-import { CatalogPanel, PackCredits } from "./CatalogPanel.tsx";
+import { PackCredits } from "./PackCredits.tsx";
 import { PageEnd, useMediaPages } from "./paging.tsx";
-import { localGiphyKey, setGiphyKey } from "./giphy.tsx";
 import { hasMediaPicker, openMediaPicker, subscribeMediaPicker } from "./navigation.ts";
 
 export function MediaLibrarySettings() {
   const canUse = useSyncExternalStore(subscribeMediaPicker, hasMediaPicker);
   const [revision, setRevision] = useState(0), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [draftKey, setDraftKey] = useState(localGiphyKey);
   const input = useRef<HTMLInputElement>(null), manifest = useRef<HTMLInputElement>(null);
   const operation = useRef<AbortController | null>(null), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; operation.current?.abort(); }; }, []);
@@ -66,9 +63,8 @@ export function MediaLibrarySettings() {
   };
   return <section className="settings-section media-library-settings">
     <h3><Icon name="image" size={24} /> {translate("expression.728001e6a865")}</h3>
-    <p className="muted">{translate("expression.catalog.f9ca77ea518e")}</p>
+    <p className="muted">{translate("expression.library.intro")}</p>
     {!canUse && <p className="muted small">{translate("expression.catalog.ea86569fb632")}</p>}
-    <CatalogPanel revision={revision} busy={busy} canUse={canUse} onUse={usePack} onInstall={(pack) => void perform((signal) => installPack(pack, { signal, onProgress: (done, total) => { if (mounted.current) setProgress({ done, total }); } }))} />
     {busy && <div className="expression-install-progress" role="status">
       <span>{progress ? translate("expression.catalog.installProgress", { p0: progress.done, p1: progress.total }) : translate("expression.catalog.63a58a19afba")}</span>
       {progress && <progress value={progress.done} max={progress.total} aria-label={translate("expression.catalog.84fb8a365775")} />}
@@ -88,11 +84,6 @@ export function MediaLibrarySettings() {
       </div>)}
       <PageEnd page={packs} empty={translate("expression.catalog.8acaaf6537db")} end={translate("expression.catalog.ab91d3f0db4d")} />
     </section>
-    <details className="expression-provider-config"><summary>{translate("expression.53bb27a0bc2f")}</summary><div className="expression-provider-fields">
-      <p>{translate("expression.catalog.4f6bcc592293")}</p>
-      <Input aria-label={translate("expression.8659385eb30a")} value={draftKey} onChange={(event) => setDraftKey(event.target.value)} placeholder={translate("expression.catalog.40a248501f12")} />
-      <Button variant="secondary" size="sm" onClick={() => { setGiphyKey(draftKey); toast(translate("expression.catalog.4bbd2e78dc5c")); }}>{translate("expression.6b46278c426a")}</Button>
-    </div></details>
     <input ref={input} type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("expression.1cdcd529e1bd")} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void perform((signal) => importFiles(files, signal)); }} />
     <input ref={manifest} type="file" hidden accept="application/json,.json" aria-label={translate("expression.catalog.b81f4e711dcd")} onChange={(event) => {
       const file = event.target.files?.[0]; event.target.value = "";

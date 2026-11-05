@@ -62,6 +62,9 @@ async function setup(page: Page, acknowledge = true) {
   });
   await page.goto('http://127.0.0.1:5178');
   await page.evaluate(async () => {
+    // Let the startup session restore finish first: on a slow runner it can end after
+    // this line and sign the forced test session out.
+    await (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).restoreSession();
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
     setState((s: any) => { s.access = { allowed: true, global: true, localAccounts: [] }; s.global = { id: "global-test", name: "Test", email: "test@example.com" }; });
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);

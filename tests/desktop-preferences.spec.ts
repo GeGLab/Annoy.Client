@@ -105,6 +105,9 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
       .getByRole("button", { name: "Redefinir", exact: true })
       .click();
     await page.keyboard.press("Escape");
+    // Tray restoration needs a system tray; headless Linux runners have none.
+    const tray = (await page.evaluate(() => window.distopic!.desktop.get())).supported.closeToTray;
+    test.skip(!tray, "No system tray on this runner");
     await page.evaluate(() => window.distopic!.window.close());
     await expect
       .poll(() =>
@@ -185,9 +188,12 @@ for (const enabled of [true, false])
           ),
         )
         .toBe(true);
-      expect(
-        await app.evaluate(({ app }) => app.isHardwareAccelerationEnabled()),
-      ).toBe(enabled);
+      // Runners without a GPU (GitHub Windows) never get acceleration, whatever the app asks.
+      const gpu = await app.evaluate(({ app }) => (app.getGPUFeatureStatus() as Record<string, string>).gpu_compositing ?? "");
+      if (!enabled || !gpu.startsWith("disabled"))
+        expect(
+          await app.evaluate(({ app }) => app.isHardwareAccelerationEnabled()),
+        ).toBe(enabled);
       const snapshot = await page.evaluate(() =>
         window.distopic!.desktop.get(),
       );
@@ -226,6 +232,8 @@ test("failed native preference write does not claim saved or applied changes", a
   try {
     await expect(page.locator(".welcome")).toBeVisible();
     const initial = await page.evaluate(() => window.distopic!.desktop.get());
+    // The first run writes desktop.json; a directory in its place makes the next write fail.
+    await rm(join(data, "desktop.json"), { force: true });
     await mkdir(join(data, "desktop.json"));
     const rejected = await page.evaluate(async (saved) => {
       try {

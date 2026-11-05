@@ -31,7 +31,7 @@ async function launch({ fakeMedia = false, packaged = false } = {}) {
   const root = resolve(tmpdir()),
     data = await mkdtemp(join(root, "distopic-experience-"));
   const auth = await globalAuthFixture();
-  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+  const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178", ANNOY_CDN_URL: "https://cdn.experience.test" };
   delete env.ELECTRON_RUN_AS_NODE;
   if (packaged) delete (env as Partial<typeof env>).ELECTRON_RENDERER_URL;
   const app = await electron.launch({ executablePath: require("electron"), args: [...(fakeMedia ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] : []), resolve("tests/fixtures/electron.cjs")], env });
@@ -148,6 +148,21 @@ function silence() {
   result.write("data", 36);
   result.writeUInt32LE(result.length - 44, 40);
   return result;
+}
+
+/** The Annoy emoji set on cdnannoy: two stickers. Returns the list of requested URLs. */
+async function annoySetFixture(page: Page) {
+  const requests: string[] = [];
+  const png = await readFile("src/renderer/public/icon.png");
+  const image = (n: number) => `https://cdn.experience.test/i/${String(n).repeat(40)}.png`;
+  await page.route("https://cdn.experience.test/**", (route) => {
+    const url = route.request().url();
+    requests.push(url);
+    if (url.endsWith("/v1/emojis")) return route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*", etag: '"emojis-1"' }, body: JSON.stringify({ version: "1", items: [{ id: "cat", name: "Gato", kind: "sticker", url: image(1), size: 96, animated: false }, { id: "dog", name: "Cachorro", kind: "sticker", url: image(2), size: 200, animated: true }] }) });
+    if (url.startsWith("https://cdn.experience.test/i/")) return route.fulfill({ contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body: png });
+    return route.fulfill({ status: 404, body: "" });
+  });
+  return requests;
 }
 
 test("native idle, manual presence and member profile file activity", async () => {
@@ -1718,10 +1733,10 @@ test("server search sits above group activities and server editing saves image d
   } finally {await close();}
 });
 
-test("emoji reactions toggle and the media library installs, imports and restores packs", async()=>{
+test("emoji reactions toggle, the Annoy set shows for everyone and the library imports and restores packs", async()=>{
   const {app,page,close}=await launch();
   try{
-    await seed(page);
+    await seed(page);await annoySetFixture(page);
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};});});
     const reactions = await uiReactionFixture(app);
     const row=page.locator('[data-message-id="message"]');await row.hover();
@@ -1734,17 +1749,18 @@ test("emoji reactions toggle and the media library installs, imports and restore
     await picker.getByRole("button",{name:"sorriso feliz",exact:true}).click();
     await expect(page.locator(".composer textarea")).toHaveValue("😀");
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();
-    await page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Baixar",exact:true}).click();
-    await expect(page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"}).getByRole("button",{name:"Usar",exact:true})).toBeEnabled();
     await page.getByLabel("Importar imagens da biblioteca",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
     await expect(page.locator(".media-library-settings .expression-installed")).toContainText("Minha coleção");
     await page.screenshot({path:join(capture,"media-store-dark.png")});
-    await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);
+    await page.getByRole("button",{name:"Fechar",exact:true}).last().click();
+    await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();
+    await expect(picker.locator(".expression-group").filter({hasText:"Annoy"}).locator(".sticker-grid img")).toHaveCount(2);
     await page.screenshot({path:join(capture,"sticker-library-dark.png")});
-    await picker.getByRole("button",{name:"Gato",exact:true}).click();await expect(page.locator(".pending-file")).toContainText("Gato.png");
+    const sent=await uiSendFixture(app);
+    await picker.getByRole("button",{name:"Gato",exact:true}).click();await expect.poll(()=>sent.sends.map((send)=>send.content)).toEqual([`https://cdn.experience.test/i/${"1".repeat(40)}.png`]);await expect(page.locator(".composer textarea")).toHaveValue("😀");await expect(page.locator(".pending-file")).toHaveCount(0);
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"GIFs",exact:true}).click();
     await expect(picker.getByRole("button",{name:"profile-animation.gif",exact:true})).toBeVisible();
-    await picker.getByRole("button",{name:"profile-animation.gif",exact:true}).click();await expect(page.locator(".pending-file")).toHaveCount(2);
+    await picker.getByRole("button",{name:"profile-animation.gif",exact:true}).click();await expect(page.locator(".pending-file")).toHaveCount(1);
     await page.setViewportSize({width:940,height:620});
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();
@@ -1752,17 +1768,18 @@ test("emoji reactions toggle and the media library installs, imports and restore
     await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();await page.screenshot({path:join(capture,"media-store-light-minimum.png")});
     await page.reload();
     const saved=await page.evaluate(async()=>{const {readPacks}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);return(await readPacks()).map((pack)=>({name:pack.name,count:pack.items.length,blob:pack.items[0]?.blob?.size}));});
-    expect(saved.some((pack)=>pack.name==="Bichos do OpenMoji"&&pack.count===6&&pack.blob!>0)).toBe(true);
+    expect(saved.map((pack)=>pack.name)).toEqual(["Minha coleção"]);
     expect(saved.some((pack)=>pack.name==="Minha coleção"&&pack.count===1&&pack.blob!>0)).toBe(true);
   }finally{await close();}
 });
 
-test("GIPHY queries the official API directly and shares a link without copying media",async()=>{
+test("GIPHY goes through cdnannoy with no key in the app and shares a link without copying media",async()=>{
  const {page,close}=await launch();
  try{
   await seed(page);
-  await page.route("https://experience.test/api/media/config",(route)=>route.fulfill({contentType:"application/json",body:JSON.stringify({giphyApiKey:"synthetic-client-key"})}));
-  await page.route("https://api.giphy.com/v1/gifs/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify({data:[{id:"syntheticGIF",title:"GIF sintético de teste",images:{fixed_height:{url:"https://media.giphy.com/media/synthetic/giphy.gif"},original:{url:"https://media.giphy.com/media/synthetic/giphy.gif"}}}],pagination:{offset:0,count:1,total_count:1}})}));
+  const gifRequests:string[]=[];
+  await page.route("https://api.giphy.com/**",(route)=>{gifRequests.push(route.request().url());return route.abort();});
+  await page.route(/^https:\/\/cdn\.experience\.test\/v1\/gifs/,(route)=>{gifRequests.push(route.request().url());return route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify({data:[{id:"syntheticGIF",title:"GIF sintético de teste",images:{fixed_height:{url:"https://media.giphy.com/media/synthetic/giphy.gif"},original:{url:"https://media.giphy.com/media/synthetic/giphy.gif"}}}],pagination:{offset:0,count:1,total_count:1}})});});
   await page.route("https://media.giphy.com/**",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
   await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
   const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"GIFs",exact:true}).click();await picker.getByRole("button",{name:"GIPHY",exact:true}).click();
@@ -1770,6 +1787,8 @@ test("GIPHY queries the official API directly and shares a link without copying 
   await page.screenshot({path:join(capture,"giphy-picker-dark.png")});
   await picker.getByRole("button",{name:"GIF sintético de teste"}).click();await expect(page.locator(".composer textarea")).toHaveValue("https://giphy.com/gifs/syntheticGIF");
   expect(await page.evaluate(async()=>{const {readPacks}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);return(await readPacks()).length;})).toBe(0);
+  expect(gifRequests.length).toBeGreaterThan(0);
+  expect(gifRequests.every((url)=>url.startsWith("https://cdn.experience.test/v1/gifs")&&!url.includes("api_key"))).toBe(true);
  }finally{await close();}
 });
 
@@ -1816,8 +1835,8 @@ test("media pack export round-trips blobs and rejects malformed packages",async(
  try{
   const result=await page.evaluate(async()=>{
    const {installPack,readPacks,exportPack,parsePack,removePack}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
-   const {readCatalogPage}=await import(/* @vite-ignore */ `${location.origin}/src/features/expression/catalog.ts`);
-   await installPack((await readCatalogPage()).items[0]!);const first=(await readPacks())[0]!;
+   const png="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+   await installPack(parsePack({name:"Pacote de teste",author:"Annoy",license:"CC0",source:"local",items:Array.from({length:6},(_,i)=>({name:`item ${i}`,kind:"sticker",url:png}))}));const first=(await readPacks())[0]!;
    const exported=JSON.parse(await (await exportPack(first)).text());const imported=parsePack(exported);await installPack(imported);
    const copy=(await readPacks()).find((pack)=>pack.id===imported.id)!;
    const same=Array.from(new Uint8Array(await first.items[0]!.blob!.arrayBuffer())).join()===Array.from(new Uint8Array(await copy.items[0]!.blob!.arrayBuffer())).join();
@@ -1828,9 +1847,10 @@ test("media pack export round-trips blobs and rejects malformed packages",async(
 });
 
 
-test("packaged renderer installs bundled stickers without a development server URL",async()=>{
+test("packaged renderer shows the Annoy stickers without a development server URL",async()=>{
  const {app,page,close}=await launch({packaged:true});
  try{
+  await annoySetFixture(page);
   expect(page.url()).toMatch(/^file:/);
   const user={id:"production",username:"production",displayName:"Pessoa",avatarUrl:null};
   const server={id:"packaged-server",name:"Servidor",ownerId:user.id,iconUrl:null};
@@ -1840,7 +1860,7 @@ test("packaged renderer installs bundled stickers without a development server U
   // Synthetic legacy-token fixture exercises one-time migration; production
   // persistence writes token-empty metadata and uses the OS secret store.
   await page.evaluate(async({user,server,channel})=>{const account={id:"packaged",url:"https://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"};const saved=await window.distopic!.secrets.set("accounts",JSON.stringify([account]));localStorage.setItem("distopic.accounts",JSON.stringify([{...account,token:saved?"":account.token}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
-  await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("button",{name:"Gerenciar",exact:true}).click();const pack=page.locator(".media-library-settings .expression-pack").filter({hasText:"Bichos do OpenMoji"});await pack.getByRole("button",{name:"Baixar",exact:true}).click();await expect(pack.getByRole("button",{name:"Usar",exact:true})).toBeEnabled();await page.getByRole("button",{name:"Usar Bichos do OpenMoji",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(6);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
+  await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(2);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
  }finally{await close();}
 });
 
@@ -1921,27 +1941,36 @@ test("clean navigation starts with direct messages and keeps secondary destinati
   } finally { await close(); }
 });
 
-test("installed media packs open their collection and send a real attachment", async () => {
+test("Annoy stickers are sent as their cdnannoy link and drawn at their admannoy size", async () => {
   const { app, page, close } = await launch();
   try {
     await seed(page);
+    await annoySetFixture(page);
     // The colored app icon (white shell, dark visor), not a single-color mask.
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", /linearGradient/);
     // Attachments go to the server with the message.
     const sent = await uiSendFixture(app);
+    await page.locator(".composer textarea").fill("rascunho");
     await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
-    await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
-    const pack = page.locator(".media-library-settings .expression-pack").filter({ hasText: "Bichos do OpenMoji" });
-    await pack.getByRole("button", { name: "Baixar", exact: true }).click();
-    await pack.getByRole("button", { name: "Usar", exact: true }).click();
-    await expect(picker.getByRole("tab", { name: "Figurinhas", exact: true })).toHaveAttribute("aria-selected", "true");
+    await picker.getByRole("tab", { name: "Figurinhas", exact: true }).click();
     await expect.poll(() => picker.getByRole("button", { name: "Gato", exact: true }).locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
     await page.screenshot({ path: join(capture, "usable-stickers-dark.png") });
     await picker.getByRole("button", { name: "Gato", exact: true }).click();
-    await expect(page.locator(".pending-file")).toContainText("Gato.png");
-    await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-    await expect.poll(() => sent.sends.flatMap((send) => send.files)).toEqual(["Gato.png"]);
+    const link = `https://cdn.experience.test/i/${"1".repeat(40)}.png`;
+    // Sent at once as its own message; the draft stays.
+    await expect.poll(() => sent.sends.map((send) => send.content)).toEqual([link]);
+    await expect(page.locator(".composer textarea")).toHaveValue("rascunho");
+    expect(sent.sends.flatMap((send) => send.files)).toEqual([]);
+    // A received sticker message: no link text, the image at 96 px.
+    await page.evaluate(async (content) => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.messages.general.items[0].content = content; });
+    }, link);
+    const sticker = page.locator('[data-message-id="message"] .annoy-sticker');
+    await expect(sticker).toHaveCSS("width", "96px");
+    await expect.poll(() => sticker.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(page.locator('[data-message-id="message"] .message-content')).toHaveCount(0);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
     await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
@@ -2036,20 +2065,16 @@ test("compact reactions expand and search while library management lives in sett
     const library = page.locator(".media-library-settings");
     await expect(library).toBeVisible();
     await expect(page.getByRole("button", { name: "Emojis e mídia", exact: true })).toHaveAttribute("aria-current", "page");
-    await library.locator(".expression-pack").filter({ hasText: "Bichos do OpenMoji" }).getByRole("button", { name: "Baixar", exact: true }).click();
-    await expect(library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true })).toBeEnabled();
+    await expect(library.getByLabel("Chave de cliente GIPHY")).toHaveCount(0);
     await page.screenshot({ path: join(capture, "media-settings-dark.png") });
     await page.setViewportSize({ width: 940, height: 620 });
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
     expect(await page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: join(capture, "media-settings-light-minimum.png") });
-    await library.locator(".expression-provider-config > summary").click();
-    await library.getByLabel("Chave de cliente GIPHY", { exact: true }).fill("synthetic-client-key");
-    await library.getByRole("button", { name: "Salvar chave", exact: true }).click();
-    expect(await page.evaluate(() => localStorage.getItem("annoy.giphy-client-key"))).toBe("synthetic-client-key");
-    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    await library.getByLabel("Importar imagens da biblioteca", { exact: true }).setInputFiles("tests/fixtures/profile-animation.gif");
+    await library.getByRole("button", { name: "Usar Minha coleção", exact: true }).click();
     await page.getByRole("dialog", { name: "Salvar suas alterações?" }).getByRole("button", { name: "Descartar alterações", exact: true }).click();
-    await expect(picker.getByRole("tab", { name: "Figurinhas", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(picker.getByRole("tab", { name: "GIFs", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(".composer textarea")).toHaveValue("Meu rascunho continua aqui");
     await fullyInside(page, ".expression-picker", 0);
     await page.screenshot({ path: join(capture, "simple-media-picker-light-minimum.png") });
@@ -2070,13 +2095,13 @@ test("using media from settings respects unsaved profile changes and works witho
     await page.getByLabel("Nome de exibição de tester", { exact: true }).fill("Nome ainda não salvo");
     await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
     const library = page.locator(".media-library-settings");
-    await library.locator(".expression-pack").filter({ hasText: "Bichos do OpenMoji" }).getByRole("button", { name: "Baixar", exact: true }).click();
-    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    await library.getByLabel("Importar imagens da biblioteca", { exact: true }).setInputFiles("tests/fixtures/profile-animation.gif");
+    await library.getByRole("button", { name: "Usar Minha coleção", exact: true }).click();
     const guard = page.getByRole("dialog", { name: "Salvar suas alterações?" });
     await expect(guard).toBeVisible();
     await guard.getByRole("button", { name: "Continuar editando", exact: true }).click();
     await expect(library).toBeVisible();
-    await library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true }).click();
+    await library.getByRole("button", { name: "Usar Minha coleção", exact: true }).click();
     await guard.getByRole("button", { name: "Descartar alterações", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
     await expect(picker).toBeVisible();
@@ -2084,7 +2109,7 @@ test("using media from settings respects unsaved profile changes and works witho
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.view = { kind: "home", accountId: "test", dmId: null }; }); });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
-    await expect(library.getByRole("button", { name: "Usar Bichos do OpenMoji", exact: true })).toBeDisabled();
+    await expect(library.getByRole("button", { name: "Usar Minha coleção", exact: true })).toBeDisabled();
     await expect(library).toContainText("Abra uma conversa para usar seus pacotes.");
   } finally { await close(); }
 });

@@ -849,3 +849,33 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
     await cleanup();
   }
 });
+
+test("the account's server list is read again until it works: a failed vault read never ends in an empty list", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).authBaseUrl());
+    const login = await page.evaluate(async () => {
+      const kdf = await import(/* @vite-ignore */ `${location.origin}/src/global-crypto.ts`);
+      const salt = kdf.newSalt();
+      const { wrapKey } = await kdf.derivePasswordKeys("synthetic", salt, 1);
+      return { salt, wrappedKeys: await kdf.wrapKeys(wrapKey, kdf.newAccountKeys()) };
+    });
+    await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: login.salt, iterations: 1 } }));
+    await page.route(`${globalUrl}/v1/auth/login`, (route) => route.fulfill({ json: {
+      token: "synthetic-global-session-for-tests", wrappedKeys: login.wrappedKeys,
+      user: { id: "test-global", name: "Test Global", email: "test@example.com" },
+    } }));
+    // authannoy restarting: the first read fails, the next one works.
+    let reads = 0;
+    await page.route(`${globalUrl}/v1/vault`, (route) => (++reads === 1 ? route.fulfill({ status: 502, json: { message: "restarting" } }) : route.fulfill({ json: { version: 0, data: null } })));
+    const state = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().vaultSync);
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).signIn("synthetic@example.test", "synthetic"));
+    await expect.poll(state).toBe("retrying");
+    expect(reads).toBe(1);
+    // No user action: the retry (or the network coming back) reads it again.
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await expect.poll(state).toBe("done");
+    expect(reads).toBe(2);
+  } finally { await cleanup(); }
+});

@@ -29,7 +29,6 @@ jobs:
       - run: npm run typecheck
       - name: Unit tests
         shell: bash
-        env:
         run: node --experimental-transform-types --test scripts/tests/*.test.mjs
       - run: npm run build
       - run: npx electron-builder ${{ matrix.target }} --publish never

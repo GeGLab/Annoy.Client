@@ -1,4 +1,5 @@
 import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
+import { normalizeAppIcon } from "../../shared/app-icon.ts";
 import type {
   ChannelReadState,
   DmChannel,
@@ -117,6 +118,8 @@ export interface VoiceUi {
 
 export interface Settings extends LocalizationPreferences {
   theme: "dark" | "light" | "system";
+  /** Annoy icon inside the app, on the window and in the tray. */
+  appIcon: import("../../shared/app-icon.ts").AppIcon;
   accentColor: string | null;
   surfaceColor: string | null;
   channelsWidth: number;
@@ -167,6 +170,8 @@ export interface AppState {
   instances: Record<string, InstanceState>;
   /** Live observations, deliberately excluded from local persistence. */
   connectivity: { network: NetworkObservation; global: EndpointObservation };
+  /** Reading the Annoy account's server list (auth/servers.ts). null: not signed in to an Annoy account. */
+  vaultSync: "syncing" | "retrying" | "done" | null;
   view: View;
   modal: Modal | null;
   voice: VoiceUi | null;
@@ -247,6 +252,7 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
+  appIcon: "white",
   shareActivity: true,
   showVoiceBar: true,
   voiceBarMode: "external",
@@ -266,7 +272,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters) } : {}) } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon) } : {}) } as T;
   } catch {
     return fallback;
   }
@@ -327,6 +333,7 @@ let state: AppState = {
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
   connectivity: { network: navigator.onLine ? { status: "unknown", observedAt: null } : observeNetwork(false, Date.now()), global: unknownEndpoint() },
+  vaultSync: null,
   view: initialView(),
   modal: null,
   voice: null,

@@ -1,4 +1,5 @@
 import {onLocalizationChange} from "../shared/localization/index.ts";
+import { appIconController } from "./app-icon.ts";
 import {desktopController,supportsTray} from "./desktop.ts";
 import {registerLocalization} from "./localization.ts";
 import {t as translate} from "../shared/localization/index.ts";
@@ -14,7 +15,7 @@ import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, 
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
-import { createAppAccess } from "./app-access.ts";
+import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
@@ -24,6 +25,8 @@ let tray: Tray | null = null;
 let trayCapable=false;
 const selectedProfile=app.commandLine.getSwitchValue("user-data-dir");
 if(selectedProfile){if(!isAbsolute(selectedProfile)||selectedProfile.includes("\0"))throw new Error("Invalid profile path");mkdirSync(selectedProfile,{recursive:true});app.setPath("userData",selectedProfile);}
+const appIcon = appIconController(() => win, () => tray);
+appIcon.register(ipcMain);
 let quitting = false;
 app.on("before-quit", () => { quitting = true; });
 function restoreWindow(): void {
@@ -38,7 +41,7 @@ function createTray(): void {
     if(win&&!win.isVisible())restoreWindow();
     return;
   }
-  if(!tray){try{tray = new Tray(join(import.meta.dirname, "../renderer/icon.png"));tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
+  if(!tray){try{tray = new Tray(appIcon.path());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
@@ -319,7 +322,7 @@ function createWindow(): void {
     title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
-    icon: join(import.meta.dirname, "../renderer/icon.png"),
+    icon: appIcon.path(),
 
     autoHideMenuBar: true,
     webPreferences: {
@@ -408,9 +411,11 @@ ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
 ipcMain.handle("auth:get", event => fromRenderer(event) ? appAccess.getState() : { allowed: false, global: false, localAccounts: [] });
 ipcMain.handle("auth:global-url", event => fromRenderer(event) ? globalUrl : null);
 ipcMain.handle("auth:cloud-urls", event => fromRenderer(event) ? cloudUrls : null);
-ipcMain.handle("auth:global", (event, token: unknown) => {
+ipcMain.handle("auth:global", async (event, token: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
-  return appAccess.verifyGlobal(token);
+  // The renderer must tell a refusal (sign in again) from a failure to reach authannoy (keep the session, retry).
+  try { return await appAccess.verifyGlobal(token); }
+  catch (error) { throw new Error(error instanceof SessionRefused ? "SESSION_REFUSED" : "SESSION_UNREACHABLE"); }
 });
 ipcMain.handle("auth:local", async (event, account: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");

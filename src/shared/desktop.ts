@@ -12,11 +12,11 @@ export interface DesktopSnapshot {
   externalAutostartDisabled: boolean;
   error: string | null;
 }
-export const desktopDefaults = (platform: string): DesktopPreferences => ({
+export const desktopDefaults = (_platform: string): DesktopPreferences => ({
   hardwareAcceleration: true,
-  startAtLogin: false,
+  startAtLogin: true,
   startMinimized: false,
-  closeToTray: platform === "win32",
+  closeToTray: true,
 });
 export function normalizeDesktop(
   value: unknown,
