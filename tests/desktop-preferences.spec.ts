@@ -185,9 +185,12 @@ for (const enabled of [true, false])
           ),
         )
         .toBe(true);
-      expect(
-        await app.evaluate(({ app }) => app.isHardwareAccelerationEnabled()),
-      ).toBe(enabled);
+      // Runners without a GPU (GitHub Windows) never get acceleration, whatever the app asks.
+      const gpu = await app.evaluate(({ app }) => (app.getGPUFeatureStatus() as Record<string, string>).gpu_compositing ?? "");
+      if (!enabled || !gpu.startsWith("disabled"))
+        expect(
+          await app.evaluate(({ app }) => app.isHardwareAccelerationEnabled()),
+        ).toBe(enabled);
       const snapshot = await page.evaluate(() =>
         window.distopic!.desktop.get(),
       );
