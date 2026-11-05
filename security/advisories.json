@@ -7,6 +7,13 @@
       "fixedIn": "0.9.3",
       "summary": "Atualização de segurança: criptografia de ponta a ponta, contas Annoy obrigatórias por padrão e modos de autenticação exclusivos por servidor. Migre sua conta anterior para preservar seu histórico e suas permissões.",
       "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.9.3"
+    },
+    {
+      "id": "DSA-2026-002",
+      "severity": "critical",
+      "fixedIn": "0.10.0-alpha.2",
+      "summary": "Atualização obrigatória: a versão anterior saía da conta e apagava os dados locais (inclusive o login do Discord) quando a rede ou um serviço do Annoy falhava por alguns segundos.",
+      "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.10.0-alpha.2"
     }
   ]
 }
