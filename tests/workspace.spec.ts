@@ -864,7 +864,8 @@ test("the account's server list is read again until it works: a failed vault rea
     await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: login.salt, iterations: 1 } }));
     await page.route(`${globalUrl}/v1/auth/login`, (route) => route.fulfill({ json: {
       token: "synthetic-global-session-for-tests", wrappedKeys: login.wrappedKeys,
-      user: { id: "test-global", name: "Test Global", email: "test@example.com" },
+      // Accounts moved to authannoy still carry the legacy "escrow" mark; it must not block the servers.
+      user: { id: "test-global", name: "Test Global", email: "test@example.com", cryptoMigrationRequired: true },
     } }));
     // authannoy restarting: the first read fails, the next one works.
     let reads = 0;
@@ -877,5 +878,54 @@ test("the account's server list is read again until it works: a failed vault rea
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect.poll(state).toBe("done");
     expect(reads).toBe(2);
+  } finally { await cleanup(); }
+});
+
+test("a server removed on another install leaves this one; one added here before its vault write stays", async () => {
+  const { page, cleanup } = await launch();
+  try {
+    await seed(page);
+    const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).authBaseUrl());
+    const login = await page.evaluate(async () => {
+      const kdf = await import(/* @vite-ignore */ `${location.origin}/src/global-crypto.ts`);
+      const salt = kdf.newSalt();
+      const { wrapKey } = await kdf.derivePasswordKeys("synthetic", salt, 1);
+      return { salt, wrappedKeys: await kdf.wrapKeys(wrapKey, kdf.newAccountKeys()) };
+    });
+    await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: login.salt, iterations: 1 } }));
+    await page.route(`${globalUrl}/v1/auth/login`, (route) => route.fulfill({ json: {
+      token: "synthetic-global-session-for-tests", wrappedKeys: login.wrappedKeys,
+      user: { id: "test-global", name: "Test Global", email: "test@example.com", cryptoMigrationRequired: true },
+    } }));
+    let vault: string | null = null;
+    await page.route(`${globalUrl}/v1/vault`, (route) => route.fulfill({ json: { version: 1, data: vault } }));
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).signIn("synthetic@example.test", "synthetic"));
+    const syncState = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().vaultSync);
+    await expect.poll(syncState).toBe("done");
+    // The workspace server belongs to the account; this install has it, and so does the vault.
+    const url = await page.evaluate(async () => {
+      const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.accounts[0].annoy = true; });
+      return getState().accounts[0]!.url;
+    });
+    const seal = (urls: string[]) => page.evaluate(async (list) => {
+      const kdf = await import(/* @vite-ignore */ `${location.origin}/src/global-crypto.ts`);
+      const { unlockedKeys } = await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`);
+      return kdf.sealVault(unlockedKeys()!, { servers: list.map((u) => ({ url: u, serverId: "S1" })) });
+    }, urls);
+    const changed = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/servers.ts`)).vaultChanged());
+    const accounts = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().accounts.map((a: any) => a.url));
+    // Still empty vault (write from here pending): the server stays.
+    await changed();
+    await expect.poll(syncState).toBe("done");
+    expect(await accounts()).toContain(url);
+    vault = await seal([url]);
+    await changed();
+    await expect.poll(async () => page.evaluate(() => localStorage.getItem("annoy.vaultServers:test-global"))).toContain(url);
+    expect(await accounts()).toContain(url);
+    // Removed on another install: VAULT_CHANGED arrives, this install follows.
+    vault = await seal([]);
+    await changed();
+    await expect.poll(accounts).not.toContain(url);
   } finally { await cleanup(); }
 });
