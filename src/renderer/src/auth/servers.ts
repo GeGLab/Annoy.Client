@@ -51,7 +51,6 @@ async function readVault(): Promise<{ version: number; servers: VaultEntry[] }> 
 async function updateVault(change: (servers: VaultEntry[]) => VaultEntry[] | null): Promise<void> {
   const unlocked = unlockedKeys();
   if (!unlocked || !signedIn()) return;
-  if (getState().global?.cryptoMigrationRequired) throw new Error(translate("common.02bd1a1ee971"));
   const g = currentGeneration();
   for (let attempt = 0; attempt < 3; attempt++) {
     const { version, servers } = await readVault();
@@ -80,8 +79,10 @@ export interface VaultSync {
 }
 /** Brings back every server in the vault this install isn't connected to yet. */
 export async function syncVault(): Promise<VaultSync> {
-  const result: VaultSync = { added: 0, needsAccount: [], migrationRequired: !!getState().global?.cryptoMigrationRequired };
-  if (!signedIn() || result.migrationRequired) return result;
+  // Accounts still marked "escrow" by the authannoy move read and write the vault normally;
+  // the migration screen is gone since 0.10, so this mark must never block the servers.
+  const result: VaultSync = { added: 0, needsAccount: [], migrationRequired: false };
+  if (!signedIn()) return result;
   const g = currentGeneration();
   const { addAccountQuietly } = await import("../client.ts");
   let servers: VaultEntry[];
@@ -92,6 +93,18 @@ export async function syncVault(): Promise<VaultSync> {
     return result;
   }
   if (g !== currentGeneration()) return result;
+  // Removed on another install: a server this install saw in the vault and that left it goes here too.
+  // A server added here but not yet in the vault (write pending) was never seen, so it stays.
+  const owner = getState().global?.id ?? "";
+  const seenKey = `annoy.vaultServers:${owner}`;
+  let seen: Set<string> | null = null;
+  try { const raw = localStorage.getItem(seenKey); seen = raw ? new Set(JSON.parse(raw) as string[]) : null; } catch { seen = null; }
+  const inVault = new Set(servers.map((s) => s.url));
+  if (seen) {
+    const { removeAccount } = await import("../client.ts");
+    for (const account of getState().accounts.filter((a) => a.annoy && seen!.has(a.url) && !inVault.has(a.url))) removeAccount(account.id, "internal");
+  }
+  try { localStorage.setItem(seenKey, JSON.stringify([...inVault])); } catch { /* storage unavailable */ }
   const known = new Set(getState().accounts.filter((a) => !a.pending).map((a) => a.url));
   for (const entry of servers) {
     if (known.has(entry.url)) continue;
@@ -229,6 +242,11 @@ function runSync(): Promise<VaultSync> {
 }
 const onOnline = () => void runSync();
 const onFocus = () => { if (Date.now() - lastSync > FOCUS_MIN_MS) void runSync(); };
+
+/** Another install changed the vault (VAULT_CHANGED from chatannoy): read it now. */
+export function vaultChanged(): void {
+  if (keeping) void runSync();
+}
 
 /** Starts (or restarts) keeping this install in step with the account's vault. */
 export function keepVaultInSync(): Promise<VaultSync> {

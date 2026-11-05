@@ -163,6 +163,10 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
     case "SESSION_REVOKED":
       handleAccountEvent(event);
       return;
+    case "VAULT_CHANGED":
+      // A server was added or removed on another install: follow it now.
+      void import("../auth/servers.ts").then((m) => m.vaultChanged());
+      return;
     case "INVALID_SESSION":
       return;
   }
