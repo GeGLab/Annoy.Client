@@ -2270,5 +2270,6 @@
   "settings.appIcon.classic": "Clásico",
   "expression.library.intro": "Importa tus propias imágenes y GIF. Elegir una pegatina prepara un adjunto; tú decides cuándo enviarlo.",
   "expression.gifsUnavailable": "GIF no disponibles por ahora",
-  "expression.gifsUnavailableHint": "La búsqueda de GIPHY aún no está activada en Annoy. Puedes usar tus propios GIF en «Mi biblioteca»."
+  "expression.gifsUnavailableHint": "La búsqueda de GIPHY aún no está activada en Annoy. Puedes usar tus propios GIF en «Mi biblioteca».",
+  "auth.sessionEnded": "Tu sesión se cerró en el servidor. Inicia sesión de nuevo; no se borró nada."
 }

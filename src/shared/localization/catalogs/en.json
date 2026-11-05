@@ -2270,5 +2270,6 @@
   "settings.appIcon.classic": "Classic",
   "expression.library.intro": "Import your own images and GIFs. Choosing a sticker prepares an attachment; you decide when to send it.",
   "expression.gifsUnavailable": "GIFs unavailable right now",
-  "expression.gifsUnavailableHint": "GIPHY search is not turned on in Annoy yet. You can use your own GIFs in My library."
+  "expression.gifsUnavailableHint": "GIPHY search is not turned on in Annoy yet. You can use your own GIFs in My library.",
+  "auth.sessionEnded": "Your session was ended on the server. Sign in again; nothing was deleted."
 }

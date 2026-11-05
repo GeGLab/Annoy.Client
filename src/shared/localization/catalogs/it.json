@@ -2270,5 +2270,6 @@
   "settings.appIcon.classic": "Classica",
   "expression.library.intro": "Importa le tue immagini e GIF. Scegliere uno sticker prepara un allegato; decidi tu quando inviarlo.",
   "expression.gifsUnavailable": "GIF non disponibili al momento",
-  "expression.gifsUnavailableHint": "La ricerca GIPHY non è ancora attiva in Annoy. Puoi usare le tue GIF nella sezione «La mia biblioteca»."
+  "expression.gifsUnavailableHint": "La ricerca GIPHY non è ancora attiva in Annoy. Puoi usare le tue GIF nella sezione «La mia biblioteca».",
+  "auth.sessionEnded": "La sessione è stata chiusa sul server. Accedi di nuovo; non è stato eliminato nulla."
 }

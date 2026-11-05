@@ -2270,5 +2270,6 @@
   "settings.appIcon.classic": "Clássico",
   "expression.library.intro": "Importe suas próprias imagens e GIFs. Escolher uma figurinha prepara um anexo; você decide quando enviar.",
   "expression.gifsUnavailable": "GIFs indisponíveis no momento",
-  "expression.gifsUnavailableHint": "A busca do GIPHY ainda não foi ligada no Annoy. Você pode usar seus próprios GIFs em Minha biblioteca."
+  "expression.gifsUnavailableHint": "A busca do GIPHY ainda não foi ligada no Annoy. Você pode usar seus próprios GIFs em Minha biblioteca.",
+  "auth.sessionEnded": "Sua sessão foi encerrada no servidor. Entre de novo; nada foi apagado."
 }
