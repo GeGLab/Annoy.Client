@@ -5,6 +5,7 @@ import { SecureAttachment } from "./SecureAttachment.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
+import { AnnoySticker, annoyStickerOf } from "../features/expression/AnnoySticker.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -301,7 +302,7 @@ function MessageRow({
               <span className="muted small">{translate("chat.057d64271e1c")}</span>
             </div>
           ) : (
-            message.content && (
+            message.content && !annoyStickerOf(message.content) && (
               <div className="message-content">
                 {renderContent(message.content, nameOf, me, channelOf)}
                 {message.editedAt && <span className="edited">{translate("chat.9629ca339f1f")}</span>}
@@ -309,6 +310,7 @@ function MessageRow({
             )
           )}
           <GiphyMessage accountId={accountId} content={message.content} />
+          {annoyStickerOf(message.content) && <AnnoySticker url={annoyStickerOf(message.content)!} />}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
           <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} onToggle={(emoji) => void react(emoji)} />
         </div>
@@ -495,6 +497,20 @@ function Composer({
     }
   };
 
+  /** An Annoy sticker is its own message (the cdnannoy link); the draft and attachments stay. */
+  const sendSticker = async (url: string) => {
+    if (!connected || sending) return;
+    setSending(true);
+    const signal = requests.signal;
+    try {
+      await apiFor(accountId).sendMessage(channelId, url, [], null, expiresIn ? new Date(Date.now() + expiresIn).toISOString() : null, signal);
+    } catch (err) {
+      if (!isCancellation(err)) toast((err as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (suggestions.length > 0) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -602,7 +618,7 @@ function Composer({
           onPaste={onPaste}
           onBlur={() => setQuery(null)}
         />
-        <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} />
+        <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} onSticker={(url) => void sendSticker(url)} />
         <Button
           variant="ghost"
           size="icon"

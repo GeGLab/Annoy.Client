@@ -142,8 +142,11 @@ export function App() {
   const { accountId: blockedAccountId, continueOffline } = useConnectionBlocked();
   const inVoice = useStore(s => s.voice !== null);
   const barPosition = useStore((s) => s.settings.barPosition);
+  const appIcon = useStore((s) => s.settings.appIcon);
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
+  // The window and tray icon live in the main process; keep them on the chosen icon.
+  useEffect(() => { void window.distopic?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor });

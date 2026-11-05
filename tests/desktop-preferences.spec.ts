@@ -226,6 +226,8 @@ test("failed native preference write does not claim saved or applied changes", a
   try {
     await expect(page.locator(".welcome")).toBeVisible();
     const initial = await page.evaluate(() => window.distopic!.desktop.get());
+    // The first run writes desktop.json; a directory in its place makes the next write fail.
+    await rm(join(data, "desktop.json"), { force: true });
     await mkdir(join(data, "desktop.json"));
     const rejected = await page.evaluate(async (saved) => {
       try {

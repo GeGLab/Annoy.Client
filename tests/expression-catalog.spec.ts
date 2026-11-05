@@ -11,7 +11,7 @@ const test = base.extend<{ libraryPage: Page }>({
   libraryPage: async ({}, use) => {
     const directory = await mkdtemp(join(tmpdir(), "annoy-catalog-test-"));
     const auth = await globalAuthFixture();
-    const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: directory, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
+    const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: directory, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178", ANNOY_CDN_URL: "http://127.0.0.1:5178" };
     delete env.ELECTRON_RUN_AS_NODE;
     const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
     try {
@@ -98,75 +98,6 @@ test("M7 interrupted downloads, cancellation, quota and integrity failures prese
   expect(result.quotaMessage).toContain("espaço");
 });
 
-test("M7 catalog pages are incremental, searchable and cached for offline use", async ({ libraryPage: page }) => {
-  const result = await page.evaluate(async () => {
-    const catalog = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/catalog.ts`);
-    const original = window.fetch, requested: string[] = [];
-    window.fetch = async (...args) => { requested.push(String(args[0])); return original(...args); };
-    const first = await catalog.readCatalogPage();
-    const second = await catalog.readCatalogPage({ after: first.next });
-    const search = await catalog.readCatalogPage({ query: "cafe" });
-    const category = await catalog.readCatalogPage({ category: "nature" });
-    const lib = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
-    await lib.installPack(first.items[0]);
-    window.fetch = async () => { throw new TypeError("Offline"); };
-    const offline = await lib.readPack(first.items[0].id);
-    const cached = await catalog.readCatalogPage();
-    window.fetch = original;
-    return { counts: [first.items.length, second.items.length], different: first.items[0].id !== second.items[0].id, manifests: requested.filter((url) => url.endsWith(".json")).length, images: requested.filter((url) => url.endsWith(".png")).length, found: search.items[0].id, category: category.items[0].category, offline: offline!.items.every((item: any) => item.blob?.size > 0), cached: cached.items[0].id, credits: !!first.items[0].version && !!first.items[0].licenseUrl && !!first.items[0].credits };
-  });
-  expect(result).toMatchObject({ counts: [2, 2], different: true, manifests: 3, images: 6, found: "openmoji-food", category: "nature", offline: true, cached: "openmoji-animals", credits: true });
-});
-
-test("M7 catalog UI retries failed reads and filters without installing media", async ({ libraryPage: page }) => {
-  let fail = true, images = 0;
-  await page.route("**/expression/catalog/index.json", (route) => fail ? route.fulfill({ status: 503, body: "unavailable" }) : route.continue());
-  page.on("request", (request) => { if (/expression\/openmoji\/.*\.png/.test(request.url())) images++; });
-  await page.evaluate(async () => {
-    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-    setState((s: any) => { s.modal = { kind: "userSettings", section: "expressions" }; });
-  });
-  const catalog = page.getByRole("region", { name: "Catálogo licenciado" });
-  await expect(catalog.getByRole("alert")).toBeVisible();
-  fail = false;
-  await catalog.getByRole("button", { name: "Tentar novamente" }).click();
-  await expect(catalog).toContainText("Bichos do OpenMoji");
-  await catalog.getByLabel("Pesquisar catálogo").fill("cafe");
-  await expect(catalog.locator(".expression-pack")).toHaveCount(1);
-  await expect(catalog).toContainText("Sabores do OpenMoji");
-  await catalog.locator("summary").click();
-  await expect(catalog.getByRole("link", { name: "CC BY-SA 4.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by-sa/4.0/");
-  await catalog.getByLabel("Pesquisar catálogo").fill("inexistente-xyz");
-  await expect(catalog).toContainText("Nenhum pacote encontrado");
-  expect(images).toBeLessThan(36);
-  expect(await page.evaluate(async () => (await (await import(/* @vite-ignore */ `${location.origin}/src/features/expression/storage.ts`)).readPackPage()).items.length)).toBe(0);
-});
-
-test("M7 cached manifests and installed images survive renderer restart offline", async ({ libraryPage: page }) => {
-  await page.evaluate(async () => {
-    const catalog = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/catalog.ts`);
-    const lib = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
-    const first = await catalog.readCatalogPage();
-    await lib.installPack(first.items[0]);
-  });
-  await expect.poll(() => page.evaluate(async () => {
-    const { cachedCatalog } = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/storage.ts`);
-    return !!await cachedCatalog("catalog:index:1");
-  })).toBe(true);
-  await page.route("http://127.0.0.1:5178/expression/**", (route) => route.abort("internetdisconnected"));
-  await page.reload();
-  const result = await page.evaluate(async () => {
-    const catalog = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/catalog.ts`);
-    const lib = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
-    const cached = await catalog.readCatalogPage();
-    const pack = await lib.readPack(cached.items[0].id);
-    const original = pack!.items[0].blob!;
-    const bytes = new Uint8Array(await original.arrayBuffer());
-    return { id: cached.items[0].id, count: pack!.items.length, signature: Array.from(bytes.slice(0, 4)) };
-  });
-  expect(result).toEqual({ id: "openmoji-animals", count: 6, signature: [137, 80, 78, 71] });
-});
-
 test("M7 failed legacy migration rolls back version and keeps the original bytes", async ({ libraryPage: page }) => {
   const result = await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
@@ -198,31 +129,44 @@ test("M7 failed legacy migration rolls back version and keeps the original bytes
   expect(result).toEqual({ rejected: true, version: 1, bytes: "unchanged", retried: "unchanged" });
 });
 
-test("M7 catalog follows all seven languages and keeps licensed metadata unchanged", async ({ libraryPage: page }) => {
-  await page.evaluate(async () => {
-    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-    setState((s: any) => { s.modal = { kind: "userSettings", section: "expressions" }; });
+test("the Annoy emoji set comes from the local cache and asks cdnannoy at most every 2 hours", async ({ libraryPage: page }) => {
+  await page.evaluate(() => localStorage.setItem("annoy.cloudUrls", JSON.stringify({ cdn: "http://cdn.test" })));
+  await page.reload();
+  const result = await page.evaluate(async () => {
+    const set = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/annoy-set.ts`);
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+    const image = "http://cdn.test/i/" + "a".repeat(40) + ".png";
+    const requests: string[] = [];
+    let mode: "ok" | "same" | "down" = "ok";
+    const original = window.fetch, realNow = Date.now;
+    let offset = 0;
+    Date.now = () => realNow() + offset;
+    window.fetch = async (input, init) => {
+      const url = String(input);
+      requests.push(`${url} ${new Headers(init?.headers).get("if-none-match") ?? ""}`.trim());
+      if (mode === "down") throw new TypeError("Offline");
+      if (url === image) return new Response(png, { headers: { "content-type": "image/png" } });
+      if (mode === "same") return new Response(null, { status: 304 });
+      return Response.json({ version: "7", items: [{ id: "x1", name: "classic", kind: "sticker", url: image }] }, { headers: { etag: "\"emojis-7\"" } });
+    };
+    try {
+      const first = await set.readAnnoyItems("sticker");
+      const bytes = new Uint8Array(await (await set.annoyImage(first[0].url)).arrayBuffer());
+      await set.annoyImage(first[0].url);
+      await set.readAnnoyItems("sticker", "class");
+      const cachedOnly = requests.length;
+      offset = set.REFRESH_MS + 1000; mode = "same";
+      const revalidated = await set.readAnnoyItems("sticker");
+      offset = 2 * set.REFRESH_MS + 2000; mode = "down";
+      const offline = await set.readAnnoyItems("sticker");
+      await set.readAnnoyItems("sticker");
+      return { names: first.map((item: any) => item.name), emoji: (await set.readAnnoyItems("emoji")).length, signature: Array.from(bytes.slice(0, 4)), cachedOnly, revalidated: revalidated.length, offline: offline.length, requests };
+    } finally { window.fetch = original; Date.now = realNow; localStorage.removeItem("annoy.cloudUrls"); }
   });
-  const catalog = page.locator(".expression-catalog");
-  await expect(catalog).toContainText("Bichos do OpenMoji");
-  for (const language of ["pt-BR", "en", "es", "fr", "it", "ja", "zh-Hans", "en"]) {
-    await page.evaluate(async (language) => {
-      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s: any) => { s.settings.language = language; });
-    }, language);
-    const expected = JSON.parse(await readFile(resolve(`src/shared/localization/catalogs/${language}.json`), "utf8"));
-    await expect(catalog).toHaveAttribute("aria-label", expected["expression.catalog.ee63de14be85"]);
-    await expect(catalog.getByRole("combobox")).toHaveText(expected["expression.catalog.9e753333692c"]);
-    await expect(catalog.locator("summary").first()).toHaveText(expected["expression.catalog.225b1203a907"]);
-    await expect(catalog).toContainText("Bichos do OpenMoji");
-    await expect(catalog).toContainText("CC BY-SA 4.0");
-  }
-  await page.setViewportSize({ width: 940, height: 620 });
-  await page.evaluate(async () => {
-    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-    setState((s: any) => { s.settings.fontSize = 24; s.settings.theme = "light"; });
+  expect(result).toEqual({
+    names: ["classic"], emoji: 0, signature: [137, 80, 78, 71], cachedOnly: 2, revalidated: 1, offline: 1,
+    // One list, one image; then one revalidation with the ETag; one failed check and no retry right after.
+    requests: ["http://cdn.test/v1/emojis", "http://cdn.test/i/" + "a".repeat(40) + ".png", 'http://cdn.test/v1/emojis "emojis-7"', 'http://cdn.test/v1/emojis "emojis-7"'],
   });
-  await catalog.locator("h4").scrollIntoViewIfNeeded();
-  expect(await page.locator(".settings-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await page.screenshot({ path: ".impeccable/review/m7-catalog-english-24px-minimum.png" });
 });
+

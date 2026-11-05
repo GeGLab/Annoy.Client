@@ -8,8 +8,9 @@ import {xdgEntry,xdgAutostartPath,readXdgAutostart,setXdgAutostart,stableAppImag
 import {singleFlight} from '../../src/shared/single-flight.ts';
 import {writePreferences,readPreferences} from '../../src/main/settings-file.ts';
 test('desktop defaults, strict IPC shape and saved-value migration',()=>{
- assert.deepEqual(desktopDefaults('win32'),{hardwareAcceleration:true,startAtLogin:false,startMinimized:false,closeToTray:true});assert.equal(desktopDefaults('linux').closeToTray,false);
- assert.equal(normalizeDesktop({hardwareAcceleration:false,startAtLogin:'true'},'win32').startAtLogin,false);
+ // New installs start with the system and close to the tray on every platform.
+ for(const platform of ['win32','linux'])assert.deepEqual(desktopDefaults(platform),{hardwareAcceleration:true,startAtLogin:true,startMinimized:false,closeToTray:true});
+ assert.equal(normalizeDesktop({hardwareAcceleration:false,startAtLogin:'true'},'win32').startAtLogin,true);assert.equal(normalizeDesktop({startAtLogin:false,closeToTray:false},'linux').closeToTray,false);
  for(const value of [null,[],{},'true',{...desktopDefaults('linux'),extra:true},{...desktopDefaults('linux'),hardwareAcceleration:0}])assert.throws(()=>parseDesktop(value));
  assert.deepEqual(parseDesktop(desktopDefaults('linux')),desktopDefaults('linux'));
  const frame={},contents={mainFrame:frame};assert.ok(localMainFrame({sender:contents,senderFrame:frame},contents));assert.ok(!localMainFrame({sender:{mainFrame:frame},senderFrame:frame},contents));assert.ok(!localMainFrame({sender:contents,senderFrame:{}},contents));assert.ok(!localMainFrame({sender:undefined,senderFrame:undefined},undefined));

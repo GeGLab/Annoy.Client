@@ -267,3 +267,6 @@
 @media (prefers-reduced-motion: reduce) { .message-actions { transition: none; transform: none; } }
 .saved-account.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
 .annoy-account-option.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
+/* Annoy stickers: drawn at the size set in admannoy, never wider than the message column. */
+.annoy-sticker { display: block; margin-top: 6px; max-width: 100%; aspect-ratio: 1; }
+.annoy-sticker img { width: 100%; height: 100%; object-fit: contain; }

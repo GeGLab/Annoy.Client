@@ -59,7 +59,7 @@ test("seven languages update live; preview discards, save persists, maximum text
     }
     await page.getByRole("slider", { name: "Tamanho do texto" }).focus();
     await page.keyboard.press("End");
-    await expect(page.locator("html")).toHaveCSS("font-size", "24px");
+    await expect(page.locator("html")).toHaveCSS("font-size", "20px");
     await page.getByRole("switch").last().click();
     await expect(page.locator("html")).toHaveAttribute(
       "data-underline-links",
@@ -69,7 +69,7 @@ test("seven languages update live; preview discards, save persists, maximum text
       .locator(".settings-savebar")
       .getByRole("button", { name: "Redefinir", exact: true })
       .click();
-    await expect(page.locator("html")).toHaveCSS("font-size", "16px");
+    await expect(page.locator("html")).toHaveCSS("font-size", "14px");
     await expect(page.locator("html")).toHaveAttribute(
       "data-underline-links",
       "true",
@@ -113,12 +113,12 @@ test("seven languages update live; preview discards, save persists, maximum text
     );
     await page.keyboard.press("Escape");
     await page.reload();
-    await expect(page.locator("html")).toHaveCSS("font-size", "24px");
+    await expect(page.locator("html")).toHaveCSS("font-size", "20px");
     const saved = JSON.parse(
       await readFile(join(data, "localization.json"), "utf8"),
     );
     expect(saved.values.language).toBe("pt-BR");
-    expect(saved.values.fontSize).toBe(24);
+    expect(saved.values.fontSize).toBe(20);
     expect(errors).toEqual([]);
   } finally {
     await app

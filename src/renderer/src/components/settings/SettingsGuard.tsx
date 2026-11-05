@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { registerNavigationGuard } from "../../lib/navigation-guard.ts";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Button } from "../ui/button.tsx";
+import { SavedNotice, useSavedNotice } from "./SavedNotice.tsx";
 
 interface Draft {
   dirty: boolean;
@@ -15,6 +16,8 @@ interface Guard {
   leave: (action: () => void) => void;
   footer: ReactNode;
   saving: boolean;
+  /** For forms that also save on their own (Enter or an inline button). */
+  showSaved: () => void;
 }
 const Context = createContext<Guard | null>(null);
 export const useSettingsGuard = () => useContext(Context);
@@ -36,6 +39,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const windowExit = useRef(false);
+  const [saved, showSaved] = useSavedNotice();
   const changed = useCallback(() => redraw((version) => version + 1), []);
   const register = useCallback(
     (id: string, draft: MutableRefObject<Draft>) => {
@@ -87,6 +91,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
           return false;
         }
       }
+      showSaved();
       return true;
     } catch (error) {
       setError((error as Error).message);
@@ -102,8 +107,8 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
       <Button variant="ghost" disabled={saving} onClick={reset}>{translate("settings.c54fabd99e62")}</Button>
       <Button loading={saving} onClick={() => void save()}>{translate("settings.7368658c96c4")}</Button>
     </div>
-  ) : null;
-  const value = useMemo(() => ({ register, changed, leave, footer, saving }), [register, changed, leave, footer, saving]);
+  ) : saved ? <SavedNotice /> : null;
+  const value = useMemo(() => ({ register, changed, leave, footer, saving, showSaved }), [register, changed, leave, footer, saving, showSaved]);
   return (
     <Context.Provider value={value}>
       {children}

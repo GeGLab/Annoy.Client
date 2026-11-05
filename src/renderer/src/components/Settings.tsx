@@ -33,7 +33,7 @@ import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 import { Brand } from "./Brand.tsx";
 import { ColorPicker } from "./ui/color-picker.tsx";
-import { useSettingsDraft } from "./settings/SettingsGuard.tsx";
+import { useSettingsDraft, useSettingsGuard } from "./settings/SettingsGuard.tsx";
 import { requestNavigation } from "../lib/navigation-guard.ts";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation } from "../../../shared/requests.ts";
@@ -188,6 +188,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const [icon, setIcon] = useState<File | null | undefined>();
   const [preview, setPreview] = useState<string | null>(state?.server.iconUrl ?? null);
   const [savingServer, setSavingServer] = useState(false);
+  const guard = useSettingsGuard();
   const iconInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (icon) { const url = URL.createObjectURL(icon); setPreview(url); return () => URL.revokeObjectURL(url); }
@@ -212,7 +213,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         const index = instance?.servers.findIndex((item) => item.id === serverId) ?? -1;
         if (instance && index >= 0) instance.servers[index] = server;
       });
-      setName(server.name); setBaselineName(server.name); setIcon(undefined); toast(translate("settings.13ca16e1d784"));
+      setName(server.name); setBaselineName(server.name); setIcon(undefined);
       return true;
     } catch (error) { if (!isCancellation(error)) toast((error as Error).message); return false; }
     finally { setSavingServer(false); }
@@ -271,7 +272,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             className="inline-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void saveName();
+              void saveName().then((ok) => { if (ok) guard?.showSaved(); });
             }}
           >
             <Field label={translate("common.87f8ee74878a")}>

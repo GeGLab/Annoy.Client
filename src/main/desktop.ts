@@ -3,6 +3,7 @@ import { app, ipcMain, type BrowserWindow } from "electron";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import {
   localMainFrame,
   normalizeDesktop,
@@ -43,6 +44,7 @@ export function desktopController(
     homedir(),
   );
   let error: string | null = null;
+  const firstRun = !existsSync(file);
   function autostartEnabled(): boolean {
     if (!autostartSupported) return false;
     if (platform === "win32") {
@@ -118,6 +120,16 @@ export function desktopController(
     saved = next;
     applyTray();
     return snapshot();
+  }
+  // A new installation starts with the system by default. Register it once, on the first run only:
+  // later runs respect the user's choice and the operating system's startup-apps settings.
+  if (firstRun) {
+    try {
+      writePreferences(file, saved);
+      if (autostartSupported && saved.startAtLogin) setAutostart(true);
+    } catch {
+      error = "desktop.autostartError";
+    }
   }
   const secure = (event: Electron.IpcMainInvokeEvent) => {
     if (!trustedRenderer(event, window()))
