@@ -101,7 +101,8 @@
   },
   "allowScripts": {
     "electron@45.1.0": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   },
   "productName": "Annoy",
   "desktopName": "br.dev.geg.distopic.desktop",
