@@ -123,8 +123,9 @@ test("invalid and escaping manifests are rejected; Steam root symlinks work", as
 test("real Linux proc detects a running executable and its exit without leaking OS metadata", async (t) => {
   const f = await fixture(t);
   const executable = join(f.directory, "game");
-  await copyFile("/bin/sleep", executable);
-  const child = spawn(executable, ["30"], { env: { SteamAppId: "480" }, stdio: "ignore" });
+  // /bin/sh runs under any name; /bin/sleep can be a multi-call binary that exits when renamed.
+  await copyFile("/bin/sh", executable);
+  const child = spawn(executable, ["-c", "read line"], { env: { SteamAppId: "480" }, stdio: ["pipe", "ignore", "ignore"] });
   const exited = new Promise((resolve) => child.once("exit", resolve));
   t.after(() => child.kill());
   await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
