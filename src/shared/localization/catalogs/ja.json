@@ -2271,5 +2271,8 @@
   "expression.library.intro": "自分の画像や GIF を読み込めます。ステッカーを選ぶと添付が準備され、送信のタイミングは自分で決められます。",
   "expression.gifsUnavailable": "現在 GIF は利用できません",
   "expression.gifsUnavailableHint": "Annoy では GIPHY 検索がまだ有効になっていません。「私の図書館」で自分の GIF を使えます。",
-  "auth.sessionEnded": "サーバーでセッションが終了しました。もう一度サインインしてください。何も削除されていません。"
+  "auth.sessionEnded": "サーバーでセッションが終了しました。もう一度サインインしてください。何も削除されていません。",
+  "servers.syncing": "サーバーを同期しています",
+  "servers.syncingHint": "Annoy アカウントのサーバーがまもなくここに表示されます。",
+  "servers.syncRetrying": "アカウントサービスが応答しませんでした。アプリが自動で再試行します。操作は不要です。"
 }

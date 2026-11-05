@@ -162,7 +162,7 @@ export function restoreSession(): Promise<void> {
       keys = restored;
       clientRef = saved.client ?? null;
       setAccount(toUser(me));
-      void import("./servers.ts").then((m) => m.syncVault());
+      void import("./servers.ts").then((m) => m.keepVaultInSync());
     } catch (error) {
       if (isCancellation(error) || g !== generation) return;
       if (refusedSession(error)) {
@@ -197,6 +197,7 @@ export function endSession(): Promise<void> {
     access = null;
     clientRef = null;
     await window.distopic?.secrets.set("global", null).catch(() => false);
+    void import("./servers.ts").then((m) => m.stopVaultSync());
     setAccount(null);
     toast(translate("auth.sessionEnded"), 8000);
   })().finally(() => {
@@ -232,7 +233,7 @@ export async function signIn(identifier: string, password: string, signal?: Abor
   }
   setAccount(user);
   await persist(user);
-  void import("./servers.ts").then((m) => m.syncVault());
+  void import("./servers.ts").then((m) => m.keepVaultInSync());
   return user;
 }
 
@@ -246,6 +247,7 @@ export function signOut(callApi = true): Promise<void> {
   return (signingOut ??= (async () => {
     const previous = session;
     cancelPending();
+    void import("./servers.ts").then((m) => m.stopVaultSync());
     if (callApi && previous) await authRequest("/v1/auth/logout", { body: {}, token: previous, observe: false }).catch(() => undefined);
     session = keys = null;
     access = null;

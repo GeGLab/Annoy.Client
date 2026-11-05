@@ -14,7 +14,7 @@ import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
 import { AuthError as GlobalError, signedIn as globalSignedIn } from "../auth/session.ts";
-import { migrateServer, signInServer, syncVault, toAccount } from "../auth/servers.ts";
+import { keepVaultInSync, migrateServer, signInServer, toAccount } from "../auth/servers.ts";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation } from "../../../shared/requests.ts";
 
@@ -135,7 +135,7 @@ export function AddAccountModal() {
   </>;
   async function afterAnnoySignIn() {
     // Signing in selects the Annoy account and lists every server of it; those that fail show as disconnected.
-    await syncVault();
+    await keepVaultInSync();
     const linked = getState().accounts.find((account) => account.annoy);
     navigate({ kind: "home", accountId: linked?.id ?? null, dmId: null });
     closeModal();

@@ -2271,5 +2271,8 @@
   "expression.library.intro": "导入你自己的图片和 GIF。选择贴纸会准备一个附件，由你决定何时发送。",
   "expression.gifsUnavailable": "GIF 暂时不可用",
   "expression.gifsUnavailableHint": "Annoy 尚未启用 GIPHY 搜索。你可以在“我的图书馆”中使用自己的 GIF。",
-  "auth.sessionEnded": "服务器已结束你的会话。请重新登录；没有删除任何内容。"
+  "auth.sessionEnded": "服务器已结束你的会话。请重新登录；没有删除任何内容。",
+  "servers.syncing": "正在同步你的服务器",
+  "servers.syncingHint": "你的 Annoy 账户的服务器稍后会显示在这里。",
+  "servers.syncRetrying": "账户服务没有响应。应用会自动重试，你无需任何操作。"
 }
