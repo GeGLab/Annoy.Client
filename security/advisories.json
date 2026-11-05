@@ -14,6 +14,13 @@
       "fixedIn": "0.10.0-alpha.2",
       "summary": "Atualização obrigatória: a versão anterior saía da conta e apagava os dados locais (inclusive o login do Discord) quando a rede ou um serviço do Annoy falhava por alguns segundos.",
       "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.10.0-alpha.2"
+    },
+    {
+      "id": "DSA-2026-003",
+      "severity": "critical",
+      "fixedIn": "0.10.0-alpha.3",
+      "summary": "Mandatory update: accounts moved to the new account service did not get their servers back on new or reset installs.",
+      "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.10.0-alpha.3"
     }
   ]
 }
