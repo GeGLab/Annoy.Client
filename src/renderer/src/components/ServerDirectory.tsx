@@ -20,6 +20,8 @@ type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: n
 export function ServerDirectory() {
   const accounts = useStore((s) => s.accounts);
   const instances = useStore((s) => s.instances);
+  const annoySignedIn = useStore((s) => !!s.global);
+  const vaultSync = useStore((s) => s.vaultSync);
   const [query, setQuery] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [pages, setPages] = useState<Record<string, DirectoryPage>>({});
@@ -107,7 +109,10 @@ export function ServerDirectory() {
       </label>
       <span className="muted small" aria-live="polite">{counted(knownCount,"counts.server.one","counts.server.other")}</span>
     </div>
-    {!accounts.length ? <div className="server-directory-empty">
+    {!accounts.length && annoySignedIn && vaultSync !== "done" ? <div className="server-directory-empty" role="status">
+      <Icon name="refresh" size={26} /><h2>{translate("servers.syncing")}</h2>
+      <p>{translate(vaultSync === "retrying" ? "servers.syncRetrying" : "servers.syncingHint")}</p>
+    </div> : !accounts.length ? <div className="server-directory-empty">
       <Icon name="users" size={26} /><h2>{translate("common.71e2f935e297")}</h2>
       <p>{translate("common.443b1939fc84")}</p>
       <Button onClick={() => openModal({ kind: "addAccount" })}>{translate("common.11cf7643fb7e")}</Button>

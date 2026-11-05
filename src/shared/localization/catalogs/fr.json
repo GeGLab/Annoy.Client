@@ -2270,5 +2270,9 @@
   "settings.appIcon.classic": "Classique",
   "expression.library.intro": "Importez vos propres images et GIF. Choisir un autocollant prépare une pièce jointe ; vous décidez quand l'envoyer.",
   "expression.gifsUnavailable": "GIF indisponibles pour le moment",
-  "expression.gifsUnavailableHint": "La recherche GIPHY n'est pas encore activée dans Annoy. Vous pouvez utiliser vos propres GIF dans « Ma bibliothèque »."
+  "expression.gifsUnavailableHint": "La recherche GIPHY n'est pas encore activée dans Annoy. Vous pouvez utiliser vos propres GIF dans « Ma bibliothèque ».",
+  "auth.sessionEnded": "Votre session a été fermée sur le serveur. Reconnectez-vous ; rien n'a été supprimé.",
+  "servers.syncing": "Synchronisation de vos serveurs",
+  "servers.syncingHint": "Les serveurs de votre compte Annoy apparaîtront ici dans un instant.",
+  "servers.syncRetrying": "Le service de comptes n'a pas répondu. L'app réessaie toute seule ; vous n'avez rien à faire."
 }

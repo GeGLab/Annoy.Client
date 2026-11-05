@@ -136,6 +136,11 @@ function setAccount(user: GlobalAccount | null): void {
 const toUser = (u: GlobalAccount): GlobalAccount => ({ id: u.id, name: u.name, email: u.email, ...(u.cryptoMigrationRequired && { cryptoMigrationRequired: true }) });
 
 let restoring: Promise<void> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryDelay = 5_000;
+/** authannoy itself refused the session (401/403), as opposed to not answering. */
+const refusedSession = (error: unknown) =>
+  (error instanceof AuthError && (error.status === 401 || error.status === 403)) || (error instanceof Error && error.message.includes("SESSION_REFUSED"));
 /** At start: a saved session counts only after authannoy confirms it (the main process checks too). */
 export function restoreSession(): Promise<void> {
   return (restoring ??= (async () => {
@@ -157,15 +162,47 @@ export function restoreSession(): Promise<void> {
       keys = restored;
       clientRef = saved.client ?? null;
       setAccount(toUser(me));
-      void import("./servers.ts").then((m) => m.syncVault());
+      void import("./servers.ts").then((m) => m.keepVaultInSync());
     } catch (error) {
       if (isCancellation(error) || g !== generation) return;
-      // A refused session (signed out elsewhere, password changed) is a sign-out here too.
-      if (error instanceof AuthError && error.status === 401) await wipeLocal();
+      if (refusedSession(error)) {
+        // Revoked elsewhere or password changed: sign in again. Nothing local is deleted;
+        // only the user's own "Sair" wipes this install.
+        await endSession();
+        return;
+      }
+      // authannoy did not answer (offline, DNS, restart): keep the saved session and try again.
       session = keys = null;
       setAccount(null);
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => { restoring = null; void restoreSession(); }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 60_000);
+    } finally {
+      if (session) retryDelay = 5_000;
     }
   })());
+}
+
+/**
+ * The server ended this session (it was revoked or the password changed). Back to the sign-in
+ * screen, keeping everything else: service tabs (Discord), local data and preferences stay.
+ */
+let ending: Promise<void> | null = null;
+export function endSession(): Promise<void> {
+  if (signingOut) return signingOut;
+  return (ending ??= (async () => {
+    cancelPending();
+    clearTimeout(retryTimer);
+    session = keys = null;
+    access = null;
+    clientRef = null;
+    await window.distopic?.secrets.set("global", null).catch(() => false);
+    void import("./servers.ts").then((m) => m.stopVaultSync());
+    setAccount(null);
+    toast(translate("auth.sessionEnded"), 8000);
+  })().finally(() => {
+    ending = null;
+  }));
 }
 
 /** Username or e-mail, and password. */
@@ -196,7 +233,7 @@ export async function signIn(identifier: string, password: string, signal?: Abor
   }
   setAccount(user);
   await persist(user);
-  void import("./servers.ts").then((m) => m.syncVault());
+  void import("./servers.ts").then((m) => m.keepVaultInSync());
   return user;
 }
 
@@ -210,6 +247,7 @@ export function signOut(callApi = true): Promise<void> {
   return (signingOut ??= (async () => {
     const previous = session;
     cancelPending();
+    void import("./servers.ts").then((m) => m.stopVaultSync());
     if (callApi && previous) await authRequest("/v1/auth/logout", { body: {}, token: previous, observe: false }).catch(() => undefined);
     session = keys = null;
     access = null;

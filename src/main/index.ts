@@ -15,7 +15,7 @@ import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, 
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
-import { createAppAccess } from "./app-access.ts";
+import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
@@ -411,9 +411,11 @@ ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
 ipcMain.handle("auth:get", event => fromRenderer(event) ? appAccess.getState() : { allowed: false, global: false, localAccounts: [] });
 ipcMain.handle("auth:global-url", event => fromRenderer(event) ? globalUrl : null);
 ipcMain.handle("auth:cloud-urls", event => fromRenderer(event) ? cloudUrls : null);
-ipcMain.handle("auth:global", (event, token: unknown) => {
+ipcMain.handle("auth:global", async (event, token: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
-  return appAccess.verifyGlobal(token);
+  // The renderer must tell a refusal (sign in again) from a failure to reach authannoy (keep the session, retry).
+  try { return await appAccess.verifyGlobal(token); }
+  catch (error) { throw new Error(error instanceof SessionRefused ? "SESSION_REFUSED" : "SESSION_UNREACHABLE"); }
 });
 ipcMain.handle("auth:local", async (event, account: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");

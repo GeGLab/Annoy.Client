@@ -170,6 +170,8 @@ export interface AppState {
   instances: Record<string, InstanceState>;
   /** Live observations, deliberately excluded from local persistence. */
   connectivity: { network: NetworkObservation; global: EndpointObservation };
+  /** Reading the Annoy account's server list (auth/servers.ts). null: not signed in to an Annoy account. */
+  vaultSync: "syncing" | "retrying" | "done" | null;
   view: View;
   modal: Modal | null;
   voice: VoiceUi | null;
@@ -331,6 +333,7 @@ let state: AppState = {
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
   connectivity: { network: navigator.onLine ? { status: "unknown", observedAt: null } : observeNetwork(false, Date.now()), global: unknownEndpoint() },
+  vaultSync: null,
   view: initialView(),
   modal: null,
   voice: null,

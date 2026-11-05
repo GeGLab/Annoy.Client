@@ -169,7 +169,8 @@ export function App() {
         setState(s => { s.modal = null; });
       }
       setState(s => { s.access = next; if (!next.global) s.global = null; });
-      if (revoked) void import("./auth/session.ts").then(g => g.signOut(false));
+      // The server refused the session: back to sign-in, nothing is deleted. Only "Sair" wipes.
+      if (revoked) void import("./auth/session.ts").then(g => g.endSession());
     };
     const off = auth?.onState(next => { revision++; update(next); });
     const started = revision;

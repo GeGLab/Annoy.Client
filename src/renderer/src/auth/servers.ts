@@ -75,6 +75,8 @@ export interface VaultSync {
   added: number;
   needsAccount: string[];
   migrationRequired: boolean;
+  /** The vault could not be read (authannoy unreachable): nothing was concluded, try again. */
+  failed?: boolean;
 }
 /** Brings back every server in the vault this install isn't connected to yet. */
 export async function syncVault(): Promise<VaultSync> {
@@ -82,7 +84,13 @@ export async function syncVault(): Promise<VaultSync> {
   if (!signedIn() || result.migrationRequired) return result;
   const g = currentGeneration();
   const { addAccountQuietly } = await import("../client.ts");
-  const { servers } = await readVault().catch(() => ({ servers: [] as VaultEntry[] }));
+  let servers: VaultEntry[];
+  try {
+    ({ servers } = await readVault());
+  } catch (error) {
+    if (!isCancellation(error)) result.failed = true;
+    return result;
+  }
   if (g !== currentGeneration()) return result;
   const known = new Set(getState().accounts.filter((a) => !a.pending).map((a) => a.url));
   for (const entry of servers) {
@@ -184,3 +192,59 @@ export async function migrateServer(url: string, info: InstanceInfo, credentials
   return auth;
 }
 
+
+/**
+ * The account's servers follow the account on every install: the vault is the source of truth.
+ * While signed in, it is read at sign-in, when the network comes back, when the window gets
+ * focus (at most every 5 minutes) and every 15 minutes. A failed read is retried with backoff
+ * (10 s up to 5 min) and never ends in an empty list silently.
+ */
+let keeping = false;
+let syncing: Promise<VaultSync> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryDelay = 10_000;
+let lastSync = 0;
+const PERIOD_MS = 15 * 60_000;
+const FOCUS_MIN_MS = 5 * 60_000;
+
+function runSync(): Promise<VaultSync> {
+  return (syncing ??= syncVault()
+    .then((result) => {
+      clearTimeout(retryTimer);
+      if (result.failed && keeping) {
+        setState((s) => void (s.vaultSync = "retrying"));
+        retryTimer = setTimeout(() => void runSync(), retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 5 * 60_000);
+      } else {
+        retryDelay = 10_000;
+        lastSync = Date.now();
+        setState((s) => void (s.vaultSync = "done"));
+        if (keeping) retryTimer = setTimeout(() => void runSync(), PERIOD_MS);
+      }
+      return result;
+    })
+    .finally(() => {
+      syncing = null;
+    }));
+}
+const onOnline = () => void runSync();
+const onFocus = () => { if (Date.now() - lastSync > FOCUS_MIN_MS) void runSync(); };
+
+/** Starts (or restarts) keeping this install in step with the account's vault. */
+export function keepVaultInSync(): Promise<VaultSync> {
+  if (!keeping) {
+    keeping = true;
+    window.addEventListener("online", onOnline);
+    window.addEventListener("focus", onFocus);
+  }
+  setState((s) => void (s.vaultSync = "syncing"));
+  retryDelay = 10_000;
+  return runSync();
+}
+export function stopVaultSync(): void {
+  keeping = false;
+  clearTimeout(retryTimer);
+  window.removeEventListener("online", onOnline);
+  window.removeEventListener("focus", onFocus);
+  setState((s) => void (s.vaultSync = null));
+}
