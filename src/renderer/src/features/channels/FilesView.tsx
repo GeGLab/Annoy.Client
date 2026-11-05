@@ -1,7 +1,6 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import {SecureAttachment} from "../../components/SecureAttachment.tsx";
-import {CryptoStatus} from "../../components/CryptoStatus.tsx";
 import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { apiFor } from "../../client.ts";
@@ -188,7 +187,6 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         <span className="chat-topic">{channel.topic || translate("common.ef5ff5de05d9",{p0:(files.length),p1:(total),p2:(formatSize(totalSize))})}</span>
       </header>
 
-      <CryptoStatus accountId={accountId} channelId={channel.id}/>
       <div className="files-toolbar">
         <label className="files-search">
           <Icon name="search" size={16} />
@@ -246,7 +244,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
         {files.map((file) => {
           const { attachment, message } = file;
           const mine = message.author.id === me;
-          if(attachment.url.startsWith('annoy-encrypted:')||attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={translate("common.58727ecc46f1",{p0:(attachment.filename)})} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
+          if(attachment.url.startsWith('/api/uploads/'))return <div key={attachment.id} className="file-row" role="listitem"><SecureAttachment accountId={accountId} message={message} file={attachment}/>{(mine||canModerate)&&<button className="icon-btn danger" aria-label={translate("common.58727ecc46f1",{p0:(attachment.filename)})} onClick={()=>void remove(file)}><Icon name="trash" size={16}/></button>}</div>;
           return (
             <div key={attachment.id} className="file-row" role="listitem">
               <button className="file-open" onClick={() => open(file)} title={attachment.contentType.startsWith("image/") || /^(audio|video)\//.test(attachment.contentType) ? translate("common.a01a5fce396e") : translate("expression.b45ae836a031")}>

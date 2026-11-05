@@ -1,6 +1,6 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
-import { GlobalSignIn } from "./GlobalSignIn.tsx";
+import { SignInForm as GlobalSignIn } from "./auth/SignInForm.tsx";
 import { clientAccepted, updateRequired } from "../lib/client-version.ts";
 import { Select } from "./ui/select.tsx";
 import type { AuthResponse, InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
@@ -13,7 +13,8 @@ import { Avatar, closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Brand } from "./Brand.tsx";
-import { GlobalError, globalSignedIn, migrateServer, signInServer, syncVault, toAccount } from "../global.ts";
+import { AuthError as GlobalError, signedIn as globalSignedIn } from "../auth/session.ts";
+import { migrateServer, signInServer, syncVault, toAccount } from "../auth/servers.ts";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation } from "../../../shared/requests.ts";
 
@@ -150,7 +151,7 @@ export function AddAccountModal() {
     </form> : <>
       {!localMode && <p role={migration ? "alert" : undefined}>{translate("common.3c6e57294ab7")}</p>}
       {localMode && <p>{info.info.accountMode === "local" ? translate("common.b58caef0b088") : translate("common.bb61831cf63a")}{migration && translate("common.da0bf384ca28")}</p>}
-      {!localMode && needsCredentials ? <GlobalSignIn email={remembered?.annoyEmail} onSignedIn={() => { setReauthenticated(true); if (remembered?.annoy) void withGlobal(); }} /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
+      {!localMode && needsCredentials ? <GlobalSignIn identifier={remembered?.annoyEmail} onSignedIn={() => { setReauthenticated(true); if (remembered?.annoy) void withGlobal(); }} /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
         {migration ? ownershipFields : (localMode || globalFirst) && <>
           {localMode && <div className="tabs"><Button type="button" variant="ghost" onClick={() => setMode("login")}>{translate("common.4105811890ae")}</Button><Button type="button" variant="ghost" disabled={!info.info.registrationOpen} onClick={() => setMode("register")}>{translate("common.391f1af9142d")}</Button></div>}
           <Field label={translate("common.47644adea672")}><Input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
@@ -298,7 +299,7 @@ export function CreateServerModal({ accountId: initialAccount, initialMode = "cr
       <hr />
       <div className="form">
         <h3>{translate("common.d92359f0e940")}</h3>
-        <p className="muted small">{translate("common.9390c74f16b6")}</p>
+        <p className="muted small">{translate("import.description")}</p>
         <div className="form-actions start">
           <Button
             variant="secondary"

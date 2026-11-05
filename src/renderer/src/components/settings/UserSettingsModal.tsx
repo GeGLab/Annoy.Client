@@ -1,4 +1,6 @@
 import {rich} from "../../lib/localization.ts";
+import { DevicesList } from "../auth/DevicesList.tsx";
+import { CloudProfileEditor } from "../social/CloudProfileEditor.tsx";
 import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {configureLocalization,normalizeLocalization} from "../../../../shared/localization/index.ts";
 import {LocalizationSettings} from "./LocalizationSettings.tsx";
@@ -33,8 +35,9 @@ import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
-import { SecuritySettings } from "../crypto/SecuritySettings.tsx";
-import { GLOBAL_URL, signOutGlobal } from "../../global.ts";
+import { MicFiltersEditor } from "./MicFiltersEditor.tsx";
+import type { MicFilters } from "../../audio/mic-filters.ts";
+import { accountWebsite, signOut as signOutGlobal } from "../../auth/session.ts";
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 
@@ -54,8 +57,13 @@ let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(localizationPreferences().region);
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
-function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold: number; filter: NoiseFilter }) {
+function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
   const [enabled, setEnabled] = useState(false);
+  const live = useRef<Mic | null>(null);
+  const latest = useRef(filters);
+  latest.current = filters;
+  // Filter values change live, so tuning them while listening needs no restart.
+  useEffect(() => { live.current?.setFilters(filters); }, [filters]);
   const [monitor, setMonitor] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +72,11 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
     let stopped = false,
       frame = 0;
     let mic: Mic | null = null;
-    void openMic(deviceId, filter)
+    void openMic(deviceId, filter, latest.current)
       .then((value) => {
         if (stopped) return value.stop();
         mic = value;
+        live.current = value;
         const analyser = value.ctx.createAnalyser();
         analyser.fftSize = 512;
         value.output.connect(analyser);
@@ -91,6 +100,7 @@ function MicMeter({ deviceId, threshold, filter }: { deviceId: string; threshold
       stopped = true;
       cancelAnimationFrame(frame);
       mic?.stop();
+      live.current = null;
     };
   }, [enabled, deviceId, filter, monitor]);
   return (
@@ -433,9 +443,10 @@ export function UserSettingsModal() {
                     <span className="account-badge">{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span>
                     <p><strong>{annoy!.name}</strong> <span className="muted">({annoy!.email})</span></p>
                     <div className="account-actions global-account-actions">
-                      <a className="ui-button ui-button-secondary ui-button-sm" href={`${GLOBAL_URL}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
+                      <a className="ui-button ui-button-secondary ui-button-sm" href={`${accountWebsite()}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
                       <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</Button>
                     </div>
+                    <CloudProfileEditor />
                   </div>
                 )}
                 {shownAccounts.map((account) => {
@@ -528,15 +539,18 @@ export function UserSettingsModal() {
                     />
                   </Field>
                 )}
+                <PreferenceCard icon="sliders" title={translate("voice.filters.title")} description={translate("voice.filters.description")}>
+                  <MicFiltersEditor value={draft.micFilters} disabled={saving} onChange={(micFilters) => update({ micFilters })} />
+                </PreferenceCard>
                 <PreferenceCard icon="mic" title={translate("settings.1633f9ec8fb3")} description={translate("settings.c86b8e23e03c")}>
-                <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} />
+                <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
                 </PreferenceCard>
               </section>
             )}
             {page === "security" && (
               <section className="settings-section">
                 <h3>{rich("common.fcad23d8694d",{p0:(<Icon name="lock" size={24} />)})}</h3>
-                <SecuritySettings accountId={selected} />
+                <DevicesList />
               </section>
             )}
             {page === "updates" && (

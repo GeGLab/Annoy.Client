@@ -9,6 +9,8 @@ interface UpdateIO {
   install(): void | Promise<void>;
   publish(state: UpdateState): void;
   formatError?(error:unknown):string;
+  /** True after the user chose to leave a newer channel now: an older release of the chosen channel is offered. */
+  allowOlder?(): boolean;
 }
 
 /** Platform-independent state machine; electron-updater owns file verification/install. */
@@ -60,7 +62,8 @@ export function createUpdateController(io: UpdateIO) {
         publish({ status: "blocked", currentVersion: io.currentVersion, advisory, releaseUrl: RELEASES_URL });
       }
       const version = await io.checkForUpdates();
-      pendingVersion = version && compareVersions(version, io.currentVersion) > 0 ? version : null;
+      const order = version ? compareVersions(version, io.currentVersion) : 0;
+      pendingVersion = version && (order > 0 || (order < 0 && io.allowOlder?.())) ? version : null;
       if (!pendingVersion || (advisory && compareVersions(pendingVersion, advisory.fixedIn) < 0)) {
         if (advisory) publish({ status: "blocked", currentVersion: io.currentVersion, advisory, releaseUrl: RELEASES_URL });
         else publish({ status: "none", currentVersion: io.currentVersion });
@@ -76,7 +79,8 @@ export function createUpdateController(io: UpdateIO) {
       publish({ status: "blocked", currentVersion: io.currentVersion, advisory, releaseUrl: RELEASES_URL });
       return;
     }
-    if(!pendingVersion||version!==pendingVersion||compareVersions(version,io.currentVersion)<=0){
+    const order=compareVersions(version,io.currentVersion);
+    if(!pendingVersion||version!==pendingVersion||order===0||(order<0&&!io.allowOlder?.())){
       error(new Error('Downloaded update does not match the requested newer version'));
       return;
     }

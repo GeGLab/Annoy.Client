@@ -12,12 +12,6 @@ import { setState, toast, useStore } from "../store.ts";
 import { closeModal, Field, Icon, Modal } from "./ui.tsx";
 
 const DEV_PORTAL = "https://discord.com/developers/applications";
-let LIMITS = [
-  { label: translate("common.5c24ea45a646"), value: 100 },
-  { label: translate("common.c0d281264e64"), value: 1000 },
-  { label: translate("common.ce53e49d1947"), value: 10_000 },
-  { label: translate("common.311c2f32bdb4"), value: null },
-] as const;
 
 type Step =
   | { kind: "token" }
@@ -44,7 +38,7 @@ function TokenStep({ accountId, onDone }: { accountId: string; onDone: (token: s
       <p className="muted">{translate("common.d2cccc3bfc19")}</p>
       <ol className="steps">
         <li>{rich("common.78076469b576",{p0:(<a href={DEV_PORTAL} target="_blank" rel="noreferrer">{translate("common.5245643fd980")}</a>),p1:(<strong>{translate("common.6386dc360341")}</strong>)})}</li>
-        <li>{rich("common.29602d85caaf",{p0:(<strong>{translate("common.41e35ba1a1fd")}</strong>),p1:(<strong>{translate("common.e24b44ae6f40")}</strong>),p2:(<strong>{translate("common.74b3ca264e52")}</strong>)})}</li>
+        <li>{rich("import.botToken",{p0:(<strong>{translate("common.41e35ba1a1fd")}</strong>),p1:(<strong>{translate("common.74b3ca264e52")}</strong>)})}</li>
         <li>{translate("common.607cd4cd05aa")}</li>
       </ol>
       <Field label={translate("common.973157512cfd")} hint={translate("common.ed96d8977e3f")}>
@@ -142,16 +136,12 @@ function SelectStep({
   const owned = (servers ?? []).filter((s) => s.ownerId === me);
   const { guild, roles } = structure;
   const importable = structure.channels.filter((c) => c.kind !== "unsupported");
-  const textIds = importable.filter((c) => c.kind === "text").map((c) => c.id);
 
   const [target, setTarget] = useState<"new" | "existing">(presetServerId ? "existing" : "new");
   const [name, setName] = useState(guild.name);
   const [serverId, setServerId] = useState(presetServerId ?? owned[0]?.id ?? "");
   const [roleIds, setRoleIds] = useState(() => new Set(roles.filter((r) => !r.managed).map((r) => r.id)));
   const [channelIds, setChannelIds] = useState(() => new Set(importable.map((c) => c.id)));
-  const [historyIds, setHistoryIds] = useState(() => new Set<string>());
-  const [limit, setLimit] = useState<number | null>(1000);
-  const [attachments, setAttachments] = useState(false);
   const [overwrites, setOverwrites] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -168,7 +158,6 @@ function SelectStep({
   };
   const setChannels = (ids: string[], on: boolean) => {
     setChannelIds((s) => toggle(s, ids, on));
-    if (!on) setHistoryIds((s) => toggle(s, ids, false));
   };
 
   const row = (c: ImportChannel, nested: boolean) => {
@@ -183,19 +172,10 @@ function SelectStep({
           {c.label !== "texto" && c.label !== "voz" && <span className="tag">{c.label}</span>}
           {!supported && <span className="muted small">{translate("common.87a20d260545")}</span>}
         </label>
-        {c.kind === "text" && (
-          <label className="check history">
-            <Checkbox
-              checked={historyIds.has(c.id)}
-              disabled={true}
-              onChange={(e) => setHistoryIds((s) => toggle(s, [c.id], e.target.checked))}
-            />{translate("common.c91b5726e58e")}</label>
-        )}
       </div>
     );
   };
 
-  const selectedHistory:string[] = []; // Server-side plaintext history import is incompatible with E2EE.
   const start = async () => {
     setBusy(true);
     const body: ImportRequest = {
@@ -204,9 +184,6 @@ function SelectStep({
       target: target === "new" ? { kind: "new", name } : { kind: "existing", serverId },
       roleIds: [...roleIds],
       channelIds: [...channelIds],
-      messageChannelIds: selectedHistory,
-      messageLimit: limit,
-      attachments,
       overwrites,
     };
     try {
@@ -276,8 +253,6 @@ function SelectStep({
               )
             }
           >{translate("common.76e1824b75a3")}</button>
-          <button className="link-btn" disabled onClick={() => setHistoryIds(new Set(textIds.filter((id) => channelIds.has(id))))}>{translate("common.04bb71a57546")}</button>
-          <button className="link-btn" onClick={() => setHistoryIds(new Set())}>{translate("common.af1c241e6792")}</button>
         </div>
         <div className="import-tree">
           {tree.loose.map((c) => row(c, false))}
@@ -315,25 +290,12 @@ function SelectStep({
         </div>
       </section>
 
-      <section className="grid-2">
-        <Field label={translate("common.c628a0bcecba")}>
-          <Select disabled value={String(limit)} onChange={(e) => setLimit(e.target.value === "null" ? null : Number(e.target.value))}>
-            {LIMITS.map((l) => (
-              <option key={String(l.value)} value={String(l.value)}>
-                {l.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="option-checks">
-          <label className="check">
-            <Checkbox disabled checked={false} onChange={(e) => setAttachments(e.target.checked)} />{translate("common.58a57c789eca")}</label>
-          <label className="check">
-            <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} />{translate("common.fe60feaa1250")}</label>
-        </div>
+      <section className="option-checks">
+        <label className="check">
+          <Checkbox checked={overwrites} onChange={(e) => setOverwrites(e.target.checked)} />{translate("common.fe60feaa1250")}</label>
       </section>
 
-      <p className="muted small">{rich("common.96e9752d1c77",{p0:(channelIds.size),p1:(selectedHistory.length),p2:([...roleIds].filter((id) => id !== guild.id).length)})}</p>
+      <p className="muted small">{translate("import.summary",{p0:(channelIds.size),p1:([...roleIds].filter((id) => id !== guild.id).length)})}</p>
       <div className="form-actions">
         <button
           className="btn"
@@ -349,7 +311,6 @@ function SelectStep({
 
 let PHASE_LABEL: Record<ImportJob["phase"], string> = {
   structure: "Criando cargos e canais…",
-  messages: translate("common.17212671aa2e"),
   done: translate("common.db003659b843"),
   failed: translate("common.5d8a36ef7254"),
   cancelled: translate("common.bb9811b14ec4"),
@@ -358,7 +319,7 @@ let PHASE_LABEL: Record<ImportJob["phase"], string> = {
 function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }) {
   const job = useStore((s) => s.instances[accountId]?.imports[jobId]);
   if (!job) return <p className="muted">{translate("common.fbe9f251d052")}</p>;
-  const running = job.phase === "structure" || job.phase === "messages";
+  const running = job.phase === "structure";
   const pct = job.channelsTotal ? Math.round((job.channelsDone / job.channelsTotal) * 100) : job.phase === "done" ? 100 : 0;
   return (
     <div className="form">
@@ -366,7 +327,7 @@ function ProgressStep({ accountId, jobId }: { accountId: string; jobId: string }
       <div className="progress">
         <div className={`progress-fill${running ? " running" : ""}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small">{rich("common.a1de12ced519",{p0:(job.channelsDone),p1:(job.channelsTotal),p2:(job.messagesImported),p3:(job.attachmentsImported),p4:(job.currentChannel && running ? translate("common.405beaea7ce4",{p0:job.currentChannel}) : "")})}</p>
+      <p className="muted small">{translate("import.progress",{p0:(job.channelsDone),p1:(job.channelsTotal)})}</p>
       {job.error && <p className="error">{job.error}</p>}
       {(job.phase === "cancelled" || job.phase === "failed") && job.serverId && (
         <p className="muted small">{translate("common.ea9c5c602d8b")}</p>
@@ -457,15 +418,8 @@ export function ImportDiscordModal({ accountId, serverId }: { accountId: string;
   );
 }
 
-onLocalizationChange(()=>{LIMITS=[
-  { label: translate("common.5c24ea45a646"), value: 100 },
-  { label: translate("common.c0d281264e64"), value: 1000 },
-  { label: translate("common.ce53e49d1947"), value: 10_000 },
-  { label: translate("common.311c2f32bdb4"), value: null },
-] as const;});
 onLocalizationChange(()=>{PHASE_LABEL={
   structure: "Criando cargos e canais…",
-  messages: translate("common.17212671aa2e"),
   done: translate("common.db003659b843"),
   failed: translate("common.5d8a36ef7254"),
   cancelled: translate("common.bb9811b14ec4"),

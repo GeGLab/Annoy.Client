@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.9.3",
+  "version": "0.10.0-alpha.1",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
@@ -15,17 +15,17 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p . && tsc -p packages/protocol",
     "sync:protocol": "node scripts/sync-protocol.mjs",
-    "dist:win": "npm run crypto:build && electron-vite build && electron-builder --win --x64 --publish never",
-    "dist:linux": "npm run crypto:build && electron-vite build && electron-builder --linux --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
     "test:transport": "node --experimental-strip-types --test scripts/tests/transport.test.mjs",
-    "test:updates": "node --experimental-strip-types --test scripts/tests/security-updates.test.mjs scripts/tests/update-signature.test.mjs",
+    "test:updates": "node --experimental-strip-types --test scripts/tests/security-updates.test.mjs scripts/tests/update-signature.test.mjs scripts/tests/update-channels.test.mjs",
     "test:accounts": "node --experimental-strip-types --test scripts/tests/app-access.test.mjs && playwright test tests/account-policy.spec.ts",
     "test:activity": "node --experimental-strip-types --test scripts/tests/*-activity.test.mjs",
     "test:servers": "node --experimental-strip-types --test scripts/tests/server-removal.test.mjs",
     "test:connectivity": "node --experimental-strip-types --test scripts/tests/connectivity.test.mjs",
     "test:chat-state": "node --experimental-strip-types --test scripts/tests/chat-state.test.mjs",
     "test:requests": "node --experimental-strip-types --test scripts/tests/requests.test.mjs",
-    "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs",
+    "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs scripts/tests/voice-item4.test.mjs",
     "test:desktop": "npm run build && playwright test",
     "brand:icons": "node scripts/generate-icons.mjs",
     "electron:install": "node scripts/ensure-electron.mjs",
@@ -33,11 +33,6 @@
     "predev": "node scripts/ensure-electron.mjs",
     "prestart": "node scripts/ensure-electron.mjs",
     "test:disconnect": "playwright test tests/disconnect.spec.ts",
-    "crypto:build": "node scripts/build-crypto.mjs",
-    "crypto:benchmark": "node --experimental-strip-types scripts/benchmark-crypto.mjs",
-    "crypto:test": "cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml",
-    "prebuild": "npm run crypto:build",
-    "test:crypto": "node --experimental-strip-types --test scripts/tests/crypto-vault.test.mjs scripts/tests/mls-service.test.mjs scripts/tests/crypto-key-protector.test.mjs",
     "test:history": "node --experimental-strip-types --test scripts/tests/message-window.test.mjs"
   },
   "engines": {
@@ -48,8 +43,6 @@
     "@ghostery/adblocker-electron": "2.20.1",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "electron-updater": "^6.8.11",
-    "jose": "6.2.14",
-    "libsodium-wrappers-sumo": "0.8.4",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -149,13 +142,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false,
-      "extraResources": [
-        {
-          "from": "native/annoy-crypto/target/release/annoy-crypto.exe",
-          "to": "crypto/annoy-crypto.exe"
-        }
-      ]
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": true,
@@ -174,13 +161,7 @@
       ],
       "icon": "build/icon.png",
       "category": "Network;Chat",
-      "artifactName": "Annoy-${arch}.${ext}",
-      "extraResources": [
-        {
-          "from": "native/annoy-crypto/target/release/annoy-crypto",
-          "to": "crypto/annoy-crypto"
-        }
-      ]
+      "artifactName": "Annoy-${arch}.${ext}"
     }
   },
   "overrides": {

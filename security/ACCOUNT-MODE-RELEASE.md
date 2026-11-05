@@ -15,7 +15,7 @@ local válida em uma instância explicitamente configurada nesse modo.
 Contas exclusivamente globais definem uma senha local por sessão anterior ou
 código de recuperação do administrador. Histórico e permissões são preservados.
 
-Pré-requisitos antes de qualquer publicação: auditoria independente, execução Windows/Linux, chave pública de produção embutida e ensaio de instalação do manifesto Ed25519. A 0.9.0 inclui SFrame nas chamadas. Ver `annoy-server/docs/security/README.md` no workspace irmão.
+Pré-requisitos antes de qualquer publicação: auditoria independente, execução Windows/Linux, chave pública de produção embutida e ensaio de instalação do manifesto Ed25519.
 
 Depois da aprovação:
 

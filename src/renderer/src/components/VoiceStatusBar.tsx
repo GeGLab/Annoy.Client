@@ -21,16 +21,6 @@ export function VoiceStatusBar() {
       <div className="voice-status-copy">
         <span role="status">
           {voice.status === "connected" ? translate("common.e58c700521d2") : translate("common.cc190ab9f5ec")}
-          {voice.status === "connected" && (
-            <span
-              className="voice-protection"
-              data-e2ee={voice.e2ee ? "true" : "false"}
-              title={voice.e2ee ? translate("common.8b4213cd6fe0") : translate("common.4e56a0bc7800")}
-            >
-              {" "}
-              <Icon name={voice.e2ee ? "lock" : "info"} size={12} /> {voice.e2ee ? "E2EE" : translate("common.fd5d785ecbef")}
-            </span>
-          )}
         </span>
         <strong className="truncate">
           {channel?.name ?? translate("common.b9bd50cb65eb")}

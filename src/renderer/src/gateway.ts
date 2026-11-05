@@ -69,10 +69,8 @@ export class Gateway {
     socket.onopen = async () => {
       if (this.socket !== socket) return;
       this.onReachable?.();
-      let dpop:string|null=null;
-      try{dpop=await window.distopic?.crypto?.proof(this.url,this.token,'GET','/gateway')??null;}catch{socket.close(4004,'Desbloqueie o cofre local');return;}
       if(this.socket!==socket)return;
-      this.send({ op: "identify", ...(dpop?{dpop}:{}), clientVersion: CLIENT_VERSION, token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls", "extendedActivity"] });
+      this.send({ op: "identify", clientVersion: CLIENT_VERSION, token: this.token, deviceId, presence: getState().settings.manualPresence, features: ["developmentActivity", "idlePresence", "manualPresence", "directCalls", "extendedActivity"] });
     };
     socket.onmessage = (e) => {
       if (this.socket !== socket) return;
@@ -93,7 +91,13 @@ export class Gateway {
         this.onRecovery?.({ cause: "network", observedAt: Date.now(), attempt: this.attempts, nextRetryAt: null, recoveryDeadline: null, restartUntil: null });
         return this.onStatus("invalid");
       }
-      // The server needs a newer app: no retries until the app is updated.
+      // 4011 also means "this session is now bound to the device": reconnect with the proof.
+      // Only "client outdated" stops retries until the app is updated.
+      if (e.code === 4011 && /device proof/i.test(e.reason)) {
+        this.onStatus("offline");
+        this.scheduleRetry("service", 200);
+        return;
+      }
       if (e.code === 4011) {
         this.invalid = true;
         return this.onStatus("outdated");
@@ -207,8 +211,11 @@ export class Gateway {
     this.onStatus("invalid");
   }
 
-  send(op: ClientOp): void {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(op));
+  /** False when the socket isn't open and the op was dropped. */
+  send(op: ClientOp): boolean {
+    if (this.socket?.readyState !== WebSocket.OPEN) return false;
+    this.socket.send(JSON.stringify(op));
+    return true;
   }
 
   voice<T = Record<string, unknown>>(method: VoiceMethod, data: Record<string, unknown> = {}): Promise<T> {

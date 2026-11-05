@@ -72,13 +72,14 @@ test("requests show history failures with retry and preserve the message draft a
   expect(historyReads).toBe(2);
   const input = page.getByRole("textbox", { name: "Conversar em #geral" });
   await input.fill("Texto preservado após erro");
-  // Without the desktop crypto service a message is never sent in plaintext; the draft stays.
+  // A failed send keeps the draft.
   await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-  await expect(page.locator(".toast")).toContainText("serviço criptográfico");
+  await expect.poll(() => writes).toBe(1);
   write.resolve();
+  await expect(page.locator(".toast")).toContainText("Envio indisponível");
   await expect(input).toHaveValue("Texto preservado após erro");
   await expect(page.getByRole("button", { name: "Enviar mensagem", exact: true })).toBeEnabled();
-  expect(writes).toBe(0);
+  expect(writes).toBe(1);
 });
 
 test("requests coalesce server reads and cannot navigate across accounts with identical server/channel IDs", async ({ page }) => {
@@ -192,7 +193,7 @@ test("requests cannot restore a Global session after sign-out while login is pen
     const salt = kdf.newSalt(), { wrapKey } = await kdf.derivePasswordKeys("synthetic", salt, 1);
     return { salt, wrappedKeys: await kdf.wrapKeys(wrapKey, kdf.newAccountKeys()) };
   });
-  const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).GLOBAL_URL);
+  const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).authBaseUrl());
   const late = deferred();
   let started = false;
   await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => route.fulfill({ json: { salt: fixture.salt, iterations: 1 } }));
@@ -202,11 +203,11 @@ test("requests cannot restore a Global session after sign-out while login is pen
     await route.fulfill({ json: { token: "obsolete", wrappedKeys: fixture.wrappedKeys, user: { id: "old", name: "Antiga", email: "old@example.test" } } }).catch(() => {});
   });
   await page.evaluate(async () => {
-    const global = await import(/* @vite-ignore */ `${location.origin}/src/global.ts`);
-    (window as any).__login = global.signInGlobal("old@example.test", "synthetic").catch((error: Error) => error.name);
+    const auth = await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`);
+    (window as any).__login = auth.signIn("old@example.test", "synthetic").catch((error: Error) => error.name);
   });
   await expect.poll(() => started).toBe(true);
-  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).signOutGlobal(false));
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).cancelPending());
   expect(await page.evaluate(() => (window as any).__login)).toBe("AbortError");
   late.resolve();
   await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().global)).toBe(null);

@@ -669,7 +669,7 @@ test("connectivity observes Global failures independently and preserves expired-
   let connections = 0;
   try {
     await seed(page);
-    const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).GLOBAL_URL);
+    const globalUrl = await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).authBaseUrl());
     let status = 503;
     await page.route(`${globalUrl}/v1/auth/prelogin`, (route) => status === 0 ? route.abort() : route.fulfill({ status, json: { message: "Falha sintética" } }));
     for (const [response, cause, availability, authentication] of [
@@ -678,7 +678,7 @@ test("connectivity observes Global failures independently and preserves expired-
     ] as const) {
       status = response;
       const state = await page.evaluate(async () => {
-        const { signInGlobal } = await import(/* @vite-ignore */ `${location.origin}/src/global.ts`);
+        const { signIn: signInGlobal } = await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`);
         const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
         await signInGlobal("synthetic@example.test", "synthetic").catch(() => undefined);
         return { connectivity: getState().connectivity, instance: getState().instances.workspace.status };
@@ -703,7 +703,7 @@ test("connectivity observes Global failures independently and preserves expired-
       user: { id: "test-global", name: "Test Global", email: "test@example.com" },
     } }));
     await page.route(`${globalUrl}/v1/vault`, (route) => route.fulfill({ json: { version: 0, data: null } }));
-    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/global.ts`)).signInGlobal("synthetic@example.test", "synthetic"));
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`)).signIn("synthetic@example.test", "synthetic"));
     await expect.poll(() => page.evaluate(async () => {
       const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       return getState().connectivity.global;

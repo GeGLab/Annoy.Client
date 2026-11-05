@@ -373,7 +373,7 @@ test("call membership sounds, stable participants, status icons and channel swit
   } finally { await close(); }
 });
 
-test("individual voice volume reaches 200%, works without moderation and persists without changing other users", async () => {
+test("individual voice volume reaches 300%, works without moderation and persists without changing other users", async () => {
   const { page, close } = await launch();
   const sharedChanges: unknown[] = [];
   try {
@@ -399,11 +399,11 @@ test("individual voice volume reaches 200%, works without moderation and persist
     await alice.click({ button: "right" });
     const slider = page.getByRole("slider", { name: "Volume de Alice", exact: true });
     await expect(slider).toHaveAttribute("aria-valuenow", "100");
-    await expect(slider).toHaveAttribute("aria-valuemax", "200");
+    await expect(slider).toHaveAttribute("aria-valuemax", "300");
     await expect(slider).toBeFocused();
     await expect(page.getByRole("menuitem", { name: "Silenciar no servidor", exact: true })).toHaveCount(0);
     await slider.press("End");
-    await expect(slider).toHaveAttribute("aria-valuenow", "200");
+    await expect(slider).toHaveAttribute("aria-valuenow", "300");
     await slider.press("Escape");
     await bob.click({ button: "right" });
     const bobSlider = page.getByRole("slider", { name: "Volume de Bob", exact: true });
@@ -413,7 +413,7 @@ test("individual voice volume reaches 200%, works without moderation and persist
     await bobSlider.press("Escape");
     await alice.hover();
     await alice.getByRole("button", { name: "Ações de voz de Alice", exact: true }).click();
-    await expect(slider).toHaveAttribute("aria-valuenow", "200");
+    await expect(slider).toHaveAttribute("aria-valuenow", "300");
     await slider.press("Escape");
     await expect(page.getByRole("button", { name: "Ações de voz de Pessoa de teste", exact: true })).toHaveCount(0);
     expect(sharedChanges).toEqual([]);
@@ -421,7 +421,7 @@ test("individual voice volume reaches 200%, works without moderation and persist
     expect(await page.evaluate(async () => {
       const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       return getState().settings.userVolumes;
-    })).toEqual({ '["test","alice"]': 200, '["test","bob"]': 0 });
+    })).toEqual({ '["test","alice"]': 300, '["test","bob"]': 0 });
   } finally { await close(); }
 });
 
@@ -863,7 +863,7 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
     }
     const volume = left.page.getByRole("slider", { name: "Volume de Bob", exact: true });
     await volume.press("End");
-    await expect(volume).toHaveAttribute("aria-valuenow", "200");
+    await expect(volume).toHaveAttribute("aria-valuenow", "300");
     await expect(right.page.getByRole("slider", { name: "Volume de Alice", exact: true })).toHaveAttribute("aria-valuenow", "100");
     await left.page.getByRole("button", { name: "Desativar áudio da chamada", exact: true }).click();
     await expect(left.page.locator(".direct-call-panel audio")).toHaveJSProperty("muted", true);
@@ -1105,7 +1105,7 @@ test("searchable permission targets distinguish roles and people and guard chang
   }
 });
 
-test("local message search filters, pagination, context jump and return to latest", async () => {
+test("message search filters, pagination, context jump and return to latest", async () => {
   const { app, page, close } = await launch();
   try {
     await seed(page);
@@ -1122,15 +1122,13 @@ test("local message search filters, pagination, context jump and return to lates
       mentionIds: [],
       mentionsEveryone: false,
     };
-    await app.evaluate(({ipcMain},message)=>{
-      (globalThis as any).__uiSearchQueries=[];
-      ipcMain.removeHandler('crypto:search');ipcMain.handle('crypto:search',(_event,raw)=>{
-        (globalThis as any).__uiSearchQueries.push(raw.query);
-        return {ok:true,value:{items:raw.query.cursor?[]:[{message,channelName:'geral',serverId:'server'}],nextCursor:raw.query.cursor?null:'found'}};
-      });
-    },message);
-    // Search text must never go to a plaintext server search endpoint.
-    await page.route('https://experience.test/api/search/**',()=>{throw new Error('Local search leaked to the server');});
+    // Channel messages are plain again (TODO item 3): the server searches them.
+    const searchQueries: string[] = [];
+    await page.route('https://experience.test/api/search/messages?**', (route) => {
+      const query = new URL(route.request().url()).searchParams;
+      searchQueries.push(query.toString());
+      return route.fulfill({ json: { items: query.get('cursor') ? [] : [{ message, channelName: 'geral', serverId: 'server' }], nextCursor: query.get('cursor') ? null : 'found' } });
+    });
     await page.route("https://experience.test/api/channels/general/messages?**", (route) =>
       route.fulfill({
         contentType: "application/json",
@@ -1145,7 +1143,7 @@ test("local message search filters, pagination, context jump and return to lates
     await page.getByRole("option", { name: "#geral", exact: true }).click();
     await page.getByRole("button", { name: "Buscar", exact: true }).click();
     await expect(page.locator(".search-result")).toHaveCount(1);
-    queries=(await app.evaluate(()=>(globalThis as any).__uiSearchQueries)).map((q:any)=>new URLSearchParams(q));
+    queries=searchQueries.map((q)=>new URLSearchParams(q));
     expect(queries[0]!.get('channelId')).toBe('general');expect(queries[0]!.get('serverId')).toBe('server');
     await page.screenshot({ path: join(capture, "message-search.png") });
     await page.setViewportSize({ width: 940, height: 620 });
@@ -1167,8 +1165,8 @@ test("local message search filters, pagination, context jump and return to lates
     await page.getByRole("button", { name: "Limpar data", exact: true }).click();
     await page.setViewportSize({ width: 1320, height: 840 });
     await page.getByRole("button", { name: "Mais resultados", exact: true }).click();
-    await expect.poll(()=>app.evaluate(()=>(globalThis as any).__uiSearchQueries.length)).toBe(2);
-    queries=(await app.evaluate(()=>(globalThis as any).__uiSearchQueries)).map((q:any)=>new URLSearchParams(q));expect(queries[1]!.get('cursor')).toBe('found');
+    await expect.poll(()=>searchQueries.length).toBe(2);
+    queries=searchQueries.map((q)=>new URLSearchParams(q));expect(queries[1]!.get('cursor')).toBe('found');
     await page.locator(".search-result").click();
     await expect(page.locator('[data-message-id="found"]')).toBeInViewport();
     await expect(page.locator(".search-highlight")).toHaveCount(1);
@@ -1614,8 +1612,13 @@ test("RNNoise loads its local worklet and releases the microphone", async () => 
   try {
     const result = await page.evaluate(async () => {
       const { openMic } = await import(/* @vite-ignore */ `${location.origin}/src/noise.ts`);
+      // The OBS-style filter chain (item 4) ends the graph; RNNoise sits before it.
+      const connected: string[] = [];
+      const connect = AudioNode.prototype.connect as (...args: unknown[]) => unknown;
+      AudioNode.prototype.connect = function (this: AudioNode, ...args: unknown[]) { connected.push((args[0] as object).constructor.name); return connect.apply(this, args); } as typeof AudioNode.prototype.connect;
       const mic = await openMic("default", "rnnoise");
-      const result = { node: mic.output.constructor.name, sampleRate: mic.ctx.sampleRate, state: mic.track.readyState };
+      AudioNode.prototype.connect = connect as typeof AudioNode.prototype.connect;
+      const result = { node: connected.includes("RnnoiseWorkletNode") ? "RnnoiseWorkletNode" : connected.join(","), sampleRate: mic.ctx.sampleRate, state: mic.track.readyState };
       mic.stop();
       return { ...result, stopped: mic.track.readyState };
     });
@@ -1720,14 +1723,12 @@ test("emoji reactions toggle and the media library installs, imports and restore
   try{
     await seed(page);
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};});});
-    await uiReactionFixture(app);
-    await page.route('https://experience.test/api/channels/general/crypto',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({channel:{active:true}})}));
-    await page.evaluate(async()=>{const {setState}=await import(location.origin+'/src/store.ts');setState((s:any)=>{s.instances.test.messages.general.items[0].protection='e2ee';});});
+    const reactions = await uiReactionFixture(app);
     const row=page.locator('[data-message-id="message"]');await row.hover();
     await row.getByRole("button",{name:"Adicionar reação",exact:true}).click();
     await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
     const reaction=row.getByRole("button",{name:"👍: 1 reação",exact:true});await expect(reaction).toHaveAttribute("aria-pressed","true");
-    await reaction.click();await expect(reaction).toHaveCount(0);expect(await app.evaluate(()=> (globalThis as any).__uiReactionFixture.writes)).toEqual(["PUT","DELETE"]);
+    await reaction.click();await expect(reaction).toHaveCount(0);expect(reactions.writes).toEqual(["PUT","DELETE"]);
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();
     const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});
     await picker.getByRole("button",{name:"sorriso feliz",exact:true}).click();
@@ -1853,28 +1854,27 @@ test("shared reaction chips group participants and ignore a stale native respons
       const { getState, setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         s.instances.test.instance = { ...s.instances.test.instance, reactions: true };
-        s.instances.test.messages.general.items[0].protection='e2ee';
         s.instances.test.messages.general.items[0].reactions = [{ emoji: "👍", userIds: ["peer"] }];
       });
       return getState().instances.test!.messages.general!.items[0]!;
     });
-    await uiReactionFixture(app);await app.evaluate(()=>{(globalThis as any).__uiReactionFixture.delay=true;});
-    release=async()=>{await app.evaluate(()=>{(globalThis as any).__uiReactionFixture.release?.();});};
-    await page.route('https://experience.test/api/channels/general/crypto',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({channel:{active:true}})}));
+    const reactions = await uiReactionFixture(app);reactions.delay=true;
+    release=async()=>{reactions.release?.();};
     const row = page.locator('[data-message-id="message"]');
     await expect(row.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
     await row.hover();
     await expect(row.locator(".reaction-quick")).toHaveCount(3);
     await row.getByRole("button", { name: "Reagir com 👍", exact: true }).click();
-    await expect.poll(() => app.evaluate(()=>!!(globalThis as any).__uiReactionFixture.release)).toBe(true);
-    await page.evaluate(message=>window.dispatchEvent(new CustomEvent('annoy:crypto-change',{detail:{url:'https://experience.test',channel:'general',id:message.id,message:{...message,reactions:[{emoji:'👍',userIds:['peer','person','other']}]}}})),message);
+    await expect.poll(() => !!reactions.release).toBe(true);
+    // A newer server update arrives while the reply is late: the late reply must not undo it.
+    socket!.send(JSON.stringify({ t: "MESSAGE_UPDATE", d: { ...message, reactions: [{ emoji: "👍", userIds: ["peer", "person", "other"] }] } }));
     await expect(row.getByRole("button", { name: "👍: 3 reações", exact: true })).toHaveAttribute("aria-pressed", "true");
     await release!();
     await expect(row.getByRole("button", { name: "Reagir com 👍", exact: true })).toBeEnabled();
     await expect(row.locator(".message-reactions .reaction")).toHaveCount(1);
     await expect(row.getByRole("button", { name: "👍: 3 reações", exact: true })).toBeVisible();
-    const media = await row.locator(".attachments").boundingBox(), reactions = await row.locator(".message-reactions").boundingBox();
-    expect(reactions!.y).toBeGreaterThan(media!.y + media!.height);
+    const media = await row.locator(".attachments").boundingBox(), chips = await row.locator(".message-reactions").boundingBox();
+    expect(chips!.y).toBeGreaterThan(media!.y + media!.height);
     await page.screenshot({ path: join(capture, "shared-reactions-dark.png") });
     await page.setViewportSize({ width: 940, height: 620 });
     await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
@@ -1927,13 +1927,8 @@ test("installed media packs open their collection and send a real attachment", a
     await seed(page);
     // The colored app icon (white shell, dark visor), not a single-color mask.
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", /linearGradient/);
-    // Attachments go to the native MLS service, never as a plaintext upload.
-    let plaintext = false;
-    await page.route("https://experience.test/api/channels/general/messages", async (route) => {
-      if (route.request().method() === "POST") plaintext = true;
-      await route.fulfill({ contentType: "application/json", body: "[]" });
-    });
-    await uiSendFixture(app);
+    // Attachments go to the server with the message.
+    const sent = await uiSendFixture(app);
     await page.getByRole("button", { name: "Emojis, GIFs e figurinhas", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Emojis, GIFs e figurinhas" });
     await picker.getByRole("button", { name: "Gerenciar", exact: true }).click();
@@ -1946,8 +1941,7 @@ test("installed media packs open their collection and send a real attachment", a
     await picker.getByRole("button", { name: "Gato", exact: true }).click();
     await expect(page.locator(".pending-file")).toContainText("Gato.png");
     await page.getByRole("button", { name: "Enviar mensagem", exact: true }).click();
-    await expect.poll(() => app.evaluate(() => (globalThis as any).__uiSendFixture.sends.flatMap((send: { files: string[] }) => send.files))).toEqual(["Gato.png"]);
-    expect(plaintext).toBe(false);
+    await expect.poll(() => sent.sends.flatMap((send) => send.files)).toEqual(["Gato.png"]);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
     await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
@@ -1987,8 +1981,7 @@ test("friend message reactions explain an old server and work when support is ad
   const { app, page, close } = await launch();
   try {
     await seed(page);
-    await uiReactionFixture(app);
-    await page.route("https://experience.test/api/channels/dm-friend/crypto", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ channel: { active: true } }) }));
+    const reactions = await uiReactionFixture(app);
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
@@ -2010,7 +2003,7 @@ test("friend message reactions explain an old server and work when support is ad
     await expect(reaction).toHaveAttribute("aria-pressed", "true");
     await reaction.click();
     await expect(message.getByRole("button", { name: "👍: 1 reação", exact: true })).toHaveAttribute("aria-pressed", "false");
-    expect(await app.evaluate(() => (globalThis as any).__uiReactionFixture.writes)).toEqual(["PUT", "DELETE"]);
+    expect(reactions.writes).toEqual(["PUT", "DELETE"]);
   } finally { await close(); }
 });
 

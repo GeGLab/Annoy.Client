@@ -18,7 +18,7 @@ import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
 import { useEffect, useMemo, useState } from "react";
-import { apiFor, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
+import { apiFor, editServerNickname, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
 import { getState, toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
@@ -36,6 +36,7 @@ import { UserPanel } from "./TopBar.tsx";
 import { VoiceUserContextMenu, VoiceUserMenuButton } from "./VoiceUserMenu.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
 import { ResizablePanel, togglePanel } from "./layout/ResizablePanel.tsx";
+import { addFriend } from "../social/index.ts";
 
 // Channel list -------------------------------------------------------------
 
@@ -247,6 +248,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="server-menu" align="start">
+          <DropdownMenuItem onSelect={() => void editServerNickname(accountId, state.server.id)}><Icon name="edit" />{translate("server.nicknameMenu")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => toggleMessageMute("server", accountId, state.server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.615490f2cb43") : translate("common.b60be554ff31")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           {has(perms, Permission.CREATE_INVITE) && (
@@ -369,6 +371,8 @@ function MemberCard({
   const api = apiFor(accountId);
   const sid = state.server.id;
   const rel = relationships?.find((r) => r.user.id === member.user.id);
+  const annoySocial = !!inst?.instance?.annoySocial;
+  const cloudRel = useStore((s) => (member.user.annoyId ? s.social.relationships.find((r) => r.user.id === member.user.annoyId) : undefined));
   const activities = useStore((s) => isSelf ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
@@ -440,10 +444,10 @@ function MemberCard({
           {!isSelf && (
             <div className="member-card-actions">
               <button className="btn" onClick={() => void openDm(accountId, member.user.id).then(onClose)}>{rich("common.034692b8029f",{p0:(<Icon name="message" size={16} />)})}</button>
-              {!rel && (
+              {!rel && !cloudRel && (!annoySocial || member.user.annoyId) && (
                 <button
                   className="btn btn-ghost"
-                  onClick={() => void act(api.post("/relationships", { username: member.user.username }), "Pedido de amizade enviado")}
+                  onClick={() => void act(annoySocial ? addFriend(member.user.annoyId!) : api.post("/relationships", { username: member.user.username }), translate("social.requestSent"))}
                 >{rich("common.65f4ed364cc0",{p0:(<Icon name="userPlus" size={16} />)})}</button>
               )}
               {outranks && has(perms, Permission.KICK_MEMBERS) && (

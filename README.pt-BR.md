@@ -55,10 +55,10 @@ Atualize também o servidor. Veja [a versão 0.8.0](docs/releases/0.8.0.md).
   alguém ouvir. Veja as [medições](docs/noise-suppression.md).
 - **Moderação:** editor de cargos, permissões por canal, convites, expulsar e
   banir.
-- **Criptografia de ponta a ponta (0.9.0):** mensagens, anexos, edições e
-  reações novas são cifradas com OpenMLS; o servidor guarda só texto cifrado.
-  Canais de voz e chamadas privadas usam SFrame: o SFU só repassa mídia cifrada.
-  O histórico de antes do E2EE fica separado e somente leitura.
+- **DMs cifradas:** as DMs entre contas Annoy são cifradas no app e entregues
+  pela nuvem Annoy, que não consegue lê-las. Mensagens dos canais trafegam em
+  TLS; a criptografia de ponta a ponta dos canais saiu depois da 0.9 e vai
+  voltar pensada para cada função.
 - **Uma conta por vez:** cada servidor usa contas Annoy ou contas locais.
   Trocar de conta troca os servidores que aparecem.
 - **Histórico longo:** carregamento sob demanda, posição de leitura

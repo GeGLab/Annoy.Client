@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { gatewayFor } from "../../client.ts";
 import { getState, setState, useStore } from "../../store.ts";
 import { effectivePresence, isAway } from "../../../../shared/presence.ts";
+import { publishPresence } from "../../social/index.ts";
 
 export function useAwayStatus() {
   const minutes = useStore((s) => s.settings.awayMinutes);
   const manual = useStore((s) => s.settings.manualPresence);
+  const cloud = useStore((s) => s.social.status);
   const ready = useStore((s) => Object.entries(s.instances).filter(([, i]) => i.status === "ready").map(([id, i]) => `${id}:${!!i.instance?.presenceStatus}:${!!i.instance?.manualPresence}`).join("|"));
   useEffect(() => {
     let lastInput = Date.now(), lastCheck = 0, stopped = false, sequence = 0;
@@ -19,8 +21,14 @@ export function useAwayStatus() {
       } catch { /* Keep the input fallback if native IPC fails. */ }
       if (stopped || request !== sequence) return;
       const presence = effectivePresence(manual, seconds, minutes);
+      // Annoy account: status goes to chatannoy only (TODO item 1).
+      const cloudKey = `${presence}:${manual}`;
+      if (published.get("annoy-cloud") !== cloudKey && getState().social.status === "ready") {
+        publishPresence({ idle: isAway(seconds, minutes), manual });
+        published.set("annoy-cloud", cloudKey);
+      }
       for (const [id, instance] of Object.entries(getState().instances)) {
-        if (instance.status !== "ready" || !instance.user) continue;
+        if (instance.status !== "ready" || !instance.user || instance.instance?.annoySocial) continue;
         const key = `${presence}:${manual}`;
         if (published.get(id) !== key && instance.instance?.presenceStatus) {
           gatewayFor(id)?.send({ op: "presence", idle: isAway(seconds, minutes), ...(instance.instance.manualPresence && !published.has(id) && { status: manual }) });
@@ -42,5 +50,5 @@ export function useAwayStatus() {
     void check();
     const timer = setInterval(() => void check(), 5000);
     return () => { stopped = true; clearInterval(timer); window.removeEventListener("pointermove", input); window.removeEventListener("pointerdown", input); window.removeEventListener("keydown", input); };
-  }, [minutes, manual, ready]);
+  }, [minutes, manual, ready, cloud]);
 }

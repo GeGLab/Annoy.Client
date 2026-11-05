@@ -19,6 +19,35 @@ function emit(): void {
   for (const l of listeners) l();
 }
 
+/**
+ * Screen shares going on in the call. Watching is opt-in: nothing of a share
+ * (picture or sound) is received until the user chooses to watch it.
+ */
+export interface StreamOffer {
+  userId: string;
+  watching: boolean;
+}
+
+let offers: StreamOffer[] = [];
+const offerListeners = new Set<() => void>();
+
+export function setStreamOffers(next: StreamOffer[]): void {
+  const same = next.length === offers.length && next.every((o, i) => o.userId === offers[i]!.userId && o.watching === offers[i]!.watching);
+  if (same) return;
+  offers = next;
+  for (const l of offerListeners) l();
+}
+
+export function useStreamOffers(): StreamOffer[] {
+  return useSyncExternalStore(
+    (l) => {
+      offerListeners.add(l);
+      return () => offerListeners.delete(l);
+    },
+    () => offers,
+  );
+}
+
 export function putTile(tile: VideoTile): void {
   tiles = [...tiles.filter((t) => t.key !== tile.key), tile];
   emit();
@@ -31,6 +60,7 @@ export function dropTile(key: string): void {
 }
 
 export function clearTiles(): void {
+  setStreamOffers([]);
   if (tiles.length === 0) return;
   tiles = [];
   emit();

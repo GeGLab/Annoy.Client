@@ -6,7 +6,6 @@ import {trustedRenderer} from './trusted-renderer.ts';
 import {secureHttpUrl} from '../shared/transport.ts';
 import {nativeApiFetch} from './native-api-fetch.ts';
 import {registerPrivateDownload} from './private-download.ts';
-import { registerCrypto } from "./crypto/ipc.ts";
 import { osStorage } from "./safe-storage.ts";
 import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
@@ -53,11 +52,19 @@ app.on("will-quit", stopActivity);
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
 const serviceWindows = new Set<BrowserWindow>();
+/** The account website (sign-up, password, recovery). */
 const globalUrl = (process.env.ANNOY_GLOBAL_URL || "https://global.geg.dev.br").replace(/\/+$/, "");
+/** authannoy: the Annoy account API (TODO item 2). */
+// A development or test Global given alone also answers for the account.
+const authUrl = (process.env.ANNOY_AUTH_URL || process.env.ANNOY_GLOBAL_URL || "https://authannoy.geg.dev.br").replace(/\/+$/, "");
+/** Annoy cloud services (TODO item 1): friends, DMs, status and images, outside any server. */
+const cloudUrls = {
+  users: (process.env.ANNOY_USERS_URL || "https://usersannoy.geg.dev.br").replace(/\/+$/, ""),
+  chat: (process.env.ANNOY_CHAT_URL || "https://chatannoy.geg.dev.br").replace(/\/+$/, ""),
+  cdn: (process.env.ANNOY_CDN_URL || "https://cdnannoy.geg.dev.br").replace(/\/+$/, ""),
+};
 let resettingRenderer = false;
-let stopCrypto = () => {};
-let proofCrypto:((url:string,token:string,method:string,path:string,nonce?:string)=>Promise<string|null>)|null=null;
-const appAccess = createAppAccess(globalUrl, state => {
+const appAccess = createAppAccess(authUrl, state => {
   if (!state.allowed) {
     showService(null);
     for (const entry of views.values()) {
@@ -73,13 +80,8 @@ const appAccess = createAppAccess(globalUrl, state => {
   if (!resettingRenderer && win && !win.isDestroyed()) win.webContents.send("auth:state", state);
 },authenticatedMainFetch);
 async function authenticatedMainFetch(input:Parameters<typeof fetch>[0],init?:RequestInit):Promise<Response>{
- const url=secureHttpUrl(String(input)),original=new Headers(init?.headers),token=original.get("authorization")?.match(/^(?:Bearer|DPoP) (.+)$/)?.[1];
- const execute=async(nonce?:string)=>{const headers=new Headers(original);
-  if(token&&url.pathname.startsWith("/api/")&&proofCrypto){const proof=await proofCrypto(url.origin,token,init?.method??"GET",url.pathname+url.search,nonce);if(proof){headers.set("authorization","DPoP "+token);headers.set("dpop",proof);}}
-  return nativeApiFetch(input,{...init,headers,redirect:'error'});};
- let response=await execute();const nonce=response.headers.get("dpop-nonce");
- if(response.status===401&&token&&nonce&&/^[A-Za-z0-9_-]{43}$/.test(nonce)){await response.body?.cancel();response=await execute(nonce);}
- return response;
+ secureHttpUrl(String(input));
+ return nativeApiFetch(input,{...init,redirect:'error'});
 }
 
 const fromRenderer = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
@@ -349,7 +351,6 @@ function createWindow(): void {
   const resetRendererAccess = () => {
     // Close native pages without sending a logout into the departing document.
     resettingRenderer = true;
-    stopCrypto();
     try { appAccess.reset(); } finally { resettingRenderer = false; }
   };
   win.webContents.on("did-start-loading", resetRendererAccess);
@@ -406,6 +407,7 @@ ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
 // Native browsing stays locked until credentials are independently validated here.
 ipcMain.handle("auth:get", event => fromRenderer(event) ? appAccess.getState() : { allowed: false, global: false, localAccounts: [] });
 ipcMain.handle("auth:global-url", event => fromRenderer(event) ? globalUrl : null);
+ipcMain.handle("auth:cloud-urls", event => fromRenderer(event) ? cloudUrls : null);
 ipcMain.handle("auth:global", (event, token: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
   return appAccess.verifyGlobal(token);
@@ -415,8 +417,26 @@ ipcMain.handle("auth:local", async (event, account: unknown) => {
   try { await appAccess.verifyLocal(account); return { ok: true }; }
   catch (error) { return { ok: false, message: error instanceof Error ? error.message : translate("common.2587fca90678") }; }
 });
-ipcMain.handle("auth:logout-global", event => { if (fromRenderer(event)) {stopCrypto();appAccess.revokeGlobal();} });
-ipcMain.handle("auth:logout-local", (event, id: unknown, lock:unknown=true) => { if (fromRenderer(event) && typeof id === "string") {if(lock!==false)stopCrypto();appAccess.revokeLocal(id);} });
+ipcMain.handle("auth:logout-global", event => { if (fromRenderer(event)) {appAccess.revokeGlobal();} });
+ipcMain.handle("auth:auth-url", event => fromRenderer(event) ? authUrl : null);
+/**
+ * Sign-out wipes this install (TODO item 2.3): sessions, saved credentials,
+ * every service tab's login and the web caches. The renderer keeps only the
+ * username and the app's preferences, and reloads.
+ */
+ipcMain.handle("auth:wipe", async (event, serviceIds: unknown) => {
+  if (!fromRenderer(event)) return;
+  appAccess.reset();
+  for (const id of [...views.keys()]) await removeService(id).catch(() => undefined);
+  const ids = Array.isArray(serviceIds) ? serviceIds.filter((id): id is string => typeof id === "string" && /^[\w-]{1,64}$/.test(id)) : [];
+  for (const partition of ["persist:discord", ...ids.map((id) => `persist:service-${id}`)]) await session.fromPartition(partition).clearStorageData().catch(() => undefined);
+  for (const name of SECRET_NAMES) await secrets.set(name, null).catch(() => false);
+  const own = win?.webContents.session ?? session.defaultSession;
+  await own.clearCache().catch(() => undefined);
+  // localStorage stays: the renderer already removed everything but the username and preferences.
+  await own.clearStorageData({ storages: ["cookies", "indexdb", "cachestorage", "serviceworkers", "filesystem", "shadercache"] }).catch(() => undefined);
+});
+ipcMain.handle("auth:logout-local", (event, id: unknown, lock:unknown=true) => { if (fromRenderer(event) && typeof id === "string") {appAccess.revokeLocal(id);} });
 
 // Only the local, isolated renderer may control the desktop window.
 ipcMain.on("window:control", (event, action: unknown) => {
@@ -472,8 +492,6 @@ ipcMain.on("window:flash", event => {
 app.whenReady().then(() => {
   trayCapable=supportsTray();
   createWindow();
-  const crypto=registerCrypto(() => win, () => appAccess.getState().allowed);
-  stopCrypto = crypto; proofCrypto=crypto.proof;
   createTray();
   setInterval(() => void appAccess.revalidate(), 60_000).unref();
   if (win) startUpdater(win);

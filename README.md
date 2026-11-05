@@ -68,18 +68,18 @@ See [SECURITY.md](SECURITY.md).
   and presence reconnect automatically; rejoining media requires your action.
 - **Moderation.** Role editor, per-channel permission overwrites
   (allow/inherit/deny), invites, kick, ban and ban list.
-- **End-to-end encryption (0.9.0).** New messages, attachments, edits and
-  reactions are encrypted with OpenMLS; the server stores only ciphertext.
-  Voice channels and private calls use SFrame, so the SFU only forwards
-  encrypted media. History from before E2EE stays separate and read-only.
+- **Encrypted DMs.** DMs between Annoy accounts are encrypted in the app and
+  delivered by the Annoy cloud, which can't read them. Channel messages travel
+  over TLS; channel end-to-end encryption was removed after 0.9 and will come
+  back designed per feature.
 - **One account at a time.** Each server uses either Annoy accounts or local
   accounts. Switching accounts switches the servers you see.
 - **Long histories.** On-demand loading, synced read position, pinned
   messages and per-channel message lifetime set by the server admins.
 - **Friends and DMs.** Friend requests, presence, direct messages and full
   profiles with per-field audiences.
-- **Discord import wizard.** Choose the channels, history, roles and options,
-  then watch the import progress live.
+- **Discord import wizard.** Choose the channels, roles and options, then
+  watch the import progress live.
 - **Sign in with Discord.** Uses the official OAuth2 in your browser and pulls
   your username, name and avatar.
 - **Notifications** for mentions and DMs, plus unread badges, including the
