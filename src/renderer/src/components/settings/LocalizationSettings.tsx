@@ -1,5 +1,5 @@
 import { rich } from "../../lib/localization.ts";
-import { t as translate } from "../../../../shared/localization/index.ts";
+import { FONT_SIZE, t as translate } from "../../../../shared/localization/index.ts";
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
@@ -136,8 +136,8 @@ export function LocalizationSettings({
       >
         <Slider
           aria-label={translate("settings.243cf75e8126")}
-          min={16}
-          max={24}
+          min={FONT_SIZE.min}
+          max={FONT_SIZE.max}
           step={1}
           value={draft.fontSize}
           disabled={disabled}

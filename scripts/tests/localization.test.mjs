@@ -52,8 +52,12 @@ test("legacy installs keep Portuguese; preferences reject malformed values", () 
       underlineLinks: "no",
       hourCycle: 24,
     }),
-    { ...defaultLocalization(), fontSize: 24 },
+    { ...defaultLocalization(), fontSize: 20 },
   );
+  // Text size: 10 to 20 px, 14 by default.
+  assert.equal(defaultLocalization().fontSize, 14);
+  assert.equal(normalizeLocalization({ fontSize: 2 }).fontSize, 10);
+  assert.equal(normalizeLocalization({ fontSize: 12.4 }).fontSize, 12);
   assert.equal(
     normalizeLocalization({ language: "en", region: "pt-BR", hourCycle: "h12" })
       .language,

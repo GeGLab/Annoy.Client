@@ -1,4 +1,5 @@
 import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
+import { normalizeAppIcon } from "../../shared/app-icon.ts";
 import type {
   ChannelReadState,
   DmChannel,
@@ -117,6 +118,8 @@ export interface VoiceUi {
 
 export interface Settings extends LocalizationPreferences {
   theme: "dark" | "light" | "system";
+  /** Annoy icon inside the app, on the window and in the tray. */
+  appIcon: import("../../shared/app-icon.ts").AppIcon;
   accentColor: string | null;
   surfaceColor: string | null;
   channelsWidth: number;
@@ -247,6 +250,7 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "before",
   serviceDisplay: "full",
   barPosition: "side",
+  appIcon: "white",
   shareActivity: true,
   showVoiceBar: true,
   voiceBarMode: "external",
@@ -266,7 +270,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters) } : {}) } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon) } : {}) } as T;
   } catch {
     return fallback;
   }

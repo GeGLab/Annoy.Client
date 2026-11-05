@@ -1,3 +1,5 @@
+/** Text size in px for the whole interface (Settings → Language and accessibility). */
+export const FONT_SIZE = { min: 10, max: 20, default: 14 } as const;
 export const LANGUAGES = [
   "pt-BR",
   "en",
@@ -52,7 +54,7 @@ export function defaultLocalization(
     previousLanguage: null,
     region,
     hourCycle: cycle === "h11" || cycle === "h12" ? "h12" : "h23",
-    fontSize: 16,
+    fontSize: FONT_SIZE.default,
     underlineLinks: true,
   };
 }
@@ -81,8 +83,8 @@ export function normalizeLocalization(
         : defaults.hourCycle,
     fontSize:
       typeof input.fontSize === "number" && Number.isFinite(input.fontSize)
-        ? Math.min(24, Math.max(16, Math.round(input.fontSize)))
-        : 16,
+        ? Math.min(FONT_SIZE.max, Math.max(FONT_SIZE.min, Math.round(input.fontSize)))
+        : FONT_SIZE.default,
     underlineLinks:
       typeof input.underlineLinks === "boolean" ? input.underlineLinks : true,
   };

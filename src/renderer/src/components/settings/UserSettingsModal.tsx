@@ -40,6 +40,7 @@ import type { MicFilters } from "../../audio/mic-filters.ts";
 import { accountWebsite, signOut as signOutGlobal } from "../../auth/session.ts";
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
+import { SavedNotice, useSavedNotice } from "./SavedNotice.tsx";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
@@ -214,6 +215,7 @@ export function UserSettingsModal() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [capturing, setCapturing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedShown, showSaved] = useSavedNotice();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<(() => void) | null>(null);
   const allowWindowClose = useRef(false);
@@ -332,7 +334,7 @@ export function UserSettingsModal() {
       setState((s)=>{Object.assign(s.settings,next);});setDraft(next);
       updateVoiceSettings();
       setProfiles({});
-      toast(translate("settings.733e6e6b42e7"));
+      showSaved();
       return true;
     } catch (error) {
       if (!isCancellation(error)) setError(textForError(error) || translate("settings.fcd0784e9779"));
@@ -385,7 +387,7 @@ export function UserSettingsModal() {
               <Button variant="ghost" disabled={saving} onClick={reset}>{translate("settings.c54fabd99e62")}</Button>
               <Button loading={saving} onClick={() => void save()}>{translate("settings.7368658c96c4")}</Button>
             </div>
-          ) : null
+          ) : savedShown ? <SavedNotice /> : null
         }
       >
         <div className="settings-layout">

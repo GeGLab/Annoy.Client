@@ -8,6 +8,10 @@ export interface MediaItem {
   blob?: Blob;
   packId?: string;
   sha256?: string;
+  /** From the Annoy emoji set on cdnannoy; the bytes come from the local cache (annoy-set.ts). */
+  remote?: boolean;
+  /** Display size in px, set in admannoy. */
+  size?: number;
 }
 export interface MediaPack {
   id: string;
