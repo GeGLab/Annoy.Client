@@ -17,7 +17,9 @@ import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../..
 import { LOCKED_ACCESS, type AppAccessState } from "../../shared/app-access.ts";
 import type { UpdateState } from "../../shared/update.ts";
 import type { NoiseFilter } from "./noise.ts";
+import { DEFAULT_MIC_FILTERS, normalizeMicFilters } from "./audio/mic-filters.ts";
 import { useSyncExternalStore } from "react";
+import { emptySocial } from "./social/types.ts";
 import { observeNetwork, unknownEndpoint, type EndpointObservation, type NetworkObservation, type TransportStatus } from "../../shared/connectivity.ts";
 
 export interface Account {
@@ -99,7 +101,6 @@ export type Modal =
   | { kind: "importDiscord"; accountId: string; serverId: string | null }
   | { kind: "userSettings"; section?: "voice" | "expressions" | "security" | "updates"; accountId?: string }
   | { kind: "screenPicker" }
-  | { kind: "instanceAdmin"; accountId: string }
   | { kind: "deleteAccount"; accountId: string }
   | { kind: "addTab" }
   | { kind: "serviceSettings"; serviceId: string };
@@ -110,8 +111,6 @@ export interface VoiceUi {
   channelId: string;
   status: "connecting" | "connected";
   canStream: boolean;
-  /** Every frame of this call is end-to-end encrypted with SFrame. */
-  e2ee?: boolean;
   camera: boolean;
   screen: boolean;
 }
@@ -137,8 +136,12 @@ export interface Settings extends LocalizationPreferences {
   mutedServers: string[];
   mutedChannels: string[];
   noiseFilter: NoiseFilter;
+  /** OBS-style chain after the noise suppression model (see audio/mic-filters.ts). */
+  micFilters: import("./audio/mic-filters.ts").MicFilters;
   /** Local playback percentages, scoped to [account ID, remote user ID]. */
   userVolumes: Record<string, number>;
+  /** Same keys as userVolumes, for the sound of each person's screen share. */
+  streamVolumes: Record<string, number>;
   dmProfileOpen: boolean;
   /** Defaults for service tabs; each tab can override them. */
   servicePlacement: TabPlacement;
@@ -182,6 +185,8 @@ export interface AppState {
   desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
   /** The signed-in Annoy account, if any (keys stay in global.ts, never in the store). */
   global: GlobalAccount | null;
+  /** Friends, DMs and status of the Annoy account, from the Annoy cloud (social/). Never persisted. */
+  social: import("./social/types.ts").SocialState;
 }
 
 export interface GlobalAccount {
@@ -235,7 +240,9 @@ const DEFAULT_SETTINGS: Settings = {
   mutedServers: [],
   mutedChannels: [],
   noiseFilter: "rnnoise",
+  micFilters: DEFAULT_MIC_FILTERS,
   userVolumes: {},
+  streamVolumes: {},
   dmProfileOpen: true,
   servicePlacement: "before",
   serviceDisplay: "full",
@@ -259,7 +266,7 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? normalizeLocalization(saved,navigator.language) : {}) } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters) } : {}) } as T;
   } catch {
     return fallback;
   }
@@ -333,6 +340,7 @@ let state: AppState = {
   messageFocus: null,
   desktopActivity: null,
   global: null,
+  social: emptySocial(),
 };
 
 

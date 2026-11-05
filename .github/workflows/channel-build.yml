@@ -1,0 +1,147 @@
+# Nightly and unstable builds (TODO item 6.2). Launched in 0.10.0-alpha.1. The
+# repository variable ANNOY_CHANNELS must be "on" (set it to anything else to
+# pause every run). Details: docs/releases/CHANNELS.md.
+#
+# Each run publishes a GitHub pre-release v<next>-<channel>.<UTC stamp>, so
+# installs on the main line (GitHub's "latest" release) never see it, signed
+# with the CI channel key, which the app trusts only for nightly and unstable.
+name: channel-build
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # nightly from main, 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel
+        type: choice
+        options: [unstable, nightly]
+        default: unstable
+      ref:
+        description: Branch or commit to build
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: channel-build-${{ inputs.channel || 'nightly' }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: vars.ANNOY_CHANNELS == 'on'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      sha: ${{ steps.v.outputs.sha }}
+      channel: ${{ steps.v.outputs.channel }}
+      skip: ${{ steps.v.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - id: v
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel || 'nightly' }}
+        run: |
+          current="$(node -p "require('./package.json').version")"
+          core="${current%%-*}"
+          # A stable package.json version is already released: build the next patch.
+          if [ "$core" = "$current" ]; then
+            IFS=. read -r major minor patch <<< "$core"; core="$major.$minor.$((patch + 1))"
+          fi
+          sha="$(git rev-parse HEAD)"
+          # Nightly runs only when main moved since the last nightly.
+          skip=false
+          if [ "$CHANNEL" = nightly ]; then
+            last="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '[.[].tagName | select(test("-nightly\\."))][0] // ""')"
+            if [ -n "$last" ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$last" --jq .sha)" = "$sha" ]; then skip=true; fi
+          fi
+          echo "version=$core-$CHANNEL.$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win --x64
+            platform: win32
+            artifact: dist/Annoy-Setup-x64.exe
+            files: dist/Annoy-Setup-x64.exe dist/Annoy-Setup-x64.exe.blockmap dist/latest.yml
+          - os: ubuntu-latest
+            target: --linux
+            platform: linux
+            artifact: dist/Annoy-x86_64.AppImage
+            files: dist/Annoy-x86_64.AppImage dist/latest-linux.yml
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      CHANNEL: ${{ needs.version.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        shell: bash
+      - run: npm run typecheck
+      - run: npx electron-vite build
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Sign with the channel key
+        shell: bash
+        env:
+          KEY: ${{ secrets.ANNOY_CHANNEL_SIGNING_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "Secret ANNOY_CHANNEL_SIGNING_KEY is missing (docs/releases/CHANNELS.md)" >&2; exit 1; fi
+          key="$RUNNER_TEMP/channel-key.pem"; umask 077; printf '%s\n' "$KEY" > "$key"
+          node --experimental-strip-types scripts/sign-update.mjs "${{ matrix.artifact }}" "$VERSION" ${{ matrix.platform }} x64 annoy-channels "$key" dist
+          rm -f "$key"
+      - name: Copy the update info for the channel
+        shell: bash
+        run: for f in dist/latest*.yml; do cp "$f" "dist/${CHANNEL}${f#dist/latest}"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}
+          path: |
+            ${{ matrix.files }}
+            dist/${{ env.CHANNEL }}*.yml
+            dist/*.signed.json
+          if-no-files-found: error
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+      CHANNEL: ${{ needs.version.outputs.channel }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish the pre-release
+        run: |
+          gh release create "v$VERSION" out/* --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+            --target "${{ needs.version.outputs.sha }}" --title "Annoy $VERSION" \
+            --notes "Build $CHANNEL automático de ${{ needs.version.outputs.sha }}. Instável: use só para testes."
+      - name: Keep the last 3 builds of the channel
+        # The updater reads only the 10 newest entries of the releases feed;
+        # old builds would push the main line out of it.
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq ".[].tagName | select(test(\"-$CHANNEL\\\\.\"))" |
+            tail -n +4 | while read -r tag; do gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes; done

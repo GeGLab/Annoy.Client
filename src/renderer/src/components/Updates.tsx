@@ -3,7 +3,9 @@ import {requestNavigation} from "../lib/navigation-guard.ts";
 import {flushChatState} from "../chat-state.ts";
 import {toast} from "../store.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { UpdateChannel, UpdateChannelInfo } from "../../../shared/update-channels.ts";
+import { confirmAction } from "./ui/action-dialog.tsx";
 import type { UpdateState } from "../../../shared/update.ts";
 import { setState, useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
@@ -158,6 +160,51 @@ let STATUS_TEXT: Partial<Record<UpdateState["status"], string>> = {
   disabled: translate("update.disabled"),
 };
 
+/** The followed channel; a picker only once more than one channel is launched. */
+function ChannelSetting() {
+  const notifications = useStore((s) => s.settings.notifications);
+  const [info, setInfo] = useState<UpdateChannelInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const refresh = () => void updates()?.channel().then(setInfo).catch(() => {});
+  useEffect(refresh, []);
+  if (!info) return null;
+  const name = (channel: UpdateChannel) => ({ alpha: translate("update.channel.alpha"), unstable: translate("update.channel.unstable"), nightly: translate("update.channel.nightly") })[channel];
+  const choose = (channel: UpdateChannel) => {
+    setInfo({ ...info, channel });
+    void updates()?.configure({ notifications, channel }).then(refresh).catch(() => toast(translate("update.networkError")));
+  };
+  // Running a build of another channel: by default wait for a newer release of
+  // the chosen one; going now may install an older version.
+  const leave = async () => {
+    const yes = await confirmAction(translate("update.leaveConfirm", { p0: name(info.channel) }), { title: translate("update.leaveNow", { p0: name(info.channel) }), confirmLabel: translate("update.leaveConfirmButton") });
+    if (!yes) return;
+    setBusy(true);
+    try { setInfo(await updates()!.leaveChannel()); } catch { toast(translate("update.networkError")); } finally { setBusy(false); }
+  };
+  return (
+    <>
+      {info.launched.length < 2
+        ? <div className="muted small">{translate("update.channel")}: {name(info.channel)}</div>
+        : (
+          <label className="update-channel">
+            <span>{translate("update.channel")}</span>
+            <select value={info.channel} onChange={(e) => choose(e.target.value as UpdateChannel)}>
+              {info.launched.map((channel) => <option key={channel} value={channel}>{name(channel)}</option>)}
+            </select>
+            <span className="muted small">{translate("update.channelHint")}</span>
+          </label>
+        )}
+      {info.outside && (
+        <div className="update-channel-outside" role="note">
+          <p className="small">{translate("update.outside", { p0: name(info.buildChannel), p1: name(info.channel) })}</p>
+          <p className="small"><strong>{translate("update.waitRecommended")}</strong></p>
+          {!info.leaving && <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void leave()}>{translate("update.leaveNow", { p0: name(info.channel) })}</button>}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** Version line and manual check, for the settings screen. */
 export function UpdateSettings() {
   const update = useStore((s) => s.update);
@@ -180,6 +227,7 @@ export function UpdateSettings() {
       <div>
         <strong>{rich("common.ec484e0600f8",{p0:(update.currentVersion)})}</strong>
         {text && <div className="muted small">{text}</div>}
+        <ChannelSetting />
       </div>
       {update.status === "available" && (
         <button className="btn" onClick={() => void api?.download()}>{translate("common.dafb59613e12")}</button>

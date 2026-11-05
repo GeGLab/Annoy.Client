@@ -1,0 +1,19 @@
+/* Annoy account: friends, DMs and profile from the Annoy cloud (TODO item 1). */
+.cloud-profile { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border, rgba(127, 127, 127, 0.2)); }
+.cloud-profile h4 { margin: 0; }
+.cloud-profile-head { display: flex; align-items: center; gap: 16px; }
+.cloud-profile-avatar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cloud-profile-avatar-actions small { flex-basis: 100%; }
+.cloud-profile fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cloud-profile legend { margin-bottom: 4px; font-weight: 600; }
+.radio-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.message-sending { opacity: 0.6; }
+.message-failed .message-content { opacity: 0.7; }
+
+/* Sign-in (TODO item 2) */
+.sign-in-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.auth-gate-local { display: grid; gap: 8px; }
+.devices-list ul { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.device-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border, rgba(127, 127, 127, 0.2)); border-radius: var(--radius, 8px); }
+.device-row.current { border-color: var(--accent, currentColor); }
+.device-info { display: grid; gap: 2px; min-width: 0; }

@@ -22,6 +22,7 @@ function VoiceMenuItems({ accountId, serverId, member, voice, canModerate, conte
   const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
   return <>
     <UserVolumeControl accountId={accountId} userId={member.user.id} name={displayNameOf(member)} />
+    {voice.screen && <UserVolumeControl accountId={accountId} userId={member.user.id} name={displayNameOf(member)} kind="stream" />}
     {canModerate && <>
       <Separator />
       {(voice.serverMute || !voice.selfMute) && <Item onSelect={() => void act(apiFor(accountId).patch(`/servers/${serverId}/members/${member.user.id}/voice`, { serverMute: !voice.serverMute }))}>

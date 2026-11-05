@@ -25,10 +25,17 @@ export type UpdateState =
 
 export const RELEASES_URL = "https://github.com/GeGLab/annoy-client/releases";
 
-/** Numeric x.y.z comparison; a pre-release sorts before its release. */
+/**
+ * Semver precedence: numeric x.y.z, a pre-release sorts before its release,
+ * and pre-release identifiers compare one by one (numbers numerically, so
+ * alpha.10 > alpha.9; numbers before words; alpha < beta < nightly).
+ */
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) => {
-    const [core = "", pre] = v.replace(/^v/, "").split("-", 2);
+    const plain = v.replace(/^v/, "").split("+", 1)[0]!;
+    const dash = plain.indexOf("-");
+    const core = dash < 0 ? plain : plain.slice(0, dash);
+    const pre = dash < 0 ? [] : plain.slice(dash + 1).split(".");
     return { nums: core.split(".").map((n) => Number.parseInt(n, 10) || 0), pre };
   };
   const x = parse(a);
@@ -37,9 +44,22 @@ export function compareVersions(a: string, b: string): number {
     const d = (x.nums[i] ?? 0) - (y.nums[i] ?? 0);
     if (d !== 0) return Math.sign(d);
   }
-  if (x.pre && !y.pre) return -1;
-  if (!x.pre && y.pre) return 1;
-  return (x.pre ?? "").localeCompare(y.pre ?? "");
+  if (x.pre.length && !y.pre.length) return -1;
+  if (!x.pre.length && y.pre.length) return 1;
+  const numeric = /^\d+$/;
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i];
+    const q = y.pre[i];
+    if (p === undefined) return -1;
+    if (q === undefined) return 1;
+    if (p === q) continue;
+    const pn = numeric.test(p);
+    const qn = numeric.test(q);
+    if (pn && qn) return Math.sign(Number(p) - Number(q));
+    if (pn !== qn) return pn ? -1 : 1;
+    return p < q ? -1 : 1;
+  }
+  return 0;
 }
 
 /** The most urgent critical advisory that still affects `version`, if any. */

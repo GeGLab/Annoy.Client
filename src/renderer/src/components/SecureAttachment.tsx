@@ -14,10 +14,10 @@ const formatSize=(bytes:number)=>bytes<1024*1024?`${number(Math.max(1,Math.ceil(
  * Object URLs exist only while this authorized message is mounted. */
 export function SecureAttachment({accountId,message,file}:{accountId:string;message:Message;file:Attachment}){
  const [url,setUrl]=useState(''),[loading,setLoading]=useState(false),[zoom,setZoom]=useState(false);const objectUrl=useRef(''),mounted=useRef(true);
- const encrypted=file.url.startsWith('annoy-encrypted:'),image=IMAGE.test(file.contentType),media=/^(audio|video)\//.test(file.contentType);
+ const image=IMAGE.test(file.contentType),media=/^(audio|video)\//.test(file.contentType);
  useEffect(()=>{mounted.current=true;const dispose=()=>{if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);objectUrl.current='';};const timer=message.expiresAt?setTimeout(()=>{dispose();setUrl('');setZoom(false);},Math.max(0,Date.parse(message.expiresAt)-Date.now())):null;return()=>{mounted.current=false;if(timer)clearTimeout(timer);dispose();};},[message.id,message.expiresAt]);
  const load=async():Promise<string>=>{if(url)return url;if(loading)return '';setLoading(true);try{
-  const result=await (encrypted?apiFor(accountId).attachment(message.channelId,message.id,file.id):apiFor(accountId).legacyAttachment(file));
+  const result=await apiFor(accountId).legacyAttachment(file);
   if(!mounted.current||(message.expiresAt&&Date.parse(message.expiresAt)<=Date.now())){new Uint8Array(result.bytes).fill(0);return '';}
   const safe=/^(image\/(png|jpeg|gif|webp|avif)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)$/i.test(result.type)?result.type:'application/octet-stream';
   objectUrl.current=URL.createObjectURL(new Blob([result.bytes],{type:safe}));new Uint8Array(result.bytes).fill(0);setUrl(objectUrl.current);return objectUrl.current;
@@ -25,7 +25,7 @@ export function SecureAttachment({accountId,message,file}:{accountId:string;mess
  // Images and media open in place, like ordinary attachments; other files wait for "Baixar".
  useEffect(()=>{if(image||media)void load();},[message.id,file.id]);
  const download=async()=>{
-  if(!encrypted&&!image&&!media)return void apiFor(accountId).downloadLegacy(file).catch(err=>toast((err as Error).message));
+  if(!image&&!media)return void apiFor(accountId).downloadLegacy(file).catch(err=>toast((err as Error).message));
   const href=await load();if(!href)return;const link=document.createElement('a');link.href=href;link.download=file.filename;link.click();
  };
  const viewer=zoom&&url&&<Suspense fallback={null}><ImageViewer images={[{id:file.id,url,filename:file.filename,size:file.size}]} initialIndex={0} onClose={()=>setZoom(false)}/></Suspense>;

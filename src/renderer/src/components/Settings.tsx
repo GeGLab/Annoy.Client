@@ -1,7 +1,6 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
-import { ChannelEncryption } from "./crypto/ChannelEncryption.tsx";
 import { Input } from "./ui/input.tsx";
 import { confirmAction, promptText } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
@@ -28,10 +27,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
 import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
 import { displayNameOf, rankOf } from "../perms.ts";
-import { getState, setState, toast, useStore, type CreatableChannel, type Settings } from "../store.ts";
-import { act, closeModal, Field, Icon, Modal, openModal, type IconName } from "./ui.tsx";
-import { Button } from "./ui/button.tsx";
-import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../noise.ts";
+import { getState, setState, toast, useStore, type CreatableChannel } from "../store.ts";
+import { act, closeModal, Field, Icon, Modal, type IconName } from "./ui.tsx";
 import { HiddenServices } from "./Services.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 import { Brand } from "./Brand.tsx";
@@ -185,7 +182,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const requests = useRequestOwner(JSON.stringify([accountId, serverId, "server-settings"]));
   const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
-  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "advanced">("overview");
+  const [tab, setTab] = useState<"overview" | "roles" | "bans">("overview");
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
   const [icon, setIcon] = useState<File | null | undefined>();
@@ -228,7 +225,6 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const canRoles = has(state.permissions, Permission.MANAGE_ROLES);
   const canBans = has(state.permissions, Permission.BAN_MEMBERS);
   const canServer = has(state.permissions, Permission.MANAGE_SERVER);
-  const instanceAdmin = !!getState().instances[accountId]?.instance?.isAdmin;
   const api = apiFor(accountId);
   const role = state.roles.find((r) => r.id === roleId) ?? null;
   const alone = state.members.length === 1 && state.members[0]?.user.id === me;
@@ -261,9 +257,6 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         )}
         {canBans && (
           <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("bans"))}>{translate("settings.3fa784bd9f2f")}</button>
-        )}
-        {(window.distopic?.crypto || instanceAdmin) && (
-          <button className={tab === "advanced" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("advanced"))}>{translate("common.27964de71ae4")}</button>
         )}
       </div>
 
@@ -355,23 +348,6 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       )}
 
       {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
-      {tab === "advanced" && (
-        <div className="form">
-          {instanceAdmin && (
-            <>
-              <h3>{translate("common.c641bdc857f2")}</h3>
-              <p className="muted">{translate("common.aafaa7fd7e34")}</p>
-              <Button variant="secondary" onClick={() => openModal({ kind: "instanceAdmin", accountId })}>{translate("settings.3856c2768e7e")}</Button>
-            </>
-          )}
-          {window.distopic?.crypto && <h3>{translate("common.efa393bf5cb4")}</h3>}
-          {window.distopic?.crypto && <ChannelEncryption
-            accountId={accountId}
-            channels={state.channels.filter((c) => c.type === "text").map((c) => ({ id: c.id, name: "#" + c.name }))}
-            members={state.members.filter((m) => m.user.id !== me).map((m) => ({ id: m.user.id, name: displayNameOf(m) }))}
-          />}
-        </div>
-      )}
     </Modal>
   );
 }

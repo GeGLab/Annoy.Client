@@ -3,6 +3,7 @@ import {createHash,createPublicKey,verify} from 'node:crypto';
 import {open,lstat} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {z} from 'zod';
+import {channelAccepts,type UpdateChannel} from '../shared/update-channels.ts';
 const version=z.string().regex(/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
 const schema=z.object({format:z.literal(1),keyId:z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),version,platform:z.enum(['win32','linux']),arch:z.enum(['x64','arm64']),filename:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/),size:z.number().int().positive().max(4*1024*1024*1024),sha512:z.string().regex(/^[A-Za-z0-9+/]{86}==$/),signature:z.string().regex(/^[A-Za-z0-9_-]{86}$/)}).strict();
 export type SignedUpdate=z.infer<typeof schema>;
@@ -10,10 +11,11 @@ export type UpdateMetadata={version:string;files:{url:string;sha512:string;size?
 export function signedUpdatePayload(value:Omit<SignedUpdate,'signature'>):Buffer {
  return Buffer.from(JSON.stringify(['annoy/update/artifact/v1',value.keyId,value.version,value.platform,value.arch,value.filename,value.size,value.sha512]));
 }
-export function authenticateUpdate(raw:unknown,keys:Readonly<Record<string,string>>,expected:{version:string;platform:string;arch:string}):SignedUpdate {
+export function authenticateUpdate(raw:unknown,keys:Readonly<Record<string,string>>,expected:{version:string;platform:string;arch:string},keyChannels:Readonly<Record<string,readonly UpdateChannel[]>>={}):SignedUpdate {
  const parsed=schema.safeParse(raw);if(!parsed.success)throw new Error(translate("common.36d1f5cfc1d8"));const manifest=parsed.data;
  if(manifest.version!==expected.version||manifest.platform!==expected.platform||manifest.arch!==expected.arch)throw new Error(translate("common.088c044b47cd"));
  const encoded=keys[manifest.keyId];if(!encoded)throw new Error(translate("common.9ba1380cfdd5"));
+ const scope=keyChannels[manifest.keyId];if(scope&&!scope.some(channel=>channelAccepts(channel,manifest.version)))throw new Error(translate("common.9ba1380cfdd5"));
  try{const key=createPublicKey(encoded);if(key.asymmetricKeyType!=='ed25519'||!verify(null,signedUpdatePayload(manifest),key,Buffer.from(manifest.signature,'base64url')))throw new Error();}
  catch{throw new Error(translate("common.277a05b60c46"));}return manifest;
 }

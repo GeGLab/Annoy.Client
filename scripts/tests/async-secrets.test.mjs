@@ -6,8 +6,10 @@ import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {SecretStore} from '../../src/main/secrets.ts';
 import {osStorage} from '../../src/main/safe-storage.ts';
-import {VaultKeyProtector} from '../../src/main/crypto/key-protector.ts';
-import {EncryptedVault,seal,open} from '../../src/main/crypto/vault.ts';
+import {createCipheriv,createDecipheriv} from 'node:crypto';
+// A stand-in for the OS keychain cipher.
+function seal(key,plain,aad){const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',key,iv);c.setAAD(Buffer.from(aad));const body=Buffer.concat([c.update(plain),c.final()]);return Buffer.concat([iv,c.getAuthTag(),body]);}
+function open(key,sealed,aad){const d=createDecipheriv('aes-256-gcm',key,sealed.subarray(0,12));d.setAAD(Buffer.from(aad));d.setAuthTag(sealed.subarray(12,28));return Buffer.concat([d.update(sealed.subarray(28)),d.final()]);}
 
 function storage(){
  const key=randomBytes(32);let available=true,rotate=false,encrypted=0;
@@ -39,27 +41,6 @@ test('unreadable secret metadata is preserved and a failed operation does not po
   }
   await writeFile(file,'{}');await store.set('global','secret');assert.equal(await store.get('global'),'secret');
  }finally{await rm(dir,{recursive:true,force:true});}
-});
-test('OS vault keys unlock asynchronously, coalesce concurrent requests and rotate without changing history',async()=>{
- const dir=await mkdtemp(join(tmpdir(),'annoy-async-vault-')),os=storage();let vault;
- try{
-  vault=new EncryptedVault(dir,new VaultKeyProtector(dir,os.api));
-  await Promise.all([vault.unlock(),vault.unlock(),vault.unlock()]);assert.equal(os.count(),1);
-  vault.put('history',Buffer.from('permanent canary'),{backup:true});vault.lock();
-  const before=await readFile(join(dir,'master.sealed'));os.rotate();
-  vault=new EncryptedVault(dir,new VaultKeyProtector(dir,os.api));await vault.unlock();
-  assert.equal(vault.get('history').toString(),'permanent canary');
-  assert.notDeepEqual(await readFile(join(dir,'master.sealed')),before);assert.equal(os.count(),2);
- }finally{vault?.lock();await rm(dir,{recursive:true,force:true});}
-});
-test('locking during an async keychain request cannot unlock the vault or save a new master key',async()=>{
- const dir=await mkdtemp(join(tmpdir(),'annoy-async-lock-'));let complete;const master=randomBytes(32);
- const vault=new EncryptedVault(dir,{available:async()=>true,seal:()=>new Promise(resolve=>{complete=resolve;}),open:async b=>b});
- try{
-  const pending=vault.unlock();await new Promise(resolve=>setImmediate(resolve));vault.lock();complete(master);
-  await assert.rejects(pending,/locked/);assert.throws(()=>vault.get('secret'),/locked/);
-  await assert.rejects(readFile(join(dir,'master.sealed')),/ENOENT/);
- }finally{vault.lock();await rm(dir,{recursive:true,force:true});}
 });
 test('the Electron adapter only uses asynchronous APIs and refuses Linux plaintext/unknown storage',async()=>{
  const api={isAsyncEncryptionAvailable:async()=>true,encryptStringAsync:async value=>Buffer.from(value),decryptStringAsync:async bytes=>({result:bytes.toString(),shouldReEncrypt:false}),getSelectedStorageBackend:()=> 'basic_text'};

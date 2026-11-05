@@ -1,5 +1,10 @@
 # Builds the installers when a GitHub release is published and attaches them,
 # together with the latest*.yml files the in-app updater reads.
+#
+# Versions carry their channel (docs/releases/CHANNELS.md): v0.10.0-alpha.1 and
+# v0.10.0-beta.1 are the main line and must be ordinary releases, because
+# installs up to 0.9.x look only at GitHub's "latest" release. Nightly and
+# unstable builds come from channel-build.yml and must be pre-releases.
 name: release
 
 on:
@@ -41,17 +46,37 @@ jobs:
       - name: Check the tag matches package.json
         shell: bash
         run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+      - name: Check the channel and the pre-release flag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          channel="$(printf '%s' "${TAG#v}" | sed -nE 's/^[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/p' | tr A-Z a-z)"
+          prerelease="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          case "$channel" in
+            ""|alpha|beta) want=false; file=alpha ;;
+            nightly|unstable) want=true; file="$channel" ;;
+            *) echo "Unknown channel '$channel' in $TAG" >&2; exit 1 ;;
+          esac
+          if [ "$prerelease" != "$want" ]; then
+            echo "$TAG must have pre-release=$want on GitHub (see docs/releases/CHANNELS.md)" >&2; exit 1
+          fi
+          echo "CHANNEL_FILE=$file" >> "$GITHUB_ENV"
       - run: npm run typecheck
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      # SFrame (renderer worker) needs the exact wasm-bindgen version locked in Cargo.lock.
-      - run: cargo install wasm-bindgen-cli --version 0.2.130 --locked
-      - run: npm run crypto:build
       - run: npx electron-vite build
       - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Copy the update info for the channel
+        shell: bash
+        run: |
+          # The updater asks for <channel>.yml first (alpha.yml on the main line)
+          # and falls back to latest.yml; upload both.
+          extra=""
+          for f in dist/latest*.yml; do
+            copy="dist/${CHANNEL_FILE}${f#dist/latest}"; cp "$f" "$copy"; extra="$extra $copy"
+          done
+          echo "CHANNEL_FILES=$extra" >> "$GITHUB_ENV"
       - name: Upload to the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" ${{ matrix.files }} --clobber
+        run: gh release upload "$TAG" ${{ matrix.files }} $CHANNEL_FILES --clobber

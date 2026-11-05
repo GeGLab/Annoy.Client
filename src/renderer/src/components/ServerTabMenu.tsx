@@ -2,7 +2,7 @@ import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { ReactNode } from "react";
 import { has, Permission, type ServerSummary } from "@distopic/protocol";
-import { apiFor, canRemoveServerConnection, markServerRead, reconnect, removeServerConnection } from "../client.ts";
+import { apiFor, canRemoveServerConnection, editServerNickname, markServerRead, reconnect, removeServerConnection } from "../client.ts";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 import { toast, useStore, type Account, type InstanceState } from "../store.ts";
 import { act, Icon, openModal } from "./ui.tsx";
@@ -43,6 +43,7 @@ export function ServerTabMenu({ account, server, inst, children }: {
       <ContextMenuItem onSelect={() => markServerRead(account.id, server.id)}>{rich("common.f35e881d0f5c",{p0:(<Icon name="check" />)})}</ContextMenuItem>
       {ready && has(perms, Permission.CREATE_INVITE) && <ContextMenuItem onSelect={() => openModal({ kind: "invite", accountId: account.id, serverId: server.id })}>{rich("common.64074706bf95",{p0:(<Icon name="userPlus" />)})}</ContextMenuItem>}
       <ContextMenuSeparator />
+      {ready && <ContextMenuItem onSelect={() => void editServerNickname(account.id, server.id)}><Icon name="edit" />{translate("server.nicknameMenu")}</ContextMenuItem>}
       <ContextMenuItem onSelect={() => toggleMessageMute("server", account.id, server.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.615490f2cb43") : translate("common.b60be554ff31")}</ContextMenuItem>
       {settings && <ContextMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id })}>{rich("common.a86cf2b71570",{p0:(<Icon name="gear" />)})}</ContextMenuItem>}
       {ready && owner && <ContextMenuItem onSelect={() => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id })}>{rich("common.f2d74b4ab9eb",{p0:(<Icon name="crown" />)})}</ContextMenuItem>}

@@ -51,15 +51,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-      - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
         working-directory: annoy-client
       - run: npm ci
         working-directory: annoy-server
       - run: npm ci
         working-directory: annoy-api-global
-      - run: cargo test --locked --manifest-path native/annoy-crypto/Cargo.toml
-        working-directory: annoy-client
       - run: npm run typecheck
         working-directory: annoy-client
       - run: npm run typecheck
@@ -67,8 +64,6 @@ jobs:
       - run: npm run test:transport
         working-directory: annoy-client
       - run: npm run test:updates
-        working-directory: annoy-client
-      - run: npm run test:crypto
         working-directory: annoy-client
       - run: npm run test:activity
         working-directory: annoy-client
@@ -80,21 +75,13 @@ jobs:
         working-directory: annoy-api-global
       - run: npm run build
         working-directory: annoy-client
-      - run: node --experimental-strip-types --test scripts/tests/sframe-wasm.test.mjs
-        working-directory: annoy-client
       - name: Package Linux locally without publishing
         if: runner.os == 'Linux'
         run: npx electron-builder --linux --x64 --dir --publish never --config.npmRebuild=false --config.directories.output=dist/security-package
         working-directory: annoy-client
-      - name: Verify packaged code, crypto runtime and executable fuses
+      - name: Verify packaged code and executable fuses
         if: runner.os == 'Linux'
         run: node scripts/verify-native-package.mjs dist/security-package/linux-unpacked
-        working-directory: annoy-client
-      - name: Exercise the bundled Linux MLS process
-        if: runner.os == 'Linux'
-        env:
-          ANNOY_CRYPTO_BINARY: ${{ github.workspace }}/annoy-client/dist/security-package/linux-unpacked/resources/crypto/annoy-crypto
-        run: npm run test:crypto
         working-directory: annoy-client
       - run: npx playwright install --with-deps chromium
         working-directory: annoy-client

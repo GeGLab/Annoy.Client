@@ -21,7 +21,7 @@ export function TitleBar() {
       : view.kind === "service"
         ? (service?.name ?? "Annoy")
         : view.kind === "home"
-          ? translate("common.c15702ca9d45")
+          ? translate("titlebar.home")
           : [server?.server.name, channel?.name].filter(Boolean).join(" / ") || "Annoy";
   return (
     <header className={`titlebar${window.distopic?.platform === "darwin" ? " titlebar-mac" : ""}`}>

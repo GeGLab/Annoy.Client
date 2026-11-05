@@ -5,13 +5,13 @@ import { screenProfile } from "./lib/screen-profile.ts";
 // negotiation to Cloudflare and decides what we may publish or receive.
 import type { GatewayEvent, MediaSource } from "@distopic/protocol";
 import type { Gateway } from "./gateway.ts";
-import { clearTiles, dropTile, putTile } from "./media.ts";
+import { clearTiles, dropTile, putTile, setStreamOffers } from "./media.ts";
+import { isStreamSource, streamOffers } from "./lib/stream-watch.ts";
 import { MicGate } from "./mic.ts";
 import { toast, type Settings } from "./store.ts";
 import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
-import { userVolume } from "../../shared/user-volume.ts";
+import { playbackVolume, volumeKindOf } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
-import { CallEncryption, needsEncodedStreamsFlag } from "./media-e2ee/call-encryption.ts";
 
 interface Remote {
   source: MediaSource;
@@ -35,11 +35,13 @@ export class CloudflareVoiceSession {
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
   private remote = new Map<string, Remote>();
+  /** Screen shares (picture and sound) announced but not received: watching is opt-in. */
+  private pendingStreams = new Map<string, { userId: string; source: MediaSource }>();
+  /** People whose screen share we chose to watch. */
+  private watching = new Set<string>();
   private mixer = new RemoteAudioMixer();
   private closed = false;
   private capturedTracks = new Set<MediaStreamTrack>();
-  private crypt: CallEncryption | null = null;
-  private protectedReceivers = new WeakSet<RTCRtpReceiver>();
   canSpeak = false;
   canStream = false;
 
@@ -51,18 +53,7 @@ export class CloudflareVoiceSession {
     private readonly onLocalMedia: () => void,
     private readonly onMediaFailed: () => void,
     private readonly accountId: string,
-    /** Set when the call is end-to-end encrypted (SFrame); null only after an explicit transport-only consent. */
-    private readonly e2ee: { url: string; token: string; userId: string } | null = null,
   ) {}
-
-  /** True when every frame of this call is sealed with SFrame before it leaves this device. */
-  get encrypted(): boolean {
-    return this.crypt !== null;
-  }
-
-  mediaStats() {
-    return this.crypt?.stats() ?? Promise.resolve(null);
-  }
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
     const run = this.queue.then(task, task);
@@ -79,20 +70,14 @@ export class CloudflareVoiceSession {
       media?: { callId: string | null };
     }>("join", {
       channelId: this.channelId,
-      protection: this.e2ee ? "sframe" : "transport_only_acknowledged",
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
     });
-    if (this.e2ee) {
-      const crypt = await CallEncryption.start(this.gw, this.e2ee, this.channelId, joined.media ?? { callId: null }, (message) => toast(message, 10000));
-      if (this.closed) return crypt.close();
-      this.crypt = crypt;
-    }
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
     if (this.closed) return;
-    const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle", ...(this.crypt && needsEncodedStreamsFlag && { encodedInsertableStreams: true }) } as RTCConfiguration);
+    const pc = new RTCPeerConnection({ iceServers: joined.iceServers, bundlePolicy: "max-bundle" });
     this.pc = pc;
     pc.addEventListener("connectionstatechange", () => {
       if (pc.connectionState === "failed" && !this.closed) this.onMediaFailed();
@@ -104,7 +89,67 @@ export class CloudflareVoiceSession {
       await this.publish(track, "audio", "mic", undefined, OPUS_VOICE);
     }
     const { producers } = await this.gw.voice<{ producers: { producerId: string; userId: string; source: MediaSource }[] }>("getProducers");
-    for (const p of producers) await this.subscribe(p.producerId, p.userId, p.source);
+    for (const p of producers) await this.offer(p.producerId, p.userId, p.source, false);
+  }
+
+  // Watching screen shares ------------------------------------------------
+
+  /** Receives a new track now, unless it is a screen share we did not choose to watch. */
+  private offer(producerId: string, userId: string, source: MediaSource, fresh: boolean): Promise<void> {
+    if (isStreamSource(source) && !this.watching.has(userId)) {
+      this.pendingStreams.set(producerId, { userId, source });
+      this.publishOffers();
+      return Promise.resolve();
+    }
+    return fresh ? this.subscribeSoon(producerId, userId, source) : this.subscribe(producerId, userId, source);
+  }
+
+  private publishOffers(): void {
+    if (this.closed) return;
+    setStreamOffers(streamOffers([...this.pendingStreams.values(), ...this.remote.values()], this.watching));
+  }
+
+  watch(userId: string): void {
+    if (this.closed) return;
+    this.watching.add(userId);
+    for (const [producerId, entry] of [...this.pendingStreams]) {
+      if (entry.userId !== userId) continue;
+      this.pendingStreams.delete(producerId);
+      void this.subscribeSoon(producerId, entry.userId, entry.source);
+    }
+    this.publishOffers();
+  }
+
+  unwatch(userId: string): void {
+    this.watching.delete(userId);
+    for (const [producerId, entry] of [...this.remote]) {
+      if (entry.userId === userId && isStreamSource(entry.source)) this.release(producerId);
+    }
+    this.publishOffers();
+  }
+
+  /** Stops pulling a screen share track but keeps it on offer. */
+  private release(producerId: string): void {
+    const entry = this.remote.get(producerId);
+    if (!entry || !this.pc) return;
+    this.dropRemote(producerId, false);
+    this.pendingStreams.set(producerId, { userId: entry.userId, source: entry.source });
+    const pc = this.pc;
+    void this.serial(async () => {
+      if (this.closed) return;
+      const transceiver = pc.getTransceivers().find((t) => t.mid === entry.mid);
+      if (!transceiver || transceiver.currentDirection === "stopped") return;
+      transceiver.direction = "inactive";
+      await pc.setLocalDescription(await pc.createOffer());
+      try {
+        const res = await this.gw.voice<{ sdp?: string }>("unsubscribe", { producerId, sdp: pc.localDescription!.sdp });
+        if (res.sdp) await this.setRemote(pc, "answer", res.sdp);
+      } catch (err) {
+        // Older servers lack "unsubscribe": undo the offer; the local close still stops playback.
+        if (pc.signalingState === "have-local-offer") await pc.setLocalDescription({ type: "rollback" });
+        throw err;
+      }
+    }).catch((err: unknown) => console.warn("unsubscribe failed", err));
   }
 
   private publish(track: MediaStreamTrack, kind: "audio" | "video", source: MediaSource, maxBitrate?: number, opus?: Record<string, number>) {
@@ -113,11 +158,6 @@ export class CloudflareVoiceSession {
       if (this.closed || !this.pc) throw new Error(translate("common.99e2847d16e5"));
       const pc = this.pc;
       const transceiver = pc.addTransceiver(track, { direction: "sendonly", ...(maxBitrate && { sendEncodings: [{ maxBitrate }] }) });
-      if (this.crypt) {
-        // Before the offer: no frame of this track is ever sent without SFrame.
-        this.crypt.protectSender(transceiver.sender, source, kind);
-        if (kind === "video") preferVp8(transceiver);
-      }
       await pc.setLocalDescription(await pc.createOffer());
       if (opus && transceiver.mid) this.opus.set(transceiver.mid, opus);
       const res = await this.gw.voice<{ producerId: string; sdp: string }>("publish", {
@@ -146,41 +186,35 @@ export class CloudflareVoiceSession {
       const res = await this.gw.voice<{ mid: string; kind: "audio" | "video"; sdp?: string; renegotiate: boolean }>("subscribe", { producerId });
       if (res.renegotiate && res.sdp) {
         await this.setRemote(pc, "offer", res.sdp);
-        this.protectReceiver(pc, res.mid, res.kind);
         await pc.setLocalDescription(await pc.createAnswer());
         await this.gw.voice("renegotiate", { sdp: pc.localDescription!.sdp });
       }
       if (this.closed) return;
       const transceiver = pc.getTransceivers().find((t) => t.mid === res.mid);
       if (!transceiver) throw new Error(translate("common.f0cc45c67996"));
-      this.protectReceiver(pc, res.mid, res.kind);
       const track = transceiver.receiver.track;
       let audio: HTMLAudioElement | null = null;
       let amplified: AmplifiedAudio | null = null;
       if (res.kind === "audio") {
         audio = new Audio();
         audio.autoplay = true;
-        amplified = this.mixer.connect(new MediaStream([track]), userVolume(this.settings.userVolumes, this.accountId, userId), audio);
+        amplified = this.mixer.connect(new MediaStream([track]), playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId), audio);
         audio.muted = this.settings.selfDeaf;
         await this.applySink(audio);
         if (this.closed) { audio.pause(); audio.srcObject = null; amplified.close(); return; }
         audio.muted = this.settings.selfDeaf;
-        amplified.setVolume(userVolume(this.settings.userVolumes, this.accountId, userId));
+        amplified.setVolume(playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId));
         void audio.play().catch(() => undefined);
       } else {
         putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([track]), local: false });
       }
       this.remote.set(producerId, { source, mid: res.mid, audio, amplified, userId });
+      this.publishOffers();
+      // The user stopped watching while this was being set up.
+      if (isStreamSource(source) && !this.watching.has(userId)) queueMicrotask(() => this.release(producerId));
     });
   }
 
-  /** Before the answer is applied, so frames of this section are only ever opened by SFrame. */
-  private protectReceiver(pc: RTCPeerConnection, mid: string, kind: "audio" | "video"): void {
-    const receiver = pc.getTransceivers().find((t) => t.mid === mid)?.receiver;
-    if (!this.crypt || !receiver || this.protectedReceivers.has(receiver)) return;
-    this.protectedReceivers.add(receiver);
-    this.crypt.protectReceiver(receiver, kind);
-  }
 
   /**
    * A track announced a moment ago may not have reached Cloudflare yet ("Track
@@ -200,21 +234,29 @@ export class CloudflareVoiceSession {
   }
 
   /** Cloudflare already stopped forwarding; release what we built for it. */
-  private dropRemote(producerId: string): void {
+  /** `ended` is false when only we stop receiving it (the share goes on). */
+  private dropRemote(producerId: string, ended = true): void {
     const entry = this.remote.get(producerId);
-    if (!entry) return;
-    this.remote.delete(producerId);
-    if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
-    else dropTile(producerId);
+    const pending = this.pendingStreams.get(producerId);
+    if (ended) {
+      this.pendingStreams.delete(producerId);
+      // The next share by the same person is opt-in again.
+      const source = entry?.source ?? pending?.source;
+      if (source === "screen") this.watching.delete((entry ?? pending)!.userId);
+    }
+    if (entry) {
+      this.remote.delete(producerId);
+      if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
+      else dropTile(producerId);
+    }
+    if (entry || pending) this.publishOffers();
   }
 
   handleEvent(event: GatewayEvent): void {
     if (event.t === "VOICE_NEW_PRODUCER" && event.d.channelId === this.channelId) {
-      void this.subscribeSoon(event.d.producerId, event.d.userId, event.d.source);
+      void this.offer(event.d.producerId, event.d.userId, event.d.source, true);
     } else if (event.t === "VOICE_PRODUCER_CLOSED") {
       this.dropRemote(event.d.producerId);
-    } else if (event.t === "VOICE_MEDIA") {
-      this.crypt?.handleEvent(event.d);
     }
   }
 
@@ -298,9 +340,9 @@ export class CloudflareVoiceSession {
     const deviceChanged = settings.outputDeviceId !== this.settings.outputDeviceId;
     this.settings = settings;
     this.mic?.update(settings);
-    for (const { audio, amplified, userId } of this.remote.values()) {
+    for (const { audio, amplified, userId, source } of this.remote.values()) {
       if (!audio) continue;
-      amplified?.setVolume(userVolume(settings.userVolumes, this.accountId, userId));
+      amplified?.setVolume(playbackVolume(settings, volumeKindOf(source), this.accountId, userId));
       audio.muted = settings.selfDeaf;
       if (deviceChanged) void this.applySink(audio);
     }
@@ -333,13 +375,5 @@ export class CloudflareVoiceSession {
     clearTiles();
     this.mic?.stop();
     this.pc?.close();
-    this.crypt?.close();
   }
-}
-
-/** SFrame keeps only the VP8 frame header readable, so the call must not negotiate H264. */
-function preferVp8(transceiver: RTCRtpTransceiver): void {
-  const codecs = RTCRtpSender.getCapabilities("video")?.codecs ?? [];
-  const allowed = codecs.filter((c) => /^video\/(vp8|rtx|red|ulpfec)$/i.test(c.mimeType));
-  if (allowed.some((c) => /vp8$/i.test(c.mimeType))) transceiver.setCodecPreferences(allowed);
 }

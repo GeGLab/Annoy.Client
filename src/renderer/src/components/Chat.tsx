@@ -2,7 +2,6 @@ import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { SecureAttachment } from "./SecureAttachment.tsx";
-import { CryptoStatus } from "./CryptoStatus.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
@@ -108,7 +107,7 @@ function Attachments({ accountId, message }: { accountId: string; message: Messa
   return (
     <div className="attachments">
       {message.attachments.map((a) =>
-        (a.url.startsWith("annoy-encrypted:")||a.url.startsWith("/api/uploads/")) ? <SecureAttachment key={a.id} accountId={accountId} message={message} file={a}/> : isImage(a.contentType) ? (
+        a.url.startsWith("/api/uploads/") ? <SecureAttachment key={a.id} accountId={accountId} message={message} file={a}/> : isImage(a.contentType) ? (
           <button
             key={a.id}
             type="button"
@@ -329,7 +328,7 @@ function MessageRow({
             try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
             catch(error){toast((error as Error).message);}
           }}><Icon name="pin" size={16} /></button>}
-          {own && message.protection==='e2ee' && (
+          {own && (
             <button
               className="icon-btn tiny"
               title={translate("chat.2eba946b2e1e")}
@@ -890,7 +889,6 @@ export function Chat(props: ChatProps) {
         {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>{translate("chat.d4d0696420fd")}</button>}
       </div>}
       <ConnectionNotice accountId={accountId} />
-      <CryptoStatus accountId={accountId} channelId={channelId} />
       <RetentionNotice accountId={accountId} channelId={channelId} />
       <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>
         <div ref={messageLog} className="message-log">
@@ -940,7 +938,7 @@ export function Chat(props: ChatProps) {
                   channelOf={props.channelOf}
                   canModerate={props.canModerate}
                   canPin={pinsSupported && (props.canPin??props.canModerate)}
-                  canReact={props.canSend&&m.protection==='e2ee'}
+                  canReact={props.canSend}
                   highlighted={focus?.messageId===m.id}
                   onReply={(message) => { changeDraft({ replyToId: message.id }); setReplyResolution({ id: message.id, status: "valid", message }); }}
                 />

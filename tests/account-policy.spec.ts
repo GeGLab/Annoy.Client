@@ -36,8 +36,8 @@ test("global hosts offer global login/registration and no ordinary local login",
   try {
     await page.route(`${origin}/api/info`, route => route.fulfill({ json: info("global") }));
     await open(page);
-    await expect(page.getByRole("button", { name: "Entrar na conta Annoy" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Cadastrar conta Annoy" })).toHaveAttribute("href", /\/cadastro$/);
+    await expect(page.getByRole("button", { name: "Entrar", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Criar conta Annoy" })).toHaveAttribute("href", /\/cadastro$/);
     await expect(page.getByLabel("Senha local", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Criar conta local" })).toHaveCount(0);
     await expect(page.getByText("Atualização de segurança:", { exact: false })).toBeVisible();
@@ -53,7 +53,7 @@ test("local hosts offer local credentials without contacting Global", async () =
     await open(page);
     await expect(page.getByLabel("Senha local", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Criar conta local" })).toBeVisible();
-    await expect(page.getByRole("dialog").getByLabel("E-mail da conta Annoy")).toHaveCount(0);
+    await expect(page.getByRole("dialog").getByLabel("Usuário ou e-mail")).toHaveCount(0);
     await expect(page.getByText("O administrador escolheu contas locais.", { exact: false })).toBeVisible();
     expect(requestsToGlobal).toBe(0);
   } finally { await close(); }
@@ -90,7 +90,7 @@ test("existing local users automatically receive the global migration popup", as
     await invalidateSaved(page, "global");
     await expect(page.getByRole("heading", { name: "Migrar sua conta" })).toBeVisible();
     await expect(page.getByText("Contas locais existentes devem cadastrar", { exact: false })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Cadastrar conta Annoy" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Criar conta Annoy" })).toBeVisible();
   } finally { await close(); }
 });
 
@@ -148,8 +148,12 @@ test("global logout closes an active browser and blocks reopening it immediately
     await page.getByRole("button", { name: "Mensagens diretas", exact: true }).click();
     // The Annoy account signs out from the settings of the Annoy account.
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
+    await page.evaluate(() => { (window as any).__beforeSignOut = true; });
     await page.getByRole("button", { name: "Sair da conta Annoy", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
+    // Sign-out wipes this install and reloads the app (TODO item 2.3).
+    await expect.poll(() => page.evaluate(() => (window as any).__beforeSignOut ?? false).catch(() => true)).toBe(false);
+    await page.waitForLoadState("load");
     await page.evaluate(async () => {
       window.distopic!.services.show({ id: "browser", kind: "web", name: "Browser", url: "https://browser.test" });
       await window.distopic!.auth.get();
@@ -189,7 +193,6 @@ test("expected local authentication refusals and async secret operations produce
       const saved = await window.distopic!.secrets.set("global", "synthetic-secret-canary");
       const decrypted = await window.distopic!.secrets.get("global");
       await window.distopic!.secrets.set("global", null);
-      await window.distopic!.crypto.unlock("synthetic-local-password-for-tests");
       return { message, saved, decrypted, access: await window.distopic!.auth.get() };
     }, { id: "local", url: auth.url, token: auth.localToken, userId: "local-user" });
     expect(result.message).toBe("Este servidor exige conta Annoy");
@@ -205,7 +208,7 @@ test("account metadata distinguishes local and Annoy sessions before connecting"
   const { page, close } = await launch();
   try {
     const kinds = await page.evaluate(async () => {
-      const { toAccount } = await import(/* @vite-ignore */ `${location.origin}/src/global.ts`);
+      const { toAccount } = await import(/* @vite-ignore */ `${location.origin}/src/auth/servers.ts`);
       const auth = { token: "synthetic", user: { id: "u", username: "u", displayName: "U", avatarUrl: null } };
       const info = { name: "Fixture", version: "1", protocol: 1, registrationOpen: true, registration: "open", discordLogin: false };
       return [toAccount("https://instance.test", { ...info, accountMode: "local" }, auth).annoy, toAccount("https://instance.test", { ...info, accountMode: "global" }, auth).annoy, toAccount("https://instance.test", info, { ...auth, user: { ...auth.user, global: true } }).annoy];

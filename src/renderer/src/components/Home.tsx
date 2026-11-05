@@ -9,6 +9,7 @@ import { useState, type FormEvent } from "react";
 import { apiFor, navigate, openDm } from "../client.ts";
 import { EMPTY_ACTIVITIES, setState, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
+import { SocialHome } from "./social/SocialHome.tsx";
 import { act, Avatar, Icon, openModal } from "./ui.tsx";
 import { ResizablePanel } from "./layout/ResizablePanel.tsx";
 import { Brand } from "./Brand.tsx";
@@ -31,7 +32,6 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
       <Avatar user={rel.user} size={36} presence={presence} />
       <div className="friend-names">
         <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || rel.user.displayName}</strong></UserProfile>
-        {rel.nicknameByOther && <small className="muted">{rich("common.a07757ccb70f",{p0:(rel.nicknameByOther)})}</small>}
         <span className="muted">
           {!connected ? translate("common.b13c69621e91") : rel.status === "incoming" ? translate("common.13954746d501") : rel.status === "outgoing" ? translate("common.5407d7530e44") : presence === "idle" ? translate("common.fd7f0836e8ad") : presence === "dnd" ? translate("common.976685dd88bf") : online ? translate("common.0d21bd52022c") : translate("common.a1794783aab7")}
         </span>
@@ -141,11 +141,42 @@ function Friends({ accountId }: { accountId: string }) {
   );
 }
 
+/** First run: no server yet. Also the Annoy home before the first friend or conversation. */
+export function WelcomeMain({ onAddFriend }: { onAddFriend?: () => void } = {}) {
+  return (
+      <div className="empty-main welcome">
+        <header className="welcome-topline">
+          <Icon name="home" size={18} />
+          <span>{translate("common.325dfc37c9ba")}</span>
+        </header>
+        <div className="welcome-content">
+          <Brand size={72} />
+          <h1>{translate("common.34bf61529596")}<br />
+            <span>{translate("common.673020374935")}</span>
+          </h1>
+          <p>{translate("common.020ed05cc372")}<br className="desktop-break" />{translate("common.1e77d0e3ad33")}</p>
+          <div className="welcome-actions">
+            <Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.6e8f75b248c6",{p0:(<Icon name="plus" size={17} />)})}</Button>
+            <Button variant="secondary" onClick={() => openModal({ kind: "addTab" })}>{rich("common.0de9ed8c15d7",{p0:(<Icon name="right" size={16} />)})}</Button>
+          </div>
+          <span className="welcome-hint">{translate("common.ec9153e20787")}</span>
+        </div>
+        <footer className="welcome-footer">
+          <Brand size={20} wordmark />
+          <span>{translate("common.86b60c356e3d")}</span>
+        </footer>
+      </div>
+  );
+}
+
 export function Home({ accountId, dmId }: { accountId: string | null; dmId: string | null }) {
   const settings = useStore((s) => s.settings);
   const accounts = useStore((s) => s.accounts);
   const inst = useStore((s) => (accountId ? s.instances[accountId] : undefined));
+  // The Annoy account's home lives in the Annoy cloud, with or without servers (TODO item 1).
+  const annoyHome = useStore((s) => !!s.global && (accountId === null || !!s.accounts.find((a) => a.id === accountId)?.annoy));
   const unread = inst?.unread;
+  if (annoyHome) return <SocialHome dmId={dmId} />;
 
   if (!accountId || !inst) {
     return (
@@ -176,28 +207,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           </div>
           <UserPanel />
         </ResizablePanel>
-        <div className="empty-main welcome">
-          <header className="welcome-topline">
-            <Icon name="home" size={18} />
-            <span>{translate("common.325dfc37c9ba")}</span>
-          </header>
-          <div className="welcome-content">
-            <Brand size={72} />
-            <h1>{translate("common.34bf61529596")}<br />
-              <span>{translate("common.673020374935")}</span>
-            </h1>
-            <p>{translate("common.020ed05cc372")}<br className="desktop-break" />{translate("common.1e77d0e3ad33")}</p>
-            <div className="welcome-actions">
-              <Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.6e8f75b248c6",{p0:(<Icon name="plus" size={17} />)})}</Button>
-              <Button variant="secondary" onClick={() => openModal({ kind: "addTab" })}>{rich("common.0de9ed8c15d7",{p0:(<Icon name="right" size={16} />)})}</Button>
-            </div>
-            <span className="welcome-hint">{translate("common.ec9153e20787")}</span>
-          </div>
-          <footer className="welcome-footer">
-            <Brand size={20} wordmark />
-            <span>{translate("common.86b60c356e3d")}</span>
-          </footer>
-        </div>
+        <WelcomeMain />
       </div>
     );
   }
