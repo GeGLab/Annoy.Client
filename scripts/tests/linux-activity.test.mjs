@@ -123,13 +123,17 @@ test("invalid and escaping manifests are rejected; Steam root symlinks work", as
 test("real Linux proc detects a running executable and its exit without leaking OS metadata", async (t) => {
   const f = await fixture(t);
   const executable = join(f.directory, "game");
-  await copyFile("/bin/sleep", executable);
-  const child = spawn(executable, ["30"], { env: { SteamAppId: "480" }, stdio: "ignore" });
+  // /bin/sh runs under any name; /bin/sleep can be a multi-call binary that exits when renamed.
+  await copyFile("/bin/sh", executable);
+  const child = spawn(executable, ["-c", "read line"], { env: { SteamAppId: "480" }, stdio: ["pipe", "ignore", "ignore"] });
   const exited = new Promise((resolve) => child.once("exit", resolve));
   t.after(() => child.kill());
   await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
   const probe = () => probeLinux(preferences, undefined, { roots: [f.steam] });
-  assert.equal((await probe()).activities[0]?.name, "Synthetic Game");
+  // /proc can lag right after spawn on a busy runner: poll briefly.
+  let found;
+  for (let i = 0; i < 30 && !found; i++) { found = (await probe()).activities[0]?.name; if (!found) await new Promise((r) => setTimeout(r, 100)); }
+  assert.equal(found, "Synthetic Game");
   child.kill();
   await exited;
   assert.deepEqual((await probe()).activities, []);
