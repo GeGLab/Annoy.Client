@@ -6,7 +6,7 @@
       "severity": "critical",
       "fixedIn": "0.9.3",
       "summary": "Atualização de segurança: criptografia de ponta a ponta, contas Annoy obrigatórias por padrão e modos de autenticação exclusivos por servidor. Migre sua conta anterior para preservar seu histórico e suas permissões.",
-      "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.9.3"
+      "url": "https://github.com/GeGLab/annoy-client/releases/tag/v0.9.3-alpha"
     },
     {
       "id": "DSA-2026-002",
