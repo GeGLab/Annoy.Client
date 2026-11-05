@@ -24,6 +24,9 @@ export async function globalAuthFixture() {
     await page.evaluate(async ({ token, user }) => {
       await window.distopic!.auth.global(token);
       if (location.protocol === "file:") return;
+      // The app's own start-up check finds no saved session and clears the account: let it finish first.
+      const { restoreSession } = await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`);
+      await restoreSession();
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => { s.global = user; });
     }, { token, user });

@@ -1,9 +1,10 @@
 const { app, screen } = require("electron");
 app.setPath("userData", process.env.ANNOY_TEST_DATA||process.env.DISTOPIC_TEST_DATA);
-app.getVersion=()=>require("../../package.json").version;
+// ANNOY_TEST_VERSION pretends to be another build (e.g. a nightly) for update-channel tests.
+app.getVersion=()=>process.env.ANNOY_TEST_VERSION||require("../../package.json").version;
 if(process.platform==='linux'&&process.env.ANNOY_TEST_MONITOR){
   app.setName('annoy-security-tests');
-  app.getVersion=()=>require('../../package.json').version;
+  app.getVersion=()=>process.env.ANNOY_TEST_VERSION||require('../../package.json').version;
   app.setDesktopName('annoy-security-tests.desktop');
   app.setPath('userData',process.env.ANNOY_TEST_DATA);
   app.on('browser-window-created',(_event,window)=>{

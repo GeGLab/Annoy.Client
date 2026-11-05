@@ -20,6 +20,7 @@ import { News } from "./components/News.tsx";
 import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
 import { connectAll, leaveVoice, navigate, setPushToTalk, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
+import { initSocial, setWhere } from "./social/index.ts";
 import { fetchInfo } from "./api.ts";
 import { AuthGate } from "./components/AuthGate.tsx";
 import { Home } from "./components/Home.tsx";
@@ -34,8 +35,7 @@ const AddAccountModal = lazy(() => import("./components/AccountModals.tsx").then
 const SwitchAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.SwitchAccountModal })));
 const CreateServerModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.CreateServerModal })));
 const ImportDiscordModal = lazy(() => import("./components/ImportModal.tsx").then(m => ({ default: m.ImportDiscordModal })));
-const DeleteAccountModal = lazy(() => import("./components/InstanceAdmin.tsx").then(m => ({ default: m.DeleteAccountModal })));
-const InstanceAdminModal = lazy(() => import("./components/InstanceAdmin.tsx").then(m => ({ default: m.InstanceAdminModal })));
+const DeleteAccountModal = lazy(() => import("./components/DeleteAccountModal.tsx").then(m => ({ default: m.DeleteAccountModal })));
 const UserSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.UserSettingsModal })));
 const ServerSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.ServerSettingsModal })));
 const ChannelSettingsModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.ChannelSettingsModal })));
@@ -67,8 +67,6 @@ function Modals() {
       return <UserSettingsModal />;
     case "screenPicker":
       return <ScreenPickerModal />;
-    case "instanceAdmin":
-      return <InstanceAdminModal accountId={modal.accountId} />;
     case "deleteAccount":
       return <DeleteAccountModal accountId={modal.accountId} />;
     case "importDiscord":
@@ -101,9 +99,26 @@ function AccountPolicyNotice() {
   return null;
 }
 
+/** "Which server I'm in" for the Annoy account: the voice channel of an Annoy-account server. */
+function useWhere() {
+  const where = useStore((s) => {
+    const v = s.voice;
+    const state = v && s.instances[v.accountId];
+    if (!v || !state?.instance?.annoySocial) return null;
+    const server = state.serverStates[v.serverId];
+    if (!server) return null;
+    return JSON.stringify({ server: server.server.name, channel: server.channels.find((c) => c.id === v.channelId)?.name ?? null });
+  });
+  const cloud = useStore((s) => s.social.status);
+  useEffect(() => {
+    if (cloud === "ready") void setWhere(where ? JSON.parse(where) : null);
+  }, [where, cloud]);
+}
+
 function WorkspaceActivity() {
   useDesktopActivity();
   useAwayStatus();
+  useWhere();
   useEffect(() => () => { void window.distopic?.activity.configure({ games: false, music: false, development: false }); }, []);
   return null;
 }
@@ -151,7 +166,7 @@ export function App() {
         setState(s => { s.modal = null; });
       }
       setState(s => { s.access = next; if (!next.global) s.global = null; });
-      if (revoked) void import("./global.ts").then(g => g.signOutGlobal(false));
+      if (revoked) void import("./auth/session.ts").then(g => g.signOut(false));
     };
     const off = auth?.onState(next => { revision++; update(next); });
     const started = revision;
@@ -160,7 +175,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>{connectAll();void import("./global.ts").then(g=>g.initGlobal());});
+    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>initSocial());});
     if (getState().view.kind !== "home") navigate(getState().view);
     return window.distopic?.services.onBadge((id, badge) =>
       setState((s) => {

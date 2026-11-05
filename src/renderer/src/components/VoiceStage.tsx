@@ -3,8 +3,9 @@ import {t as translate} from "../../../shared/localization/index.ts";
 import { UserProfile } from "./UserProfile.tsx";
 import type { Channel, ServerState, VoiceState } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting } from "../client.ts";
-import { useVideoTiles, type VideoTile } from "../media.ts";
+import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting, watchStream } from "../client.ts";
+import { useStreamOffers, useVideoTiles, type VideoTile } from "../media.ts";
+import { UserVolumeControl } from "./UserVolumeControl.tsx";
 import { displayNameOf } from "../perms.ts";
 import { setState, useStore } from "../store.ts";
 import { Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
@@ -26,8 +27,9 @@ interface Person {
   user: ServerState["members"][number]["user"];
 }
 
-function VideoCard({ tile, person, focused, onFocus }: { tile: VideoTile; person: Person | undefined; focused: boolean; onFocus: () => void }) {
+function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoTile; person: Person | undefined; focused: boolean; onFocus: () => void; accountId: string }) {
   const card = useRef<HTMLDivElement>(null);
+  const remoteScreen = tile.source === "screen" && !tile.local;
   return (
     <div ref={card} className={`stage-card video ${tile.source}${focused ? " focused" : ""}${person?.state.speaking ? " speaking" : ""}`} onClick={onFocus}>
       <Video tile={tile} />
@@ -48,6 +50,26 @@ function VideoCard({ tile, person, focused, onFocus }: { tile: VideoTile; person
       >
         <Icon name="maximize" size={16} />
       </button>
+      {remoteScreen && (
+        <div className="stage-stream-tools" onClick={(e) => e.stopPropagation()}>
+          {person && <UserVolumeControl accountId={accountId} userId={tile.userId} name={person.name} kind="stream" />}
+          <button className="btn btn-ghost" onClick={() => watchStream(tile.userId, false)}>{translate("voice.stopWatching")}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Someone is sharing a screen we are not receiving: nothing arrives until the user asks. */
+function StreamOfferCard({ person, userId }: { person: Person | undefined; userId: string }) {
+  return (
+    <div className="stage-card stream-offer">
+      {person && <Avatar user={person.user} size={56} />}
+      <div className="stream-offer-text">
+        <span className="live">{screenQualityLabel(person?.state.screenQuality)}</span>
+        <span className="truncate">{translate("voice.isStreaming", { p0: person?.name ?? "…" })}</span>
+      </div>
+      <button className="btn" onClick={() => watchStream(userId, true)}><Icon name="monitor" size={16} />{translate("voice.watch")}</button>
     </div>
   );
 }
@@ -71,6 +93,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
   const voice = useStore((s) => s.voice);
   const settings = useStore((s) => s.settings);
   const tiles = useVideoTiles();
+  const offers = useStreamOffers();
   const [focus, setFocus] = useState<string | null>(null);
   const connected = voice?.accountId === accountId && voice.channelId === channel.id;
   const joining = connected && voice.status === "connecting";
@@ -90,6 +113,8 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
   const withVideo = new Set(visibleTiles.filter((t) => t.source === "camera").map((t) => t.userId));
   const audioOnly = [...people.values()].filter((p) => !withVideo.has(p.state.userId));
   const focusedTile = ordered.find((t) => t.key === focus) ?? null;
+  // Shares not being watched; the voice state confirms the share is still going on.
+  const unwatched = connected ? offers.filter((o) => !o.watching && people.get(o.userId)?.state.screen) : [];
 
 
   return (
@@ -124,14 +149,17 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
           <div className={`stage-grid${focusedTile ? " has-focus" : ""}`}>
             {focusedTile && (
               <div className="stage-focus">
-                <VideoCard tile={focusedTile} person={people.get(focusedTile.userId)} focused onFocus={() => setFocus(null)} />
+                <VideoCard tile={focusedTile} person={people.get(focusedTile.userId)} focused onFocus={() => setFocus(null)} accountId={accountId} />
               </div>
             )}
             <div className="stage-tiles">
+              {unwatched.map((o) => (
+                <StreamOfferCard key={`offer:${o.userId}`} person={people.get(o.userId)} userId={o.userId} />
+              ))}
               {ordered
                 .filter((t) => t.key !== focusedTile?.key)
                 .map((t) => (
-                  <VideoCard key={t.key} tile={t} person={people.get(t.userId)} focused={false} onFocus={() => setFocus(t.key)} />
+                  <VideoCard key={t.key} tile={t} person={people.get(t.userId)} focused={false} onFocus={() => setFocus(t.key)} accountId={accountId} />
                 ))}
               {audioOnly.map((p) => (
                 <PersonCard key={p.state.userId} person={p} accountId={accountId} />

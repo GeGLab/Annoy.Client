@@ -1707,6 +1707,10 @@ img.avatar-face {
   border-radius: var(--radius);
   padding: 10px 12px;
 }
+.update-channel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; }
+.update-channel .muted { flex-basis: 100%; }
+.update-channel-outside { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--warn); border-radius: var(--radius); background: rgba(255, 138, 61, 0.1); display: grid; gap: 6px; justify-items: start; }
+.update-channel-outside p { margin: 0; }
 
 /* Voice stage (camera and screen share) */
 .stage { display: flex; flex-direction: column; }
@@ -1766,3 +1770,18 @@ button.instance-status:hover { box-shadow: 0 0 0 3px rgba(255, 178, 63, 0.3); }
 .offline-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 40px; }
 .offline-panel p { max-width: 420px; margin: 0; }
 .offline-icon { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 178, 63, 0.12); color: var(--warn); }
+
+/* Watching a screen share is opt-in (TODO 4.1). */
+.stage-card.stream-offer { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 14px; text-align: center; }
+.stream-offer-text { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 0.9rem; }
+.stage-stream-tools { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 56px); flex-wrap: wrap; display: flex; align-items: flex-end; gap: 8px; padding: 4px; border-radius: 10px; background: rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity .15s; }
+.stage-card:hover .stage-stream-tools, .stage-stream-tools:focus-within { opacity: 1; }
+.stage-stream-tools .user-volume-control { min-width: 180px; padding: 4px 8px; }
+@media (prefers-reduced-motion: reduce) { .stage-stream-tools { transition: none; } }
+
+/* OBS-style microphone filters (TODO 4.4). */
+.mic-filters { display: grid; gap: 10px; }
+.mic-filter { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0; min-width: 0; }
+.mic-filter .muted.small { margin: 4px 0 0; }
+.mic-filter-controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 16px; margin-top: 8px; }
+.mic-filters > .ui-button { justify-self: start; }

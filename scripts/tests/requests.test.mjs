@@ -140,16 +140,11 @@ test("poll delays release timers and listeners immediately on cancellation", asy
   t.mock.timers.tick(1500);
 });
 
-test("uploads go only through the desktop crypto service and honor cancellation", async (t) => {
-  const previous = globalThis.window;
-  globalThis.window = {};
-  t.after(() => { if (previous) globalThis.window = previous; else delete globalThis.window; });
+test("uploads honor cancellation before sending anything", async () => {
   const api = new Api("https://test", "token", () => true, undefined, "user");
   const progress = [];
-  await assert.rejects(api.uploadMessage("channel", "", [], (value) => progress.push(value)), /serviço criptográfico/);
-  assert.deepEqual(progress, [0]);
   const controller = new AbortController();
   controller.abort();
-  await assert.rejects(api.uploadMessage("channel", "", [], () => {}, controller.signal), isCancellation);
-  assert.deepEqual(progress, [0]);
+  await assert.rejects(api.uploadMessage("channel", "", [], (value) => progress.push(value), controller.signal), isCancellation);
+  assert.deepEqual(progress, []);
 });

@@ -4,6 +4,15 @@ import type { UserActivity } from "@distopic/protocol";
 import { withSteamFallback } from "../../../../shared/steam-activity.ts";
 import { apiFor, gatewayFor } from "../../client.ts";
 import { getState, setState, useStore } from "../../store.ts";
+import { publishPresence } from "../../social/index.ts";
+/**
+ * Last activity payload sent to each server connection. Servers disconnect a
+ * client that sends more than 10 updates in 10 s, and desktop snapshots can
+ * arrive in bursts, so an unchanged payload is only re-sent as a refresh.
+ */
+const lastSent = new Map<string, { payload: string; at: number }>();
+const REFRESH_MS = 20_000;
+
 /** OS adapter -> sanitized preload -> authenticated gateways. No OS fields in profile entities. */
 export function useDesktopActivity() {
   const [connectionsVersion, setConnectionsVersion] = useState(0);
@@ -38,12 +47,15 @@ export function useDesktopActivity() {
     void window.distopic?.activity?.configure({ games: sharing, music: sharing, development: sharing });
   }, [sharing]);
   const screenSharing=useStore(s=>s.voice?.screen?s.voice.accountId:null);
+  const cloud = useStore((s) => s.social.status);
   const snapshot = useStore((s) => s.desktopActivity);
   useEffect(() => {
     const controller = new AbortController();
     let inFlight = false;
     if (!sharing || invisible) online.current.clear();
     for (const id of online.current.keys()) if (!ready.split("|").includes(id)) online.current.delete(id);
+    // A reconnected server starts with no activity: send it again right away.
+    for (const id of lastSent.keys()) if (!ready.split("|").includes(id)) lastSent.delete(id);
     const send = (id: string) => {
       const s = getState(), instance = s.instances[id];
       if (controller.signal.aborted || instance?.status !== "ready") return;
@@ -52,19 +64,34 @@ export function useDesktopActivity() {
       const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(id) : undefined;
       const activities:UserActivity[] = [...withSteamFallback(local, remote)];
       if(visible&&s.voice?.accountId===id&&s.voice.screen&&instance.instance?.extendedActivity)activities.push({kind:"video",provider:"annoy-screen",name:translate("activity.81dadf9352cb")});
-      gatewayFor(id)?.send({
-        op: "activity",
-        // Older instances validate activity strictly: don't disconnect their users with a new field.
-        activities: activities.filter((activity) => (activity.kind !== "development" || instance.instance?.developmentActivity) && (!["video","generic"].includes(activity.kind) || instance.instance?.extendedActivity)).map((activity) => {
+      const gateway = gatewayFor(id);
+      if (!gateway) return;
+      // Older instances validate activity strictly: don't disconnect their users with a new field.
+      const filtered = activities.filter((activity) => (activity.kind !== "development" || instance.instance?.developmentActivity) && (!["video","generic"].includes(activity.kind) || instance.instance?.extendedActivity)).map((activity) => {
           if (instance.instance?.activityArtwork) return activity;
           const { artwork: _artwork, ...legacy } = activity;
           return legacy;
-        }),
-      });
+        });
+      const payload = JSON.stringify(filtered), previous = lastSent.get(id), now = Date.now();
+      if (previous?.payload === payload && now - previous.at < REFRESH_MS) return;
+      // Only a delivered payload counts: a dropped one is sent again next time.
+      if (gateway.send({ op: "activity", activities: filtered })) lastSent.set(id, { payload, at: now });
+    };
+    // Annoy account: activities go to chatannoy only, never to its servers (TODO item 1).
+    const sendCloud = () => {
+      const s = getState();
+      if (s.social.status !== "ready") return;
+      const visible = s.settings.shareActivity && s.settings.manualPresence !== "offline";
+      const local = visible ? (s.desktopActivity?.activities ?? []) : [];
+      const remote = visible && !local.some((a) => a.kind === "game") ? [...online.current.values()][0] : undefined;
+      const activities: UserActivity[] = [...withSteamFallback(local, remote)];
+      if (visible && s.voice?.screen) activities.push({ kind: "video", provider: "annoy-screen", name: translate("activity.81dadf9352cb") });
+      publishPresence({ activities });
     };
     const publish = () => {
       const s = getState();
-      for (const [id, instance] of Object.entries(s.instances)) if (instance.status === "ready") send(id);
+      sendCloud();
+      for (const [id, instance] of Object.entries(s.instances)) if (instance.status === "ready" && !instance.instance?.annoySocial) send(id);
       if (inFlight || !s.settings.shareActivity || s.settings.manualPresence === "offline" || s.desktopActivity?.activities.some((a) => a.kind === "game")) return;
       inFlight = true;
       void Promise.all(Object.entries(s.instances).map(async ([id, instance]) => {
@@ -79,13 +106,16 @@ export function useDesktopActivity() {
         const previous = online.current.get(id);
         if (game) online.current.set(id, { ...game, startedAt: previous?.appId === game.appId ? previous?.startedAt : Date.now() });
         else online.current.delete(id);
-        if (JSON.stringify(previous) !== JSON.stringify(online.current.get(id))) send(id);
+        if (JSON.stringify(previous) !== JSON.stringify(online.current.get(id))) {
+          if (instance.instance?.annoySocial) sendCloud();
+          else send(id);
+        }
       })).finally(() => { inFlight = false; });
     };
     publish();
     const timer = setInterval(publish, 25_000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [snapshot, ready, sharing, invisible, connectionsVersion, screenSharing]);
+  }, [snapshot, ready, sharing, invisible, connectionsVersion, screenSharing, cloud]);
 }
 
 

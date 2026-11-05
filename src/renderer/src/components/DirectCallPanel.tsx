@@ -10,6 +10,8 @@ import { Button } from "./ui/button.tsx";
 import { UserVolumeControl } from "./UserVolumeControl.tsx";
 import { userVolume } from "../../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "../lib/remote-audio.ts";
+import { CLOUD_ACCOUNT } from "../social/types.ts";
+import { cloudUser } from "./social/SocialHome.tsx";
 
 function CallVideo({ stream, local = false }: { stream: MediaStream | null; local?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -19,12 +21,17 @@ function CallVideo({ stream, local = false }: { stream: MediaStream | null; loca
 export function DirectCallPanel() {
   const entry = useStore((s) => s.directCall);
   const instance = useStore((s) => entry ? s.instances[entry.accountId] : undefined);
+  const cloudCall = entry?.accountId === CLOUD_ACCOUNT;
+  const cloudMe = useStore((s) => s.social.me?.id);
+  const cloudFriends = useStore((s) => s.social.relationships);
+  const cloudProfiles = useStore((s) => s.social.profiles);
   const settings = useStore((s) => s.settings);
   const media = useDirectCallMedia();
   const audio = useRef<HTMLAudioElement>(null);
   const amplified = useRef<AmplifiedAudio | null>(null);
   const ringing = entry?.call.status === "ringing";
-  const incoming = entry?.call.calleeId === instance?.user?.id;
+  const myId = cloudCall ? cloudMe : instance?.user?.id;
+  const incoming = entry?.call.calleeId === myId;
   const otherId = entry ? (incoming ? entry.call.callerId : entry.call.calleeId) : "";
   const percent = userVolume(settings.userVolumes, entry?.accountId ?? "", otherId);
   const audioTracks = media.remote?.getAudioTracks().map((track) => track.id).join("|") ?? "";
@@ -57,18 +64,22 @@ export function DirectCallPanel() {
     void sink.then(() => { if (active && element.srcObject === stream) void element.play().catch(() => undefined); });
     return () => { active = false; };
   }, [audioTracks, entry?.call.id, settings.selfDeaf, settings.outputDeviceId]);
-  if (!entry || !instance?.user) return null;
-  const friend = instance.relationships.find((relationship) => relationship.user.id === otherId);
-  const other = friend?.user ?? instance.dms.flatMap((dm) => dm.recipients).find((user) => user.id === otherId);
-  const name = friend?.nickname || other?.displayName || translate("common.dfdf1ff8c702");
+  if (!entry || !myId) return null;
+  let other: import("@distopic/protocol").User | undefined, name: string;
+  if (cloudCall) {
+    other = cloudUser(cloudProfiles[otherId], otherId);
+    name = cloudFriends.find((r) => r.user.id === otherId)?.nickname || other.displayName;
+  } else {
+    const friend = instance!.relationships.find((relationship) => relationship.user.id === otherId);
+    other = friend?.user ?? instance!.dms.flatMap((dm) => dm.recipients).find((user) => user.id === otherId);
+    name = friend?.nickname || other?.displayName || translate("common.dfdf1ff8c702");
+  }
   if (ringing) return <Modal title={incoming ? translate("common.93947904c31c") : translate("common.c330e6eab743")} onClose={() => callAction(incoming ? "reject" : "end")} className="direct-call-invite">
-    <p role="note">{translate("common.783d0ed94ded")}</p>
     <div className="call-invite-person">{other && <Avatar user={other} size={80} />}<h3>{name}</h3><p className="muted">{incoming ? translate("common.b691e187af93") : translate("common.74d16463d404")} · {entry.call.video ? translate("common.63fb625e5405") : translate("common.195c60bb2325")}</p></div>
     <div className="call-invite-actions"><Button variant="secondary" onClick={() => callAction(incoming ? "reject" : "end")}><Icon name="hangup" />{incoming ? translate("common.ce432849d60e") : translate("common.bb9dbb406dcb")}</Button>{incoming && <Button onClick={() => callAction("accept")}>{rich("common.c783dd737e63",{p0:(<Icon name={entry.call.video ? "camera" : "phone"} />)})}</Button>}</div>
   </Modal>;
   return <section className="direct-call-panel" aria-label={translate("common.395edaa78986",{p0:(name)})}>
     <header>{other && <Avatar user={other} size={32} />}<div><strong>{name}</strong><small>{media.connected ? translate("common.77a41191fcc1") : translate("common.c059f8b22580")}</small></div><Icon name={entry.call.video ? "camera" : "phone"} /></header>
-    <p role="note">{entry.call.protection === "sframe" ? <><Icon name="lock" size={12} />{translate("common.fb4c00977d0d")}</> : translate("common.f593b114ffe6")}</p>
     <UserVolumeControl accountId={entry.accountId} userId={otherId} name={name} />
     <audio ref={audio} autoPlay />
     {entry.call.video && <div className="direct-call-video"><CallVideo stream={media.remote} /><CallVideo stream={media.local} local /></div>}

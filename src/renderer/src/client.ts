@@ -10,13 +10,12 @@ import { emptyInstance, getState, setState, subscribe, toast, type Account, type
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
-import { callEncryptionSupported } from "./media-e2ee/call-encryption.ts";
 import { playStreamFeedback, playCallFeedback, playVoiceFeedback, playMessageFeedback } from "./lib/voice-feedback.ts";
 import { isMessageMuted, notificationKey } from "./lib/notification-preferences.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
-import { handleDirectCallEvent, handleDirectCallMedia, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
+import { handleDirectCallEvent, updateDirectCallMute, disconnectDirectCall, callAction } from "./features/direct-calls.ts";
 import { canRemoveServer, connectionOfflineSince } from "../../shared/server-removal.ts";
-import { normalizeUserVolume, userVolumeKey } from "../../shared/user-volume.ts";
+import { normalizeUserVolume, userVolumeKey, type VolumeKind } from "../../shared/user-volume.ts";
 import { observeHttp, observeNetwork, observeReachable, observeRequestFailure, observeTransport } from "../../shared/connectivity.ts";
 import { cancelled, isCancellation, RequestError } from "../../shared/requests.ts";
 import { clearAccountChatState, clearChatAnchor, clearRecoveryReturn, flushChatState, readChatAnchor, readRecoveryReturn, type RecoveryReturn } from "./chat-state.ts";
@@ -114,7 +113,7 @@ function writeCache(accountId: string): void {
 export function reconnect(accountId?: string): void {
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
   // Servers of the Annoy account not signed in yet retry the Annoy sign-in instead.
-  if (getState().accounts.some((a) => a.pending && (!accountId || a.id === accountId))) void import("./global.ts").then((g) => g.syncVault());
+  if (getState().accounts.some((a) => a.pending && (!accountId || a.id === accountId))) void import("./auth/servers.ts").then((g) => g.syncVault());
 }
 
 window.addEventListener("online", () => {
@@ -305,7 +304,7 @@ export function removeAccount(accountId: string, mode: "signOut" | "remove" | "i
     }
   });
   // Removing on purpose: the Annoy account's server list forgets it too, so it doesn't come back.
-  if (mode === "remove" && account && getState().global) void import("./global.ts").then((g) => g.forgetServer(account.url));
+  if (mode === "remove" && account && getState().global) void import("./auth/servers.ts").then((g) => g.forgetServer(account.url));
   if (voice?.accountId === accountId) leaveVoice();
   const entry = live.get(accountId);
   entry?.api.dispose();
@@ -470,7 +469,29 @@ export function openChannel(accountId: string, serverId: string, channelId: stri
   navigate({ kind: "server", accountId, serverId, channelId });
 }
 
+/** Annoy public ID of a user seen on an Annoy-account server (member lists, own user). */
+export function annoyIdOf(accountId: string, userId: string): string | null {
+  const inst = getState().instances[accountId];
+  if (!inst?.instance?.annoySocial) return null;
+  if (inst.user?.id === userId) return inst.user.annoyId ?? null;
+  for (const st of Object.values(inst.serverStates)) for (const m of st.members) if (m.user.id === userId) return m.user.annoyId ?? null;
+  return null;
+}
+
 export async function openDm(accountId: string, userId: string): Promise<void> {
+  // Annoy-account servers: DMs live in the Annoy cloud (TODO item 1).
+  if (getState().instances[accountId]?.instance?.annoySocial) {
+    const annoyId = annoyIdOf(accountId, userId);
+    if (!annoyId) return toast(translate("social.noAnnoyId"));
+    try {
+      const { openDmWith } = await import("./social/dms.ts");
+      const dm = await openDmWith(annoyId);
+      navigate({ kind: "home", accountId: null, dmId: dm.id });
+    } catch (err) {
+      toast((err as Error).message);
+    }
+    return;
+  }
   const existing = getState().instances[accountId]?.dms.find((dm) => dm.recipients.some((user) => user.id === userId));
   if (existing) return navigate({ kind: "home", accountId, dmId: existing.id });
   const navigation = navigationGeneration;
@@ -673,15 +694,8 @@ export function sendTyping(accountId: string, channelId: string): void {
 
 // Voice --------------------------------------------------------------------
 
-/** Server replies meaning this call cannot be end-to-end encrypted with this client. */
-const NO_CALL_E2EE = /apenas a criptografia de transporte|SFrame ainda não foi implementado|não suportada neste servidor/;
-
-export async function joinVoice(accountId: string, serverId: string, channelId: string, transportOnly = false): Promise<void> {
+export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
-  const account = getState().accounts.find((a) => a.id === accountId);
-  // Voice, camera and screen are sealed with SFrame by default; otherwise the call goes ahead with a visible "sem E2EE" notice.
-  const e2ee = !transportOnly && account && callEncryptionSupported() ? { url: account.url, token: account.token, userId: account.userId } : null;
-  if (!e2ee) toast(translate("common.5f4379372fc3"), 6000);
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
@@ -703,7 +717,6 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         12000,
       ),
     accountId,
-    e2ee,
   );
   voice = { accountId, serverId, session };
   setState((s) => {
@@ -716,14 +729,12 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
       if (s.voice) {
         s.voice.status = "connected";
         s.voice.canStream = session.canStream;
-        s.voice.e2ee = session.encrypted;
       }
     });
     playCallFeedback("join");
     if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
     if (voice?.session === session) leaveVoice();
-    if (e2ee && NO_CALL_E2EE.test((err as Error).message)) return joinVoice(accountId, serverId, channelId, true);
     toast(translate("common.5ece26b7ec6d",{p0:((err as Error).message)}));
   }
 }
@@ -746,14 +757,41 @@ export function updateVoiceSettings(): void {
   if (voice) gatewayFor(voice.accountId)?.send({ op: "voice_state", selfMute: settings.selfMute, selfDeaf: settings.selfDeaf, ...(voice.session.isSharing("screen") && { screenQuality: screenProfile(settings).quality }) });
 }
 
+/**
+ * Your nickname in one server: every member of that server sees it. Not the
+ * friend nickname, which only its author sees (TODO item 5).
+ */
+export async function editServerNickname(accountId: string, serverId: string): Promise<void> {
+  const { promptText } = await import("./components/ui/action-dialog.tsx");
+  const state = getState().instances[accountId]?.serverStates[serverId];
+  const me = state?.members.find((m) => m.user.id === getState().instances[accountId]?.user?.id);
+  const nick = await promptText(translate("server.nicknamePrompt"), me?.nick ?? "", { confirmLabel: translate("server.nicknameSave") });
+  if (nick === null) return;
+  try {
+    await apiFor(accountId).patch(`/servers/${serverId}/members/@me`, { nick: nick.trim().slice(0, 32) || null });
+    await ensureServer(accountId, serverId, true);
+    toast(nick.trim() ? translate("server.nicknameSaved") : translate("server.nicknameCleared"));
+  } catch (err) {
+    toast((err as Error).message);
+  }
+}
+
+/** Starts or stops receiving someone's screen share in the current call. Watching is never automatic. */
+export function watchStream(userId: string, watch: boolean): void {
+  if (!voice) return;
+  if (watch) voice.session.watch(userId);
+  else voice.session.unwatch(userId);
+}
+
 /** Only local playback changes: this never sends a voice state or moderation request. */
-export function setUserVolume(accountId: string, userId: string, percent: number): void {
+export function setUserVolume(accountId: string, userId: string, percent: number, kind: VolumeKind = "voice"): void {
   const value = normalizeUserVolume(percent);
   setState((s) => {
-    s.settings.userVolumes ??= {};
+    const field = kind === "stream" ? "streamVolumes" : "userVolumes";
+    const volumes = (s.settings[field] ??= {});
     const key = userVolumeKey(accountId, userId);
-    if (value === 100) delete s.settings.userVolumes[key];
-    else s.settings.userVolumes[key] = value;
+    if (value === 100) delete volumes[key];
+    else volumes[key] = value;
   });
   if (voice?.accountId === accountId) voice.session.updateSettings(getState().settings);
 }
@@ -836,8 +874,8 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
       return member ? displayNameOf(member) : (dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null))?.displayName;
     };
     const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
-    const body = message.protection === "e2ee" ? translate("common.e8cfd559e42e") : previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
-    const n = new Notification(message.protection === "e2ee" ? "Annoy" : message.author.displayName, { body, silent: true });
+    const body = previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
+    const n = new Notification(message.author.displayName, { body, silent: true });
     n.onclick = () => window.focus();
   }
 }
@@ -849,22 +887,7 @@ function replaceUser(inst: InstanceState, user: User): void {
   for (const r of inst.relationships) if (r.user.id === user.id) r.user = user;
 }
 
-function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=false): void {
-  if(!authenticatedCrypto&&['MESSAGE_CREATE','MESSAGE_UPDATE','MESSAGE_DELETE'].includes(event.t)){
-    void(async()=>{
-      const account=getState().accounts.find(a=>a.id===accountId);if(!account)return;
-      const channel=(event.d as {channelId:string}).channelId;
-      try{
-        if(window.distopic?.crypto&&await window.distopic.crypto.guard(account.url,account.token,channel,account.userId))return;
-        try{const status=await apiFor(accountId).get<{channel:unknown}>(`/channels/${encodeURIComponent(channel)}/crypto`);if(status.channel)return;}
-        catch(error){if((error as {status?:number}).status!==404)return;}
-        if(event.t==='MESSAGE_CREATE'||event.t==='MESSAGE_UPDATE')onEvent(accountId,{...event,d:{...event.d,protection:'legacy_plaintext'}},true);
-        else onEvent(accountId,event,true);
-      }catch{/* Locked or unverifiable state cannot authorize plaintext gateway messages. */}
-    })();return;
-  }
-  if(event.t==='CRYPTO_DELIVERY'){void pullCrypto(accountId,event.d.channelId);return;}
-  if(event.t==='VOICE_MEDIA'&&event.d.channelId.startsWith('call:')){handleDirectCallMedia(accountId,event.d);return;}
+function onEvent(accountId: string, event: GatewayEvent): void {
   if (voice?.accountId === accountId) voice.session.handleEvent(event);
 
   switch (event.t) {
@@ -880,13 +903,7 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
         if (annoyUser !== account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = annoyUser; });
         if (window.distopic?.auth) {
           const current = () => getState().accounts.some((saved) => saved.id === account.id && saved.token === account.token && saved.url === account.url);
-          const bind = () => current() ? window.distopic?.crypto?.bind(account.url, account.token, account.userId)?.catch((error: Error) => {
-            // A new session lives only minutes until it is bound to this device's key (DPoP).
-            // Servers without MLS (older versions) have no device-bound sessions to set up.
-            if (current() && !/MLS/.test(error.message)) toast(translate("common.5f0ce6405685",{p0:(error.message)}), 10000);
-          }) : undefined;
-          if (annoyUser) void bind();
-          else void window.distopic.auth.local(account).then(bind, (error: Error) => { if (current()) toast(error.message, 10000); });
+          if (!annoyUser) void window.distopic.auth.local(account).catch((error: Error) => { if (current()) toast(error.message, 10000); });
         }
         else void fetchInfo(account.url).then(async info => {
           if (info.accountMode === "global") return;
@@ -1125,35 +1142,4 @@ function onEvent(accountId: string, event: GatewayEvent,authenticatedCrypto=fals
   }
 }
 
-// The cryptographic process emits plaintext only after authenticated local persistence.
-const cryptoPulls=new Map<string,Promise<void>>(),cryptoPullsAgain=new Set<string>();
-async function pullCrypto(accountId:string,channel:string):Promise<void>{
- const key=accountId+':'+channel;if(cryptoPulls.has(key)){cryptoPullsAgain.add(key);return cryptoPulls.get(key);}
- const task=(async()=>{
-  const account=getState().accounts.find(a=>a.id===accountId);if(!account||!window.distopic?.crypto)return;
-  try{
-   await window.distopic.crypto.guard(account.url,account.token,channel,account.userId);
-   const known=getState().instances[accountId]?.messages[channel]?.items.map(m=>m.id)??[];
-   const result=await window.distopic.crypto.reconcile(account.url,account.token,channel,known);
-   for(const message of result.items)if(result.newIds.includes(message.id))onEvent(accountId,{t:'MESSAGE_CREATE',d:message},true);
-   patchInstance(accountId,i=>{const list=i.messages[channel];if(!list)return;const messages=new Map([...list.items,...result.items].map(m=>[m.id,m]));list.items=[...messages.values()].filter(m=>!result.deletedIds.includes(m.id));});
-  }catch{/* Authorization, unlock or connectivity remains visible in the conversation banner. */}
- })().finally(()=>{cryptoPulls.delete(key);if(cryptoPullsAgain.delete(key))void pullCrypto(accountId,channel);});cryptoPulls.set(key,task);return task;
-}
-window.addEventListener('annoy:crypto-message',event=>{
- const {url,message}=(event as CustomEvent<{url:string;message:Message}>).detail;
- const account=getState().accounts.find(a=>a.url===url);if(account)onEvent(account.id,{t:'MESSAGE_CREATE',d:message},true);
-});
-window.addEventListener('annoy:crypto-begin',event=>{
- const marker=(event as CustomEvent<{url:string;channel:string;id:string;captured:boolean;previous:unknown}>).detail;
- const account=getState().accounts.find(a=>a.url===marker.url);if(!account)return;
- marker.previous=getState().instances[account.id]?.messages[marker.channel]?.items.find(m=>m.id===marker.id);marker.captured=true;
-});
-window.addEventListener('annoy:crypto-change',event=>{
- const {url,channel,id,message,captured,previous}=(event as CustomEvent<{url:string;channel:string;id:string;message:Message|null;captured?:boolean;previous?:unknown}>).detail;
- const account=getState().accounts.find(a=>a.url===url);if(!account)return;
- // A newer authenticated sync may have replaced or deleted this message while
- // the mutation awaited IPC/network. Its stale result must not replace it.
- if(captured&&getState().instances[account.id]?.messages[channel]?.items.find(m=>m.id===id)!==previous)return;
- onEvent(account.id,message?{t:'MESSAGE_UPDATE',d:message}:{t:'MESSAGE_DELETE',d:{channelId:channel,messageId:id}},true);
-});
+

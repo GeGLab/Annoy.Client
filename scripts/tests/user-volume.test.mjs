@@ -12,7 +12,7 @@ test("individual volume defaults to 100%, persists and is isolated by account an
   assert.equal(userVolume(undefined, "account-a", "alice"), 100);
   for (const value of [undefined, null, NaN, Infinity, "200"]) assert.equal(normalizeUserVolume(value), 100);
   assert.equal(normalizeUserVolume(-20), 0);
-  assert.equal(normalizeUserVolume(250), 200);
+  assert.equal(normalizeUserVolume(350), 300);
 });
 
 class Node {
@@ -160,4 +160,14 @@ test("cleanup releases only owned tracks and leaves the receiver tracks alone", 
   for (const pull of pulls) { assert.equal(pull.srcObject, null); assert.ok(pull.pauses > 0); }
   assert.equal(context.listeners.size, 0);
   assert.throws(() => mixer.connect({}, 100, new Audio()), /Audio session is closed/);
+});
+
+test("screen-share sound has its own volume, separate from the voice", async () => {
+  const { playbackVolume, volumeKindOf } = await import("../../src/shared/user-volume.ts");
+  const settings = { userVolumes: { [userVolumeKey("a", "alice")]: 40 }, streamVolumes: { [userVolumeKey("a", "alice")]: 250 } };
+  assert.equal(volumeKindOf("mic"), "voice");
+  assert.equal(volumeKindOf("screen_audio"), "stream");
+  assert.equal(playbackVolume(settings, "voice", "a", "alice"), 40);
+  assert.equal(playbackVolume(settings, "stream", "a", "alice"), 250);
+  assert.equal(playbackVolume({ userVolumes: settings.userVolumes }, "stream", "a", "alice"), 100);
 });

@@ -8,7 +8,8 @@ import {singleFlight} from "../shared/single-flight.ts";
 import updaterPkg from "electron-updater";
 import { blockingAdvisory, type Advisory } from "../shared/update.ts";
 import { createUpdateController } from "./update-controller.ts";
-import {UPDATE_TRUST} from './update-trust.ts';
+import {UPDATE_TRUST,UPDATE_KEY_CHANNELS} from './update-trust.ts';
+import {DEFAULT_CHANNEL,LAUNCHED_CHANNELS,channelAccepts,channelOfVersion,effectiveChannel,isUpdateChannel,type UpdateChannel} from '../shared/update-channels.ts';
 import {authenticateUpdate,fetchUpdateManifest,matchUpdateMetadata,verifyUpdateFile,type SignedUpdate} from './update-signature.ts';
 
 const { autoUpdater } = updaterPkg;
@@ -32,7 +33,19 @@ async function loadAdvisory(): Promise<Advisory | null> {
 
 export function startUpdater(window: BrowserWindow): void {
   const preferencesFile=join(app.getPath("userData"),"updates.json");
-  let notifications=readPreferences(preferencesFile,value=>!!value&&typeof value==="object"&&"notifications"in value&&typeof value.notifications==="boolean"?value.notifications:true);
+  const saved=readPreferences(preferencesFile,value=>{
+    const o=value&&typeof value==="object"?value as Record<string,unknown>:{};
+    return {notifications:typeof o.notifications==="boolean"?o.notifications:true,channel:isUpdateChannel(o.channel)?o.channel:null};
+  });
+  let notifications=saved.notifications;
+  // Saved choice of channel; kept even while that channel is not launched.
+  let savedChannel:UpdateChannel|null=saved.channel;
+  let channel=effectiveChannel(savedChannel,app.getVersion());
+  // Set when the user, running a build outside the chosen channel (e.g. a
+  // nightly after switching to alpha), asks to go to that channel now instead
+  // of waiting for a newer release there. Only then may an older version install.
+  let leaveNow=false;
+  const save=()=>writePreferences(preferencesFile,{notifications,...(savedChannel?{channel:savedChannel}:{})});
   let notificationsReady=false;
   const notified=new Set<string>();
   const notify=(version:string)=>{if(!notificationsReady||!notifications||notified.has(version)||!Notification.isSupported())return;try{const notice=new Notification({title:translate("update.notificationTitle"),body:translate("update.notificationBody",{p0:version})});notice.on("click",()=>{window.show();if(window.isMinimized())window.restore();window.focus();});notice.show();notified.add(version);}catch{}};
@@ -47,8 +60,19 @@ export function startUpdater(window: BrowserWindow): void {
     autoUpdater.forceDevUpdateConfig = !app.isPackaged;
     autoUpdater.setFeedURL({ provider: "generic", url: process.env.ANNOY_UPDATE_FEED });
   }
+  // The channel decides which releases are offered (src/shared/update-channels.ts).
+  // On GitHub the updater reads it from the tags; a generic feed (tests, mirrors)
+  // serves latest.yml for the default channel and <channel>.yml for the others.
+  const applyChannel=()=>{
+    autoUpdater.channel=process.env.ANNOY_UPDATE_FEED&&channel===DEFAULT_CHANNEL?"latest":channel;
+    autoUpdater.allowPrerelease=true;
+    // Setting a channel turns downgrades on; never install an older version
+    // unless the user asked to leave the current build's channel now.
+    autoUpdater.allowDowngrade=leaveNow;
+  };
+  applyChannel();
   const controller = createUpdateController({
-    currentVersion: app.getVersion(), updatable, loadAdvisory,
+    currentVersion: app.getVersion(), updatable, loadAdvisory, allowOlder:()=>leaveNow,
     formatError:error=>/checksum|sha512|sha256/i.test(String(error))?translate("update.integrityError"):error instanceof Error&&/autenticad|assinatura/i.test(error.message)?error.message:translate("update.networkError"),
     checkForUpdates: async () => (await autoUpdater.checkForUpdates())?.updateInfo.version ?? null,
     downloadUpdate: () => autoUpdater.downloadUpdate(),
@@ -72,9 +96,10 @@ export function startUpdater(window: BrowserWindow): void {
   autoUpdater.on("update-downloaded", info => {
     verified=null;autoUpdater.autoInstallOnAppQuit=false;
     void (async()=>{
+      if(!channelAccepts(channel,info.version))throw new Error("Update outside the selected channel");
       const expected={version:info.version,platform:process.platform,arch:process.arch};
       const base=process.env.ANNOY_UPDATE_FEED||`https://github.com/GeGLab/annoy-client/releases/download/v${info.version}/`;
-      const manifest=authenticateUpdate(await fetchUpdateManifest(base,expected),UPDATE_TRUST,expected);
+      const manifest=authenticateUpdate(await fetchUpdateManifest(base,expected),UPDATE_TRUST,expected,UPDATE_KEY_CHANNELS);
       matchUpdateMetadata(manifest,info);await verifyUpdateFile(info.downloadedFile,manifest);
       verified={path:info.downloadedFile,manifest};controller.downloaded(info.version);
     })().catch(()=>controller.error(new Error(translate("common.61ff88422613"))));
@@ -91,13 +116,25 @@ export function startUpdater(window: BrowserWindow): void {
   autoUpdater.on("error", err => controller.error(err));
   const trusted=(event:Electron.IpcMainInvokeEvent)=>trustedRenderer(event,window);
   ipcMain.handle("update:get", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.getState();});
+  const channelInfo=()=>({channel,launched:LAUNCHED_CHANNELS,outside:!channelAccepts(channel,app.getVersion()),buildChannel:channelOfVersion(app.getVersion()),leaving:leaveNow});
+  ipcMain.handle("update:channel", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return channelInfo();});
+  ipcMain.handle("update:leave-channel", async event => {
+    if(!trusted(event))throw new Error("Invalid update IPC sender");
+    if(channelAccepts(channel,app.getVersion()))throw new Error("This build already belongs to the selected channel");
+    leaveNow=true;applyChannel();await check();return channelInfo();
+  });
   ipcMain.handle("update:configure",(event,values:unknown)=>{
     if(!trusted(event))throw new Error("Invalid update IPC sender");
     if(!values||typeof values!=="object"||!("notifications"in values)||typeof values.notifications!=="boolean")throw new Error("Invalid update preferences");
-    const changed=values.notifications!==notifications;
+    const requested="channel"in values?values.channel:undefined;
+    if(requested!==undefined&&(!isUpdateChannel(requested)||!LAUNCHED_CHANNELS.includes(requested)))throw new Error("Invalid update channel");
+    let changed=values.notifications!==notifications;
     notifications=values.notifications;notificationsReady=true;
+    if(requested!==undefined&&requested!==channel){
+      savedChannel=requested;channel=requested;changed=true;leaveNow=false;applyChannel();void check();
+    }
     const state=controller.getState();if(state.status==="available")notify(state.version);
-    if(changed)writePreferences(preferencesFile,{notifications});
+    if(changed)save();
   });
   ipcMain.handle("update:check", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return check();});
   ipcMain.handle("update:download", event => {if(!trusted(event))throw new Error("Invalid update IPC sender");return controller.download();});
