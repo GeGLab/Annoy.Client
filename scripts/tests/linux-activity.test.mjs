@@ -129,7 +129,10 @@ test("real Linux proc detects a running executable and its exit without leaking 
   t.after(() => child.kill());
   await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
   const probe = () => probeLinux(preferences, undefined, { roots: [f.steam] });
-  assert.equal((await probe()).activities[0]?.name, "Synthetic Game");
+  // /proc can lag right after spawn on a busy runner: poll briefly.
+  let found;
+  for (let i = 0; i < 30 && !found; i++) { found = (await probe()).activities[0]?.name; if (!found) await new Promise((r) => setTimeout(r, 100)); }
+  assert.equal(found, "Synthetic Game");
   child.kill();
   await exited;
   assert.deepEqual((await probe()).activities, []);
