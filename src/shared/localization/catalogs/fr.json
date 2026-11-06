@@ -2162,7 +2162,7 @@
   "social.whereChannel": "Dans {p0} · {p1}",
   "social.whereServer": "Dans {p0}",
   "social.profileTitle": "Profil du compte Annoy",
-  "social.profileHelp": "Les amis et les MP voient ce profil. Chaque serveur garde le sien.",
+  "social.profileHelp": "Votre seul profil. Les amis, les DM et les serveurs où vous entrez avec le compte Annoy utilisent ce profil.",
   "social.displayName": "Nom affiché",
   "social.bio": "À propos de moi",
   "social.changeAvatar": "Changer la photo",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "Retirer l'autocollant",
   "settings.stickers.removeConfirm": "Retirer l'autocollant « {p0} » ?",
   "expression.stickerReactionName": "Autocollant",
-  "expression.noStickersFound": "Aucun autocollant trouvé."
+  "expression.noStickersFound": "Aucun autocollant trouvé.",
+  "settings.profileFromAnnoy": "Le nom, la photo et la bio viennent du profil du compte Annoy.",
+  "settings.profileIntroAnnoy": "Un seul profil, sur le compte Annoy. Il apparaît aussi sur les serveurs où vous entrez avec ce compte."
 }

@@ -10,8 +10,9 @@ import { Avatar } from "../ui.tsx";
 import { cloudUser } from "./SocialHome.tsx";
 
 /**
- * The Annoy account's public profile (usersannoy): what friends and DMs see.
- * Each server keeps its own profile; this one never goes to a server.
+ * The Annoy account's public profile (usersannoy): the one profile. Friends and
+ * DMs read it; social/profile-sync.ts copies name, bio and photo to each server
+ * signed in with the Annoy account.
  */
 export function CloudProfileEditor() {
   const me = useStore((s) => s.social.me);

@@ -2162,7 +2162,7 @@
   "social.whereChannel": "{p0} · {p1} にいます",
   "social.whereServer": "{p0} にいます",
   "social.profileTitle": "Annoyアカウントのプロフィール",
-  "social.profileHelp": "フレンドとDMにはこのプロフィールが表示されます。各サーバーは独自のものを保持します。",
+  "social.profileHelp": "あなたの唯一のプロフィールです。フレンド、DM、Annoy アカウントで参加するサーバーはこのプロフィールを使います。",
   "social.displayName": "表示名",
   "social.bio": "自己紹介",
   "social.changeAvatar": "画像を変更",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "スタンプを削除",
   "settings.stickers.removeConfirm": "スタンプ「{p0}」を削除しますか？",
   "expression.stickerReactionName": "スタンプ",
-  "expression.noStickersFound": "スタンプが見つかりません。"
+  "expression.noStickersFound": "スタンプが見つかりません。",
+  "settings.profileFromAnnoy": "名前、写真、自己紹介は Annoy アカウントのプロフィールから使われます。",
+  "settings.profileIntroAnnoy": "プロフィールは Annoy アカウントの 1 つだけです。このアカウントで参加するサーバーにも表示されます。"
 }

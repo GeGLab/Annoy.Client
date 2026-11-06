@@ -2162,7 +2162,7 @@
   "social.whereChannel": "Em {p0} · {p1}",
   "social.whereServer": "Em {p0}",
   "social.profileTitle": "Perfil da conta Annoy",
-  "social.profileHelp": "Amigos e DMs veem este perfil. Cada servidor continua com o seu.",
+  "social.profileHelp": "Seu único perfil. Amigos, DMs e os servidores em que você entra com a conta Annoy usam este perfil.",
   "social.displayName": "Nome de exibição",
   "social.bio": "Sobre mim",
   "social.changeAvatar": "Trocar foto",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "Remover figurinha",
   "settings.stickers.removeConfirm": "Remover a figurinha \"{p0}\"?",
   "expression.stickerReactionName": "Figurinha",
-  "expression.noStickersFound": "Nenhuma figurinha encontrada."
+  "expression.noStickersFound": "Nenhuma figurinha encontrada.",
+  "settings.profileFromAnnoy": "Nome, foto e bio vêm do perfil da conta Annoy.",
+  "settings.profileIntroAnnoy": "Um perfil só, na conta Annoy. Ele também aparece nos servidores em que você entra com essa conta."
 }

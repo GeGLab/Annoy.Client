@@ -28,12 +28,15 @@ export function ProfileEditor({
   draft,
   onChange,
   disabled,
+  fromAnnoy = false,
 }: {
   account: Account;
   user: User;
   draft: ProfileDraft;
   onChange: (draft: ProfileDraft) => void;
   disabled: boolean;
+  /** Signed in with the Annoy account: name, bio and photo come from the Annoy profile. */
+  fromAnnoy?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const profile=useProfileDetails(account.id,user.id);
@@ -92,6 +95,7 @@ export function ProfileEditor({
         <span className="muted small">
           @{user.username} · {account.url}
         </span>
+        {fromAnnoy ? <p className="muted small">{translate("settings.profileFromAnnoy")}</p> : <>
         <label className="field">
           <span className="field-label">{translate("common.80d20f1ebbc0")}</span>
           <Input
@@ -129,6 +133,7 @@ export function ProfileEditor({
             {error}
           </p>
         )}
+        </>}
         <section className="profile-privacy-editor"><h4>{translate("common.547c01840a7c")}</h4>
           <p className="muted small">{translate("settings.7d3050d20d4b")}</p>
           {!profile.supported?<p className="muted small">{translate("settings.d06344b0b31c")}</p>:profile.loading&&!details?<p role="status">{translate("settings.dc5ddb06911f")}</p>:profile.error&&!details?<div role="alert"><p>{profile.error}</p><Button variant="secondary" onClick={profile.retry}>{translate("common.b9e10688be01")}</Button></div>:details&&<>

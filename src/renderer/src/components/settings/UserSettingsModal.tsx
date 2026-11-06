@@ -442,7 +442,7 @@ export function UserSettingsModal() {
             {page === "profile" && (
               <section className="settings-section">
                 <h3>{rich("common.ce989b279c2d",{p0:(<Icon name="users" size={24} />)})}</h3>
-                <p className="muted">{translate("settings.10bdfb7e1dd7")}</p>
+                <p className="muted">{annoyMode ? translate("settings.profileIntroAnnoy") : translate("settings.10bdfb7e1dd7")}</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" />)})}</Button>
                 {annoyMode && (
                   <div className="settings-account annoy-profile global-account-panel">
@@ -467,6 +467,7 @@ export function UserSettingsModal() {
                           draft={profiles[account.id] ?? { displayName: user.displayName }}
                           onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
                           disabled={saving}
+                          fromAnnoy={!!account.annoy && !!annoy}
                         />
                         <AccountActions accountId={account.id} busy={saving} />
                       </div>

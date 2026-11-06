@@ -2162,7 +2162,7 @@
   "social.whereChannel": "En {p0} · {p1}",
   "social.whereServer": "En {p0}",
   "social.profileTitle": "Perfil de la cuenta Annoy",
-  "social.profileHelp": "Amigos y MD ven este perfil. Cada servidor mantiene el suyo.",
+  "social.profileHelp": "Tu único perfil. Amigos, DMs y los servidores en los que entras con la cuenta Annoy usan este perfil.",
   "social.displayName": "Nombre visible",
   "social.bio": "Sobre mí",
   "social.changeAvatar": "Cambiar foto",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "Quitar sticker",
   "settings.stickers.removeConfirm": "¿Quitar el sticker \"{p0}\"?",
   "expression.stickerReactionName": "Sticker",
-  "expression.noStickersFound": "No se encontraron stickers."
+  "expression.noStickersFound": "No se encontraron stickers.",
+  "settings.profileFromAnnoy": "El nombre, la foto y la bio vienen del perfil de la cuenta Annoy.",
+  "settings.profileIntroAnnoy": "Un solo perfil, en la cuenta Annoy. También aparece en los servidores en los que entras con esa cuenta."
 }

@@ -2162,7 +2162,7 @@
   "social.whereChannel": "In {p0} · {p1}",
   "social.whereServer": "In {p0}",
   "social.profileTitle": "Annoy account profile",
-  "social.profileHelp": "Friends and DMs see this profile. Each server keeps its own.",
+  "social.profileHelp": "Your only profile. Friends, DMs and the servers you join with the Annoy account use this profile.",
   "social.displayName": "Display name",
   "social.bio": "About me",
   "social.changeAvatar": "Change picture",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "Remove sticker",
   "settings.stickers.removeConfirm": "Remove the sticker \"{p0}\"?",
   "expression.stickerReactionName": "Sticker",
-  "expression.noStickersFound": "No stickers found."
+  "expression.noStickersFound": "No stickers found.",
+  "settings.profileFromAnnoy": "Name, photo and bio come from the Annoy account profile.",
+  "settings.profileIntroAnnoy": "One profile, on the Annoy account. It also shows on the servers you join with that account."
 }

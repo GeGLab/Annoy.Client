@@ -2162,7 +2162,7 @@
   "social.whereChannel": "在 {p0} · {p1}",
   "social.whereServer": "在 {p0}",
   "social.profileTitle": "Annoy 账户资料",
-  "social.profileHelp": "好友和私信看到的是此资料。每个服务器保留各自的资料。",
+  "social.profileHelp": "你唯一的资料。好友、私信以及你用 Annoy 账户加入的服务器都使用此资料。",
   "social.displayName": "显示名称",
   "social.bio": "关于我",
   "social.changeAvatar": "更换头像",
@@ -2296,5 +2296,7 @@
   "settings.stickers.remove": "移除贴纸",
   "settings.stickers.removeConfirm": "移除贴纸“{p0}”？",
   "expression.stickerReactionName": "贴纸",
-  "expression.noStickersFound": "未找到贴纸。"
+  "expression.noStickersFound": "未找到贴纸。",
+  "settings.profileFromAnnoy": "名称、头像和简介来自 Annoy 账户资料。",
+  "settings.profileIntroAnnoy": "只有一个资料，在 Annoy 账户上。它也会显示在你用该账户加入的服务器上。"
 }
