@@ -1,6 +1,6 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import {secureFetch} from "./secure-fetch.ts";
-import type { AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@distopic/protocol";
+import type { AuthResponse, DiscordLoginBegin, DiscordLoginPoll, InstanceInfo } from "@annoy/protocol";
 import { abortableDelay, cancelled, fetchJson, isCancellation, parseResponse, READ_TIMEOUT_MS, RequestError, RequestScope, setRequestTransport, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS } from "../../shared/requests.ts";
 export { RequestError } from "../../shared/requests.ts";
 // Every renderer request goes through HTTPS/WSS checks and refused redirects.
@@ -186,8 +186,8 @@ export class Api {
     for (const f of files) form.append("files", f, f.name);
     return this.fetch<T>(`/channels/${channelId}/messages`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body: form }, signal, WRITE_TIMEOUT_MS * 6);
   }
-  downloadLegacy(file:import('@distopic/protocol').Attachment){if(!window.distopic)throw new Error(translate("common.3968f81630af"));return window.distopic.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
-  async legacyAttachment(file:import('@distopic/protocol').Attachment):Promise<{bytes:ArrayBuffer;type:string;name:string}>{
+  downloadLegacy(file:import('@annoy/protocol').Attachment){if(!window.annoy)throw new Error(translate("common.3968f81630af"));return window.annoy.downloadPrivate(this.baseUrl,this.token,file.url,file.filename);}
+  async legacyAttachment(file:import('@annoy/protocol').Attachment):Promise<{bytes:ArrayBuffer;type:string;name:string}>{
     const url=new URL(file.url,this.baseUrl);
     if(url.origin!==new URL(this.baseUrl).origin||!/^\/api\/uploads\/[a-f0-9]{32}\//.test(url.pathname))throw new Error(translate("common.c26cf0c38f84"));
     if(file.size>64*1024*1024)throw new Error(translate("common.47ada758ced5"));

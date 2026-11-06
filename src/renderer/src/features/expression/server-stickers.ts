@@ -1,6 +1,6 @@
 // The sticker packs of the servers the user is in. Members can send them
 // anywhere; the message is the sticker's public link on its server.
-import type { ServerSticker, ServerStickerList } from "@distopic/protocol";
+import type { ServerSticker, ServerStickerList } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { getState } from "../../store.ts";
 

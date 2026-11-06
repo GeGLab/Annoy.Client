@@ -1,5 +1,5 @@
 import { t as translate } from "../../../shared/localization/index.ts";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import { handleAccountEvent, signedIn as globalSignedIn } from "../auth/session.ts";
 import { getState, setState, subscribe, toast } from "../store.ts";
 import { cloud, cloudUrls } from "./cloud.ts";

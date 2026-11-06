@@ -331,7 +331,7 @@ function arrived(conversationId: string, message: DmMessage, live: boolean): voi
   if (!live || viewing || s.settings.manualPresence === "dnd" || s.settings.mutedChannels.includes(`annoy:${conversationId}`)) return;
   if (s.settings.messageSounds) playMessageFeedback();
   if (!s.settings.notifications) return;
-  window.distopic?.flashWindow();
+  window.annoy?.flashWindow();
   if (!document.hasFocus() || s.view.kind === "service") {
     const sender = social().profiles[message.senderId];
     try {

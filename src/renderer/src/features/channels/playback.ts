@@ -1,4 +1,4 @@
-import { playbackPosition, type PlaybackAction, type PlaybackItem, type PlaybackState } from "@distopic/protocol";
+import { playbackPosition, type PlaybackAction, type PlaybackItem, type PlaybackState } from "@annoy/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { toast, useStore } from "../../store.ts";
@@ -171,7 +171,7 @@ type Slot = "theater" | "music";
 
 /** Drives the YouTube or website view of a slot through the main process. */
 export function viewDriver(slot: Slot, events: () => UserEvents): { driver: Driver; dispose: () => void } {
-  const bridge = window.distopic?.theater;
+  const bridge = window.annoy?.theater;
   let status: { position: number; paused: boolean; at: number } | null = null;
   const offs = [
     bridge?.on("status", (from, s) => {

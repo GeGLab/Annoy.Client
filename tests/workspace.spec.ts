@@ -12,7 +12,7 @@ const screenshots = resolve(".impeccable/review");
 
 async function launch() {
   const tempRoot = resolve(tmpdir());
-  const userData = await mkdtemp(join(tempRoot, "distopic-workspace-"));
+  const userData = await mkdtemp(join(tempRoot, "annoy-workspace-"));
   const auth = await globalAuthFixture();
   const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -25,7 +25,7 @@ async function launch() {
   const cleanup = async () => {
     await app.close();
     await auth.close();
-    if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("distopic-workspace-"))
+    if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("annoy-workspace-"))
       throw new Error("Unexpected test profile path");
     await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
@@ -213,14 +213,14 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     const channels = page.getByRole("separator", { name: "Largura do painel de canais" });
     await channels.focus();
     await page.keyboard.press("ArrowRight");
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).channelsWidth)).toBe(260);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).channelsWidth)).toBe(260);
     const members = page.getByRole("separator", { name: "Largura do painel de membros" });
     const handle = (await members.boundingBox())!;
     await page.mouse.move(handle.x + 3, handle.y + 90);
     await page.mouse.down();
     await page.mouse.move(handle.x - 37, handle.y + 90);
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).membersWidth)).toBeGreaterThan(220);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).membersWidth)).toBeGreaterThan(220);
     await expect(page.getByRole("button", { name: "Fechar painel de canais" })).toHaveCount(0);
     await page.getByRole("button", { name: "Alternar painel de membros" }).click();
     await expect(page.locator(".members")).toHaveCount(0);
@@ -237,7 +237,7 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     await page.getByLabel("Código hexadecimal de Tom dos painéis").fill("#55408f");
     await page.getByRole("button", { name: "Usar cor", exact: true }).click();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).accentColor)).toBe("#3182ed");
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).accentColor)).toBe("#3182ed");
     await page.keyboard.press("Escape");
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -725,7 +725,7 @@ test("connectivity observes Global failures independently and preserves expired-
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts")!));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.accounts")!));
     expect(saved[0]).not.toHaveProperty("connection");
     expect(saved[0]).not.toHaveProperty("connectivity");
     await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
@@ -748,7 +748,7 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
     description: "Bot sintético para testar o contrato das integrações. Não é um bot publicado.",
     author: "Instância de teste",
     version: "1.0.0",
-    runtime: "distopic-worker-v1",
+    runtime: "annoy-worker-v1",
     permissions: ["members.read", "messages.send"],
   };
   const writes: unknown[] = [];

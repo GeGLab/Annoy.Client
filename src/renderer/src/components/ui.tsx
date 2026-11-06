@@ -1,5 +1,5 @@
 import {t as translate} from "../../../shared/localization/index.ts";
-import type { Presence, User } from "@distopic/protocol";
+import type { Presence, User } from "@annoy/protocol";
 import { requestNavigation } from "../lib/navigation-guard.ts";
 import { useSettingsGuard } from "./settings/SettingsGuard.tsx";
 import { type ReactNode } from "react";

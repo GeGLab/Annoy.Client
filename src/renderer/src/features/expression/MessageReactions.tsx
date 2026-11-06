@@ -1,5 +1,5 @@
 import {t as translate,counted} from "../../../../shared/localization/index.ts";
-import type { Message } from "@distopic/protocol";
+import type { Message } from "@annoy/protocol";
 import type { NameOf } from "../../format.tsx";
 import { EmojiMenu } from "./MediaPicker.tsx";
 

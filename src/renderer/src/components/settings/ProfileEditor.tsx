@@ -1,6 +1,6 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,textForError} from "../../../../shared/localization/index.ts";
-import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@distopic/protocol";
+import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@annoy/protocol";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { type Account } from "../../store.ts";
 import { Avatar, Icon } from "../ui.tsx";

@@ -1,7 +1,7 @@
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
-import type { User } from "@distopic/protocol";
+import type { User } from "@annoy/protocol";
 import { useState } from "react";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";
 import { canViewActivity } from "../features/activity/access.ts";

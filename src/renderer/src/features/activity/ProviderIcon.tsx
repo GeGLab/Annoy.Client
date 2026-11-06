@@ -1,4 +1,4 @@
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import spotify from "../../assets/providers/spotify.svg";
 import steam from "../../assets/providers/steam.svg";
 import appleMusic from "../../assets/providers/apple-music.svg";

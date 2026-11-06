@@ -1,6 +1,6 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
-import type { ServerSummary } from "@distopic/protocol";
+import type { ServerSummary } from "@annoy/protocol";
 import * as Popover from "@radix-ui/react-popover";
 import { leaveVoice, navigate, openServer, reconnect, toggleVoiceSetting } from "../client.ts";
 import { initials } from "../format.tsx";

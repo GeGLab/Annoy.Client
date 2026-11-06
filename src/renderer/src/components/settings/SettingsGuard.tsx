@@ -69,7 +69,7 @@ export function SettingsGuard({ children }: { children: ReactNode }) {
       e.returnValue = "";
       leave(() => {
         windowExit.current = true;
-        window.distopic?.window.close();
+        window.annoy?.window.close();
       });
     };
     window.addEventListener("beforeunload", event);

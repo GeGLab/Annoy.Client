@@ -12,7 +12,7 @@ import { Icon } from "./ui.tsx";
 
 export const BANNER_HEIGHT = 40;
 
-const updates = () => window.distopic?.updates;
+const updates = () => window.annoy?.updates;
 const install=()=>requestNavigation(()=>{flushChatState();void updates()?.install().catch(()=>toast(translate("update.installError")));});
 
 /** Mirrors the main process's update state into the store. */

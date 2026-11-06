@@ -16,7 +16,7 @@ export function useAwayStatus() {
       const request = ++sequence;
       let seconds = (Date.now() - lastInput) / 1000;
       try {
-        const native = await window.distopic?.idleSeconds?.();
+        const native = await window.annoy?.idleSeconds?.();
         if (typeof native === "number" && Number.isFinite(native) && native >= 0) seconds = native;
       } catch { /* Keep the input fallback if native IPC fails. */ }
       if (stopped || request !== sequence) return;

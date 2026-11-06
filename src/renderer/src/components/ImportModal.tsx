@@ -4,7 +4,7 @@ import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
 import { Select } from "./ui/select.tsx";
 import { RadioGroup } from "./ui/radio-group.tsx";
-import type { ImportChannel, ImportGuild, ImportGuildList, ImportJob, ImportRequest, ImportStructure } from "@distopic/protocol";
+import type { ImportChannel, ImportGuild, ImportGuildList, ImportJob, ImportRequest, ImportStructure } from "@annoy/protocol";
 import { useMemo, useState, type FormEvent } from "react";
 import { apiFor, openServer } from "../client.ts";
 import { initials } from "../format.tsx";

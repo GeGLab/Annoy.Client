@@ -3,7 +3,7 @@ import { screenProfile } from "./lib/screen-profile.ts";
 // Voice session for instances using Cloudflare's Realtime SFU. One
 // RTCPeerConnection carries everything; the Annoy server relays every
 // negotiation to Cloudflare and decides what we may publish or receive.
-import type { GatewayEvent, MediaSource } from "@distopic/protocol";
+import type { GatewayEvent, MediaSource } from "@annoy/protocol";
 import type { Gateway } from "./gateway.ts";
 import { clearTiles, dropTile, putTile, setStreamOffers } from "./media.ts";
 import { isStreamSource, streamOffers } from "./lib/stream-watch.ts";

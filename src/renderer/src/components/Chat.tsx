@@ -7,7 +7,7 @@ import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
 import { isStickerMessage, StickerMessage } from "../features/expression/AnnoySticker.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
-import { LIMITS, type Message } from "@distopic/protocol";
+import { LIMITS, type Message } from "@annoy/protocol";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   lazy,

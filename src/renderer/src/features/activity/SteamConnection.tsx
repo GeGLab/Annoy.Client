@@ -1,7 +1,7 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
-import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll } from "@distopic/protocol";
+import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { useStore } from "../../store.ts";
 import { Button } from "../../components/ui/button.tsx";

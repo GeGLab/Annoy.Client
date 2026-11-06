@@ -23,7 +23,7 @@ implementar os 20 requisitos em uma única execução.
 ### Estado, autenticação e comunicação
 
 - `store.ts` usa Immer e `useSyncExternalStore`; preferências, contas e vista
-  persistem em chaves `distopic.*`. Preservar essas chaves e seus dados existentes.
+  persistem em chaves `annoy.*`. Preservar essas chaves e seus dados existentes.
 - `client.ts` coordena contas, APIs, navegação e eventos; `gateway.ts` mantém
   um WebSocket por conta com identify, heartbeat, backoff e recuperação.
 - `api.ts` autentica requests por Bearer token e resolve uploads. Sessões de
@@ -338,7 +338,7 @@ inteiro. Ler apenas a tarefa atual e suas dependências; conferir o diff local.
   índices e chaves estrangeiras; testar banco novo e existente. Não migrar
   instância publicada nesta execução nem remover colunas/tabelas antigas.
 - Dados locais: defaults compatíveis, schema versionado, recuperação de JSON
-  inválido e migração de IndexedDB. Preservar contas/sessões/chaves `distopic.*`.
+  inválido e migração de IndexedDB. Preservar contas/sessões/chaves `annoy.*`.
 - Ordem de compatibilidade: implementar/validar servidor e protocolo, sincronizar
   contrato no cliente, então ativar UI por capabilities. Testar servidor antigo
   e cliente antigo com payload negociado. Versões publicadas não são pressupostas.

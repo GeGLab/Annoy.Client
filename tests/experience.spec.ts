@@ -29,7 +29,7 @@ async function fullyInside(page: Page, selector: string, top = 12) {
 }
 async function launch({ fakeMedia = false, packaged = false } = {}) {
   const root = resolve(tmpdir()),
-    data = await mkdtemp(join(root, "distopic-experience-"));
+    data = await mkdtemp(join(root, "annoy-experience-"));
   const auth = await globalAuthFixture();
   const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: data, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178", ANNOY_CDN_URL: "https://cdn.experience.test" };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -40,13 +40,13 @@ async function launch({ fakeMedia = false, packaged = false } = {}) {
   if(fakeMedia)await app.evaluate(({dialog})=>{dialog.showMessageBox=async(...args:any[])=>{const options=args.at(-1);if(options.message!=='Permitir media?')throw new Error('Unexpected native permission');return {response:1,checkboxChecked:false};};});
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".welcome")).toBeVisible();
-  await page.evaluate(() => window.distopic?.activity.configure({ games: false, music: false, development: false }));
+  await page.evaluate(() => window.annoy?.activity.configure({ games: false, music: false, development: false }));
   await mkdir(capture, { recursive: true });
   const close = async () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.destroy())).catch(() => undefined);
     await app.close();
     await auth.close();
-    if (dirname(data) !== root || !basename(data).startsWith("distopic-experience-")) throw new Error("Unsafe test directory");
+    if (dirname(data) !== root || !basename(data).startsWith("annoy-experience-")) throw new Error("Unsafe test directory");
     await rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
   return { app, page, close };
@@ -209,7 +209,7 @@ test("native idle, manual presence and member profile file activity", async () =
     await selectStatus("Aparecer como offline");
     await expect(page.locator(".user-identity .presence-offline")).toBeVisible();
     await expect.poll(() => ops.filter((op) => op.op === "activity").at(-1)?.activities).toEqual([]);
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).manualPresence)).toBe("offline");
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).manualPresence)).toBe("offline");
     await selectStatus("Online");
     await expect(page.locator(".user-identity .presence-online")).toBeVisible();
     await nativeIdle(601);
@@ -619,7 +619,7 @@ test("old server connections have a context menu and require a single named conf
     await expect(oldTab).toHaveCount(0);
     await expect(confirmation).toHaveCount(0);
     await expect(currentTab).toBeVisible();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts") ?? "[]").map((a: any) => a.id))).toEqual(["test"]);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.accounts") ?? "[]").map((a: any) => a.id))).toEqual(["test"]);
     expect(destructiveRequests).toEqual([]);
   } finally { await close(); }
 });
@@ -927,7 +927,7 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
     await page.screenshot({ path: join(capture, "annoy-news.png") });
     await page.evaluate(async () => { const { signOutAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`); const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); signOutAccount("test"); openModal({ kind: "switchAccount" }); });
     await expect(page.locator(".saved-account")).toHaveCount(1);
-    expect(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("distopic.rememberedAccounts")!)))).not.toContain("token");
+    expect(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("annoy.rememberedAccounts")!)))).not.toContain("token");
     await page.locator(".saved-account").click();
     await expect(page.getByRole("textbox", { name: "Usuário neste servidor", exact: true })).toHaveValue("tester");
     await page.screenshot({ path: join(capture, "remembered-login.png") });
@@ -1372,7 +1372,7 @@ test("animated menus, custom selects, color history and unsaved settings", async
     await expect(page.getByRole("listbox")).toBeVisible();
     await page.screenshot({ path: join(capture, "custom-select.png") });
     await page.getByRole("option", { name: /Microfone com um nome/ }).click();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings") ?? "{}").inputDeviceId ?? "default")).toBe(
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings") ?? "{}").inputDeviceId ?? "default")).toBe(
       "default",
     );
     await expect(page.getByRole("button", { name: "Salvar alterações", exact: true })).toBeVisible();
@@ -1392,7 +1392,7 @@ test("animated menus, custom selects, color history and unsaved settings", async
     await page.getByRole("button", { name: "Continuar editando" }).click();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await expect(page.locator(".settings-savebar")).toHaveCount(0);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).inputDeviceId)).toBe("test-mic");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).inputDeviceId)).toBe("test-mic");
     await page.getByRole("button", { name: "Claro", exact: true }).click();
     await page.getByRole("button", { name: "Fechar", exact: true }).click();
     await page.getByRole("button", { name: "Descartar alterações" }).click();
@@ -1564,7 +1564,7 @@ test("friend sidebar, elapsed activity, animated stack and persistent personal v
     const slider = sidebar.getByRole("slider");
     await slider.focus(); await slider.press("Home"); await slider.press("ArrowRight");
     await expect(sidebar.locator("output")).toHaveText("1%");
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).userVolumes['["test","friend"]'])).toBe(1);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).userVolumes['["test","friend"]'])).toBe(1);
     await page.getByRole("button", { name: "Ocultar perfil do amigo" }).click();
     await expect(sidebar).toHaveCount(0);
     await page.getByRole("button", { name: "Mostrar perfil do amigo" }).click();
@@ -1679,7 +1679,7 @@ test("both voice backends send screen audio separately and explain incompatible 
           await session.startVideo("screen");
           const explanation = getState().toast?.text;
           await session.stopVideo("screen");
-          return { requested, published, stopped, explanation, supportsAudio: window.distopic?.platform === "win32" };
+          return { requested, published, stopped, explanation, supportsAudio: window.annoy?.platform === "win32" };
         } finally { navigator.mediaDevices.getDisplayMedia = original; await ctx.close(); }
       }, backend);
       expect(result.requested).toEqual([result.supportsAudio, false]);
@@ -1859,7 +1859,7 @@ test("packaged renderer shows the Annoy stickers without a development server UR
   await page.routeWebSocket("wss://packaged.test/gateway",(socket)=>socket.onMessage((raw)=>{const message=JSON.parse(String(raw));if(message.op==="identify")socket.send(JSON.stringify({t:"READY",d:{user,servers:[server],dms:[],relationships:[],presences:{[user.id]:"online"},activities:{},instance:{isAdmin:false,registration:"open",voiceBackend:"builtin",reactions:true,groupActivity:true}}}));if(message.op==="heartbeat")socket.send(JSON.stringify({t:"HEARTBEAT_ACK",d:null}));}));
   // Synthetic legacy-token fixture exercises one-time migration; production
   // persistence writes token-empty metadata and uses the OS secret store.
-  await page.evaluate(async({user,server,channel})=>{const account={id:"packaged",url:"https://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"};const saved=await window.distopic!.secrets.set("accounts",JSON.stringify([account]));localStorage.setItem("distopic.accounts",JSON.stringify([{...account,token:saved?"":account.token}]));localStorage.setItem("distopic.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("distopic.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
+  await page.evaluate(async({user,server,channel})=>{const account={id:"packaged",url:"https://packaged.test",token:"synthetic",userId:user.id,instanceName:"Instância"};const saved=await window.annoy!.secrets.set("accounts",JSON.stringify([account]));localStorage.setItem("annoy.accounts",JSON.stringify([{...account,token:saved?"":account.token}]));localStorage.setItem("annoy.view",JSON.stringify({kind:"server",accountId:"packaged",serverId:server.id,channelId:channel.id}));localStorage.setItem("annoy.settings",JSON.stringify({shareActivity:false}));},{user,server,channel});
   await page.reload();await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();const picker=page.getByRole("dialog",{name:"Emojis, GIFs e figurinhas"});await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();await expect(picker.locator(".sticker-grid img")).toHaveCount(2);for(const image of await picker.locator(".sticker-grid img").all())await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);
  }finally{await close();}
 });

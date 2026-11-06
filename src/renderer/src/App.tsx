@@ -119,14 +119,14 @@ function WorkspaceActivity() {
   useDesktopActivity();
   useAwayStatus();
   useWhere();
-  useEffect(() => () => { void window.distopic?.activity.configure({ games: false, music: false, development: false }); }, []);
+  useEffect(() => () => { void window.annoy?.activity.configure({ games: false, music: false, development: false }); }, []);
   return null;
 }
 
 const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
-  useEffect(()=>window.distopic?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.distopic?.desktop?.quit().catch(()=>{});})),[]);
+  useEffect(()=>window.annoy?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.annoy?.desktop?.quit().catch(()=>{});})),[]);
   const localization=useLocalization();
   useEffect(()=>applyTextPreferences(localization),[localization]);
   const access = useStore(s => s.access.allowed);
@@ -146,7 +146,7 @@ export function App() {
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
   // The window and tray icon live in the main process; keep them on the chosen icon.
-  useEffect(() => { void window.distopic?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
+  useEffect(() => { void window.annoy?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor });
@@ -157,7 +157,7 @@ export function App() {
   }, [theme, accentColor, surfaceColor]);
 
   useEffect(() => {
-    const auth = window.distopic?.auth;
+    const auth = window.annoy?.auth;
     let revision = 0;
     let active = true;
     const update = (next: import("../../shared/app-access.ts").AppAccessState) => {
@@ -181,7 +181,7 @@ export function App() {
   useEffect(() => {
     void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>initSocial());});
     if (getState().view.kind !== "home") navigate(getState().view);
-    return window.distopic?.services.onBadge((id, badge) =>
+    return window.annoy?.services.onBadge((id, badge) =>
       setState((s) => {
         s.serviceBadges[id] = badge;
       }),
@@ -191,7 +191,7 @@ export function App() {
   // Browser services are a native layer above the page; hide it while a modal is open.
   useEffect(() => {
     if (view.kind !== "service") return;
-    if (!access || modalOpen || blocking) window.distopic?.services.hide();
+    if (!access || modalOpen || blocking) window.annoy?.services.hide();
     else showServiceView(view);
   }, [access, modalOpen, blocking, view]);
 
@@ -202,7 +202,7 @@ export function App() {
     if (!main) return;
     const report = () => {
       const rect = main.getBoundingClientRect();
-      window.distopic?.services.setBounds({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+      window.annoy?.services.setBounds({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
     };
     report();
     const observer = new ResizeObserver(report);

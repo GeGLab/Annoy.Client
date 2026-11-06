@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ProfileDetails } from "@distopic/protocol";
+import type { ProfileDetails } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { useStore } from "../../store.ts";
 import { isCancellation, RequestError } from "../../../../shared/requests.ts";

@@ -31,7 +31,7 @@ export function screenProfile(quality: ScreenQuality): { constraints: MediaTrack
 }
 
 /** Only Windows can capture the system's sound together with the screen (WASAPI loopback). */
-export const screenAudioSupported = () => window.distopic?.platform === "win32";
+export const screenAudioSupported = () => window.annoy?.platform === "win32";
 
 /**
  * Audio for a screen share, minus Annoy's own playback so viewers don't hear

@@ -24,7 +24,7 @@ interface ChatStateDocument {
   recoveryReturns: Record<string, RecoveryReturn>;
 }
 
-const STORAGE_KEY = "distopic.chat-state.v1";
+const STORAGE_KEY = "annoy.chat-state.v1";
 const filesByChannel = new Map<string, File[]>();
 const pendingAnchorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const channelKey = (accountId: string, channelId: string) => JSON.stringify([accountId, channelId]);

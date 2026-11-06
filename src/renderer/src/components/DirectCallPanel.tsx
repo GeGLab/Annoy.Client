@@ -66,7 +66,7 @@ export function DirectCallPanel() {
     return () => { active = false; };
   }, [audioTracks, entry?.call.id, settings.selfDeaf, settings.outputDeviceId]);
   if (!entry || !myId) return null;
-  let other: import("@distopic/protocol").User | undefined, name: string;
+  let other: import("@annoy/protocol").User | undefined, name: string;
   if (cloudCall) {
     other = cloudUser(cloudProfiles[otherId], otherId);
     name = cloudFriends.find((r) => r.user.id === otherId)?.nickname || other.displayName;

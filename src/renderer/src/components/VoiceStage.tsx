@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { UserProfile } from "./UserProfile.tsx";
-import type { Channel, ServerState, VoiceState } from "@distopic/protocol";
+import type { Channel, ServerState, VoiceState } from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting, watchStream } from "../client.ts";
 import { useStreamOffers, useVideoTiles, type VideoTile } from "../media.ts";
@@ -248,9 +248,9 @@ export function ScreenPickerModal() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [tab, setTab] = useState<"screen" | "window">("screen");
   useEffect(() => {
-    void window.distopic?.screen.mode().then(async (mode) => {
+    void window.annoy?.screen.mode().then(async (mode) => {
       if (mode === "system") { setSystem(true); setSources([]); }
-      else setSources(await window.distopic!.screen.sources());
+      else setSources(await window.annoy!.screen.sources());
     }).catch(() => setSources([]));
   }, []);
   const list = sources?.filter((s) => s.kind === tab) ?? [];

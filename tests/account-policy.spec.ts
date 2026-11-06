@@ -123,9 +123,9 @@ test("a signed-out client cannot open native browser views even through IPC or s
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       const service = { id: "guest-browser", kind: "web" as const, name: "Browser", url: "https://browser.test" };
       setState((s: any) => { s.services = [service]; s.view = { kind: "service", serviceId: service.id }; s.global = { id: "forged", name: "Cached", email: "cached@example.com" }; });
-      window.distopic!.services.show(service);
-      window.distopic!.theater.open("theater", "https://browser.test", "web");
-      await window.distopic!.auth.get();
+      window.annoy!.services.show(service);
+      window.annoy!.theater.open("theater", "https://browser.test", "web");
+      await window.annoy!.auth.get();
     });
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(0);
@@ -155,13 +155,13 @@ test("global logout closes an active browser and blocks reopening it immediately
     await expect.poll(() => page.evaluate(() => (window as any).__beforeSignOut ?? false).catch(() => true)).toBe(false);
     await page.waitForLoadState("load");
     await page.evaluate(async () => {
-      window.distopic!.services.show({ id: "browser", kind: "web", name: "Browser", url: "https://browser.test" });
-      await window.distopic!.auth.get();
+      window.annoy!.services.show({ id: "browser", kind: "web", name: "Browser", url: "https://browser.test" });
+      await window.annoy!.auth.get();
     });
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(0);
     await page.reload();
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
-    expect(await page.evaluate(() => window.distopic!.auth.get())).toEqual({ allowed: false, global: false, localAccounts: [] });
+    expect(await page.evaluate(() => window.annoy!.auth.get())).toEqual({ allowed: false, global: false, localAccounts: [] });
   } finally { await close(); }
 });
 
@@ -170,13 +170,13 @@ test("the local exception requires the server flag and a validated local session
   try {
     const credential = { id: "local-test", url: auth.url, token: auth.localToken, userId: "local-user" };
     auth.setMode("global");
-    expect(await page.evaluate(async credential => { try { await window.distopic!.auth.local(credential); return true; } catch { return false; } }, credential)).toBe(false);
-    expect((await page.evaluate(() => window.distopic!.auth.get())).allowed).toBe(false);
+    expect(await page.evaluate(async credential => { try { await window.annoy!.auth.local(credential); return true; } catch { return false; } }, credential)).toBe(false);
+    expect((await page.evaluate(() => window.annoy!.auth.get())).allowed).toBe(false);
     auth.setMode("local");
-    expect(await page.evaluate(async credential => { try { await window.distopic!.auth.local({ ...credential, token: "invalid" }); return true; } catch { return false; } }, credential)).toBe(false);
-    await page.evaluate(credential => window.distopic!.auth.local(credential), credential);
+    expect(await page.evaluate(async credential => { try { await window.annoy!.auth.local({ ...credential, token: "invalid" }); return true; } catch { return false; } }, credential)).toBe(false);
+    await page.evaluate(credential => window.annoy!.auth.local(credential), credential);
     await expect(page.locator(".welcome")).toBeVisible();
-    await page.evaluate(() => window.distopic!.auth.logoutLocal("local-test"));
+    await page.evaluate(() => window.annoy!.auth.logoutLocal("local-test"));
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
   } finally { await close(); }
 });
@@ -189,11 +189,11 @@ test("expected local authentication refusals and async secret operations produce
     auth.setMode("global");
     const result = await page.evaluate(async (credential) => {
       let message = "";
-      try { await window.distopic!.auth.local(credential); } catch (error) { message = (error as Error).message; }
-      const saved = await window.distopic!.secrets.set("global", "synthetic-secret-canary");
-      const decrypted = await window.distopic!.secrets.get("global");
-      await window.distopic!.secrets.set("global", null);
-      return { message, saved, decrypted, access: await window.distopic!.auth.get() };
+      try { await window.annoy!.auth.local(credential); } catch (error) { message = (error as Error).message; }
+      const saved = await window.annoy!.secrets.set("global", "synthetic-secret-canary");
+      const decrypted = await window.annoy!.secrets.get("global");
+      await window.annoy!.secrets.set("global", null);
+      return { message, saved, decrypted, access: await window.annoy!.auth.get() };
     }, { id: "local", url: auth.url, token: auth.localToken, userId: "local-user" });
     expect(result.message).toBe("Este servidor exige conta Annoy");
     expect(result.access.allowed).toBe(false);
@@ -228,7 +228,7 @@ test("reload locks native access without deleting saved server connections", asy
     });
     await page.reload();
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts") ?? "[]").map((a: any) => a.id))).toContain("retained");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.accounts") ?? "[]").map((a: any) => a.id))).toContain("retained");
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(0);
   } finally { await close(); }
 });

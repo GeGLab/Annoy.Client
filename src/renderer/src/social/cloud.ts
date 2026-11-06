@@ -20,7 +20,7 @@ export function cloudUrls(): Promise<CloudUrls> {
   return (loaded ??= (async () => {
     let next = DEFAULTS;
     try {
-      next = { ...next, ...((await window.distopic?.auth?.cloudUrls?.()) ?? {}) };
+      next = { ...next, ...((await window.annoy?.auth?.cloudUrls?.()) ?? {}) };
     } catch {
       /* defaults */
     }

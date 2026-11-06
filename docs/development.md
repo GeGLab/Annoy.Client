@@ -103,7 +103,7 @@ cores, altura, foco e bordas. Use nomes de ação nos rótulos acessíveis.
 
 Use `Select` para escolhas de formulário e `DropdownMenu` para ações. Não
 adicione `<select>` nativo nem menus posicionados manualmente. O seletor de
-cores guarda as 12 últimas cores em `distopic.recentColors`; aplicar uma cor
+cores guarda as 12 últimas cores em `annoy.recentColors`; aplicar uma cor
 na prévia não salva as preferências. Configurações pessoais só persistem ao
 salvar, e `SettingsGuard` / `useSettingsDraft` fazem o mesmo para servidor,
 cargos, canal e sobrescritas. Ações de exclusão/conexão mantêm confirmação própria.

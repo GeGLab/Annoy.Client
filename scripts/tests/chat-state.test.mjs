@@ -24,7 +24,7 @@ test("only attachment count persists; File objects remain in session memory", ()
   chatState.writePendingFiles("account-a", "channel-1", [file]);
   assert.deepEqual(chatState.readPendingFiles("account-a", "channel-1"), [file]);
   assert.equal(chatState.readChatDraft("account-a", "channel-1").attachmentCount, 1);
-  const persisted = localStorage.getItem("distopic.chat-state.v1");
+  const persisted = localStorage.getItem("annoy.chat-state.v1");
   assert.ok(persisted);
   assert.ok(!persisted.includes("private-document.pdf"));
   assert.ok(persisted.includes("local draft"));

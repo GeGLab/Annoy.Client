@@ -1,7 +1,7 @@
 import {t as translate} from "../../../shared/localization/index.ts";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-const log = (text: string) => window.distopic?.logError?.(text);
+const log = (text: string) => window.annoy?.logError?.(text);
 
 /** Errors outside React (handlers, promises) only get logged. */
 window.addEventListener("error", (e) => log(`error: ${e.error instanceof Error ? e.error.stack : e.message}`));

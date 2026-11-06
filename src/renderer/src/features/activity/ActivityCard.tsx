@@ -1,7 +1,7 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,counted} from "../../../../shared/localization/index.ts";
 import { Gamepad2, Headphones, ExternalLink,Monitor,Activity } from "lucide-react";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import { useEffect, useRef, useState } from "react";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { DevelopmentIcon } from "./DevelopmentIcon.tsx";

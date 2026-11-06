@@ -1,6 +1,6 @@
 import {t as translate} from "../../../shared/localization/index.ts";
 import { openMic, type Mic } from "../noise.ts";
-import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
+import type { DirectCall, GatewayEvent, ClientOp } from "@annoy/protocol";
 import { useSyncExternalStore } from "react";
 import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
 import { getState, setState, toast } from "../store.ts";
@@ -160,7 +160,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       if (call.status === "ended") { if (getState().directCall?.call.id !== call.id) return; cleanup(); setState((s) => { s.directCall = null; }); playCallFeedback("leave"); if (call.reason) toast(call.reason); return; }
       const existed = getState().directCall?.call;
       if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
-        window.distopic?.flashWindow();
+        window.annoy?.flashWindow();
         if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: translate("common.beceda3adc2f",{p0:((isCloud(accountId) ? displayName(getState().social.profiles[call.callerId]) : getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName) || translate("common.9980aa129514"))}), silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }
       setState((s) => { s.directCall = { accountId, call }; });

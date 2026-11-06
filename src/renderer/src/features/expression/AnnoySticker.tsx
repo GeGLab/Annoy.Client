@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PublicSticker } from "@distopic/protocol";
+import type { PublicSticker } from "@annoy/protocol";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { cloudUrls, currentCloudUrls } from "../../social/cloud.ts";
 import { annoyImage, isAnnoySticker, stickerSize } from "./annoy-set.ts";

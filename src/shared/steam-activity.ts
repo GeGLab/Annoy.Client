@@ -1,4 +1,4 @@
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 
 /** A connection belongs to one instance; local detection always takes precedence. */
 export function withSteamFallback(local: readonly UserActivity[], remote?: UserActivity): readonly UserActivity[] {

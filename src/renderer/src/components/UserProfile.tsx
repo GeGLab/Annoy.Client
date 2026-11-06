@@ -3,7 +3,7 @@ import {t as translate} from "../../../shared/localization/index.ts";
 import {FullProfileButton} from "./FullProfile.tsx";
 import { canViewActivity } from "../features/activity/access.ts";
 import * as Popover from "@radix-ui/react-popover";
-import type { User } from "@distopic/protocol";
+import type { User } from "@annoy/protocol";
 import type { ReactNode } from "react";
 import { apiFor, openDm } from "../client.ts";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";

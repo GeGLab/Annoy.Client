@@ -1,4 +1,4 @@
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 
 /** Public data of an Annoy account (usersannoy). */
 export interface CloudProfile {

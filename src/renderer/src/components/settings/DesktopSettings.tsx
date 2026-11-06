@@ -23,7 +23,7 @@ export function DesktopSettings({
   loadError: boolean;
   refresh: () => void;
 }) {
-  const api = window.distopic?.desktop;
+  const api = window.annoy?.desktop;
   const restart = () =>
     requestNavigation(() => {
       flushChatState();

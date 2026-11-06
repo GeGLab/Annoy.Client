@@ -2,7 +2,7 @@
 
 **Estado:** contrato proposto e integração do cliente implementados neste
 repositório. O runtime, a persistência, o catálogo e os endpoints abaixo
-precisam ser implementados no **distopic-server**. Este repositório contém
+precisam ser implementados no **annoy-server**. Este repositório contém
 apenas o cliente. Os testes usam uma API simulada; não comprovam execução de
 bots numa instância real. Não publique `/bot-platform` antes de completar os
 requisitos do servidor.
@@ -73,7 +73,7 @@ cliente não conhece.
     "description": "Exemplo de manifesto, não um bot publicado.",
     "author": "Autor do exemplo",
     "version": "1.0.0",
-    "runtime": "distopic-worker-v1",
+    "runtime": "annoy-worker-v1",
     "permissions": ["members.read", "messages.send"]
   }]
 }

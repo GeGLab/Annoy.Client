@@ -16,7 +16,7 @@ import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
-import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@distopic/protocol";
+import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
 import { useEffect, useMemo, useState } from "react";
 import { apiFor, editServerNickname, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";

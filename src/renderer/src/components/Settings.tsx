@@ -23,7 +23,7 @@ import {
   type ServerSummary,
   type User,
   type ServerStickerList,
-} from "@distopic/protocol";
+} from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
 import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";

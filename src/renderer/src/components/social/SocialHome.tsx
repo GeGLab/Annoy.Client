@@ -1,4 +1,4 @@
-import type { User } from "@distopic/protocol";
+import type { User } from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";

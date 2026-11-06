@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { FocusEvent, ReactNode } from "react";
-import type { Member, VoiceState } from "@distopic/protocol";
+import type { Member, VoiceState } from "@annoy/protocol";
 import { apiFor } from "../client.ts";
 import { displayNameOf } from "../perms.ts";
 import { act, Icon } from "./ui.tsx";

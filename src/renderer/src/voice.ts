@@ -2,7 +2,7 @@ import {t as translate} from "../../shared/localization/index.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
-import type { GatewayEvent, MediaSource } from "@distopic/protocol";
+import type { GatewayEvent, MediaSource } from "@annoy/protocol";
 import { clearTiles, dropTile, putTile, setStreamOffers } from "./media.ts";
 import { isStreamSource, streamOffers } from "./lib/stream-watch.ts";
 import { MicGate } from "./mic.ts";

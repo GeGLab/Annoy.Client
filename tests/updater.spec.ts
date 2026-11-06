@@ -101,15 +101,15 @@ for (const critical of [false, true])
     try {
       await expect(page.locator(".welcome")).toBeVisible();
       await page.evaluate(() =>
-        window.distopic!.updates.configure({ notifications: false }),
+        window.annoy!.updates.configure({ notifications: false }),
       );
       policyEnabled = true;
       const beforeChecks = checks;
       await page.evaluate(() =>
         Promise.all([
-          window.distopic!.updates.check(),
-          window.distopic!.updates.check(),
-          window.distopic!.updates.check(),
+          window.annoy!.updates.check(),
+          window.annoy!.updates.check(),
+          window.annoy!.updates.check(),
         ]),
       );
       expect(checks - beforeChecks).toBe(1);
@@ -117,16 +117,16 @@ for (const critical of [false, true])
         await expect
           .poll(
             async () =>
-              (await page.evaluate(() => window.distopic!.updates.get()))
+              (await page.evaluate(() => window.annoy!.updates.get()))
                 .status,
           )
           .toBe("error");
         expect(
-          await page.evaluate(() => window.distopic!.updates.get()),
+          await page.evaluate(() => window.annoy!.updates.get()),
         ).toMatchObject({ mandatory: true });
       } else {
         expect(
-          await page.evaluate(() => window.distopic!.updates.get()),
+          await page.evaluate(() => window.annoy!.updates.get()),
         ).toMatchObject({
           status: "available",
           version: "99.0.0",
@@ -138,47 +138,47 @@ for (const critical of [false, true])
           ),
         ).toBe(0);
         await page.evaluate(() =>
-          window.distopic!.updates.configure({ notifications: true }),
+          window.annoy!.updates.configure({ notifications: true }),
         );
-        await page.evaluate(() => window.distopic!.updates.check());
-        await page.evaluate(() => window.distopic!.updates.check());
+        await page.evaluate(() => window.annoy!.updates.check());
+        await page.evaluate(() => window.annoy!.updates.check());
         expect(
           await app.evaluate(
             () => (globalThis as any).annoyTestNotifications.length,
           ),
         ).toBe(1);
-        await page.evaluate(() => window.distopic!.updates.download());
+        await page.evaluate(() => window.annoy!.updates.download());
       }
-      const failed = await page.evaluate(() => window.distopic!.updates.get());
+      const failed = await page.evaluate(() => window.annoy!.updates.get());
       expect(failed).toMatchObject({ status: "error" });
       if (failed.status === "error")
         expect(failed.message).toContain("integridade");
-      await page.evaluate(() => window.distopic!.updates.install());
+      await page.evaluate(() => window.annoy!.updates.install());
       expect(
         await app.evaluate(() => (globalThis as any).annoyTestInstalls),
       ).toBe(0);
       offline = true;
-      await page.evaluate(() => window.distopic!.updates.check());
+      await page.evaluate(() => window.annoy!.updates.check());
       expect(
-        (await page.evaluate(() => window.distopic!.updates.get())).status,
+        (await page.evaluate(() => window.annoy!.updates.get())).status,
       ).toBe("error");
       offline = false;
       corrupt = false;
-      await page.evaluate(() => window.distopic!.updates.check());
+      await page.evaluate(() => window.annoy!.updates.check());
       if (!critical)
-        await page.evaluate(() => window.distopic!.updates.download());
+        await page.evaluate(() => window.annoy!.updates.download());
       await expect
         .poll(
           async () =>
-            (await page.evaluate(() => window.distopic!.updates.get())).status,
+            (await page.evaluate(() => window.annoy!.updates.get())).status,
         )
         .toBe("error");
       const unauthenticated = await page.evaluate(() =>
-        window.distopic!.updates.get(),
+        window.annoy!.updates.get(),
       );
       if (unauthenticated.status === "error")
         expect(unauthenticated.message).toContain("autenticada");
-      await page.evaluate(() => window.distopic!.updates.install());
+      await page.evaluate(() => window.annoy!.updates.install());
       expect(
         await app.evaluate(() => (globalThis as any).annoyTestInstalls),
       ).toBe(0);

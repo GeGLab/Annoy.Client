@@ -39,7 +39,7 @@ export class AuthError extends Error {
 }
 
 /** Local data that survives sign-out (TODO item 2.3): preferences, the username, this install's IDs. */
-const KEEP = new Set(["distopic.settings", "annoy.lastUsername", "annoy.clientId", "annoy.cloudDevice", "distopic.globalUrl", "annoy.cloudUrls", "annoy.authUrl"]);
+const KEEP = new Set(["annoy.settings", "annoy.lastUsername", "annoy.clientId", "annoy.cloudDevice", "annoy.globalUrl", "annoy.cloudUrls", "annoy.authUrl"]);
 
 export const lastUsername = (): string => {
   try {
@@ -63,15 +63,15 @@ export function clientId(): string {
 }
 
 function clientName(): string {
-  const platform = window.distopic?.platform ?? navigator.platform;
+  const platform = window.annoy?.platform ?? navigator.platform;
   const os = /win/i.test(platform) ? "Windows" : /darwin|mac/i.test(platform) ? "macOS" : /linux/i.test(platform) ? "Linux" : platform || "Navegador";
   return `${os} · Annoy ${CLIENT_VERSION}`;
 }
 
 async function loadUrls(): Promise<void> {
   try {
-    authUrl = localStorage.getItem("annoy.authUrl") || (await window.distopic?.auth?.authUrl?.()) || DEFAULT_AUTH_URL;
-    websiteUrl = localStorage.getItem("distopic.globalUrl") || (await window.distopic?.auth?.globalUrl?.()) || DEFAULT_WEBSITE_URL;
+    authUrl = localStorage.getItem("annoy.authUrl") || (await window.annoy?.auth?.authUrl?.()) || DEFAULT_AUTH_URL;
+    websiteUrl = localStorage.getItem("annoy.globalUrl") || (await window.annoy?.auth?.globalUrl?.()) || DEFAULT_WEBSITE_URL;
   } catch {
     /* defaults */
   }
@@ -122,14 +122,14 @@ interface Saved {
 let persisting: Promise<unknown> = Promise.resolve();
 function persist(user: GlobalAccount | null): Promise<unknown> {
   const value = user && session && keys ? JSON.stringify({ session, user, keys: kdf.escrowKeys(keys), client: clientRef } satisfies Saved) : null;
-  persisting = persisting.then(() => window.distopic?.secrets.set("global", value).catch(() => false));
+  persisting = persisting.then(() => window.annoy?.secrets.set("global", value).catch(() => false));
   return persisting;
 }
 
 function setAccount(user: GlobalAccount | null): void {
   setState((s) => {
     s.global = user;
-    if (!window.distopic) s.access = { allowed: !!user, global: !!user, localAccounts: [] };
+    if (!window.annoy) s.access = { allowed: !!user, global: !!user, localAccounts: [] };
   });
 }
 
@@ -146,7 +146,7 @@ export function restoreSession(): Promise<void> {
   return (restoring ??= (async () => {
     const g = generation;
     await loadUrls();
-    const raw = await window.distopic?.secrets.get("global").catch(() => null);
+    const raw = await window.annoy?.secrets.get("global").catch(() => null);
     if (g !== generation) return;
     if (!raw) {
       session = keys = null;
@@ -156,7 +156,7 @@ export function restoreSession(): Promise<void> {
     try {
       const saved = JSON.parse(raw) as Saved;
       const restored = kdf.fromEscrow(saved.keys);
-      const me = window.distopic?.auth ? await window.distopic.auth.global(saved.session) : await authRequest<GlobalAccount>("/v1/me", { token: saved.session });
+      const me = window.annoy?.auth ? await window.annoy.auth.global(saved.session) : await authRequest<GlobalAccount>("/v1/me", { token: saved.session });
       if (g !== generation) return;
       session = saved.session;
       keys = restored;
@@ -196,7 +196,7 @@ export function endSession(): Promise<void> {
     session = keys = null;
     access = null;
     clientRef = null;
-    await window.distopic?.secrets.set("global", null).catch(() => false);
+    await window.annoy?.secrets.set("global", null).catch(() => false);
     void import("./servers.ts").then((m) => m.stopVaultSync());
     setAccount(null);
     toast(translate("auth.sessionEnded"), 8000);
@@ -219,7 +219,7 @@ export async function signIn(identifier: string, password: string, signal?: Abor
     signal,
   });
   const unlocked = await kdf.unwrapKeys(pk.wrapKey, res.wrappedKeys);
-  const me = window.distopic?.auth ? await window.distopic.auth.global(res.token) : res.user;
+  const me = window.annoy?.auth ? await window.annoy.auth.global(res.token) : res.user;
   if (g !== generation) throw new AuthError(0, "superseded", translate("common.459edfa35541"));
   session = res.token;
   keys = unlocked;
@@ -252,7 +252,7 @@ export function signOut(callApi = true): Promise<void> {
     session = keys = null;
     access = null;
     clientRef = null;
-    await window.distopic?.auth?.logoutGlobal().catch(() => undefined);
+    await window.annoy?.auth?.logoutGlobal().catch(() => undefined);
     await wipeLocal();
     location.reload();
   })().finally(() => {
@@ -274,7 +274,7 @@ async function wipeLocal(): Promise<void> {
   } catch {
     /* nothing stored */
   }
-  await window.distopic?.auth?.wipe?.(services).catch(() => undefined);
+  await window.annoy?.auth?.wipe?.(services).catch(() => undefined);
 }
 
 // --- What other modules need ------------------------------------------------------------

@@ -59,7 +59,7 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
       page.getByRole("button", { name: "Reiniciar agora", exact: true }),
     ).toBeVisible();
     expect(
-      (await page.evaluate(() => window.distopic!.desktop.get())).applied
+      (await page.evaluate(() => window.annoy!.desktop.get())).applied
         .hardwareAcceleration,
     ).toBe(true);
     const saved = JSON.parse(
@@ -106,9 +106,9 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
       .click();
     await page.keyboard.press("Escape");
     // Tray restoration needs a system tray; headless Linux runners have none.
-    const tray = (await page.evaluate(() => window.distopic!.desktop.get())).supported.closeToTray;
+    const tray = (await page.evaluate(() => window.annoy!.desktop.get())).supported.closeToTray;
     test.skip(!tray, "No system tray on this runner");
-    await page.evaluate(() => window.distopic!.window.close());
+    await page.evaluate(() => window.annoy!.window.close());
     await expect
       .poll(() =>
         app.evaluate(({ BrowserWindow }) =>
@@ -136,7 +136,7 @@ test("desktop preview/save/reload, applied acceleration, unsupported autostart a
       .toBe(true);
     await page.reload();
     expect(
-      (await page.evaluate(() => window.distopic!.desktop.get())).saved
+      (await page.evaluate(() => window.annoy!.desktop.get())).saved
         .hardwareAcceleration,
     ).toBe(false);
     const closed = app.waitForEvent("close");
@@ -195,7 +195,7 @@ for (const enabled of [true, false])
           await app.evaluate(({ app }) => app.isHardwareAccelerationEnabled()),
         ).toBe(enabled);
       const snapshot = await page.evaluate(() =>
-        window.distopic!.desktop.get(),
+        window.annoy!.desktop.get(),
       );
       expect(snapshot.applied.hardwareAcceleration).toBe(enabled);
       expect(snapshot.applied.closeToTray).toBe(false);
@@ -231,13 +231,13 @@ test("failed native preference write does not claim saved or applied changes", a
   const { app, page } = await launch(data);
   try {
     await expect(page.locator(".welcome")).toBeVisible();
-    const initial = await page.evaluate(() => window.distopic!.desktop.get());
+    const initial = await page.evaluate(() => window.annoy!.desktop.get());
     // The first run writes desktop.json; a directory in its place makes the next write fail.
     await rm(join(data, "desktop.json"), { force: true });
     await mkdir(join(data, "desktop.json"));
     const rejected = await page.evaluate(async (saved) => {
       try {
-        await window.distopic!.desktop.set({
+        await window.annoy!.desktop.set({
           ...saved,
           hardwareAcceleration: false,
         });
@@ -247,7 +247,7 @@ test("failed native preference write does not claim saved or applied changes", a
       }
     }, initial.saved);
     expect(rejected).toBe(true);
-    const after = await page.evaluate(() => window.distopic!.desktop.get());
+    const after = await page.evaluate(() => window.annoy!.desktop.get());
     expect(after.saved.hardwareAcceleration).toBe(true);
     expect(after.applied.hardwareAcceleration).toBe(true);
     expect(after.restartRequired).toBe(false);

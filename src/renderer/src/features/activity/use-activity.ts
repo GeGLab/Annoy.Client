@@ -1,6 +1,6 @@
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import { withSteamFallback } from "../../../../shared/steam-activity.ts";
 import { apiFor, gatewayFor } from "../../client.ts";
 import { getState, setState, useStore } from "../../store.ts";
@@ -31,7 +31,7 @@ export function useDesktopActivity() {
       .join("|"),
   );
   useEffect(() => {
-    const activity = window.distopic?.activity;
+    const activity = window.annoy?.activity;
     if (!activity) return;
     const unsubscribe = activity.onSnapshot((snapshot) =>
       setState((s) => {
@@ -44,7 +44,7 @@ export function useDesktopActivity() {
     return unsubscribe;
   }, []);
   useEffect(() => {
-    void window.distopic?.activity?.configure({ games: sharing, music: sharing, development: sharing });
+    void window.annoy?.activity?.configure({ games: sharing, music: sharing, development: sharing });
   }, [sharing]);
   const screenSharing=useStore(s=>s.voice?.screen?s.voice.accountId:null);
   const cloud = useStore((s) => s.social.status);

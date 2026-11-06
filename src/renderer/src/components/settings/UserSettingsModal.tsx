@@ -7,11 +7,11 @@ import {LocalizationSettings} from "./LocalizationSettings.tsx";
 import {DesktopSettings} from "./DesktopSettings.tsx";
 import type {DesktopPreferences,DesktopSnapshot} from "../../../../shared/desktop.ts";
 import {t as translate,textForError,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import {normalizeProfileField} from "@distopic/protocol";
+import {normalizeProfileField} from "@annoy/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
 import { confirmAction } from "../ui/action-dialog.tsx";
-import type { DiscordLoginBegin, User } from "@distopic/protocol";
+import type { DiscordLoginBegin, User } from "@annoy/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
 import { apiFor, applyUserUpdate, removeAccount, updateVoiceSettings } from "../../client.ts";
@@ -242,7 +242,7 @@ export function UserSettingsModal() {
     else action();
   };
   useEffect(() => registerNavigationGuard(leave), [dirty, saving]);
-  const refreshDesktop=()=>{void window.distopic?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
+  const refreshDesktop=()=>{void window.annoy?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
   useEffect(()=>{refreshDesktop();},[]);
   useEffect(()=>{configureLocalization(draft);},[draft.language,draft.region,draft.hourCycle,draft.fontSize,draft.underlineLinks]);
   useEffect(()=>()=>configureLocalization(getState().settings),[]);
@@ -266,7 +266,7 @@ export function UserSettingsModal() {
       event.returnValue = "";
       leave(() => {
         allowWindowClose.current = true;
-        window.distopic?.window.close();
+        window.annoy?.window.close();
       });
     };
     window.addEventListener("beforeunload", beforeUnload);
@@ -333,8 +333,8 @@ export function UserSettingsModal() {
         }
       }
       const next={...draft,previousLanguage:draft.language!==saved.language?saved.language:draft.previousLanguage};
-      if(desktopDirty&&desktopDraft){try{const status=await window.distopic!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}}
-      await window.distopic?.localization?.set(normalizeLocalization(next));signal.throwIfAborted();
+      if(desktopDirty&&desktopDraft){try{const status=await window.annoy!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}}
+      await window.annoy?.localization?.set(normalizeLocalization(next));signal.throwIfAborted();
       setState((s)=>{Object.assign(s.settings,next);});setDraft(next);
       updateVoiceSettings();
       setProfiles({});
@@ -616,7 +616,7 @@ export function UserSettingsModal() {
               <section className="settings-section">
                 <h3>{rich("common.5b986d904c4a",{p0:(<Icon name="radio" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.ef3f1976270b")}</p>
-                {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
+                {window.annoy?.platform === "win32" || window.annoy?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
                       <span><strong>{rich("common.7d846bb586da",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.90aac47f7432")}</small></span>

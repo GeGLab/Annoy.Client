@@ -14,7 +14,7 @@ export interface BotListing {
   description: string;
   author: string;
   version: string;
-  runtime: "distopic-worker-v1";
+  runtime: "annoy-worker-v1";
   permissions: BotPermission[];
 }
 export interface BotInstallation {

@@ -1,5 +1,5 @@
 import {t as translate} from "../../shared/localization/index.ts";
-import type { ClientOp, GatewayEvent, VoiceMethod } from "@distopic/protocol";
+import type { ClientOp, GatewayEvent, VoiceMethod } from "@annoy/protocol";
 import { CLIENT_VERSION } from "./lib/client-version.ts";
 import { deviceId } from "./lib/device-id.ts";
 import { getState } from "./store.ts";

@@ -1,5 +1,5 @@
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import type { ProfileFieldKind } from "@distopic/protocol";
+import type { ProfileFieldKind } from "@annoy/protocol";
 import { Globe, Mail, Phone } from "lucide-react";
 export let PROFILE_LABELS: Record<ProfileFieldKind, string> = {
   linkedin: "LinkedIn",

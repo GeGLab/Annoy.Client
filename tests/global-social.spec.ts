@@ -256,8 +256,8 @@ test("sign-in by username, the list of installs, and sign-out that keeps only th
     await a.page.getByRole("button", { name: "Sair da conta Annoy", exact: true }).click();
     await expect(a.page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible({ timeout: 30_000 });
     await expect(a.page.getByLabel("Usuário ou e-mail")).toHaveValue(who.name);
-    const left = await a.page.evaluate(async () => ({ keys: Object.keys(localStorage).sort(), dbs: ((await indexedDB.databases()) ?? []).map((d) => d.name), theme: JSON.parse(localStorage.getItem("distopic.settings") ?? "{}").theme }));
-    expect(left.keys.every((k) => ["annoy.clientId", "annoy.cloudDevice", "annoy.lastUsername", "distopic.settings"].includes(k))).toBe(true);
+    const left = await a.page.evaluate(async () => ({ keys: Object.keys(localStorage).sort(), dbs: ((await indexedDB.databases()) ?? []).map((d) => d.name), theme: JSON.parse(localStorage.getItem("annoy.settings") ?? "{}").theme }));
+    expect(left.keys.every((k) => ["annoy.clientId", "annoy.cloudDevice", "annoy.lastUsername", "annoy.settings"].includes(k))).toBe(true);
     expect(left.dbs).toEqual([]);
     expect(left.theme).toBe("light");
     // authannoy ended this install's session: signing in again asks for the password.

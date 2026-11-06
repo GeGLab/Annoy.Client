@@ -2,7 +2,7 @@ import {localizationPreferences} from "../../../../shared/localization/index.ts"
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useRef, useState } from "react";
 import { Search, SlidersHorizontal, FileSearch, ArrowUpRight } from "lucide-react";
-import type { MessageSearchPage } from "@distopic/protocol";
+import type { MessageSearchPage } from "@annoy/protocol";
 import { apiFor, jumpToMessage } from "../../client.ts";
 import { useStore } from "../../store.ts";
 import { Modal, Avatar, Field } from "../../components/ui.tsx";

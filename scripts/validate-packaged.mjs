@@ -105,12 +105,12 @@ try {
       page = context.pages()[0] ?? (await context.waitForEvent("page"));
       await auth.keepAuthenticated(page);
       await page.locator(".welcome").waitFor();
-      const status = await page.evaluate(() => window.distopic.desktop.get());
+      const status = await page.evaluate(() => window.annoy.desktop.get());
       assert.equal(status.applied.hardwareAcceleration, hardwareAcceleration);
       assert.equal(status.restartRequired, false);
       await page.evaluate(
         (saved) =>
-          window.distopic.desktop.set({ ...saved, startMinimized: true }),
+          window.annoy.desktop.set({ ...saved, startMinimized: true }),
         status.saved,
       );
       assert.equal(
@@ -134,11 +134,11 @@ try {
       });
       assert.ok(width > 0);
       assert.ok(
-        (await page.evaluate(() => window.distopic.screen.sources())).length >
+        (await page.evaluate(() => window.annoy.screen.sources())).length >
           0,
       );
-      await page.evaluate(() => window.distopic.updates.check());
-      const update = await page.evaluate(() => window.distopic.updates.get());
+      await page.evaluate(() => window.annoy.updates.check());
+      const update = await page.evaluate(() => window.annoy.updates.get());
       assert.equal(update.currentVersion, metadata.version);
       assert.equal(update.status, "none");
       console.log(
@@ -155,7 +155,7 @@ try {
       );
     } finally {
       await page
-        ?.evaluate(() => window.distopic.window.close())
+        ?.evaluate(() => window.annoy.window.close())
         .catch(() => {});
       await browser?.close().catch(() => {});
       if (child.exitCode === null) {

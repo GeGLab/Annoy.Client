@@ -22,7 +22,7 @@ Preserve existing authentication, multiple accounts, relationships, server admin
 
 ## Brand Commitments
 
-The product is named Annoy. Preserve the upstream Annoy logo, amber/indigo identity, package metadata and repository ownership. The user requested familiar Discord-like interaction patterns with a distinct visual identity, an in-app image viewer and a custom window bar. Earlier Distopic naming and speech/D identity are superseded by the collaborator's upstream 0.3.1 rename, which the user explicitly requested preserving when preparing the PRs.
+The product is named Annoy. Preserve the upstream Annoy logo, amber/indigo identity, package metadata and repository ownership. The user requested familiar Discord-like interaction patterns with a distinct visual identity, an in-app image viewer and a custom window bar. The earlier name and speech/D identity are superseded by the collaborator's upstream 0.3.1 rename, which the user explicitly requested preserving when preparing the PRs.
 
 ## Product Principles
 
