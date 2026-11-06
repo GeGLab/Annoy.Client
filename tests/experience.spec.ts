@@ -1778,6 +1778,28 @@ test("packaged renderer shows the Annoy stickers without a development server UR
  }finally{await close();}
 });
 
+test("packaged renderer keeps settings saved under the old distopic.* keys (the store must not read before the move)",async()=>{
+ const {page,close}=await launch({packaged:true});
+ try{
+  expect(page.url()).toMatch(/^file:/);
+  const filters={gate:{enabled:false,openDb:-26,closeDb:-79,attackMs:25,holdMs:200,releaseMs:150},eq:{enabled:true,lowDb:6.5,midDb:-1,highDb:-8},gain:{enabled:false,db:-1.5},compressor:{enabled:true,thresholdDb:-10,ratio:6,attackMs:37,releaseMs:230,outputDb:3},limiter:{enabled:true,thresholdDb:-6,releaseMs:60}};
+  // An install updated from 0.10.0-alpha.4: only the old keys exist.
+  await page.evaluate((filters)=>{const current=JSON.parse(localStorage.getItem("annoy.settings")??"{}");localStorage.clear();localStorage.setItem("distopic.settings",JSON.stringify({...current,noiseFilter:"max",vadThreshold:1,appIcon:"classic",micFilters:filters,userVolumes:{"[\"a\",\"b\"]":200}}));},filters);
+  await page.reload();
+  await page.waitForLoadState("domcontentloaded");
+  const after=await page.evaluate(()=>({stored:JSON.parse(localStorage.getItem("annoy.settings")??"null"),old:localStorage.getItem("distopic.settings")}));
+  expect(after.old).toBeNull();
+  expect(after.stored).toMatchObject({noiseFilter:"max",vadThreshold:1,appIcon:"classic",micFilters:filters,userVolumes:{"[\"a\",\"b\"]":200}});
+  // The store must have loaded them: saving any setting writes the whole settings object back.
+  await page.getByRole("button",{name:"Configurações",exact:true}).click();
+  await page.getByRole("button",{name:"Aparência",exact:true}).click();
+  await page.getByLabel("Claro",{exact:true}).click();
+  await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem("annoy.settings")!).theme)).toBe("light");
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("annoy.settings")!))).toMatchObject({noiseFilter:"max",vadThreshold:1,appIcon:"classic",micFilters:filters});
+ }finally{await close();}
+});
+
 test("shared reaction chips group participants and ignore a stale native response", async () => {
   const { app, page, close } = await launch();
   let socket: WebSocketRoute;

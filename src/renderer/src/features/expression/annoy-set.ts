@@ -52,14 +52,18 @@ async function refresh(cached: Cached | null): Promise<Cached | null> {
   return next;
 }
 
-/** The set from the cache; asks cdnannoy only when the cache is older than 2 hours. */
-export function annoySet(): Promise<Cached | null> {
+/**
+ * The set from the cache; asks cdnannoy when the cache is older than 2 hours,
+ * or right away with `fresh` (the picker opening), so new items show at once.
+ * An unchanged set answers 304 with no body.
+ */
+export function annoySet(fresh = false): Promise<Cached | null> {
   if (pending) return pending;
   // Clear only after the assignment: the body can finish without awaiting anything.
   const current = (async () => {
     memory ??= (await readCache<Cached>(SET_KEY).catch(() => undefined)) ?? null;
-    const due = !memory || now() - memory.checkedAt >= REFRESH_MS;
-    if (!due || now() - failedAt < RETRY_MS) return memory;
+    const due = fresh || !memory || now() - memory.checkedAt >= REFRESH_MS;
+    if (!due || (!fresh && now() - failedAt < RETRY_MS)) return memory;
     try {
       memory = await refresh(memory);
       if (memory) void writeCache(SET_KEY, memory).catch(() => undefined);
@@ -72,6 +76,9 @@ export function annoySet(): Promise<Cached | null> {
   void current.finally(() => { if (pending === current) pending = null; });
   return current;
 }
+
+/** Asks cdnannoy for changes now (when a picker opens). */
+export const refreshAnnoySet = () => annoySet(true);
 
 export async function readAnnoyItems(kind: MediaKind, query = ""): Promise<MediaItem[]> {
   const set = await annoySet();

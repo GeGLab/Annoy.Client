@@ -1,3 +1,5 @@
+// Must run before this module reads storage: bundling can evaluate this chunk before main.tsx's own code.
+import "./storage-migration.ts";
 import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
 import { normalizeAppIcon } from "../../shared/app-icon.ts";
 import type {

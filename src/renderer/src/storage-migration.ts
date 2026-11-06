@@ -1,5 +1,6 @@
 // 0.10 renamed the remaining "distopic.*" storage keys to "annoy.*". Move saved data once,
-// before any module reads it (imported first in main.tsx).
+// before any module reads it. Imported first by store.ts and main.tsx: a split bundle can evaluate
+// the store chunk before main.tsx's own code (0.10.0-alpha.5 reset everyone's settings that way).
 const OLD = "distopic.";
 const NEW = "annoy.";
 
