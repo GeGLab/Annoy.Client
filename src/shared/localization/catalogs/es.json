@@ -2247,7 +2247,7 @@
   "news.social.title": "Tus servidores en todos los dispositivos",
   "news.social.body": "Los servidores de tu cuenta Annoy aparecen en cada dispositivo donde inicias sesión. Añadir o quitar un servidor en un dispositivo cambia los demás al instante.",
   "news.login.title": "Entrar en la voz",
-  "news.login.body": "Si el micrófono elegido en la configuración no está conectado, la app usa el micrófono predeterminado del sistema y avisa. Los errores del micrófono ahora dicen qué pasó.",
+  "news.login.body": "Si ya no se encuentra el micrófono guardado, la app pasa a usar el micrófono predeterminado del sistema una vez y avisa. Los errores del micrófono dicen qué pasó.",
   "news.voice.title": "Pegatinas de Annoy",
   "news.voice.body": "Emojis y pegatinas de Annoy para todos. La pegatina se envía al instante, animada y en su tamaño definido.",
   "news.settings.title": "Apariencia y texto",
@@ -2275,7 +2275,7 @@
   "servers.syncing": "Sincronizando tus servidores",
   "servers.syncingHint": "Los servidores de tu cuenta Annoy aparecerán aquí en un momento.",
   "servers.syncRetrying": "El servicio de cuentas no respondió. La app lo intenta de nuevo sola; no tienes que hacer nada.",
-  "voice.mic.fallback": "El micrófono elegido no está conectado. Usando el micrófono predeterminado del sistema.",
+  "voice.mic.fallback": "No se encontró el micrófono guardado. La app ahora usa el micrófono predeterminado del sistema; puede elegir otro en la configuración de voz.",
   "voice.mic.denied": "Se denegó el acceso al micrófono. Permítalo en la configuración del sistema e inténtelo de nuevo.",
   "voice.mic.notFound": "No se encontró ningún micrófono. Conecte uno o elija otro en la configuración de voz.",
   "voice.mic.busy": "El micrófono está en uso por otro programa o no se pudo iniciar."
