@@ -2294,5 +2294,7 @@
   "settings.stickers.add": "Ajouter",
   "settings.stickers.full": "Ce serveur a atteint la limite de {p0} autocollants.",
   "settings.stickers.remove": "Retirer l'autocollant",
-  "settings.stickers.removeConfirm": "Retirer l'autocollant « {p0} » ?"
+  "settings.stickers.removeConfirm": "Retirer l'autocollant « {p0} » ?",
+  "expression.stickerReactionName": "Autocollant",
+  "expression.noStickersFound": "Aucun autocollant trouvé."
 }

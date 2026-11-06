@@ -33,11 +33,38 @@ export function ItemImage({ item }: { item: MediaItem }) {
   return item.emoji ? <span>{item.emoji}</span> : <img ref={image} src={url} alt="" loading="lazy" />;
 }
 const matches = (item: MediaItem, query: string) => `${item.name} ${item.emoji ?? ""}`.normalize("NFD").replace(/\p{M}/gu,"").toLocaleLowerCase(localizationPreferences().region).includes(query.normalize("NFD").replace(/\p{M}/gu,"").toLocaleLowerCase(localizationPreferences().region));
-export function EmojiMenu({ onSelect, disabled=false }: { onSelect: (emoji: string) => void; disabled?: boolean }) {
-  const [open,setOpen]=useState(false), [query,setQuery]=useState(""), [expanded,setExpanded]=useState(false);
+/** Reaction picker. With `stickers`, a second tab lists the stickers that have a public link (Annoy set and server packs). */
+export function EmojiMenu({ onSelect, disabled=false, stickers=false }: { onSelect: (reaction: string) => void; disabled?: boolean; stickers?: boolean }) {
+  const [open,setOpen]=useState(false), [query,setQuery]=useState(""), [expanded,setExpanded]=useState(false), [tab,setTab]=useState<"emoji"|"sticker">("emoji");
   const common = ["😂", "❤️", "👍", "🔥", "👀", "🎉", "😢", "👏", "😀", "🥰", "🤔", "😳", "💀", "🙏", "✅", "💪"];
   const items = query.trim() || expanded ? EMOJIS.filter((item)=>matches(item,query)) : common.flatMap((emoji)=>EMOJIS.filter((item)=>item.emoji===emoji));
-  return <Popover.Root open={open} onOpenChange={(value)=>{setOpen(value);if(value){setQuery("");setExpanded(false);}}}><Popover.Trigger asChild><button className="icon-btn tiny" aria-label={translate("expression.3fabbf2c1eb1")} title={translate("expression.3fabbf2c1eb1")} disabled={disabled}><Smile size={16} /></button></Popover.Trigger><Popover.Portal><Popover.Content side="top" align="end" collisionPadding={{ top: 48, right: 12, bottom: 12, left: 12 }} sideOffset={8} className="expression-picker reaction-picker" role="dialog" aria-label={translate("expression.76f20d93f109")}><Input aria-label={translate("expression.e18752d70c23")} placeholder={translate("expression.9306b76a82a0")} value={query} onChange={(event)=>setQuery(event.target.value)} /><div className="expression-grid emoji-grid">{items.map((item)=><button key={item.id} title={item.name} aria-label={item.name} onClick={()=>{onSelect(item.emoji!);setOpen(false);}}>{item.emoji}</button>)}</div>{!items.length&&<p className="muted small">{translate("expression.d26bebda6099")}</p>}{!query.trim()&&<Button variant="ghost" size="sm" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?translate("expression.677b6ee8c1b5"):translate("expression.7e9151435083")}</Button>}<Popover.Arrow className="popover-arrow" /></Popover.Content></Popover.Portal></Popover.Root>;
+  const [annoyStickers,setAnnoyStickers]=useState<MediaItem[]>([]), [serverPacks,setServerPacks]=useState<ServerStickerPack[]>([]), [loadingStickers,setLoadingStickers]=useState(false);
+  useEffect(()=>{
+    if(!open||tab!=="sticker")return;
+    let disposed=false;
+    void readAnnoyItems("sticker",query).then((found)=>{if(!disposed)setAnnoyStickers(found);}).catch(()=>undefined);
+    return()=>{disposed=true;};
+  },[open,tab,query]);
+  useEffect(()=>{
+    if(!open||tab!=="sticker")return;
+    const controller=new AbortController();setLoadingStickers(true);
+    void readServerStickerPacks(controller.signal).then((packs)=>{if(!controller.signal.aborted)setServerPacks(packs);}).finally(()=>{if(!controller.signal.aborted)setLoadingStickers(false);});
+    return()=>controller.abort();
+  },[open,tab]);
+  const packs=tab==="sticker"?[{key:"annoy",serverName:"Annoy",iconUrl:null as string|null,stickers:annoyStickers.map((item)=>({id:item.id,name:item.name,url:item.url!}))},...serverPacks.map((pack)=>({...pack,stickers:pack.stickers.filter((sticker)=>matches({id:sticker.id,name:sticker.name} as MediaItem,query))}))].filter((pack)=>pack.stickers.length):[];
+  const pick=(reaction:string)=>{onSelect(reaction);setOpen(false);};
+  return <Popover.Root open={open} onOpenChange={(value)=>{setOpen(value);if(value){setQuery("");setExpanded(false);setTab("emoji");}}}><Popover.Trigger asChild><button className="icon-btn tiny" aria-label={translate("expression.3fabbf2c1eb1")} title={translate("expression.3fabbf2c1eb1")} disabled={disabled}><Smile size={16} /></button></Popover.Trigger><Popover.Portal><Popover.Content side="top" align="end" collisionPadding={{ top: 48, right: 12, bottom: 12, left: 12 }} sideOffset={8} className="expression-picker reaction-picker" role="dialog" aria-label={translate("expression.76f20d93f109")}>
+    {stickers&&<div className="expression-tabs" role="tablist" aria-label={translate("expression.76f20d93f109")}>{([["emoji",translate("common.0a76ba756cf5")],["sticker",translate("expression.3076a998ce59")]] as const).map(([id,label])=><button key={id} role="tab" aria-selected={tab===id} onClick={()=>{setTab(id);setQuery("");}}>{label}</button>)}</div>}
+    <Input aria-label={tab==="emoji"?translate("expression.e18752d70c23"):translate("expression.1f83655213c6")} placeholder={tab==="emoji"?translate("expression.9306b76a82a0"):translate("expression.1f83655213c6")} value={query} onChange={(event)=>setQuery(event.target.value)} />
+    {tab==="emoji"?<>
+      <div className="expression-grid emoji-grid">{items.map((item)=><button key={item.id} title={item.name} aria-label={item.name} onClick={()=>pick(item.emoji!)}>{item.emoji}</button>)}</div>
+      {!items.length&&<p className="muted small">{translate("expression.d26bebda6099")}</p>}
+      {!query.trim()&&<Button variant="ghost" size="sm" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?translate("expression.677b6ee8c1b5"):translate("expression.7e9151435083")}</Button>}
+    </>:<div className="reaction-sticker-scroll">
+      {packs.map((pack)=><section className="expression-group" key={pack.key}><h3 className="server-pack-title">{pack.iconUrl?<img src={pack.iconUrl} alt=""/>:null}{pack.serverName}</h3><div className="expression-grid sticker-grid">{pack.stickers.map((sticker)=><button key={sticker.id} title={sticker.name} aria-label={sticker.name} onClick={()=>pick(sticker.url)}>{pack.key==="annoy"?<ItemImage item={{id:sticker.id,name:sticker.name,kind:"sticker",url:sticker.url,remote:true} as MediaItem}/>:<img src={sticker.url} alt="" loading="lazy"/>}</button>)}</div></section>)}
+      {!packs.length&&<p className="muted small">{loadingStickers?translate("expression.catalog.9abc0a44cfc9"):translate("expression.noStickersFound")}</p>}
+    </div>}
+    <Popover.Arrow className="popover-arrow" /></Popover.Content></Popover.Portal></Popover.Root>;
 }
 
 export function MediaPicker({accountId,canAttach,onEmoji,onFile,onLink,onSticker,disabled=false}:{accountId:string;canAttach:boolean;onEmoji:(emoji:string)=>void;onFile:(file:File)=>void;onLink:(link:string)=>void;/** Sends an Annoy sticker right away, as its own message. */onSticker?:(url:string)=>void;disabled?:boolean}) {

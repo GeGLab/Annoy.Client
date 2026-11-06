@@ -2294,5 +2294,7 @@
   "settings.stickers.add": "Adicionar",
   "settings.stickers.full": "Este servidor chegou ao limite de {p0} figurinhas.",
   "settings.stickers.remove": "Remover figurinha",
-  "settings.stickers.removeConfirm": "Remover a figurinha \"{p0}\"?"
+  "settings.stickers.removeConfirm": "Remover a figurinha \"{p0}\"?",
+  "expression.stickerReactionName": "Figurinha",
+  "expression.noStickersFound": "Nenhuma figurinha encontrada."
 }

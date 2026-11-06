@@ -2294,5 +2294,7 @@
   "settings.stickers.add": "添加",
   "settings.stickers.full": "此服务器已达到 {p0} 个贴纸的上限。",
   "settings.stickers.remove": "移除贴纸",
-  "settings.stickers.removeConfirm": "移除贴纸“{p0}”？"
+  "settings.stickers.removeConfirm": "移除贴纸“{p0}”？",
+  "expression.stickerReactionName": "贴纸",
+  "expression.noStickersFound": "未找到贴纸。"
 }

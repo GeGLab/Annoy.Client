@@ -5,7 +5,7 @@ import { SecureAttachment } from "./SecureAttachment.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
-import { isStickerMessage, StickerMessage } from "../features/expression/AnnoySticker.tsx";
+import { isStickerLink, isStickerMessage, StickerMessage } from "../features/expression/AnnoySticker.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@annoy/protocol";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -218,6 +218,7 @@ function MessageRow({
   onReply: (m: Message) => void;
 }) {
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
+  const stickerReactions = useStore((s) => s.instances[accountId]?.instance?.stickerReactions === true);
   const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
@@ -226,7 +227,10 @@ function MessageRow({
     try {
       const path = `/channels/${message.channelId}/messages/${message.id}/reactions/${encodeURIComponent(emoji)}`;
       const exists = message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(me));
-      const updated = exists ? await apiFor(accountId).del<Message>(path) : await apiFor(accountId).put<Message>(path);
+      // Sticker links are too long for the path: they go in the body.
+      const updated = isStickerLink(emoji)
+        ? await apiFor(accountId).post<Message>(`/channels/${message.channelId}/messages/${message.id}/reactions`, { reaction: emoji, add: !exists })
+        : exists ? await apiFor(accountId).del<Message>(path) : await apiFor(accountId).put<Message>(path);
       const latest = getState().instances[accountId]?.messages[message.channelId]?.items.find((item) => item.id === message.id);
       // A newer gateway update may already include reactions from another person.
       if (latest?.reactions === message.reactions) setState((s) => {
@@ -312,14 +316,14 @@ function MessageRow({
           <GiphyMessage accountId={accountId} content={message.content} />
           {message.content && <StickerMessage content={message.content} />}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
-          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} onToggle={(emoji) => void react(emoji)} />
+          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} stickers={stickerReactions} onToggle={(emoji) => void react(emoji)} />
         </div>
       </div>
       {!editing && (
         <div className="message-actions">
           {reactionsEnabled && canReact && <>
             <div className="reaction-shortcuts" aria-label={translate("chat.d767e158a964")}>{REACTION_SHORTCUTS.map((emoji) => <button key={emoji} className="reaction-quick" aria-label={translate("chat.e113ea72ab1d",{p0:(emoji)})} aria-pressed={message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(me)) ?? false} title={translate("chat.e113ea72ab1d",{p0:(emoji)})} disabled={reacting} onClick={() => void react(emoji)}>{emoji}</button>)}</div>
-            <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />
+            <EmojiMenu disabled={reacting} stickers={stickerReactions} onSelect={(emoji) => void react(emoji)} />
             <span className="message-action-divider" aria-hidden="true" />
           </>}
           {!reactionsEnabled && canReact && <button className="icon-btn tiny" aria-label={translate("expression.3fabbf2c1eb1")} title={translate("chat.25c010d1cb69")} onClick={() => toast(translate("chat.99b1109a32bd"))}><Icon name="smile" size={16} /></button>}

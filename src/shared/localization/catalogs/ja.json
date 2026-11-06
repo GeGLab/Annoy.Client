@@ -2294,5 +2294,7 @@
   "settings.stickers.add": "追加",
   "settings.stickers.full": "このサーバーはスタンプの上限 {p0} 個に達しました。",
   "settings.stickers.remove": "スタンプを削除",
-  "settings.stickers.removeConfirm": "スタンプ「{p0}」を削除しますか？"
+  "settings.stickers.removeConfirm": "スタンプ「{p0}」を削除しますか？",
+  "expression.stickerReactionName": "スタンプ",
+  "expression.noStickersFound": "スタンプが見つかりません。"
 }

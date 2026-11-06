@@ -272,6 +272,13 @@
 .message-reactions { margin-top: 10px; }
 .message-reactions .reaction { min-height: 30px; padding: 3px 8px; border-radius: 8px; gap: 6px; }
 .reaction-count { font-size: 0.85714rem; font-weight: 600; }
+.reaction-sticker { display: block; width: 24px; height: 24px; flex: none; }
+.reaction-sticker img { width: 100%; height: 100%; object-fit: contain; }
+.message-reactions .reaction.sticker { padding-block: 2px; }
+.reaction-picker .expression-tabs { flex: none; }
+.reaction-sticker-scroll { max-height: 300px; overflow-y: auto; overflow-x: hidden; }
+.reaction-sticker-scroll .expression-group h3 { margin: 4px 0 8px; }
+.reaction-sticker-scroll .sticker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: none; overflow: visible; }
 @media (prefers-reduced-motion: reduce) { .message-actions { transition: none; transform: none; } }
 .saved-account.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
 .annoy-account-option.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }

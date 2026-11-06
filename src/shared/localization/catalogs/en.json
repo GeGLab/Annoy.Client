@@ -2294,5 +2294,7 @@
   "settings.stickers.add": "Add",
   "settings.stickers.full": "This server has reached the limit of {p0} stickers.",
   "settings.stickers.remove": "Remove sticker",
-  "settings.stickers.removeConfirm": "Remove the sticker \"{p0}\"?"
+  "settings.stickers.removeConfirm": "Remove the sticker \"{p0}\"?",
+  "expression.stickerReactionName": "Sticker",
+  "expression.noStickersFound": "No stickers found."
 }
