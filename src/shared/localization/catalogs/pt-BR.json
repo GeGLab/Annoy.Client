@@ -2297,6 +2297,10 @@
   "settings.stickers.removeConfirm": "Remover a figurinha \"{p0}\"?",
   "expression.stickerReactionName": "Figurinha",
   "expression.noStickersFound": "Nenhuma figurinha encontrada.",
-  "settings.profileFromAnnoy": "Nome, foto e bio vêm do perfil da conta Annoy.",
-  "settings.profileIntroAnnoy": "Um perfil só, na conta Annoy. Ele também aparece nos servidores em que você entra com essa conta."
+  "settings.profileIntroAnnoy": "Um perfil só, na conta Annoy. Ele também aparece nos servidores em que você entra com essa conta.",
+  "social.contactsHelp": "Campos opcionais da sua conta Annoy. Novos contatos ficam em Somente eu. E-mail e telefone não mudam o login da conta.",
+  "social.audienceCommunity": "Qualquer pessoa com conta Annoy",
+  "social.historyHelp": "Desligado inicialmente. Após salvar o consentimento, guarda até três sessões encerradas por até 30 dias, visíveis para você e seus amigos. Desativar apaga o histórico. Arquivos, projetos e caminhos locais ficam fora do registro.",
+  "activity.annoySteamTitle": "Steam · Conta Annoy",
+  "activity.annoySteamHelp": "Conecte sua conta pelo navegador para complementar a detecção local. Sua senha fica na Steam. O vínculo vale para a sua conta Annoy, em todos os servidores."
 }

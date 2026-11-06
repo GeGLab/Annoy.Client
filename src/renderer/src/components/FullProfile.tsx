@@ -40,7 +40,7 @@ export function FullProfileButton({
 }
 function FullProfile({ accountId, user }: { accountId: string; user: User }) {
   const { details, error, unavailable, loading, supported, connected, retry } =
-    useProfileDetails(accountId, user.id);
+    useProfileDetails(accountId, user.id, true, user);
   const instance = useStore((s) => s.instances[accountId]);
   const presence = instance?.presences[user.id] ?? "offline";
   const relationship = instance?.relationships.find(

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { toast, useStore } from "../../store.ts";
 import { updateProfile, uploadProfileImage } from "../../social/index.ts";
+import { deleteCloudHistory, readCloudDetails, saveCloudDetails, type CloudProfileDetails } from "../../social/details.ts";
+import { ProfileDetailsSection } from "../settings/ProfileEditor.tsx";
 import type { ServerVisibility } from "../../social/types.ts";
 import { Button } from "../ui/button.tsx";
 import { Input } from "../ui/input.tsx";
@@ -22,6 +24,22 @@ export function CloudProfileEditor() {
   const [visibility, setVisibility] = useState<ServerVisibility>("shared");
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  // Profile contacts and activity history: also part of the Annoy account.
+  const revision = useStore((s) => s.social.detailsRevision);
+  const [stored, setStored] = useState<CloudProfileDetails | null>(null);
+  const [detailsError, setDetailsError] = useState<string | undefined>();
+  const [detailsAttempt, setDetailsAttempt] = useState(0);
+  const [draftDetails, setDraftDetails] = useState<{ fields: CloudProfileDetails["fields"]; historyEnabled: boolean } | undefined>();
+  useEffect(() => {
+    if (!me || !ready) return;
+    const controller = new AbortController();
+    setDetailsError(undefined);
+    void readCloudDetails(me.id, controller.signal).then((value) => { if (!controller.signal.aborted) setStored(value); })
+      .catch((error) => { if (!controller.signal.aborted) setDetailsError((error as Error).message); });
+    return () => controller.abort();
+  }, [me?.id, ready, revision, detailsAttempt]);
+  const original = stored ? { fields: stored.fields, historyEnabled: stored.history.enabled } : null;
+  const details = draftDetails ?? original;
   useEffect(() => {
     if (!me) return;
     setName(me.displayName ?? "");
@@ -40,7 +58,12 @@ export function CloudProfileEditor() {
       setBusy(false);
     }
   };
-  const dirty = name.trim() !== (me.displayName ?? "") || bio.trim() !== (me.bio ?? "") || visibility !== me.serverVisibility;
+  const profileDirty = name.trim() !== (me.displayName ?? "") || bio.trim() !== (me.bio ?? "") || visibility !== me.serverVisibility;
+  const dirty = profileDirty || !!draftDetails;
+  const save = async () => {
+    if (profileDirty) await updateProfile({ displayName: name.trim() || null, bio: bio.trim() || null, serverVisibility: visibility });
+    if (draftDetails) { setStored(await saveCloudDetails(draftDetails)); setDraftDetails(undefined); }
+  };
   return (
     <div className="cloud-profile">
       <h4>{translate("social.profileTitle")}</h4>
@@ -88,7 +111,16 @@ export function CloudProfileEditor() {
         ))}
         <small className="muted">{translate("social.visibilityHelp")}</small>
       </fieldset>
-      <Button disabled={!ready || busy || !dirty} loading={busy} onClick={() => void run(() => updateProfile({ displayName: name.trim() || null, bio: bio.trim() || null, serverVisibility: visibility }), translate("social.saved"))}>
+      <ProfileDetailsSection
+        profile={{ supported: true, connected: ready, loading: !stored && !detailsError, error: detailsError, details: stored ?? undefined, retry: () => setDetailsAttempt((v) => v + 1) }}
+        details={details}
+        disabled={busy}
+        intro={translate("social.contactsHelp")}
+        onChange={(next) => setDraftDetails(JSON.stringify(next) === JSON.stringify(original) ? undefined : next)}
+        onDeleteHistory={deleteCloudHistory}
+        annoy
+      />
+      <Button disabled={!ready || busy || !dirty} loading={busy} onClick={() => void run(save, translate("social.saved"))}>
         {translate("social.save")}
       </Button>
     </div>

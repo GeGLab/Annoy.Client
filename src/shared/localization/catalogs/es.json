@@ -2297,6 +2297,10 @@
   "settings.stickers.removeConfirm": "¿Quitar el sticker \"{p0}\"?",
   "expression.stickerReactionName": "Sticker",
   "expression.noStickersFound": "No se encontraron stickers.",
-  "settings.profileFromAnnoy": "El nombre, la foto y la bio vienen del perfil de la cuenta Annoy.",
-  "settings.profileIntroAnnoy": "Un solo perfil, en la cuenta Annoy. También aparece en los servidores en los que entras con esa cuenta."
+  "settings.profileIntroAnnoy": "Un solo perfil, en la cuenta Annoy. También aparece en los servidores en los que entras con esa cuenta.",
+  "social.contactsHelp": "Campos opcionales de tu cuenta Annoy. Los contactos nuevos empiezan en Solo yo. El correo y el teléfono no cambian el inicio de sesión de la cuenta.",
+  "social.audienceCommunity": "Cualquier persona con cuenta Annoy",
+  "social.historyHelp": "Desactivado al principio. Después de guardar el consentimiento, guarda hasta tres sesiones terminadas durante hasta 30 días, visibles para ti y tus amigos. Desactivarlo borra el historial. Los archivos, proyectos y rutas locales no se registran.",
+  "activity.annoySteamTitle": "Steam · Cuenta Annoy",
+  "activity.annoySteamHelp": "Conecta tu cuenta en el navegador para complementar la detección local. Tu contraseña queda en Steam. El vínculo es de tu cuenta Annoy, en todos los servidores."
 }

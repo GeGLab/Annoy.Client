@@ -22,7 +22,7 @@ import { registerNavigationGuard, requestNavigation } from "../../lib/navigation
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
 import { Input } from "../ui/input.tsx";
 import { ActivityCard } from "../../features/activity/ActivityCard.tsx";
-import { SteamConnection } from "../../features/activity/SteamConnection.tsx";
+import { AnnoySteamConnection, SteamConnection } from "../../features/activity/SteamConnection.tsx";
 import { Avatar, Field, Icon, Modal, openModal, type IconName } from "../ui.tsx";
 import { Button } from "../ui/button.tsx";
 import { Select } from "../ui/select.tsx";
@@ -461,14 +461,18 @@ export function UserSettingsModal() {
                     user && (
                       <div className="settings-account" key={account.id}>
                         {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}>{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
-                        <ProfileEditor
-                          account={account}
-                          user={user}
-                          draft={profiles[account.id] ?? { displayName: user.displayName }}
-                          onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
-                          disabled={saving}
-                          fromAnnoy={!!account.annoy && !!annoy}
-                        />
+                        {/* Signed in with the Annoy account: the profile is the Annoy one above; the server only shows it. */}
+                        {account.annoy && annoy ? (
+                          <p className="annoy-server-account"><strong>{account.instanceName}</strong> <span className="muted small">@{user.username} · {account.url}</span></p>
+                        ) : (
+                          <ProfileEditor
+                            account={account}
+                            user={user}
+                            draft={profiles[account.id] ?? { displayName: user.displayName }}
+                            onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
+                            disabled={saving}
+                          />
+                        )}
                         <AccountActions accountId={account.id} busy={saving} />
                       </div>
                     )
@@ -636,7 +640,8 @@ export function UserSettingsModal() {
                 ) : (
                   <p className="muted">{translate("settings.c7a6df285e2a")}</p>
                 )}
-                {accounts.some((account) => instances[account.id]?.instance?.steamConnection) && <h4>{translate("settings.3985bcd7ade0")}</h4>}
+                {(!!annoy || accounts.some((account) => instances[account.id]?.instance?.steamConnection)) && <h4>{translate("settings.3985bcd7ade0")}</h4>}
+                {annoy && <AnnoySteamConnection />}
                 {shownAccounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
               </section>
             )}

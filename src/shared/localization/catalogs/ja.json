@@ -2297,6 +2297,10 @@
   "settings.stickers.removeConfirm": "スタンプ「{p0}」を削除しますか？",
   "expression.stickerReactionName": "スタンプ",
   "expression.noStickersFound": "スタンプが見つかりません。",
-  "settings.profileFromAnnoy": "名前、写真、自己紹介は Annoy アカウントのプロフィールから使われます。",
-  "settings.profileIntroAnnoy": "プロフィールは Annoy アカウントの 1 つだけです。このアカウントで参加するサーバーにも表示されます。"
+  "settings.profileIntroAnnoy": "プロフィールは Annoy アカウントの 1 つだけです。このアカウントで参加するサーバーにも表示されます。",
+  "social.contactsHelp": "Annoy アカウントの任意項目です。新しい連絡先は「自分のみ」から始まります。メールと電話番号はアカウントのログインを変えません。",
+  "social.audienceCommunity": "Annoy アカウントを持つ全員",
+  "social.historyHelp": "最初はオフです。同意を保存すると、終了したセッションを最大 3 件、最長 30 日間保存し、あなたとフレンドに表示されます。オフにすると履歴は削除されます。ファイル、プロジェクト、ローカルパスは記録されません。",
+  "activity.annoySteamTitle": "Steam · Annoy アカウント",
+  "activity.annoySteamHelp": "ブラウザでアカウントを接続し、ローカル検出を補います。パスワードは Steam に残ります。連携は Annoy アカウントに属し、すべてのサーバーで使われます。"
 }

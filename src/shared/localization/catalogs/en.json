@@ -2297,6 +2297,10 @@
   "settings.stickers.removeConfirm": "Remove the sticker \"{p0}\"?",
   "expression.stickerReactionName": "Sticker",
   "expression.noStickersFound": "No stickers found.",
-  "settings.profileFromAnnoy": "Name, photo and bio come from the Annoy account profile.",
-  "settings.profileIntroAnnoy": "One profile, on the Annoy account. It also shows on the servers you join with that account."
+  "settings.profileIntroAnnoy": "One profile, on the Annoy account. It also shows on the servers you join with that account.",
+  "social.contactsHelp": "Optional fields of your Annoy account. New contacts start as Only me. Email and phone do not change the account sign-in.",
+  "social.audienceCommunity": "Anyone with an Annoy account",
+  "social.historyHelp": "Off at first. After you save your consent, it keeps up to three finished sessions for up to 30 days, visible to you and your friends. Turning it off deletes the history. Files, projects and local paths are never recorded.",
+  "activity.annoySteamTitle": "Steam · Annoy account",
+  "activity.annoySteamHelp": "Connect your account in the browser to complement local detection. Your password stays with Steam. The link belongs to your Annoy account, on every server."
 }

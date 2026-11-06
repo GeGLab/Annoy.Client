@@ -5,6 +5,10 @@ import { withSteamFallback } from "../../../../shared/steam-activity.ts";
 import { apiFor, gatewayFor } from "../../client.ts";
 import { getState, setState, useStore } from "../../store.ts";
 import { publishPresence } from "../../social/index.ts";
+import { cloudSteam } from "../../social/details.ts";
+
+/** Key of the Annoy account's Steam game in the online map (the others are server account IDs). */
+const ANNOY_STEAM = "annoy";
 /**
  * Last activity payload sent to each server connection. Servers disconnect a
  * client that sends more than 10 updates in 10 s, and desktop snapshots can
@@ -53,7 +57,8 @@ export function useDesktopActivity() {
     const controller = new AbortController();
     let inFlight = false;
     if (!sharing || invisible) online.current.clear();
-    for (const id of online.current.keys()) if (!ready.split("|").includes(id)) online.current.delete(id);
+    for (const id of online.current.keys()) if (id !== ANNOY_STEAM && !ready.split("|").includes(id)) online.current.delete(id);
+    if (cloud !== "ready") online.current.delete(ANNOY_STEAM);
     // A reconnected server starts with no activity: send it again right away.
     for (const id of lastSent.keys()) if (!ready.split("|").includes(id)) lastSent.delete(id);
     const send = (id: string) => {
@@ -83,7 +88,7 @@ export function useDesktopActivity() {
       if (s.social.status !== "ready") return;
       const visible = s.settings.shareActivity && s.settings.manualPresence !== "offline";
       const local = visible ? (s.desktopActivity?.activities ?? []) : [];
-      const remote = visible && !local.some((a) => a.kind === "game") ? [...online.current.values()][0] : undefined;
+      const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(ANNOY_STEAM) : undefined;
       const activities: UserActivity[] = [...withSteamFallback(local, remote)];
       if (visible && s.voice?.screen) activities.push({ kind: "video", provider: "annoy-screen", name: translate("activity.81dadf9352cb") });
       publishPresence({ activities });
@@ -94,8 +99,23 @@ export function useDesktopActivity() {
       for (const [id, instance] of Object.entries(s.instances)) if (instance.status === "ready" && !instance.instance?.annoySocial) send(id);
       if (inFlight || !s.settings.shareActivity || s.settings.manualPresence === "offline" || s.desktopActivity?.activities.some((a) => a.kind === "game")) return;
       inFlight = true;
-      void Promise.all(Object.entries(s.instances).map(async ([id, instance]) => {
-        if (instance.status !== "ready" || !instance.instance?.steamConnection) return;
+      // The Annoy account's Steam link (usersannoy).
+      const annoySteam = async () => {
+        if (getState().social.status !== "ready") return;
+        let game: UserActivity | undefined;
+        try {
+          const result = await cloudSteam.activity(AbortSignal.any([controller.signal, AbortSignal.timeout(7000)]));
+          game = result.activities.find((a) => a.kind === "game" && a.provider === "steam" && /^\d{1,10}$/.test(a.appId ?? ""));
+        } catch { /* A failed online lookup clears the fallback and retains local activity. */ }
+        if (controller.signal.aborted) return;
+        const previous = online.current.get(ANNOY_STEAM);
+        if (game) online.current.set(ANNOY_STEAM, { ...game, startedAt: previous?.appId === game.appId ? previous?.startedAt : Date.now() });
+        else online.current.delete(ANNOY_STEAM);
+        if (JSON.stringify(previous) !== JSON.stringify(online.current.get(ANNOY_STEAM))) sendCloud();
+      };
+      void Promise.all([annoySteam(), ...Object.entries(s.instances).map(async ([id, instance]) => {
+        // Servers signed in with the Annoy account have no Steam link of their own.
+        if (instance.status !== "ready" || !instance.instance?.steamConnection || instance.instance?.annoySocial) return;
         let game: UserActivity | undefined;
         try {
           const result = await apiFor(id).request<{ activities: UserActivity[] }>("GET", "/users/@me/steam/activity", undefined,
@@ -106,11 +126,8 @@ export function useDesktopActivity() {
         const previous = online.current.get(id);
         if (game) online.current.set(id, { ...game, startedAt: previous?.appId === game.appId ? previous?.startedAt : Date.now() });
         else online.current.delete(id);
-        if (JSON.stringify(previous) !== JSON.stringify(online.current.get(id))) {
-          if (instance.instance?.annoySocial) sendCloud();
-          else send(id);
-        }
-      })).finally(() => { inFlight = false; });
+        if (JSON.stringify(previous) !== JSON.stringify(online.current.get(id))) send(id);
+      })]).finally(() => { inFlight = false; });
     };
     publish();
     const timer = setInterval(publish, 25_000);

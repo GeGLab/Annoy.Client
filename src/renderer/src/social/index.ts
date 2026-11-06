@@ -110,6 +110,9 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       return;
     case "PRESENCE_UPDATE":
       return applyPresence(event.d as PresenceView);
+    case "PROFILE_DETAILS_UPDATE":
+      setSocial((s) => { s.detailsRevision++; });
+      return;
     case "USER_UPDATE": {
       const p = event.d as CloudProfile;
       setSocial((s) => {
