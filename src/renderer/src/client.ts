@@ -34,6 +34,8 @@ interface Live {
 const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
+/** Voice channel to return to when the connection to its server comes back. */
+let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
 const messageReads = new Map<string, AbortController>();
 let messageEventSequence=0;
@@ -175,7 +177,13 @@ export function connectAccount(account: Account): void {
           s.access.allowed = s.access.global || s.access.localAccounts.length > 0;
         });
         disconnectDirectCall(account.id);
-        if (voice?.accountId === account.id || getState().voice?.accountId === account.id) leaveVoice(false);
+        const inCall = getState().voice;
+        if (voice?.accountId === account.id || inCall?.accountId === account.id) {
+          leaveVoice(false);
+          // A dropped connection (server restart, network) returns to the call; an ended session does not.
+          if (inCall?.accountId === account.id && status !== "invalid") rejoinVoice = { accountId: account.id, serverId: inCall.serverId, channelId: inCall.channelId };
+        }
+        if (status === "invalid" && rejoinVoice?.accountId === account.id) rejoinVoice = null;
       }
       setState((s) => {
         const inst = s.instances[account.id];
@@ -209,6 +217,16 @@ export function connectAccount(account: Account): void {
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
       });
+      if (status === "ready" && rejoinVoice?.accountId === account.id) {
+        const target = rejoinVoice;
+        rejoinVoice = null;
+        // After READY has filled the server state, which arrives right after this status.
+        setTimeout(() => {
+          if (!getState().voice && getState().instances[target.accountId]?.serverStates[target.serverId]?.channels.some((c) => c.id === target.channelId)) {
+            void joinVoice(target.accountId, target.serverId, target.channelId);
+          }
+        }, 0);
+      }
 
     },
     () => {
@@ -696,6 +714,7 @@ export function sendTyping(accountId: string, channelId: string): void {
 // Voice --------------------------------------------------------------------
 
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
+  rejoinVoice = null;
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
@@ -741,6 +760,8 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
 }
 
 export function leaveVoice(notifyServer = true): void {
+  // Leaving on purpose (or switching) cancels a pending return to the call.
+  if (notifyServer) rejoinVoice = null;
   const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
   voice = null;
