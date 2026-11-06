@@ -1,7 +1,7 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import { execFile } from "node:child_process";
 import { sep } from "node:path";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../../shared/activity.ts";
 import { installedGames, steamArtwork, type InstalledGame } from "./steam.ts";
 import { windowsProbe } from "./windows-script.ts";

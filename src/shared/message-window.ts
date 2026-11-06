@@ -1,4 +1,4 @@
-import type { Message } from "@distopic/protocol";
+import type { Message } from "@annoy/protocol";
 
 export const CHANNEL_MESSAGE_LIMIT = 500;
 export const TOTAL_MESSAGE_LIMIT = 5000;

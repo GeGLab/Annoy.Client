@@ -161,8 +161,16 @@
 .sticker-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sticker-grid button { aspect-ratio: 1; padding: 8px; }
 .sticker-grid img { width: 100%; height: 100%; object-fit: contain; }
+.server-pack-title { display: flex; align-items: center; gap: 6px; }
+.server-pack-title img { width: 16px; height: 16px; border-radius: 5px; object-fit: cover; }
 .gif-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .gif-grid img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
+.gif-cell { position: relative; }
+.gif-cell > button:first-child { width: 100%; }
+.gif-favorite { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; opacity: 0; }
+.gif-favorite.on { color: #f5c542; }
+.gif-cell:hover .gif-favorite, .giphy-message-wrap:hover .gif-favorite, .gif-favorite:focus-visible { opacity: 1; }
+.giphy-message-wrap { position: relative; display: inline-block; max-width: 100%; }
 .expression-picker > footer { padding: 12px 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.78571rem; line-height: 1.5; }
 .expression-empty { padding: 28px 16px; text-align: center; }
 .expression-empty h3, .expression-store-intro h3 { font-size: 1.14286rem; margin: 0 0 12px; }
@@ -264,9 +272,28 @@
 .message-reactions { margin-top: 10px; }
 .message-reactions .reaction { min-height: 30px; padding: 3px 8px; border-radius: 8px; gap: 6px; }
 .reaction-count { font-size: 0.85714rem; font-weight: 600; }
+.reaction-sticker { display: block; width: 24px; height: 24px; flex: none; }
+.reaction-sticker img { width: 100%; height: 100%; object-fit: contain; }
+.message-reactions .reaction.sticker { padding-block: 2px; }
+.reaction-picker .expression-tabs { flex: none; }
+.reaction-sticker-scroll { max-height: 300px; overflow-y: auto; overflow-x: hidden; }
+.reaction-sticker-scroll .expression-group h3 { margin: 4px 0 8px; }
+.reaction-sticker-scroll .sticker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: none; overflow: visible; }
 @media (prefers-reduced-motion: reduce) { .message-actions { transition: none; transform: none; } }
 .saved-account.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
 .annoy-account-option.active { box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
 /* Annoy stickers: drawn at the size set in admannoy, never wider than the message column. */
 .annoy-sticker { display: block; margin-top: 6px; max-width: 100%; aspect-ratio: 1; }
 .annoy-sticker img { width: 100%; height: 100%; object-fit: contain; }
+.server-sticker { display: inline-flex; flex-direction: column; gap: 4px; max-width: 100%; }
+.server-sticker-origin { display: inline-flex; align-items: center; gap: 6px; max-width: 160px; font-size: 0.78571rem; color: var(--text-muted); }
+.server-sticker-origin img, .server-sticker-initial { width: 16px; height: 16px; flex: none; border-radius: 5px; object-fit: cover; }
+.server-sticker-initial { display: grid; place-items: center; background: var(--bg-tertiary, rgba(255, 255, 255, 0.1)); font-size: 10px; font-weight: 600; }
+.server-sticker-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.server-sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 12px; margin-top: 12px; }
+.server-sticker-grid figure { position: relative; margin: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.server-sticker-grid img { width: 96px; height: 96px; object-fit: contain; }
+.server-sticker-grid figcaption { max-width: 100%; font-size: 0.85714rem; }
+.server-sticker-grid .icon-btn { position: absolute; top: 0; right: 0; opacity: 0; }
+.server-sticker-grid figure:hover .icon-btn, .server-sticker-grid .icon-btn:focus-visible { opacity: 1; }
+@media (max-width: 640px) { .server-sticker-add { grid-template-columns: 1fr; } }

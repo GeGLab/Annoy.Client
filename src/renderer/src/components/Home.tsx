@@ -4,7 +4,7 @@ import { Input } from "./ui/input.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { Select } from "./ui/select.tsx";
 import { ActivityStack } from "../features/activity/ActivityCard.tsx";
-import type { Relationship } from "@distopic/protocol";
+import type { Relationship } from "@annoy/protocol";
 import { useState, type FormEvent } from "react";
 import { apiFor, navigate, openDm } from "../client.ts";
 import { EMPTY_ACTIVITIES, setState, useStore } from "../store.ts";

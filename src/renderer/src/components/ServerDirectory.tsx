@@ -2,7 +2,7 @@ import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useMemo, useState } from "react";
-import type { ServerSummary, ServerSummaryPage } from "@distopic/protocol";
+import type { ServerSummary, ServerSummaryPage } from "@annoy/protocol";
 import { apiFor, navigate, openServer, reconnect, resumeRecoveredView } from "../client.ts";
 import { RequestError } from "../api.ts";
 import { isCancellation } from "../../../shared/requests.ts";

@@ -1,11 +1,13 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { UserProfile } from "./UserProfile.tsx";
-import type { Channel, ServerState, VoiceState } from "@distopic/protocol";
+import type { Channel, ServerState, VoiceState } from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting, watchStream } from "../client.ts";
 import { useStreamOffers, useVideoTiles, type VideoTile } from "../media.ts";
 import { UserVolumeControl } from "./UserVolumeControl.tsx";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu.tsx";
+import { popOutStream, usePoppedOutStreams } from "../features/stream-popout.ts";
 import { displayNameOf } from "../perms.ts";
 import { setState, useStore } from "../store.ts";
 import { Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
@@ -30,7 +32,8 @@ interface Person {
 function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoTile; person: Person | undefined; focused: boolean; onFocus: () => void; accountId: string }) {
   const card = useRef<HTMLDivElement>(null);
   const remoteScreen = tile.source === "screen" && !tile.local;
-  return (
+  const popOut = () => popOutStream(tile, translate("voice.streamWindowTitle", { p0: person?.name ?? "…" }));
+  const view = (
     <div ref={card} className={`stage-card video ${tile.source}${focused ? " focused" : ""}${person?.state.speaking ? " speaking" : ""}`} onClick={onFocus}>
       <Video tile={tile} />
       <div className="stage-label">
@@ -40,23 +43,53 @@ function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoT
           {tile.local ? translate("common.0eaa1e8430de") : ""}
         </span>
       </div>
-      <button
-        className="icon-btn stage-full"
-        title={translate("common.cdd35dea1ee3")}
-        onClick={(e) => {
-          e.stopPropagation();
-          void card.current?.requestFullscreen();
-        }}
-      >
-        <Icon name="maximize" size={16} />
-      </button>
+      <div className="stage-corner">
+        {remoteScreen && (
+          <button
+            className="icon-btn"
+            title={translate("voice.streamWindow")}
+            onClick={(e) => {
+              e.stopPropagation();
+              popOut();
+            }}
+          >
+            <Icon name="external" size={16} />
+          </button>
+        )}
+        <button
+          className="icon-btn"
+          title={translate("common.cdd35dea1ee3")}
+          onClick={(e) => {
+            e.stopPropagation();
+            void card.current?.requestFullscreen();
+          }}
+        >
+          <Icon name="maximize" size={16} />
+        </button>
+      </div>
       {remoteScreen && (
         <div className="stage-stream-tools" onClick={(e) => e.stopPropagation()}>
-          {person && <UserVolumeControl accountId={accountId} userId={tile.userId} name={person.name} kind="stream" />}
           <button className="btn btn-ghost" onClick={() => watchStream(tile.userId, false)}>{translate("voice.stopWatching")}</button>
         </div>
       )}
     </div>
+  );
+  if (!remoteScreen) return view;
+  // The stream volume lives only in this menu (right click on the stream).
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{view}</ContextMenuTrigger>
+      <ContextMenuContent
+        aria-label={translate("voice.streamVolumeOf", { p0: person?.name ?? "…" })}
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.currentTarget.querySelector<HTMLElement>('[role="slider"]')?.focus();
+        }}
+      >
+        {person && <UserVolumeControl accountId={accountId} userId={tile.userId} name={person.name} kind="stream" />}
+        <ContextMenuItem onSelect={popOut}><Icon name="external" />{translate("voice.streamWindow")}</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -93,6 +126,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
   const voice = useStore((s) => s.voice);
   const settings = useStore((s) => s.settings);
   const tiles = useVideoTiles();
+  const poppedOut = usePoppedOutStreams();
   const offers = useStreamOffers();
   const [focus, setFocus] = useState<string | null>(null);
   const connected = voice?.accountId === accountId && voice.channelId === channel.id;
@@ -107,7 +141,8 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
     return map;
   }, [state.voiceStates, state.members, channel.id]);
 
-  const visibleTiles = connected ? tiles : [];
+  // Shares open in their own window are shown only there.
+  const visibleTiles = connected ? tiles.filter((t) => !poppedOut.has(t.key)) : [];
   // Screens first: they're usually what everyone is looking at.
   const ordered = [...visibleTiles].sort((a, b) => (a.source === b.source ? 0 : a.source === "screen" ? -1 : 1));
   const withVideo = new Set(visibleTiles.filter((t) => t.source === "camera").map((t) => t.userId));
@@ -213,9 +248,9 @@ export function ScreenPickerModal() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [tab, setTab] = useState<"screen" | "window">("screen");
   useEffect(() => {
-    void window.distopic?.screen.mode().then(async (mode) => {
+    void window.annoy?.screen.mode().then(async (mode) => {
       if (mode === "system") { setSystem(true); setSources([]); }
-      else setSources(await window.distopic!.screen.sources());
+      else setSources(await window.annoy!.screen.sources());
     }).catch(() => setSources([]));
   }, []);
   const list = sources?.filter((s) => s.kind === tab) ?? [];

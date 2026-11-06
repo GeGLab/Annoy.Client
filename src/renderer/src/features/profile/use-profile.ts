@@ -1,20 +1,28 @@
 import { useEffect, useState } from "react";
-import type { ProfileDetails } from "@distopic/protocol";
+import type { ProfileDetails, User } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { useStore } from "../../store.ts";
+import { readCloudDetails, withUser } from "../../social/details.ts";
 import { isCancellation, RequestError } from "../../../../shared/requests.ts";
 
+/**
+ * Profile contacts and activity history. On servers signed in with the Annoy
+ * account they come from the Annoy account (by the member's Annoy ID), never
+ * from the server.
+ */
 export function useProfileDetails(
   accountId: string,
   userId: string,
   enabled = true,
+  user?: User,
 ) {
+  const annoyId = useStore((s) => (s.instances[accountId]?.instance?.annoySocial ? (user?.annoyId ?? null) : null));
   const revision = useStore(
-    (s) => s.instances[accountId]?.profileRevision ?? 0,
+    (s) => (annoyId ? s.social.detailsRevision : (s.instances[accountId]?.profileRevision ?? 0)),
   );
-  const connected = useStore((s) => s.instances[accountId]?.status === "ready");
+  const connected = useStore((s) => (annoyId ? s.social.status === "ready" : s.instances[accountId]?.status === "ready"));
   const supported = useStore(
-    (s) => s.instances[accountId]?.instance?.profileDetails === true,
+    (s) => !!annoyId || s.instances[accountId]?.instance?.profileDetails === true,
   );
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{
@@ -23,15 +31,16 @@ export function useProfileDetails(
     error?: string;
     unavailable?: boolean;
   } | null>(null);
-  const key = JSON.stringify([accountId, userId, revision, attempt, connected]);
+  const key = JSON.stringify([accountId, userId, annoyId, revision, attempt, connected]);
   useEffect(() => {
     if (!enabled || !connected || !supported) return;
     const controller = new AbortController();
-    void apiFor(accountId)
-      .get<ProfileDetails>(
-        `/users/${encodeURIComponent(userId)}/profile`,
-        controller.signal,
-      )
+    void (annoyId && user
+      ? readCloudDetails(annoyId, controller.signal).then((details) => withUser(details, user))
+      : apiFor(accountId).get<ProfileDetails>(
+          `/users/${encodeURIComponent(userId)}/profile`,
+          controller.signal,
+        ))
       .then((details) => {
         if (!controller.signal.aborted) setResult({ key, details });
       })

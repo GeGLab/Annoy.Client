@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { ReactNode } from "react";
-import { has, Permission, type ServerSummary } from "@distopic/protocol";
+import { has, Permission, type ServerSummary } from "@annoy/protocol";
 import { apiFor, canRemoveServerConnection, editServerNickname, markServerRead, reconnect, removeServerConnection } from "../client.ts";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
 import { toast, useStore, type Account, type InstanceState } from "../store.ts";

@@ -19,7 +19,7 @@ test("a nightly build on the alpha channel recommends waiting and asks before go
   await auth.keepAuthenticated(page);
   try {
     await expect(page.locator(".welcome")).toBeVisible();
-    expect(await page.evaluate(() => window.distopic!.updates.channel())).toMatchObject({ channel: "alpha", outside: true, buildChannel: "nightly", leaving: false });
+    expect(await page.evaluate(() => window.annoy!.updates.channel())).toMatchObject({ channel: "alpha", outside: true, buildChannel: "nightly", leaving: false });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await page.getByRole("button", { name: "Atualizações", exact: true }).click();
     const note = page.locator(".update-channel-outside");
@@ -29,18 +29,18 @@ test("a nightly build on the alpha channel recommends waiting and asks before go
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("pode quebrar opções");
     await dialog.getByRole("button", { name: "Cancelar" }).click();
-    expect((await page.evaluate(() => window.distopic!.updates.channel())).leaving).toBe(false);
+    expect((await page.evaluate(() => window.annoy!.updates.channel())).leaving).toBe(false);
     await note.getByRole("button", { name: "Ir para a versão Alpha agora" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Instalar mesmo assim" }).click();
     await expect(note.getByRole("button")).toHaveCount(0);
-    expect((await page.evaluate(() => window.distopic!.updates.channel())).leaving).toBe(true);
+    expect((await page.evaluate(() => window.annoy!.updates.channel())).leaving).toBe(true);
     await page.screenshot({ path: join("test-results", "update-channel-outside.png") });
     // All channels are offered; choosing nightly again clears the notice.
     const picker = page.getByRole("combobox", { name: "Canal" });
     await expect(picker.locator("option")).toHaveText(["Alpha", "Instável", "Nightly"]);
     await picker.selectOption("nightly");
     await expect(note).toHaveCount(0);
-    expect(await page.evaluate(() => window.distopic!.updates.channel())).toMatchObject({ channel: "nightly", outside: false, leaving: false });
+    expect(await page.evaluate(() => window.annoy!.updates.channel())).toMatchObject({ channel: "nightly", outside: false, leaving: false });
     await page.screenshot({ path: join("test-results", "update-channel-picker.png") });
   } finally {
     await app.close();

@@ -1,4 +1,4 @@
-import type { MediaSource } from "@distopic/protocol";
+import type { MediaSource } from "@annoy/protocol";
 import type { StreamOffer } from "../media.ts";
 
 /** A screen share's picture and sound are only received when the user chooses to watch. */

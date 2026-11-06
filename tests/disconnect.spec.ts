@@ -15,7 +15,7 @@ async function setup(page: Page, acknowledge = true) {
   let available = true;
   const methods: string[] = [], writes: string[] = [];
   await page.addInitScript(() => {
-    localStorage.setItem('distopic.settings', JSON.stringify({ noiseFilter: 'off', notifications: false, messageSounds: false, screenAudio: true }));
+    localStorage.setItem('annoy.settings', JSON.stringify({ noiseFilter: 'off', notifications: false, messageSounds: false, screenAudio: true }));
     const tracks: MediaStreamTrack[] = [], peers: any[] = [];
     (window as any).__captured = tracks; (window as any).__peers = peers;
     const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);

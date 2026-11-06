@@ -66,6 +66,12 @@ export function clearTiles(): void {
   emit();
 }
 
+/** Calls `listener` whenever the tiles change, outside React. */
+export function onTilesChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 /** Current tiles outside React. */
 export function videoTiles(): VideoTile[] {
   return tiles;

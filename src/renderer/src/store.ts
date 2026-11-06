@@ -12,7 +12,7 @@ import type {
   ServerState,
   ServerSummary,
   User,
-} from "@distopic/protocol";
+} from "@annoy/protocol";
 import { produce, type Draft } from "immer";
 import { CATALOG, type Service, type TabDisplay, type TabPlacement } from "../../shared/services.ts";
 import { LOCKED_ACCESS, type AppAccessState } from "../../shared/app-access.ts";
@@ -68,7 +68,7 @@ export interface InstanceState {
   dms: DmChannel[];
   relationships: Relationship[];
   presences: Record<string, Presence>;
-  activities: Record<string, import("@distopic/protocol").UserActivity[]>;
+  activities: Record<string, import("@annoy/protocol").UserActivity[]>;
   profileRevision?: number;
   messages: Record<string, ChannelMessages>;
   /** channelId -> userId -> expiry timestamp */
@@ -132,6 +132,10 @@ export interface Settings extends LocalizationPreferences {
   inputDeviceId: string;
   outputDeviceId: string;
   cameraDeviceId: string;
+  /** Device names saved with the IDs above; IDs change, names find the same device again. */
+  inputDeviceLabel: string;
+  outputDeviceLabel: string;
+  cameraDeviceLabel: string;
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
@@ -163,7 +167,7 @@ export interface Settings extends LocalizationPreferences {
 
 export interface AppState {
   access: AppAccessState;
-  directCall: { accountId: string; call: import("@distopic/protocol").DirectCall } | null;
+  directCall: { accountId: string; call: import("@annoy/protocol").DirectCall } | null;
   rememberedAccounts: RememberedAccount[];
   recentMessages: Record<string, { own: boolean; at: number }>;
   accounts: Account[];
@@ -201,10 +205,10 @@ export interface GlobalAccount {
   email: string;
 }
 
-const ACCOUNTS_KEY = "distopic.accounts";
-export const EMPTY_ACTIVITIES: readonly import("@distopic/protocol").UserActivity[] = [];
-const SETTINGS_KEY = "distopic.settings";
-const VIEW_KEY = "distopic.view";
+const ACCOUNTS_KEY = "annoy.accounts";
+export const EMPTY_ACTIVITIES: readonly import("@annoy/protocol").UserActivity[] = [];
+const SETTINGS_KEY = "annoy.settings";
+const VIEW_KEY = "annoy.view";
 /** The identity in use survives views without an account (services, news) and restarts. */
 const ACTIVE_KEY = "annoy.activeAccount";
 
@@ -221,7 +225,7 @@ export function identityAccountIds(s: AppState): string[] {
   if (s.global) return s.accounts.filter((a) => a.annoy).map((a) => a.id);
   return s.accounts.slice(0, 1).map((a) => a.id);
 }
-const SERVICES_KEY = "distopic.services";
+const SERVICES_KEY = "annoy.services";
 
 const DEFAULT_SETTINGS: Settings = {
   ...defaultLocalization(navigator.language),
@@ -238,6 +242,9 @@ const DEFAULT_SETTINGS: Settings = {
   inputDeviceId: "default",
   outputDeviceId: "default",
   cameraDeviceId: "default",
+  inputDeviceLabel: "",
+  outputDeviceLabel: "",
+  cameraDeviceLabel: "",
   selfMute: false,
   selfDeaf: false,
   notifications: true,
@@ -268,7 +275,7 @@ function load<T>(key: string, fallback: T): T {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const saved = JSON.parse(raw);
-    if (key === "distopic.settings" && saved.screenFps === undefined && saved.screenQuality) {
+    if (key === "annoy.settings" && saved.screenFps === undefined && saved.screenQuality) {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
@@ -328,7 +335,7 @@ function initialView(): View {
 let state: AppState = {
   access: LOCKED_ACCESS,
   directCall: null,
-  rememberedAccounts: loadArray<RememberedAccount>("distopic.rememberedAccounts"),
+  rememberedAccounts: loadArray<RememberedAccount>("annoy.rememberedAccounts"),
   recentMessages: {},
   accounts: loadArray<Account>(ACCOUNTS_KEY),
   instances: {},
@@ -356,11 +363,11 @@ function persistAccounts(accounts:Account[]):void {
   // Connection metadata may persist in localStorage; bearer credentials never do.
   localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(accounts.map(a=>({...a,token:""}))));
   const value=JSON.stringify(accounts);
-  savedAccountWrite=savedAccountWrite.catch(()=>{}).then(()=>window.distopic?.secrets.set('accounts',value)).catch(()=>false);
+  savedAccountWrite=savedAccountWrite.catch(()=>{}).then(()=>window.annoy?.secrets.set('accounts',value)).catch(()=>false);
 }
 export async function restoreSavedAccounts():Promise<void>{
   const legacy=state.accounts;
-  const saved=await window.distopic?.secrets.get('accounts').catch(()=>null);
+  const saved=await window.annoy?.secrets.get('accounts').catch(()=>null);
   let restored=legacy;
   if(saved){try{const value=JSON.parse(saved);if(Array.isArray(value))restored=value;}catch{}}
   state=produce(state,s=>{s.accounts=restored;});
@@ -377,7 +384,7 @@ export function setState(recipe: (draft: Draft<AppState>) => void): void {
   state = produce(state, recipe);
   if (state === prev) return;
   if (state.accounts !== prev.accounts) persistAccounts(state.accounts);
-  if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("distopic.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
+  if (state.rememberedAccounts !== prev.rememberedAccounts) localStorage.setItem("annoy.rememberedAccounts", JSON.stringify(state.rememberedAccounts));
   if (state.settings !== prev.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
   if(JSON.stringify(normalizeLocalization(state.settings))!==JSON.stringify(normalizeLocalization(prev.settings)))configureLocalization(state.settings);
   if (state.view !== prev.view) {

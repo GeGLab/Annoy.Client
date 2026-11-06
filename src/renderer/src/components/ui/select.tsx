@@ -4,7 +4,7 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Children, isValidElement, useId, type ComponentProps, type ReactNode, type ReactElement } from "react";
 import { cn } from "../../lib/utils.ts";
 
-const EMPTY = "__distopic_empty_selection__";
+const EMPTY = "__annoy_empty_selection__";
 type OptionProps = ComponentProps<"option">;
 function options(children: ReactNode): ReactElement<OptionProps>[] {
   return Children.toArray(children).flatMap((child) => {

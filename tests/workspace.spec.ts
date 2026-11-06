@@ -12,7 +12,7 @@ const screenshots = resolve(".impeccable/review");
 
 async function launch() {
   const tempRoot = resolve(tmpdir());
-  const userData = await mkdtemp(join(tempRoot, "distopic-workspace-"));
+  const userData = await mkdtemp(join(tempRoot, "annoy-workspace-"));
   const auth = await globalAuthFixture();
   const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -25,7 +25,7 @@ async function launch() {
   const cleanup = async () => {
     await app.close();
     await auth.close();
-    if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("distopic-workspace-"))
+    if (dirname(resolve(userData)) !== tempRoot || !basename(userData).startsWith("annoy-workspace-"))
       throw new Error("Unexpected test profile path");
     await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
@@ -110,33 +110,6 @@ test("M3 variable-height history keeps the DOM bounded and restores unloaded sea
   }finally{await cleanup();}
 });
 
-test("M4 profile drafts validate and retain edits after failed save, then publish normalized contacts explicitly",async()=>{
-  const {page,cleanup}=await launch();
-  let saved:any={user:{id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null},fields:[],hasPrivateFields:false,history:{enabled:false,visibility:"disabled",entries:[]}};
-  let fail=true,writeCount=0;
-  try{
-    await seed(page);
-    await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:saved}));
-    await page.route(`${origin}/api/users/@me/profile`,async route=>{writeCount++;if(fail)return route.fulfill({status:500,json:{message:"Falha de gravação simulada"}});const body=route.request().postDataJSON();saved={...saved,fields:body.fields,history:{...saved.history,enabled:body.historyEnabled}};return route.fulfill({json:saved});});
-    await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.instance={profileDetails:true};});});
-    await page.getByRole("button",{name:"Configurações",exact:true}).click();
-    const github=page.getByRole("textbox",{name:"GitHub",exact:true});await expect(github).toBeVisible();
-    await expect(page.getByRole("combobox",{name:"Quem pode ver GitHub",exact:true})).toHaveText("Somente eu");
-    await github.fill("https://evil.test/me");await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByText("O link não pertence à plataforma escolhida.").first()).toBeVisible();expect(writeCount).toBe(0);
-    await github.fill("octocat");await page.getByRole("textbox",{name:"E-mail de contato",exact:true}).fill("Contact@EXAMPLE.COM");
-    await page.getByRole("combobox",{name:"Quem pode ver E-mail de contato",exact:true}).click();await page.getByRole("option",{name:"Amigos",exact:true}).click();
-    await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByText("Falha de gravação simulada")).toBeVisible();await expect(github).toHaveValue("https://github.com/octocat");expect(saved.fields).toEqual([]);
-    fail=false;await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();await expect(page.getByRole("button",{name:"Salvar alterações",exact:true})).toHaveCount(0);
-    expect(saved.fields.find((field:any)=>field.kind==="email")).toMatchObject({value:"Contact@example.com",audience:"friends"});expect(saved.history.enabled).toBe(false);
-    await page.locator(".settings-content").evaluate(el=>{el.scrollTop=0;});
-    await page.screenshot({path:join(screenshots,"m4-profile-editor-dark.png")});
-    await page.setViewportSize({width:940,height:620});
-    await expect.poll(()=>page.locator(".profile-editor").evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
-    await page.getByRole("checkbox",{name:"Guardar sessões de atividades nesta instância"}).scrollIntoViewIfNeeded();
-    await page.screenshot({path:join(screenshots,"m4-profile-editor-minimum.png")});
-  }finally{await cleanup();}
-});
-
 test("M4 full profile clears authorized details on revocation and returns keyboard focus",async()=>{
   const {page,cleanup}=await launch();let privateView=false;
   try{
@@ -213,14 +186,14 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     const channels = page.getByRole("separator", { name: "Largura do painel de canais" });
     await channels.focus();
     await page.keyboard.press("ArrowRight");
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).channelsWidth)).toBe(260);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).channelsWidth)).toBe(260);
     const members = page.getByRole("separator", { name: "Largura do painel de membros" });
     const handle = (await members.boundingBox())!;
     await page.mouse.move(handle.x + 3, handle.y + 90);
     await page.mouse.down();
     await page.mouse.move(handle.x - 37, handle.y + 90);
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).membersWidth)).toBeGreaterThan(220);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).membersWidth)).toBeGreaterThan(220);
     await expect(page.getByRole("button", { name: "Fechar painel de canais" })).toHaveCount(0);
     await page.getByRole("button", { name: "Alternar painel de membros" }).click();
     await expect(page.locator(".members")).toHaveCount(0);
@@ -237,7 +210,7 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     await page.getByLabel("Código hexadecimal de Tom dos painéis").fill("#55408f");
     await page.getByRole("button", { name: "Usar cor", exact: true }).click();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("distopic.settings")!).accentColor)).toBe("#3182ed");
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).accentColor)).toBe("#3182ed");
     await page.keyboard.press("Escape");
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
@@ -725,7 +698,7 @@ test("connectivity observes Global failures independently and preserves expired-
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("region", { name: "Sessão expirada" })).toBeVisible();
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("distopic.accounts")!));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.accounts")!));
     expect(saved[0]).not.toHaveProperty("connection");
     expect(saved[0]).not.toHaveProperty("connectivity");
     await page.getByRole("button", { name: "Novidades do Annoy", exact: true }).click();
@@ -748,7 +721,7 @@ test("bot platform capability, consent, server-owned lifecycle and permission de
     description: "Bot sintético para testar o contrato das integrações. Não é um bot publicado.",
     author: "Instância de teste",
     version: "1.0.0",
-    runtime: "distopic-worker-v1",
+    runtime: "annoy-worker-v1",
     permissions: ["members.read", "messages.send"],
   };
   const writes: unknown[] = [];

@@ -9,7 +9,7 @@ const text = (value: unknown): value is string => typeof value === "string" && v
 const listing = (value: unknown): value is BotListing =>
   object(value) &&
   [value.id, value.name, value.description, value.author, value.version].every(text) &&
-  value.runtime === "distopic-worker-v1" &&
+  value.runtime === "annoy-worker-v1" &&
   Array.isArray(value.permissions) &&
   value.permissions.every((p) => typeof p === "string" && Object.hasOwn(BOT_PERMISSIONS, p));
 const installation = (value: unknown): value is BotInstallation =>

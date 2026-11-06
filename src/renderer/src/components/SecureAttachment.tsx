@@ -1,7 +1,7 @@
 import {t as translate,number} from "../../../shared/localization/index.ts";
 import {lazy,Suspense,useEffect,useRef,useState} from 'react';
 const ImageViewer=lazy(()=>import('./ImageViewer.tsx'));
-import type {Message,Attachment} from '@distopic/protocol';
+import type {Message,Attachment} from '@annoy/protocol';
 import {apiFor} from '../client.ts';
 import {toast} from '../store.ts';
 import {Icon} from './ui.tsx';

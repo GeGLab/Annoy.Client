@@ -1,6 +1,6 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import { has, Permission, playbackPosition, type Channel, type Message, type PlaybackItem, type ServerState } from "@distopic/protocol";
+import { has, Permission, playbackPosition, type Channel, type Message, type PlaybackItem, type ServerState } from "@annoy/protocol";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { apiFor, joinVoice, leaveVoice, openChannel } from "../../client.ts";
 import { displayNameOf } from "../../perms.ts";
@@ -29,7 +29,7 @@ function clock(seconds: number): string {
 function useViewBounds(slot: Slot, el: HTMLElement | null, active: boolean): void {
   const modalOpen = useStore((s) => s.modal !== null);
   useLayoutEffect(() => {
-    const bridge = window.distopic?.theater;
+    const bridge = window.annoy?.theater;
     if (!bridge) return;
     const hide = () => bridge.setBounds(slot, { x: 0, y: 0, width: 0, height: 0 });
     if (!el || !active || modalOpen) return hide();
@@ -61,7 +61,7 @@ function useMediaDriver(slot: Slot, playback: Playback, media: HTMLMediaElement 
   useEffect(() => {
     if (view) {
       if (!url || !kind) return;
-      window.distopic?.theater.open(slot, url, kind);
+      window.annoy?.theater.open(slot, url, kind);
       const made = viewDriver(slot, () => events.current!);
       setDriver(made.driver);
       return () => {
@@ -69,7 +69,7 @@ function useMediaDriver(slot: Slot, playback: Playback, media: HTMLMediaElement 
         setDriver(null);
       };
     }
-    window.distopic?.theater.close(slot);
+    window.annoy?.theater.close(slot);
     if (!media) return;
     const made = elementDriver(media, () => events.current!);
     setDriver(made.driver);
@@ -79,7 +79,7 @@ function useMediaDriver(slot: Slot, playback: Playback, media: HTMLMediaElement 
     };
   }, [slot, view, url, kind, media]);
 
-  useEffect(() => () => window.distopic?.theater.close(slot), [slot]);
+  useEffect(() => () => window.annoy?.theater.close(slot), [slot]);
   events.current = useSync(driver, playback);
   return events.current;
 }

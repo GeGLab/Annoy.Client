@@ -2,7 +2,7 @@ import {t as translate} from "../../shared/localization/index.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
-import type { GatewayEvent, MediaSource } from "@distopic/protocol";
+import type { GatewayEvent, MediaSource } from "@annoy/protocol";
 import { clearTiles, dropTile, putTile, setStreamOffers } from "./media.ts";
 import { isStreamSource, streamOffers } from "./lib/stream-watch.ts";
 import { MicGate } from "./mic.ts";
@@ -11,6 +11,7 @@ import { toast, type Settings } from "./store.ts";
 import { CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported } from "./media-profiles.ts";
 import { playbackVolume, volumeKindOf } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
+import { savedDevice } from "./lib/devices.ts";
 
 type TransportInfo = {
   id: string;
@@ -193,9 +194,8 @@ export class VoiceSession {
 
 
   private async applySink(audio: HTMLAudioElement): Promise<void> {
-    const sinkId = this.settings.outputDeviceId === "default" ? "" : this.settings.outputDeviceId;
     try {
-      await audio.setSinkId(sinkId);
+      await audio.setSinkId((await savedDevice("output", this.settings)) ?? "");
     } catch {
       // Device disappeared; keep the current output.
     }

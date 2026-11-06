@@ -1,6 +1,6 @@
-import type { User } from "@distopic/protocol";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { AnnoySticker, annoyStickerOf } from "../../features/expression/AnnoySticker.tsx";
+import type { User } from "@annoy/protocol";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { navigate } from "../../client.ts";
 import { formatClock, formatDay, formatTime, renderContent } from "../../format.tsx";
@@ -19,6 +19,8 @@ import { Input } from "../ui/input.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
+
+const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
 /**
  * Home of the Annoy account (TODO item 1): friends and DMs from the Annoy
@@ -203,6 +205,7 @@ function Friends({ initialTab = "online" }: { initialTab?: Tab }) {
 
 function AttachmentView({ attachment }: { attachment: DmAttachment }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(false);
   const [failed, setFailed] = useState(false);
   const image = attachment.type.startsWith("image/") && attachment.size <= 10 * 1024 * 1024;
   useEffect(() => {
@@ -232,7 +235,14 @@ function AttachmentView({ attachment }: { attachment: DmAttachment }) {
       toast((error as Error).message);
     }
   };
-  if (image && url) return <img className="attachment-image" src={url} alt={attachment.name} onClick={() => void download()} />;
+  // Same as in server channels: the image opens in the viewer, not as a download.
+  if (image && url) return <>
+    <button type="button" className="attachment-image" aria-label={translate("chat.5ed9aabafd14", { p0: attachment.name })} onClick={() => setZoom(true)}>
+      <img src={url} alt={attachment.name} decoding="async" />
+      <span className="attachment-expand"><Icon name="maximize" size={16} /></span>
+    </button>
+    {zoom && <Suspense fallback={null}><ImageViewer images={[{ id: attachment.blobId, url, filename: attachment.name, size: attachment.size }]} initialIndex={0} onClose={() => setZoom(false)} /></Suspense>}
+  </>;
   return (
     <button className="attachment-file" onClick={() => void download()}>
       <Icon name="file" size={18} />
@@ -300,7 +310,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
               />
             </div>
           ) : (
-            message.content && (annoyStickerOf(message.content) ? <AnnoySticker url={annoyStickerOf(message.content)!} /> : (
+            message.content && (isStickerMessage(message.content) ? <StickerMessage content={message.content} /> : (
               <div className="message-content">
                 {renderContent(message.content, nameOf, me)}
                 {message.editedAt && <span className="edited">{translate("social.edited")}</span>}

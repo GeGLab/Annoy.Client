@@ -1,7 +1,7 @@
 import {rich} from "../../lib/localization.ts";
 import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import { has, Permission, type Channel, type CodeEntry, type CodeFile, type CodeRepo, type CodeStatus, type ServerState } from "@distopic/protocol";
+import { has, Permission, type Channel, type CodeEntry, type CodeFile, type CodeRepo, type CodeStatus, type ServerState } from "@annoy/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { RequestError } from "../../api.ts";
 import { apiFor } from "../../client.ts";

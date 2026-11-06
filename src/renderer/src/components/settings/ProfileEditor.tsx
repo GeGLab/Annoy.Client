@@ -1,6 +1,6 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,textForError} from "../../../../shared/localization/index.ts";
-import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@distopic/protocol";
+import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@annoy/protocol";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { type Account } from "../../store.ts";
 import { Avatar, Icon } from "../ui.tsx";
@@ -38,15 +38,9 @@ export function ProfileEditor({
   const input = useRef<HTMLInputElement>(null);
   const profile=useProfileDetails(account.id,user.id);
   const details=draft.details??(profile.details?{fields:profile.details.fields,historyEnabled:profile.details.history.enabled}:null);
-  const [deleting,setDeleting]=useState(false);
   const changeDetails=(next:NonNullable<ProfileDraft["details"]>)=>{
     const original=profile.details?{fields:profile.details.fields,historyEnabled:profile.details.history.enabled}:null;
     onChange({...draft,details:JSON.stringify(next)===JSON.stringify(original)?undefined:next});
-  };
-  const changeField=(kind:ProfileField["kind"],patch:Partial<ProfileField>)=>{
-    if(!details)return;
-    const old=details.fields.find(field=>field.kind===kind)??{kind,value:"",audience:"self" as const};
-    changeDetails({...details,fields:[...details.fields.filter(field=>field.kind!==kind),{...old,...patch}]});
   };
   const [file, setFile] = useState<File | null>(null);
   const original = useRef<File | null>(null);
@@ -129,26 +123,7 @@ export function ProfileEditor({
             {error}
           </p>
         )}
-        <section className="profile-privacy-editor"><h4>{translate("common.547c01840a7c")}</h4>
-          <p className="muted small">{translate("settings.7d3050d20d4b")}</p>
-          {!profile.supported?<p className="muted small">{translate("settings.d06344b0b31c")}</p>:profile.loading&&!details?<p role="status">{translate("settings.dc5ddb06911f")}</p>:profile.error&&!details?<div role="alert"><p>{profile.error}</p><Button variant="secondary" onClick={profile.retry}>{translate("common.b9e10688be01")}</Button></div>:details&&<>
-            {PROFILE_FIELD_KINDS.map(kind=>{
-              const field=details.fields.find(item=>item.kind===kind);
-              let validation="";try{normalizeProfileField(kind,field?.value??"");}catch(error){validation=textForError(error);}
-              return <div className="profile-field-editor" key={kind}>
-                <label className="field"><span className="field-label"><ProfileFieldIcon kind={kind}/>{PROFILE_LABELS[kind]}</span><Input aria-label={PROFILE_LABELS[kind]} value={field?.value??""} placeholder={PROFILE_PLACEHOLDERS[kind]} maxLength={2048} disabled={disabled||!profile.connected} aria-invalid={!!validation} onChange={event=>changeField(kind,{value:event.target.value})} onBlur={()=>{if(field?.value&&!validation)changeField(kind,{value:normalizeProfileField(kind,field.value)});}}/>{validation&&<span className="error small">{validation}</span>}{kind==="email"&&<span className="field-hint">{translate("settings.a003af875e0d")}</span>}{kind==="phone"&&<span className="field-hint">{translate("settings.fcd094aacecc")}</span>}</label>
-                <Select aria-label={translate("settings.2e0b86907bf6",{p0:(PROFILE_LABELS[kind])})} value={field?.audience??"self"} disabled={disabled||!profile.connected||!field?.value} onChange={event=>changeField(kind,{audience:event.target.value as ProfileField["audience"]})}>{Object.entries(AUDIENCE_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select>
-                <Button variant="ghost" size="sm" aria-label={translate("expression.82e85db7347e",{p0:(PROFILE_LABELS[kind])})} disabled={disabled||!field?.value} onClick={()=>changeDetails({...details,fields:details.fields.filter(item=>item.kind!==kind)})}><Icon name="trash" size={15}/></Button>
-              </div>;
-            })}
-            <h4>{translate("common.83549f764bc9")}</h4><label className="profile-history-consent"><Checkbox checked={details.historyEnabled} disabled={disabled||!profile.connected} onChange={event=>changeDetails({...details,historyEnabled:event.target.checked})}/>{translate("settings.1a0d092c2e83")}</label>
-            <p className="muted small">{translate("settings.b67c6b8ade75")}</p>
-            <Button variant="secondary" size="sm" disabled={disabled||deleting||!profile.connected} onClick={async()=>{
-              if(!await confirmAction(translate("settings.a98a312a03c8")))return;
-              setDeleting(true);try{await apiFor(account.id).del("/users/@me/activity-history");profile.retry();toast(translate("settings.46d1a7cbaa39"));}catch(error){toast((error as Error).message);}finally{setDeleting(false);}
-            }}>{deleting?translate("common.29e916fc8cbd"):translate("settings.84abdb96ed02")}</Button>
-          </>}
-        </section>
+        <ProfileDetailsSection profile={profile} details={details} disabled={disabled} intro={translate("settings.7d3050d20d4b")} onChange={changeDetails} onDeleteHistory={()=>apiFor(account.id).del("/users/@me/activity-history").then(()=>undefined)} />
       </div>
       <aside className="profile-live-preview" aria-label={translate("settings.8a9623359659")}>
         <h4>{translate("settings.e6f37ed76e87")}</h4>
@@ -168,4 +143,44 @@ export function ProfileEditor({
   );
 }
 
-
+type DetailsDraft=NonNullable<ProfileDraft["details"]>;
+/** Profile contacts with who sees them, and the activity history consent. */
+export function ProfileDetailsSection({profile,details,disabled,intro,onChange,onDeleteHistory,annoy=false}:{
+  /** The Annoy account: "community" means anyone with an Annoy account; the history is for you and friends. */
+  annoy?:boolean;
+  profile:{supported:boolean;connected:boolean;loading:boolean;error?:string;details?:unknown;retry:()=>void};
+  details:DetailsDraft|null;
+  disabled:boolean;
+  intro:string;
+  onChange:(next:DetailsDraft)=>void;
+  onDeleteHistory:()=>Promise<void>;
+}) {
+  const [deleting,setDeleting]=useState(false);
+  const changeField=(kind:ProfileField["kind"],patch:Partial<ProfileField>)=>{
+    if(!details)return;
+    const old=details.fields.find(field=>field.kind===kind)??{kind,value:"",audience:"self" as const};
+    onChange({...details,fields:[...details.fields.filter(field=>field.kind!==kind),{...old,...patch}]});
+  };
+  return (
+    <section className="profile-privacy-editor"><h4>{translate("common.547c01840a7c")}</h4>
+          <p className="muted small">{intro}</p>
+          {!profile.supported?<p className="muted small">{translate("settings.d06344b0b31c")}</p>:profile.loading&&!details?<p role="status">{translate("settings.dc5ddb06911f")}</p>:profile.error&&!details?<div role="alert"><p>{profile.error}</p><Button variant="secondary" onClick={profile.retry}>{translate("common.b9e10688be01")}</Button></div>:details&&<>
+            {PROFILE_FIELD_KINDS.map(kind=>{
+              const field=details.fields.find(item=>item.kind===kind);
+              let validation="";try{normalizeProfileField(kind,field?.value??"");}catch(error){validation=textForError(error);}
+              return <div className="profile-field-editor" key={kind}>
+                <label className="field"><span className="field-label"><ProfileFieldIcon kind={kind}/>{PROFILE_LABELS[kind]}</span><Input aria-label={PROFILE_LABELS[kind]} value={field?.value??""} placeholder={PROFILE_PLACEHOLDERS[kind]} maxLength={2048} disabled={disabled||!profile.connected} aria-invalid={!!validation} onChange={event=>changeField(kind,{value:event.target.value})} onBlur={()=>{if(field?.value&&!validation)changeField(kind,{value:normalizeProfileField(kind,field.value)});}}/>{validation&&<span className="error small">{validation}</span>}{kind==="email"&&<span className="field-hint">{translate("settings.a003af875e0d")}</span>}{kind==="phone"&&<span className="field-hint">{translate("settings.fcd094aacecc")}</span>}</label>
+                <Select aria-label={translate("settings.2e0b86907bf6",{p0:(PROFILE_LABELS[kind])})} value={field?.audience??"self"} disabled={disabled||!profile.connected||!field?.value} onChange={event=>changeField(kind,{audience:event.target.value as ProfileField["audience"]})}>{Object.entries(AUDIENCE_LABELS).map(([value,label])=><option key={value} value={value}>{annoy&&value==="community"?translate("social.audienceCommunity"):label}</option>)}</Select>
+                <Button variant="ghost" size="sm" aria-label={translate("expression.82e85db7347e",{p0:(PROFILE_LABELS[kind])})} disabled={disabled||!field?.value} onClick={()=>onChange({...details,fields:details.fields.filter(item=>item.kind!==kind)})}><Icon name="trash" size={15}/></Button>
+              </div>;
+            })}
+            <h4>{translate("common.83549f764bc9")}</h4><label className="profile-history-consent"><Checkbox checked={details.historyEnabled} disabled={disabled||!profile.connected} onChange={event=>onChange({...details,historyEnabled:event.target.checked})}/>{translate("settings.1a0d092c2e83")}</label>
+            <p className="muted small">{annoy?translate("social.historyHelp"):translate("settings.b67c6b8ade75")}</p>
+            <Button variant="secondary" size="sm" disabled={disabled||deleting||!profile.connected} onClick={async()=>{
+              if(!await confirmAction(translate("settings.a98a312a03c8")))return;
+              setDeleting(true);try{await onDeleteHistory();profile.retry();toast(translate("settings.46d1a7cbaa39"));}catch(error){toast((error as Error).message);}finally{setDeleting(false);}
+            }}>{deleting?translate("common.29e916fc8cbd"):translate("settings.84abdb96ed02")}</Button>
+          </>}
+        </section>
+  );
+}

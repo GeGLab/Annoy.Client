@@ -22,7 +22,7 @@ export async function globalAuthFixture() {
   const address = server.address() as { port: number };
   async function authenticate(page: Page) {
     await page.evaluate(async ({ token, user }) => {
-      await window.distopic!.auth.global(token);
+      await window.annoy!.auth.global(token);
       if (location.protocol === "file:") return;
       // The app's own start-up check finds no saved session and clears the account: let it finish first.
       const { restoreSession } = await import(/* @vite-ignore */ `${location.origin}/src/auth/session.ts`);

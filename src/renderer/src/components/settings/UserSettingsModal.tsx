@@ -7,21 +7,22 @@ import {LocalizationSettings} from "./LocalizationSettings.tsx";
 import {DesktopSettings} from "./DesktopSettings.tsx";
 import type {DesktopPreferences,DesktopSnapshot} from "../../../../shared/desktop.ts";
 import {t as translate,textForError,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import {normalizeProfileField} from "@distopic/protocol";
+import {normalizeProfileField} from "@annoy/protocol";
 import { Checkbox } from "../ui/checkbox.tsx";
 import { Slider } from "../ui/slider.tsx";
 import { confirmAction } from "../ui/action-dialog.tsx";
-import type { DiscordLoginBegin, User } from "@distopic/protocol";
+import type { DiscordLoginBegin, User } from "@annoy/protocol";
 import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
 import { apiFor, applyUserUpdate, removeAccount, updateVoiceSettings } from "../../client.ts";
 import { getState, setState, toast, useStore, type Settings } from "../../store.ts";
+import { deviceChoice, shownDevice } from "../../lib/devices.ts";
 import { applyTheme } from "../../lib/theme.ts";
 import { registerNavigationGuard, requestNavigation } from "../../lib/navigation-guard.ts";
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
 import { Input } from "../ui/input.tsx";
 import { ActivityCard } from "../../features/activity/ActivityCard.tsx";
-import { SteamConnection } from "../../features/activity/SteamConnection.tsx";
+import { AnnoySteamConnection, SteamConnection } from "../../features/activity/SteamConnection.tsx";
 import { Avatar, Field, Icon, Modal, openModal, type IconName } from "../ui.tsx";
 import { Button } from "../ui/button.tsx";
 import { Select } from "../ui/select.tsx";
@@ -58,7 +59,10 @@ let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(localizationPreferences().region);
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
-function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
+const SLOT = { inputDeviceId: "input", outputDeviceId: "output", cameraDeviceId: "camera" } as const;
+const LABEL = { inputDeviceId: "inputDeviceLabel", outputDeviceId: "outputDeviceLabel", cameraDeviceId: "cameraDeviceLabel" } as const;
+
+function MicMeter({ deviceId, deviceLabel, threshold, filter, filters }: { deviceId: string; deviceLabel: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
   const [enabled, setEnabled] = useState(false);
   const live = useRef<Mic | null>(null);
   const latest = useRef(filters);
@@ -73,7 +77,7 @@ function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; 
     let stopped = false,
       frame = 0;
     let mic: Mic | null = null;
-    void openMic(deviceId, filter, latest.current)
+    void openMic(deviceId, filter, latest.current, deviceLabel)
       .then((value) => {
         if (stopped) return value.stop();
         mic = value;
@@ -131,58 +135,6 @@ function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; 
   );
 }
 
-function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
-  const requests = useRequestOwner(accountId);
-  const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
-  const [discord, setDiscord] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  useEffect(() => {
-    if (!account) return;
-    const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, requests.signal]);
-    void fetchInfo(account.url, signal).then((info) => { signal.throwIfAborted(); setDiscord(info.discordLogin); })
-      .catch((error) => { if (!isCancellation(error)) setDiscord(false); });
-    return () => controller.abort();
-  }, [account?.url]);
-  const sync = async () => {
-    if (!account || syncing) return;
-    const signal = requests.signal;
-    setSyncing(true);
-    try {
-      await discordLogin(
-        account.url,
-        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }, signal),
-        signal,
-      );
-      signal.throwIfAborted();
-      toast(translate("settings.c20a38d028a4"));
-    } catch (error) {
-      if (!isCancellation(error)) toast((error as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  };
-  return (
-    <div className="account-actions">
-      {discord && (
-        <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>{translate("settings.70aae5a6660f")}</Button>
-      )}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={busy}
-        onClick={() =>
-          requestNavigation(async () => {
-            if (await confirmAction(translate("common.4acd3c09c649",{p0:(account?.instanceName)}))) removeAccount(accountId, "signOut");
-          })
-        }
-      >{translate("settings.b73f3ff34b4b")}</Button>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
-    </div>
-  );
-}
-
-
 export function UserSettingsModal() {
   const requests = useRequestOwner("user-settings");
   const [page, setPage] = useState(() => {
@@ -238,7 +190,7 @@ export function UserSettingsModal() {
     else action();
   };
   useEffect(() => registerNavigationGuard(leave), [dirty, saving]);
-  const refreshDesktop=()=>{void window.distopic?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
+  const refreshDesktop=()=>{void window.annoy?.desktop?.get().then(status=>{if(requests.signal.aborted)return;setDesktopStatus(status);setDesktopDraft(current=>current??status.saved);setDesktopLoadError(false);}).catch(()=>{if(!requests.signal.aborted)setDesktopLoadError(true);});};
   useEffect(()=>{refreshDesktop();},[]);
   useEffect(()=>{configureLocalization(draft);},[draft.language,draft.region,draft.hourCycle,draft.fontSize,draft.underlineLinks]);
   useEffect(()=>()=>configureLocalization(getState().settings),[]);
@@ -262,7 +214,7 @@ export function UserSettingsModal() {
       event.returnValue = "";
       leave(() => {
         allowWindowClose.current = true;
-        window.distopic?.window.close();
+        window.annoy?.window.close();
       });
     };
     window.addEventListener("beforeunload", beforeUnload);
@@ -329,8 +281,8 @@ export function UserSettingsModal() {
         }
       }
       const next={...draft,previousLanguage:draft.language!==saved.language?saved.language:draft.previousLanguage};
-      if(desktopDirty&&desktopDraft){try{const status=await window.distopic!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}}
-      await window.distopic?.localization?.set(normalizeLocalization(next));signal.throwIfAborted();
+      if(desktopDirty&&desktopDraft){try{const status=await window.annoy!.desktop.set(desktopDraft);signal.throwIfAborted();setDesktopStatus(status);setDesktopDraft(status.saved);}catch{refreshDesktop();throw new Error(translate("desktop.saveError"));}}
+      await window.annoy?.localization?.set(normalizeLocalization(next));signal.throwIfAborted();
       setState((s)=>{Object.assign(s.settings,next);});setDraft(next);
       updateVoiceSettings();
       setProfiles({});
@@ -358,7 +310,7 @@ export function UserSettingsModal() {
     key: "inputDeviceId" | "outputDeviceId" | "cameraDeviceId",
   ) => (
     <Field label={label}>
-      <Select aria-label={label} value={value} onChange={(event) => update({ [key]: event.target.value })} disabled={saving}>
+      <Select aria-label={label} value={shownDevice(value, draft[LABEL[key]], devices.filter((d) => d.kind === kind))} onChange={(event) => update(deviceChoice(SLOT[key], event.target.value, devices))} disabled={saving}>
         <option value="default">{translate("common.f48584be4417")}</option>
         {devices
           .filter((d) => d.kind === kind && d.deviceId !== "default")
@@ -438,7 +390,7 @@ export function UserSettingsModal() {
             {page === "profile" && (
               <section className="settings-section">
                 <h3>{rich("common.ce989b279c2d",{p0:(<Icon name="users" size={24} />)})}</h3>
-                <p className="muted">{translate("settings.10bdfb7e1dd7")}</p>
+                <p className="muted">{annoyMode ? translate("settings.profileIntroAnnoy") : translate("settings.10bdfb7e1dd7")}</p>
                 <Button variant="secondary" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" />)})}</Button>
                 {annoyMode && (
                   <div className="settings-account annoy-profile global-account-panel">
@@ -447,24 +399,23 @@ export function UserSettingsModal() {
                     <div className="account-actions global-account-actions">
                       <a className="ui-button ui-button-secondary ui-button-sm" href={`${accountWebsite()}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
                       <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</Button>
+                      <a className="ui-button ui-button-ghost ui-button-sm" href={`${accountWebsite()}/conta#excluir`} target="_blank" rel="noreferrer">{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</a>
                     </div>
                     <CloudProfileEditor />
                   </div>
                 )}
-                {shownAccounts.map((account) => {
+                {/* User settings hold only Annoy-account things. Servers signed in with the Annoy
+                    account are left in the server menu ("Sair do servidor"). A local account (no Annoy
+                    account) only has "Excluir conta" here. */}
+                {shownAccounts.filter((account) => !account.annoy).map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
-                      <div className="settings-account" key={account.id}>
-                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}>{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
-                        <ProfileEditor
-                          account={account}
-                          user={user}
-                          draft={profiles[account.id] ?? { displayName: user.displayName }}
-                          onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
-                          disabled={saving}
-                        />
-                        <AccountActions accountId={account.id} busy={saving} />
+                      <div className="settings-account local-account" key={account.id}>
+                        <p><strong>{account.instanceName}</strong> <span className="muted small">@{user.username} · {account.url}</span></p>
+                        <div className="account-actions">
+                          <Button variant="ghost" size="sm" disabled={saving} onClick={() => openModal({ kind: "deleteAccount", accountId: account.id })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
+                        </div>
                       </div>
                     )
                   );
@@ -545,7 +496,7 @@ export function UserSettingsModal() {
                   <MicFiltersEditor value={draft.micFilters} disabled={saving} onChange={(micFilters) => update({ micFilters })} />
                 </PreferenceCard>
                 <PreferenceCard icon="mic" title={translate("settings.1633f9ec8fb3")} description={translate("settings.c86b8e23e03c")}>
-                <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
+                <MicMeter deviceId={draft.inputDeviceId} deviceLabel={draft.inputDeviceLabel} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
                 </PreferenceCard>
               </section>
             )}
@@ -612,7 +563,7 @@ export function UserSettingsModal() {
               <section className="settings-section">
                 <h3>{rich("common.5b986d904c4a",{p0:(<Icon name="radio" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.ef3f1976270b")}</p>
-                {window.distopic?.platform === "win32" || window.distopic?.platform === "linux" ? (
+                {window.annoy?.platform === "win32" || window.annoy?.platform === "linux" ? (
                   <>
                     <label className="switch-setting">
                       <span><strong>{rich("common.7d846bb586da",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.90aac47f7432")}</small></span>
@@ -631,7 +582,8 @@ export function UserSettingsModal() {
                 ) : (
                   <p className="muted">{translate("settings.c7a6df285e2a")}</p>
                 )}
-                {accounts.some((account) => instances[account.id]?.instance?.steamConnection) && <h4>{translate("settings.3985bcd7ade0")}</h4>}
+                {(!!annoy || accounts.some((account) => instances[account.id]?.instance?.steamConnection)) && <h4>{translate("settings.3985bcd7ade0")}</h4>}
+                {annoy && <AnnoySteamConnection />}
                 {shownAccounts.map((account) => <SteamConnection key={account.id} accountId={account.id} />)}
               </section>
             )}

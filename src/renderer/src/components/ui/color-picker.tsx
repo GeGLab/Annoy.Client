@@ -6,7 +6,7 @@ import { validColor } from "../../lib/appearance.ts";
 import { Button } from "./button.tsx";
 import { Icon } from "./icon.tsx";
 
-const KEY = "distopic.recentColors";
+const KEY = "annoy.recentColors";
 let recent: string[];
 try {
   const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");

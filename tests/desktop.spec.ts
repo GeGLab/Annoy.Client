@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 test("desktop navigation, themes, window controls and image attachments", async () => {
-  const userData = await mkdtemp(join(tmpdir(), "distopic-ui-"));
+  const userData = await mkdtemp(join(tmpdir(), "annoy-ui-"));
   const auth = await globalAuthFixture();
   const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: userData, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178" };
   delete env.ELECTRON_RUN_AS_NODE;

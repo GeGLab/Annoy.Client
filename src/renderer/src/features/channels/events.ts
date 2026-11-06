@@ -1,4 +1,4 @@
-import type { GatewayEventOf } from "@distopic/protocol";
+import type { GatewayEventOf } from "@annoy/protocol";
 
 // Gateway events only the open room cares about: they skip the global store.
 

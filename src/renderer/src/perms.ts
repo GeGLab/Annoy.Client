@@ -1,4 +1,4 @@
-import { computePermissions, type Channel, type Member, type ServerState } from "@distopic/protocol";
+import { computePermissions, type Channel, type Member, type ServerState } from "@annoy/protocol";
 
 /** Mirrors the server's resolution; used only to decide which controls to show. */
 export function channelPerms(state: ServerState, userId: string, channel: Channel): number {

@@ -1731,8 +1731,9 @@ img.avatar-face {
 .stage-card.camera video { object-fit: cover; }
 .stage-card video.mirrored { transform: scaleX(-1); }
 .stage-label { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); font-size: 0.8rem; }
-.stage-full { position: absolute; top: 6px; right: 6px; background: rgba(0, 0, 0, 0.55); opacity: 0; }
-.stage-card:hover .stage-full { opacity: 1; }
+.stage-corner { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; }
+.stage-corner .icon-btn { background: rgba(0, 0, 0, 0.55); }
+.stage-card:hover .stage-corner, .stage-corner:focus-within { opacity: 1; }
 .live { background: var(--danger); color: #fff; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 4px; }
 .live.small { font-size: 0.55rem; padding: 0 4px; }
 .stage-controls { flex: none; display: flex; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid var(--border); }
@@ -1776,7 +1777,6 @@ button.instance-status:hover { box-shadow: 0 0 0 3px rgba(255, 178, 63, 0.3); }
 .stream-offer-text { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 0.9rem; }
 .stage-stream-tools { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 56px); flex-wrap: wrap; display: flex; align-items: flex-end; gap: 8px; padding: 4px; border-radius: 10px; background: rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity .15s; }
 .stage-card:hover .stage-stream-tools, .stage-stream-tools:focus-within { opacity: 1; }
-.stage-stream-tools .user-volume-control { min-width: 180px; padding: 4px 8px; }
 @media (prefers-reduced-motion: reduce) { .stage-stream-tools { transition: none; } }
 
 /* OBS-style microphone filters (TODO 4.4). */

@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { FocusEvent, ReactNode } from "react";
-import type { Member, VoiceState } from "@distopic/protocol";
+import type { Member, VoiceState } from "@annoy/protocol";
 import { apiFor } from "../client.ts";
 import { displayNameOf } from "../perms.ts";
 import { act, Icon } from "./ui.tsx";
@@ -22,7 +22,6 @@ function VoiceMenuItems({ accountId, serverId, member, voice, canModerate, conte
   const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
   return <>
     <UserVolumeControl accountId={accountId} userId={member.user.id} name={displayNameOf(member)} />
-    {voice.screen && <UserVolumeControl accountId={accountId} userId={member.user.id} name={displayNameOf(member)} kind="stream" />}
     {canModerate && <>
       <Separator />
       {(voice.serverMute || !voice.selfMute) && <Item onSelect={() => void act(apiFor(accountId).patch(`/servers/${serverId}/members/${member.user.id}/voice`, { serverMute: !voice.serverMute }))}>

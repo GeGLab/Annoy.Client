@@ -1,5 +1,5 @@
 import { t as translate } from "../../../shared/localization/index.ts";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 import { handleAccountEvent, signedIn as globalSignedIn } from "../auth/session.ts";
 import { getState, setState, subscribe, toast } from "../store.ts";
 import { cloud, cloudUrls } from "./cloud.ts";
@@ -110,6 +110,9 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       return;
     case "PRESENCE_UPDATE":
       return applyPresence(event.d as PresenceView);
+    case "PROFILE_DETAILS_UPDATE":
+      setSocial((s) => { s.detailsRevision++; });
+      return;
     case "USER_UPDATE": {
       const p = event.d as CloudProfile;
       setSocial((s) => {
@@ -140,6 +143,16 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       sendWatch();
       for (const handler of callHandlers) handler(event);
       return;
+    // The other person deleted their Annoy account: the conversation is gone.
+    case "DM_REMOVE": {
+      const dmId = String(event.d.dmId ?? "");
+      setSocial((s) => {
+        s.dms = s.dms.filter((d) => d.id !== dmId);
+        delete s.threads[dmId];
+        delete s.unread[dmId];
+      });
+      return;
+    }
     case "DM_CREATE":
     case "DM_UPDATE":
       setSocial((s) => {

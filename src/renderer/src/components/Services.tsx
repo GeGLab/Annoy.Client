@@ -215,7 +215,7 @@ export function ServiceSettingsModal({ serviceId }: { serviceId: string }) {
               type="button"
               className="btn btn-ghost"
               onClick={() => {
-                window.distopic?.services.reload(service.id);
+                window.annoy?.services.reload(service.id);
                 closeModal();
               }}
             >{translate("common.9b6bb68d29b1")}</button>
@@ -280,7 +280,7 @@ export function TeamSpeakView({ service }: { service: Service }) {
                 {server.nickname && translate("common.884db61cf183",{p0:(server.nickname)})}
               </span>
             </span>
-            <button className="btn" onClick={() => window.distopic?.openTeamSpeak(teamspeakLink(server))}>{translate("common.4105811890ae")}</button>
+            <button className="btn" onClick={() => window.annoy?.openTeamSpeak(teamspeakLink(server))}>{translate("common.4105811890ae")}</button>
             <button className="icon-btn" title={translate("settings.a3037dc71a43")} onClick={() => remove(server.id)}>
               <Icon name="trash" size={16} />
             </button>

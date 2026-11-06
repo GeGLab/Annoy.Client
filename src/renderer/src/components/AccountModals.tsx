@@ -3,7 +3,7 @@ import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { SignInForm as GlobalSignIn } from "./auth/SignInForm.tsx";
 import { clientAccepted, updateRequired } from "../lib/client-version.ts";
 import { Select } from "./ui/select.tsx";
-import type { AuthResponse, InstanceInfo, Invite, ServerSummary } from "@distopic/protocol";
+import type { AuthResponse, InstanceInfo, Invite, ServerSummary } from "@annoy/protocol";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { authenticate, beginDiscordLogin, discordLogin, DEFAULT_PORT, findInstance } from "../api.ts";
 import { addAccount, apiFor, openServer, navigate, signOutAccount } from "../client.ts";

@@ -1,9 +1,10 @@
 import {t as translate} from "../../../shared/localization/index.ts";
 import { openMic, type Mic } from "../noise.ts";
-import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
+import type { DirectCall, GatewayEvent, ClientOp } from "@annoy/protocol";
 import { useSyncExternalStore } from "react";
 import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
 import { getState, setState, toast } from "../store.ts";
+import { savedDevice } from "../lib/devices.ts";
 import { playCallFeedback } from "../lib/voice-feedback.ts";
 import { deviceId } from "../lib/device-id.ts";
 import { CLOUD_ACCOUNT } from "../social/types.ts";
@@ -124,12 +125,13 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
   };
   preparing = (async () => {
     const settings = getState().settings;
-    const mic = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters);
+    const mic = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters, settings.inputDeviceLabel);
     if (sessionId !== call.id) { mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
     callMic = mic;
     const stream = new MediaStream([mic.track]);
     if (call.video) {
-      const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } });
+      const cameraId = await savedDevice("camera", settings);
+      const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(cameraId && { deviceId: { exact: cameraId } }) } });
       if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
       camera.getVideoTracks().forEach((track) => stream.addTrack(track));
     }
@@ -158,7 +160,7 @@ export async function handleDirectCallEvent(accountId: string, event: Extract<Ga
       if (call.status === "ended") { if (getState().directCall?.call.id !== call.id) return; cleanup(); setState((s) => { s.directCall = null; }); playCallFeedback("leave"); if (call.reason) toast(call.reason); return; }
       const existed = getState().directCall?.call;
       if (getState().settings.manualPresence !== "dnd" && incomingNotificationNeeded(call, me, existed?.id)) {
-        window.distopic?.flashWindow();
+        window.annoy?.flashWindow();
         if (!document.hasFocus()) try { const notification = new Notification(translate("common.93947904c31c"), { body: translate("common.beceda3adc2f",{p0:((isCloud(accountId) ? displayName(getState().social.profiles[call.callerId]) : getState().instances[accountId]?.relationships.find((r) => r.user.id === call.callerId)?.user.displayName) || translate("common.9980aa129514"))}), silent: true }); notification.onclick = () => window.focus(); } catch { /* The in-app invitation and ringtone remain available. */ }
       }
       setState((s) => { s.directCall = { accountId, call }; });

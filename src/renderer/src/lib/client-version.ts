@@ -1,7 +1,7 @@
 import {t as translate} from "../../../shared/localization/index.ts";
 import { version } from "../../../../package.json";
 import { compareVersions } from "../../../shared/update.ts";
-import type { InstanceInfo } from "@distopic/protocol";
+import type { InstanceInfo } from "@annoy/protocol";
 
 /** This app's version, sent to servers so they can refuse clients older than they accept. */
 export const CLIENT_VERSION: string = version;

@@ -119,7 +119,7 @@ if (process.platform === "linux" && !app.commandLine.hasSwitch("password-store")
   app.commandLine.appendSwitch("password-store", "gnome-libsecret");
 }
 // Windows only shows notifications for apps with an explicit AppUserModelID; it must match build.appId.
-if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.distopic");
+if (process.platform === "win32") app.setAppUserModelId("br.dev.geg.annoy");
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
@@ -129,7 +129,7 @@ app.on("second-instance", () => {
 /** Discord and WhatsApp gate features on the user agent; present plain Chrome like Vesktop does. */
 function chromeUserAgent(s: Session): string {
   // Drops the "Electron/x" and app ("Annoy/x", "annoy-client/x") tokens.
-  return s.getUserAgent().replace(/\s(Electron|annoy[\w-]*|distopic[\w-]*)\/\S+/gi, "");
+  return s.getUserAgent().replace(/\s(Electron|annoy[\w-]*)\/\S+/gi, "");
 }
 
 function inSites(raw: string, sites: readonly string[]): boolean {
@@ -334,9 +334,28 @@ function createWindow(): void {
       backgroundThrottling: false,
     },
   });
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // A screen share in its own window: the renderer fills this blank page with the video.
+    if (url === "about:blank" && frameName.startsWith("annoy-stream:")) {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 1280,
+          height: 720,
+          backgroundColor: "#000000",
+          autoHideMenuBar: true,
+          icon: appIcon.path(),
+          webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
+        },
+      };
+    }
     openExternal(url);
     return { action: "deny" };
+  });
+  win.webContents.on("did-create-window", (child) => {
+    child.setMenu(null);
+    child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    child.webContents.on("will-navigate", (event) => event.preventDefault());
   });
   win.webContents.on("will-navigate", (event, url) => {
     if (url !== win?.webContents.getURL()) {

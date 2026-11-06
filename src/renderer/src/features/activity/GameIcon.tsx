@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Gamepad2 } from "lucide-react";
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 
 /** The game itself is the visual identity; platform branding belongs to the integration settings. */
 export function GameIcon({ activity, size = 16 }: { activity: UserActivity; size?: number }) {
@@ -10,7 +10,7 @@ export function GameIcon({ activity, size = 16 }: { activity: UserActivity; size
   useEffect(() => {
     if (!appId) return;
     let active = true;
-    void window.distopic?.activity.gameIcon?.(appId).then((url) => {
+    void window.annoy?.activity.gameIcon?.(appId).then((url) => {
       if (active && url) setResolved({ appId, url });
     }).catch(() => undefined);
     return () => { active = false; };

@@ -1,4 +1,4 @@
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 
 /** Public data of an Annoy account (usersannoy). */
 export interface CloudProfile {
@@ -94,6 +94,8 @@ export interface SocialState {
   /** userId -> expiry (ms) */
   typing: Record<string, number>;
   unread: Record<string, number>;
+  /** Bumped when someone's profile contacts or activity history change. */
+  detailsRevision: number;
 }
 
 export const emptySocial = (): SocialState => ({
@@ -106,6 +108,7 @@ export const emptySocial = (): SocialState => ({
   threads: {},
   typing: {},
   unread: {},
+  detailsRevision: 0,
 });
 
 /** The pseudo account ID of the Annoy cloud in places that take an account (calls, views). */

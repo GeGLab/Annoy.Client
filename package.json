@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.10.0-alpha.4",
+  "version": "0.10.0-alpha.5",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
@@ -46,7 +46,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@distopic/protocol": "*",
+    "@annoy/protocol": "*",
     "@playwright/test": "^1.64.1",
     "@radix-ui/react-alert-dialog": "^1.2.1",
     "@radix-ui/react-checkbox": "^1.4.1",
@@ -98,7 +98,7 @@
     "electron-winstaller@5.4.0": true
   },
   "productName": "Annoy",
-  "desktopName": "br.dev.geg.distopic.desktop",
+  "desktopName": "br.dev.geg.annoy.desktop",
   "author": "Gustavo Cruz",
   "homepage": "https://annoy.geg.dev.br",
   "repository": {
@@ -106,7 +106,7 @@
     "url": "https://github.com/GeGLab/annoy-client.git"
   },
   "build": {
-    "appId": "br.dev.geg.distopic",
+    "appId": "br.dev.geg.annoy",
     "productName": "Annoy",
     "copyright": "Copyright © 2026 Gustavo Cruz",
     "directories": {
@@ -146,6 +146,7 @@
       "signAndEditExecutable": false
     },
     "nsis": {
+      "guid": "9024d7e0-4d40-5d7a-a820-97ca9d828a63",
       "oneClick": true,
       "perMachine": false,
       "createDesktopShortcut": true,

@@ -1,4 +1,4 @@
-import type { UserActivity } from "@distopic/protocol";
+import type { UserActivity } from "@annoy/protocol";
 export interface ActivityPreferences {
   games: boolean;
   music: boolean;

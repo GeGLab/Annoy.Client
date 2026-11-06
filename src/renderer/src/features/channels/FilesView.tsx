@@ -1,7 +1,7 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import {SecureAttachment} from "../../components/SecureAttachment.tsx";
-import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@distopic/protocol";
+import { has, LIMITS, Permission, type Attachment, type Channel, type ChannelFilePage, type Message, type ServerState } from "@annoy/protocol";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { apiFor } from "../../client.ts";
 import { RequestError } from "../../api.ts";
@@ -165,7 +165,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
     const { contentType, url, filename } = file.attachment;
     if (contentType.startsWith("image/")) setImage(images.findIndex((i) => i.id === file.attachment.id));
     else if (/^(audio|video)\//.test(contentType)) setMedia({ url: api.resolve(url), filename, contentType });
-    else window.distopic?.download(api.resolve(url));
+    else window.annoy?.download(api.resolve(url));
   };
 
   return (
@@ -264,7 +264,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
                 </span>
               </button>
               <span className="row-actions">
-                <button className="icon-btn" title={translate("expression.b45ae836a031")} aria-label={translate("common.f1fe7aee5e4f",{p0:(attachment.filename)})} onClick={() => window.distopic?.download(api.resolve(attachment.url))}>
+                <button className="icon-btn" title={translate("expression.b45ae836a031")} aria-label={translate("common.f1fe7aee5e4f",{p0:(attachment.filename)})} onClick={() => window.annoy?.download(api.resolve(attachment.url))}>
                   <Icon name="download" size={16} />
                 </button>
                 <button

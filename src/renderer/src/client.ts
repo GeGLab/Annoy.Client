@@ -1,12 +1,13 @@
 import { requestNavigation } from "./lib/navigation-guard.ts";
 import {t as translate} from "../../shared/localization/index.ts";
-import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@distopic/protocol";
+import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@annoy/protocol";
 import { emitRoomEvent } from "./features/channels/events.ts";
 import { Api, fetchInfo } from "./api.ts";
 import { previewText } from "./format.tsx";
 import { Gateway, type RecoveryEvent } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
 import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
+import { savedDevice } from "./lib/devices.ts";
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
@@ -33,6 +34,8 @@ interface Live {
 const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
+/** Voice channel to return to when the connection to its server comes back. */
+let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
 const messageReads = new Map<string, AbortController>();
 let messageEventSequence=0;
@@ -87,7 +90,7 @@ function patchInstance(accountId: string, recipe: (inst: InstanceState) => void)
 // Accounts -------------------------------------------------------------------
 
 // Last-known servers and profile per account, so tabs survive restarts and outages.
-const cacheKey = (accountId: string) => `distopic.cache.${accountId}`;
+const cacheKey = (accountId: string) => `annoy.cache.${accountId}`;
 
 function readCache(accountId: string): Pick<InstanceState, "servers" | "user" | "serversObservedAt"> | null {
   try {
@@ -168,13 +171,19 @@ export function connectAccount(account: Account): void {
       api.cancelPending();
       if (status !== "ready") clearAccountWork(account.id);
       if (status !== "ready") {
-        void window.distopic?.auth.logoutLocal(account.id,status === "invalid");
-        if (!window.distopic) setState(s => {
+        void window.annoy?.auth.logoutLocal(account.id,status === "invalid");
+        if (!window.annoy) setState(s => {
           s.access.localAccounts = s.access.localAccounts.filter(id => id !== account.id);
           s.access.allowed = s.access.global || s.access.localAccounts.length > 0;
         });
         disconnectDirectCall(account.id);
-        if (voice?.accountId === account.id || getState().voice?.accountId === account.id) leaveVoice(false);
+        const inCall = getState().voice;
+        if (voice?.accountId === account.id || inCall?.accountId === account.id) {
+          leaveVoice(false);
+          // A dropped connection (server restart, network) returns to the call; an ended session does not.
+          if (inCall?.accountId === account.id && status !== "invalid") rejoinVoice = { accountId: account.id, serverId: inCall.serverId, channelId: inCall.channelId };
+        }
+        if (status === "invalid" && rejoinVoice?.accountId === account.id) rejoinVoice = null;
       }
       setState((s) => {
         const inst = s.instances[account.id];
@@ -208,6 +217,16 @@ export function connectAccount(account: Account): void {
         const saved = s.accounts.find((a) => a.id === account.id);
         if (saved) saved.offlineSince = connectionOfflineSince(saved.offlineSince, status, Date.now(), navigator.onLine);
       });
+      if (status === "ready" && rejoinVoice?.accountId === account.id) {
+        const target = rejoinVoice;
+        rejoinVoice = null;
+        // After READY has filled the server state, which arrives right after this status.
+        setTimeout(() => {
+          if (!getState().voice && getState().instances[target.accountId]?.serverStates[target.serverId]?.channels.some((c) => c.id === target.channelId)) {
+            void joinVoice(target.accountId, target.serverId, target.channelId);
+          }
+        }, 0);
+      }
 
     },
     () => {
@@ -290,8 +309,8 @@ export function signOutAccount(accountId: string): void {
  * "internal" is for the app's own cleanups (Annoy sign-out, migrations).
  */
 export function removeAccount(accountId: string, mode: "signOut" | "remove" | "internal" = "remove"): void {
-  void window.distopic?.auth.logoutLocal(accountId);
-  if (!window.distopic) setState(s => { s.access.localAccounts = s.access.localAccounts.filter(id => id !== accountId); s.access.allowed = s.access.global || s.access.localAccounts.length > 0; });
+  void window.annoy?.auth.logoutLocal(accountId);
+  if (!window.annoy) setState(s => { s.access.localAccounts = s.access.localAccounts.filter(id => id !== accountId); s.access.allowed = s.access.global || s.access.localAccounts.length > 0; });
   clearAccountChatState(accountId);
   const account = getState().accounts.find((item) => item.id === accountId);
   const user = getState().instances[accountId]?.user;
@@ -411,10 +430,10 @@ export async function resumeRecoveredView(accountId: string): Promise<void> {
 
 /** Shows the native view of a browser service, or hides it for anything else. */
 export function showServiceView(view: View): void {
-  if (!getState().access.allowed) { window.distopic?.services.hide(); return; }
+  if (!getState().access.allowed) { window.annoy?.services.hide(); return; }
   const service = view.kind === "service" ? getState().services.find((sv) => sv.id === view.serviceId) : undefined;
-  if (service && service.kind !== "teamspeak") window.distopic?.services.show(service);
-  else window.distopic?.services.hide();
+  if (service && service.kind !== "teamspeak") window.annoy?.services.show(service);
+  else window.annoy?.services.hide();
 }
 
 export function addService(service: Service): void {
@@ -434,7 +453,7 @@ export async function removeService(id: string): Promise<void> {
     delete s.serviceBadges[id];
     s.modal = null;
   });
-  await window.distopic?.services.remove(id);
+  await window.annoy?.services.remove(id);
 }
 
 /** Hides a tab from the bar without removing it (or its login). */
@@ -458,14 +477,14 @@ export async function openServer(accountId: string, serverId: string): Promise<v
   const state = await ensureServer(accountId, serverId, false, navigationAbort.signal);
   const current = getState().view;
   if (!state || navigation !== navigationGeneration || current.kind !== "server" || current.accountId !== accountId || current.serverId !== serverId || current.channelId) return;
-  const remembered = localStorage.getItem(`distopic.lastChannel.${serverId}`);
+  const remembered = localStorage.getItem(`annoy.lastChannel.${serverId}`);
   const text = state.channels.filter((c) => c.type === "text");
   const target = text.find((c) => c.id === remembered) ?? text[0];
   if (target) navigate({ kind: "server", accountId, serverId, channelId: target.id });
 }
 
 export function openChannel(accountId: string, serverId: string, channelId: string): void {
-  localStorage.setItem(`distopic.lastChannel.${serverId}`, channelId);
+  localStorage.setItem(`annoy.lastChannel.${serverId}`, channelId);
   navigate({ kind: "server", accountId, serverId, channelId });
 }
 
@@ -695,6 +714,7 @@ export function sendTyping(accountId: string, channelId: string): void {
 // Voice --------------------------------------------------------------------
 
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
+  rejoinVoice = null;
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
@@ -740,6 +760,8 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
 }
 
 export function leaveVoice(notifyServer = true): void {
+  // Leaving on purpose (or switching) cancels a pending return to the call.
+  if (notifyServer) rejoinVoice = null;
   const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
   voice = null;
@@ -812,7 +834,7 @@ export async function toggleCamera(): Promise<void> {
   if (!session) return;
   try {
     if (session.isSharing("camera")) await session.stopVideo("camera");
-    else await session.startVideo("camera", getState().settings.cameraDeviceId);
+    else await session.startVideo("camera", (await savedDevice("camera")) ?? "default");
   } catch (err) {
     toast(translate("common.c88e21593233",{p0:((err as Error).message)}));
   }
@@ -837,7 +859,7 @@ export async function toggleScreenShare(): Promise<void> {
 export async function startScreenShare(sourceId: string | null): Promise<void> {
   const session = voice?.session;
   if (!session) return;
-  if (sourceId) window.distopic?.screen.choose(sourceId);
+  if (sourceId) window.annoy?.screen.choose(sourceId);
   try {
     session.updateSettings(getState().settings);
     await session.startVideo("screen");
@@ -865,7 +887,7 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
   if (!me || message.author.id === me) return;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
   if (!isDm && !mentioned) return;
-  window.distopic?.flashWindow();
+  window.annoy?.flashWindow();
   if (!document.hasFocus() || s.view.kind === "service") {
     const server = Object.values(inst.serverStates).find((st) => st.channels.some((c) => c.id === message.channelId));
     const dm = inst.dms.find((d) => d.id === message.channelId);
@@ -901,9 +923,9 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         // An Annoy account on this server: access comes from the Annoy sign-in, never from local credentials.
         const annoyUser = event.d.user.global ?? account.annoy === true;
         if (annoyUser !== account.annoy) setState((s) => { const saved = s.accounts.find((a) => a.id === accountId); if (saved) saved.annoy = annoyUser; });
-        if (window.distopic?.auth) {
+        if (window.annoy?.auth) {
           const current = () => getState().accounts.some((saved) => saved.id === account.id && saved.token === account.token && saved.url === account.url);
-          if (!annoyUser) void window.distopic.auth.local(account).catch((error: Error) => { if (current()) toast(error.message, 10000); });
+          if (!annoyUser) void window.annoy.auth.local(account).catch((error: Error) => { if (current()) toast(error.message, 10000); });
         }
         else void fetchInfo(account.url).then(async info => {
           if (info.accountMode === "global") return;
@@ -937,7 +959,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         void ensureServer(accountId, view.serverId).then((server) => {
           const current = getState().view;
           if (!server || visit !== navigationGeneration || current.kind !== "server" || current.accountId !== accountId || current.serverId !== view.serverId || current.channelId) return;
-          const remembered = localStorage.getItem(`distopic.lastChannel.${view.serverId}`);
+          const remembered = localStorage.getItem(`annoy.lastChannel.${view.serverId}`);
           const target = server.channels.find((channel) => channel.id === remembered && channel.type === "text") ?? server.channels.find((channel) => channel.type === "text");
           if (target) navigate({ kind: "server", accountId, serverId: view.serverId, channelId: target.id });
         });

@@ -1,4 +1,4 @@
-import type { AuthResponse, GlobalLogin, InstanceInfo } from "@distopic/protocol";
+import type { AuthResponse, GlobalLogin, InstanceInfo } from "@annoy/protocol";
 import { t as translate } from "../../../shared/localization/index.ts";
 import { fetchJson, isCancellation, RequestError, WRITE_TIMEOUT_MS } from "../../../shared/requests.ts";
 import { fetchInfo } from "../api.ts";

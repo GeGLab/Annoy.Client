@@ -139,7 +139,7 @@ const bridge = {
   },
 };
 
-export type DistopicBridge = typeof bridge;
+export type AnnoyBridge = typeof bridge;
 
-contextBridge.exposeInMainWorld("distopic", bridge);
+contextBridge.exposeInMainWorld("annoy", bridge);
 import type {LocalizationPreferences} from "../shared/localization/preferences.ts";

@@ -22,7 +22,8 @@ import {
   type ServerState,
   type ServerSummary,
   type User,
-} from "@distopic/protocol";
+  type ServerStickerList,
+} from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
 import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
@@ -178,11 +179,66 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
   );
 }
 
+/** The server's own sticker pack: members send them anywhere, with the server's name. */
+function ServerStickers({ accountId, serverId }: { accountId: string; serverId: string }) {
+  const requests = useRequestOwner(JSON.stringify([accountId, serverId, "stickers"]));
+  const signal = requests.signal;
+  const [list, setList] = useState<ServerStickerList | null>(null);
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    void apiFor(accountId).get<ServerStickerList>(`/servers/${serverId}/stickers`, signal)
+      .then((value) => { if (!signal.aborted) setList(value); }, (e: Error) => { if (!isCancellation(e) && !signal.aborted) toast(e.message); });
+  }, [accountId, serverId]);
+  if (!list) return <p className="muted">{translate("common.6cc1bbba0f84")}</p>;
+  const full = list.stickers.length >= list.limit;
+  const add = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!file || !name.trim() || busy || full) return;
+    setBusy(true);
+    try {
+      const next = await apiFor(accountId).uploadSticker<ServerStickerList>(serverId, name.trim(), file, signal);
+      if (signal.aborted) return;
+      setList(next); setName(""); setFile(null);
+      if (input.current) input.current.value = "";
+    } catch (error) { if (!isCancellation(error)) toast((error as Error).message); }
+    finally { setBusy(false); }
+  };
+  const remove = async (id: string, label: string) => {
+    if (!await confirmAction(translate("settings.stickers.removeConfirm", { p0: label }), { title: translate("settings.stickers.remove"), confirmLabel: translate("settings.stickers.remove") }) || signal.aborted) return;
+    try { const next = await apiFor(accountId).del<ServerStickerList>(`/servers/${serverId}/stickers/${id}`, signal); if (!signal.aborted) setList(next); }
+    catch (error) { if (!isCancellation(error)) toast((error as Error).message); }
+  };
+  return (
+    <div className="form server-stickers">
+      <p className="muted">{translate("settings.stickers.hint")} {translate("settings.stickers.count", { p0: list.stickers.length, p1: list.limit })}</p>
+      <form className="server-sticker-add" onSubmit={(event) => void add(event)}>
+        <Field label={translate("settings.stickers.name")}><Input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} disabled={busy || full} /></Field>
+        <Field label={translate("settings.stickers.image")}><input ref={input} type="file" accept="image/png,image/webp,image/gif" onChange={(e) => setFile(e.target.files?.[0] ?? null)} disabled={busy || full} /></Field>
+        <button className="btn" type="submit" disabled={!file || !name.trim() || busy || full}>{translate("settings.stickers.add")}</button>
+      </form>
+      {full && <p className="muted small">{translate("settings.stickers.full", { p0: list.limit })}</p>}
+      <div className="server-sticker-grid">
+        {list.stickers.map((sticker) => (
+          <figure key={sticker.id}>
+            <img src={sticker.url} alt="" loading="lazy" />
+            <figcaption className="truncate">{sticker.name}</figcaption>
+            <button className="icon-btn" title={translate("settings.stickers.remove")} aria-label={translate("settings.stickers.removeConfirm", { p0: sticker.name })} onClick={() => void remove(sticker.id, sticker.name)}><Icon name="trash" size={15} /></button>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ServerSettingsModal({ accountId, serverId }: { accountId: string; serverId: string }) {
   const requests = useRequestOwner(JSON.stringify([accountId, serverId, "server-settings"]));
   const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
-  const [tab, setTab] = useState<"overview" | "roles" | "bans">("overview");
+  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "stickers">("overview");
+  const stickersSupported = useStore((s) => s.instances[accountId]?.instance?.serverStickers === true);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
   const [icon, setIcon] = useState<File | null | undefined>();
@@ -226,6 +282,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const canRoles = has(state.permissions, Permission.MANAGE_ROLES);
   const canBans = has(state.permissions, Permission.BAN_MEMBERS);
   const canServer = has(state.permissions, Permission.MANAGE_SERVER);
+  const canStickers = stickersSupported && has(state.permissions, Permission.MANAGE_STICKERS);
   const api = apiFor(accountId);
   const role = state.roles.find((r) => r.id === roleId) ?? null;
   const alone = state.members.length === 1 && state.members[0]?.user.id === me;
@@ -258,6 +315,9 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         )}
         {canBans && (
           <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("bans"))}>{translate("settings.3fa784bd9f2f")}</button>
+        )}
+        {canStickers && (
+          <button className={tab === "stickers" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("stickers"))}>{translate("settings.stickers.tab")}</button>
         )}
       </div>
 
@@ -349,6 +409,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
       )}
 
       {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
+      {tab === "stickers" && canStickers && <ServerStickers accountId={accountId} serverId={serverId} />}
     </Modal>
   );
 }

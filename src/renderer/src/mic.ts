@@ -25,7 +25,7 @@ export class MicGate {
   ) {}
 
   async start(): Promise<MediaStreamTrack> {
-    const mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter, this.settings.micFilters);
+    const mic = await openMic(this.settings.inputDeviceId, this.settings.noiseFilter, this.settings.micFilters, this.settings.inputDeviceLabel);
     if (this.stopped) {
       mic.stop();
       throw new Error(translate("common.99e2847d16e5"));

@@ -11,8 +11,8 @@ export function TitleBar() {
   const service = useStore((s) => (view.kind === "service" ? s.services.find((sv) => sv.id === view.serviceId) : undefined));
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {
-    void window.distopic?.window.isMaximized().then(setMaximized);
-    return window.distopic?.window.onMaximized(setMaximized);
+    void window.annoy?.window.isMaximized().then(setMaximized);
+    return window.annoy?.window.onMaximized(setMaximized);
   }, []);
   const channel = view.kind === "server" ? server?.channels.find((c) => c.id === view.channelId) : null;
   const title =
@@ -24,7 +24,7 @@ export function TitleBar() {
           ? translate("titlebar.home")
           : [server?.server.name, channel?.name].filter(Boolean).join(" / ") || "Annoy";
   return (
-    <header className={`titlebar${window.distopic?.platform === "darwin" ? " titlebar-mac" : ""}`}>
+    <header className={`titlebar${window.annoy?.platform === "darwin" ? " titlebar-mac" : ""}`}>
       <Brand size={18} wordmark />
       <span className="titlebar-context truncate">{title}</span>
       <SearchButton />
@@ -39,19 +39,19 @@ export function TitleBar() {
         >
           <Icon name="info" size={15} />
         </a>
-        {window.distopic?.platform !== "darwin" && window.distopic && (
+        {window.annoy?.platform !== "darwin" && window.annoy && (
           <>
-            <button className="window-control" onClick={() => window.distopic?.window.minimize()} aria-label={translate("common.3fc5f90b27f1")}>
+            <button className="window-control" onClick={() => window.annoy?.window.minimize()} aria-label={translate("common.3fc5f90b27f1")}>
               <Icon name="minus" size={14} />
             </button>
             <button
               className="window-control"
-              onClick={() => window.distopic?.window.maximize()}
+              onClick={() => window.annoy?.window.maximize()}
               aria-label={maximized ? translate("common.d2a6ab8b615f") : translate("common.092b9ccfbf63")}
             >
               <Icon name={maximized ? "restore" : "square"} size={12} />
             </button>
-            <button className="window-control window-close" onClick={() => window.distopic?.window.close()} aria-label={translate("common.23ab80ae9880")}>
+            <button className="window-control window-close" onClick={() => window.annoy?.window.close()} aria-label={translate("common.23ab80ae9880")}>
               <Icon name="x" size={16} />
             </button>
           </>

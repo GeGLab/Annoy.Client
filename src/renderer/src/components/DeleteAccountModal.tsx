@@ -4,15 +4,19 @@ import { useState } from "react";
 import { apiFor, removeAccount } from "../client.ts";
 import { toast, useStore } from "../store.ts";
 import { act, closeModal, Field, Modal } from "./ui.tsx";
+import { confirmAction } from "./ui/action-dialog.tsx";
 
 /** Self-service account deletion. */
 export function DeleteAccountModal({ accountId }: { accountId: string }) {
   const user = useStore((s) => s.instances[accountId]?.user);
+  const instanceName = useStore((s) => s.accounts.find((account) => account.id === accountId)?.instanceName ?? "");
   const [confirmText, setConfirmText] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   if (!user) return null;
   const submit = async () => {
+    // Second check: a local account has no copy anywhere else.
+    if (!(await confirmAction(translate("account.localDeleteConfirm", { p0: instanceName })))) return;
     setBusy(true);
     const ok = await act(apiFor(accountId).request("DELETE", "/users/@me", { confirm: confirmText, password: password || undefined }));
     setBusy(false);
@@ -26,6 +30,7 @@ export function DeleteAccountModal({ accountId }: { accountId: string }) {
     <Modal title={translate("common.37642ff749e3")}>
       <div className="form">
         <p className="warning">{translate("common.34bb391049e7")}</p>
+        <p className="warning">{translate("account.localDeleteWarning", { p0: instanceName })}</p>
         <Field label={translate("common.a5c92f994d5e",{p0:(user.username)})}>
           <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={user.username} />
         </Field>

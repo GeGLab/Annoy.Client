@@ -3,6 +3,7 @@ import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, updateVoiceSettings } from "../client.ts";
 import { setState, useStore } from "../store.ts";
+import { deviceChoice, shownDevice } from "../lib/devices.ts";
 import { Icon } from "./ui.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import {
@@ -19,7 +20,8 @@ import {
 export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [open, setOpen] = useState(false);
-  const selected = useStore((s) => (kind === "input" ? s.settings.inputDeviceId : s.settings.outputDeviceId));
+  const savedId = useStore((s) => (kind === "input" ? s.settings.inputDeviceId : s.settings.outputDeviceId));
+  const savedLabel = useStore((s) => (kind === "input" ? s.settings.inputDeviceLabel : s.settings.outputDeviceLabel));
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -48,11 +50,10 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
       <DropdownMenuContent side="top" align="end" className="device-dropdown">
         <DropdownMenuLabel>{kind === "input" ? translate("common.1b9441c4f487") : translate("common.fac2b769ff4a")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
-          value={selected}
+          value={shownDevice(savedId, savedLabel, devices)}
           onValueChange={(value) => {
             setState((s) => {
-              if (kind === "input") s.settings.inputDeviceId = value;
-              else s.settings.outputDeviceId = value;
+              Object.assign(s.settings, deviceChoice(kind, value, devices));
             });
             updateVoiceSettings();
           }}
