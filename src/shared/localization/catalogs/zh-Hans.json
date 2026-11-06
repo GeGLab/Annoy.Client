@@ -2274,5 +2274,9 @@
   "auth.sessionEnded": "服务器已结束你的会话。请重新登录；没有删除任何内容。",
   "servers.syncing": "正在同步你的服务器",
   "servers.syncingHint": "你的 Annoy 账户的服务器稍后会显示在这里。",
-  "servers.syncRetrying": "账户服务没有响应。应用会自动重试，你无需任何操作。"
+  "servers.syncRetrying": "账户服务没有响应。应用会自动重试，你无需任何操作。",
+  "voice.mic.fallback": "所选麦克风未连接。正在使用系统默认麦克风。",
+  "voice.mic.denied": "麦克风访问被拒绝。请在系统设置中允许后重试。",
+  "voice.mic.notFound": "未找到麦克风。请连接一个麦克风或在语音设置中选择其他麦克风。",
+  "voice.mic.busy": "麦克风正被其他程序占用或无法启动。"
 }

@@ -77,16 +77,47 @@ export interface Mic {
   stop(): void;
 }
 
+/** Chromium rejects a saved device that is gone with an OverconstrainedError whose message is empty. */
+const MISSING_DEVICE = new Set(["OverconstrainedError", "NotFoundError"]);
+
+/** Turns getUserMedia failures into readable errors; several arrive with an empty message. */
+function micError(err: unknown): Error {
+  const name = (err as { name?: string } | null)?.name ?? "";
+  if (name === "NotAllowedError" || name === "SecurityError") return new Error(translate("voice.mic.denied"));
+  if (MISSING_DEVICE.has(name)) return new Error(translate("voice.mic.notFound"));
+  if (name === "NotReadableError" || name === "AbortError") return new Error(translate("voice.mic.busy"));
+  const message = (err as { message?: string } | null)?.message;
+  return err instanceof Error && message ? err : new Error(message || name || String(err));
+}
+
+/** Opens the chosen microphone, falling back to the system default when it is no longer connected. */
+async function captureMic(deviceId: string, filter: NoiseFilter): Promise<MediaStream> {
+  const open = (id: string | undefined) =>
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: id ? { exact: id } : undefined,
+        echoCancellation: true,
+        // Our models expect the untouched signal; stacking suppressors smears speech.
+        noiseSuppression: filter === "browser",
+        autoGainControl: true,
+      },
+    });
+  try {
+    return await open(deviceId === "default" ? undefined : deviceId);
+  } catch (err) {
+    if (deviceId === "default" || !MISSING_DEVICE.has((err as { name?: string } | null)?.name ?? "")) throw micError(err);
+  }
+  try {
+    const stream = await open(undefined);
+    toast(translate("voice.mic.fallback"), 8000);
+    return stream;
+  } catch (err) {
+    throw micError(err);
+  }
+}
+
 export async function openMic(deviceId: string, filter: NoiseFilter, filters: MicFilters = DEFAULT_MIC_FILTERS): Promise<Mic> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: deviceId === "default" ? undefined : { exact: deviceId },
-      echoCancellation: true,
-      // Our models expect the untouched signal; stacking suppressors smears speech.
-      noiseSuppression: filter === "browser",
-      autoGainControl: true,
-    },
-  });
+  const stream = await captureMic(deviceId, filter);
   // The models run at 48 kHz, which is also what Opus sends.
   const ctx = new AudioContext({ sampleRate: 48000 });
   const nodes: ModelNode[] = [];

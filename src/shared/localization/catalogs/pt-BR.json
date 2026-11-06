@@ -2274,5 +2274,9 @@
   "auth.sessionEnded": "Sua sessão foi encerrada no servidor. Entre de novo; nada foi apagado.",
   "servers.syncing": "Sincronizando seus servidores",
   "servers.syncingHint": "Os servidores da sua conta Annoy aparecem aqui em instantes.",
-  "servers.syncRetrying": "O serviço de contas não respondeu. O app tenta de novo sozinho; você não precisa fazer nada."
+  "servers.syncRetrying": "O serviço de contas não respondeu. O app tenta de novo sozinho; você não precisa fazer nada.",
+  "voice.mic.fallback": "O microfone escolhido não está conectado. Usando o microfone padrão do sistema.",
+  "voice.mic.denied": "O acesso ao microfone foi negado. Libere nas configurações do sistema e tente de novo.",
+  "voice.mic.notFound": "Nenhum microfone encontrado. Conecte um ou escolha outro nas configurações de voz.",
+  "voice.mic.busy": "O microfone está em uso por outro programa ou não pôde ser iniciado."
 }
