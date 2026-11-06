@@ -735,7 +735,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
     if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
     if (voice?.session === session) leaveVoice();
-    toast(translate("common.5ece26b7ec6d",{p0:((err as Error).message)}));
+    toast(translate("common.5ece26b7ec6d",{p0:(err as Error)?.message||(err as Error)?.name||String(err)}));
   }
 }
 

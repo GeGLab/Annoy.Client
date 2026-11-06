@@ -2246,8 +2246,8 @@
   "news.version": "Version {p0}",
   "news.social.title": "Vos serveurs sur tous vos appareils",
   "news.social.body": "Les serveurs de votre compte Annoy apparaissent sur chaque appareil où vous vous connectez. Ajouter ou retirer un serveur sur un appareil change les autres aussitôt.",
-  "news.login.title": "Session stable",
-  "news.login.body": "Les pannes de réseau ou de service ne vous déconnectent plus et n'effacent rien. Seul « Se déconnecter » termine la session.",
+  "news.login.title": "Rejoindre la voix",
+  "news.login.body": "Si le microphone choisi dans les paramètres n'est pas connecté, l'app utilise le microphone par défaut du système et vous prévient. Les erreurs du microphone indiquent maintenant ce qui s'est passé.",
   "news.voice.title": "Autocollants Annoy",
   "news.voice.body": "Emojis et autocollants Annoy pour tous. Un autocollant est envoyé aussitôt, animé et à sa taille définie.",
   "news.settings.title": "Apparence et texte",
@@ -2274,5 +2274,9 @@
   "auth.sessionEnded": "Votre session a été fermée sur le serveur. Reconnectez-vous ; rien n'a été supprimé.",
   "servers.syncing": "Synchronisation de vos serveurs",
   "servers.syncingHint": "Les serveurs de votre compte Annoy apparaîtront ici dans un instant.",
-  "servers.syncRetrying": "Le service de comptes n'a pas répondu. L'app réessaie toute seule ; vous n'avez rien à faire."
+  "servers.syncRetrying": "Le service de comptes n'a pas répondu. L'app réessaie toute seule ; vous n'avez rien à faire.",
+  "voice.mic.fallback": "Le microphone choisi n'est pas connecté. Utilisation du microphone par défaut du système.",
+  "voice.mic.denied": "L'accès au microphone a été refusé. Autorisez-le dans les paramètres du système et réessayez.",
+  "voice.mic.notFound": "Aucun microphone trouvé. Branchez-en un ou choisissez-en un autre dans les paramètres vocaux.",
+  "voice.mic.busy": "Le microphone est utilisé par un autre programme ou n'a pas pu démarrer."
 }

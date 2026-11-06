@@ -2246,8 +2246,8 @@
   "news.version": "Versão {p0}",
   "news.social.title": "Seus servidores em todos os aparelhos",
   "news.social.body": "Os servidores da sua conta Annoy aparecem em todo aparelho em que você entra. Adicionar ou remover um servidor em um aparelho muda os outros na hora.",
-  "news.login.title": "Sessão estável",
-  "news.login.body": "Falhas de rede ou de serviço não tiram você da conta e não apagam nada. Só o botão Sair encerra a sessão.",
+  "news.login.title": "Entrar na voz",
+  "news.login.body": "Se o microfone escolhido nas configurações não estiver conectado, o app usa o microfone padrão do sistema e avisa. Erros do microfone agora dizem o que aconteceu.",
   "news.voice.title": "Figurinhas do Annoy",
   "news.voice.body": "Emojis e figurinhas do Annoy para todos. A figurinha é enviada na hora, animada e no tamanho definido.",
   "news.settings.title": "Aparência e texto",
@@ -2274,5 +2274,9 @@
   "auth.sessionEnded": "Sua sessão foi encerrada no servidor. Entre de novo; nada foi apagado.",
   "servers.syncing": "Sincronizando seus servidores",
   "servers.syncingHint": "Os servidores da sua conta Annoy aparecem aqui em instantes.",
-  "servers.syncRetrying": "O serviço de contas não respondeu. O app tenta de novo sozinho; você não precisa fazer nada."
+  "servers.syncRetrying": "O serviço de contas não respondeu. O app tenta de novo sozinho; você não precisa fazer nada.",
+  "voice.mic.fallback": "O microfone escolhido não está conectado. Usando o microfone padrão do sistema.",
+  "voice.mic.denied": "O acesso ao microfone foi negado. Libere nas configurações do sistema e tente de novo.",
+  "voice.mic.notFound": "Nenhum microfone encontrado. Conecte um ou escolha outro nas configurações de voz.",
+  "voice.mic.busy": "O microfone está em uso por outro programa ou não pôde ser iniciado."
 }
