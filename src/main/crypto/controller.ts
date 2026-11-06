@@ -3,7 +3,7 @@ import {writeBackupDirectory,readBackupDirectory} from './backup-directory.ts';
 import {createHash,createPrivateKey,createPublicKey,generateKeyPairSync,randomBytes,randomUUID,sign,verify} from 'node:crypto';
 import type {Message,Attachment} from '@distopic/protocol';
 import {parsePayload,type AppPayload} from "./payload.ts";
-import {deviceProof} from "./dpop.ts";
+import {deviceProof,observeServerClock} from "./dpop.ts";
 import {MlsService,expireStoredOutboxes,type MlsMember} from './mls-service.ts';
 import {MediaCalls} from './media-calls.ts';
 import {seal,open,type EncryptedVault} from './vault.ts';
@@ -59,8 +59,8 @@ export class CryptoController {
    headers.set('authorization',(proof?'DPoP ':'Bearer ')+token);if(proof)headers.set('dpop',proof);
    return this.fetcher(new URL(path,url).toString(),{...init,headers,redirect:'error',signal:init.signal??AbortSignal.any([this.abort.signal,AbortSignal.timeout(15000)])});
   };
-  let response=await execute();const nonce=response.headers.get('dpop-nonce');
-  if(response.status===401 && nonce && this.nonces.get(url)?.value!==nonce){await response.body?.cancel();response=await execute(nonce);}
+  let response=await execute();observeServerClock(url,response);const nonce=response.headers.get('dpop-nonce');
+  if(response.status===401 && nonce && (this.nonces.get(url)?.value!==nonce||response.headers.has('date'))){await response.body?.cancel();response=await execute(nonce);}
   return response;
  }
  private async jsonResponse(response:Response):Promise<unknown>{
@@ -116,7 +116,7 @@ export class CryptoController {
  private async bindSession(a:Account):Promise<void>{
   const bindingId='session:'+hash(a.url+'\0'+a.token);if(this.sessionBinding(a.url,a.token))return;
   const id=hash(a.url+'\0'+a.user.id);
-  const info=await this.fetcher(a.url+'/api/info',{signal:AbortSignal.timeout(10000),redirect:'error'}).then(r=>this.jsonResponse(r)) as {crypto:{dpopNonce:string}};
+  const info=await this.fetcher(a.url+'/api/info',{signal:AbortSignal.timeout(10000),redirect:'error'}).then(r=>{observeServerClock(a.url,r);return this.jsonResponse(r);}) as {crypto:{dpopNonce:string}};
   const proof=await deviceProof(a.keys.pub,a.keys.private,a.token,'POST',a.url+'/api/auth/device-bind',info.crypto.dpopNonce);
   await this.request(a.url,a.token,'/auth/device-bind',{deviceId:a.keys.id,proof});
   const bytes=Buffer.from(JSON.stringify({id,url:a.url,deviceId:a.keys.id}));

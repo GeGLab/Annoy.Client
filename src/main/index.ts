@@ -1,3 +1,4 @@
+import {observeServerClock} from "./crypto/dpop.ts";
 import {trustedRenderer} from './trusted-renderer.ts';
 import {secureHttpUrl} from '../shared/transport.ts';
 import {nativeApiFetch} from './native-api-fetch.ts';
@@ -65,7 +66,7 @@ async function authenticatedMainFetch(input:Parameters<typeof fetch>[0],init?:Re
  const execute=async(nonce?:string)=>{const headers=new Headers(original);
   if(token&&url.pathname.startsWith("/api/")&&proofCrypto){const proof=await proofCrypto(url.origin,token,init?.method??"GET",url.pathname+url.search,nonce);if(proof){headers.set("authorization","DPoP "+token);headers.set("dpop",proof);}}
   return nativeApiFetch(input,{...init,headers,redirect:'error'});};
- let response=await execute();const nonce=response.headers.get("dpop-nonce");
+ let response=await execute();observeServerClock(url.origin,response);const nonce=response.headers.get("dpop-nonce");
  if(response.status===401&&token&&nonce&&/^[A-Za-z0-9_-]{43}$/.test(nonce)){await response.body?.cancel();response=await execute(nonce);}
  return response;
 }
