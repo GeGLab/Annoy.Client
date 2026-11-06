@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.10.0-alpha.4",
+  "version": "0.10.0-alpha.5",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
