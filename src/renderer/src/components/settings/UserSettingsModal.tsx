@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
 import { apiFor, applyUserUpdate, removeAccount, updateVoiceSettings } from "../../client.ts";
 import { getState, setState, toast, useStore, type Settings } from "../../store.ts";
-import { deviceChoice, shownDevice } from "../../lib/devices.ts";
+import { deviceChoice, savedDevice, shownDevice } from "../../lib/devices.ts";
 import { applyTheme } from "../../lib/theme.ts";
 import { registerNavigationGuard, requestNavigation } from "../../lib/navigation-guard.ts";
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
@@ -32,7 +32,9 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { UpdateSettings } from "../Updates.tsx";
 import { MediaLibrarySettings } from "../../features/expression/MediaLibrarySettings.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
-import { NOISE_FILTERS, openMic, type Mic, type NoiseFilter } from "../../noise.ts";
+import { NOISE_FILTERS, type NoiseFilter } from "../../noise.ts";
+import { MicGate } from "../../mic.ts";
+import { opusLoopback, type OpusLoopback } from "../../audio/opus-loopback.ts";
 import { HiddenServices } from "../Services.tsx";
 import { screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
@@ -62,37 +64,56 @@ const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u03
 const SLOT = { inputDeviceId: "input", outputDeviceId: "output", cameraDeviceId: "camera" } as const;
 const LABEL = { inputDeviceId: "inputDeviceLabel", outputDeviceId: "outputDeviceLabel", cameraDeviceId: "cameraDeviceLabel" } as const;
 
-function MicMeter({ deviceId, deviceLabel, threshold, filter, filters }: { deviceId: string; deviceLabel: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
+function MicMeter({ settings }: { settings: Settings }) {
   const [enabled, setEnabled] = useState(false);
-  const live = useRef<Mic | null>(null);
-  const latest = useRef(filters);
-  latest.current = filters;
-  // Filter values change live, so tuning them while listening needs no restart.
-  useEffect(() => { live.current?.setFilters(filters); }, [filters]);
+  const live = useRef<MicGate | null>(null);
+  const latest = useRef(settings);
+  latest.current = settings;
+  // Filters, noise filter and microphone apply live, exactly as in a call.
+  useEffect(() => { live.current?.update(settings); }, [settings]);
   const [monitor, setMonitor] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const threshold = settings.inputMode === "vad" ? settings.vadThreshold : 0;
   useEffect(() => {
     if (!enabled) return;
-    let stopped = false,
-      frame = 0;
-    let mic: Mic | null = null;
-    void openMic(deviceId, filter, latest.current, deviceLabel)
-      .then((value) => {
-        if (stopped) return value.stop();
-        mic = value;
-        live.current = value;
-        const analyser = value.ctx.createAnalyser();
-        analyser.fftSize = 512;
-        value.output.connect(analyser);
-        if (monitor) value.output.connect(value.ctx.destination);
-        const bytes = new Uint8Array(analyser.fftSize);
+    let stopped = false, frame = 0;
+    let loopback: OpusLoopback | null = null;
+    const audio = new Audio();
+    // The same capture, filters and voice gate as a call; with "listen", the same Opus encoding too,
+    // played like the others' voices, so you hear what your friends hear.
+    const gate = new MicGate(latest.current, undefined, async (track) => { await loopback?.replace(track); });
+    live.current = gate;
+    const key = (down: boolean) => (event: KeyboardEvent) => { if (event.code === latest.current.pttKey) gate.setPushToTalk(down); };
+    const press = key(true), release = key(false);
+    window.addEventListener("keydown", press);
+    window.addEventListener("keyup", release);
+    void gate.start()
+      .then(async (track) => {
+        if (stopped) return;
+        if (monitor) {
+          loopback = await opusLoopback(track);
+          if (stopped) return loopback.close();
+          audio.srcObject = new MediaStream([loopback.track]);
+          await audio.setSinkId((await savedDevice("output", latest.current)) ?? "").catch(() => undefined);
+          await audio.play();
+        }
+        const buf = new Uint8Array(512);
+        let analyser: AnalyserNode | null = null, source: AudioNode | null = null;
         const loop = () => {
           if (stopped) return;
-          analyser.getByteTimeDomainData(bytes);
-          let peak = 0;
-          for (const byte of bytes) peak = Math.max(peak, Math.abs(byte - 128));
-          setLevel((peak / 128) * 100);
+          // The chain changes when the noise filter or microphone changes.
+          if (gate.output !== source) {
+            source = gate.output;
+            analyser = source ? source.context.createAnalyser() : null;
+            if (analyser && source) { analyser.fftSize = 512; source.connect(analyser); }
+          }
+          if (analyser) {
+            analyser.getByteTimeDomainData(buf);
+            let peak = 0;
+            for (const byte of buf) peak = Math.max(peak, Math.abs(byte - 128));
+            setLevel((peak / 128) * 100);
+          }
           frame = requestAnimationFrame(loop);
         };
         loop();
@@ -104,10 +125,15 @@ function MicMeter({ deviceId, deviceLabel, threshold, filter, filters }: { devic
     return () => {
       stopped = true;
       cancelAnimationFrame(frame);
-      mic?.stop();
+      window.removeEventListener("keydown", press);
+      window.removeEventListener("keyup", release);
+      audio.pause();
+      audio.srcObject = null;
+      loopback?.close();
+      gate.stop();
       live.current = null;
     };
-  }, [enabled, deviceId, filter, monitor]);
+  }, [enabled, monitor]);
   return (
     <>
       <div className="meter">
@@ -496,7 +522,7 @@ export function UserSettingsModal() {
                   <MicFiltersEditor value={draft.micFilters} disabled={saving} onChange={(micFilters) => update({ micFilters })} />
                 </PreferenceCard>
                 <PreferenceCard icon="mic" title={translate("settings.1633f9ec8fb3")} description={translate("settings.c86b8e23e03c")}>
-                <MicMeter deviceId={draft.inputDeviceId} deviceLabel={draft.inputDeviceLabel} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
+                <MicMeter settings={draft} />
                 </PreferenceCard>
               </section>
             )}

@@ -85,9 +85,16 @@ export class CloudflareVoiceSession {
     });
 
     if (this.canSpeak) {
-      this.mic = new MicGate(this.settings, (talking) => this.gw.send({ op: "speaking", speaking: talking }));
+      let sender: RTCRtpSender | null = null;
+      // A new noise filter or microphone mid-call: the same sender carries the new track at once.
+      this.mic = new MicGate(this.settings, (talking) => this.gw.send({ op: "speaking", speaking: talking }), async (next) => {
+        this.capturedTracks.add(next);
+        const previous = sender?.track;
+        await sender?.replaceTrack(next);
+        if (previous) this.capturedTracks.delete(previous);
+      });
       const track = await this.mic.start();
-      await this.publish(track, "audio", "mic", undefined, OPUS_VOICE);
+      sender = (await this.publish(track, "audio", "mic", undefined, OPUS_VOICE)).transceiver.sender;
     }
     const { producers } = await this.gw.voice<{ producers: { producerId: string; userId: string; source: MediaSource }[] }>("getProducers");
     for (const p of producers) await this.offer(p.producerId, p.userId, p.source, false);

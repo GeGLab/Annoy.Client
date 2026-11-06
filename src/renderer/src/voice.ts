@@ -163,7 +163,8 @@ export class VoiceSession {
   }
 
   private async startMic(): Promise<void> {
-    this.micGate = new MicGate(this.settings);
+    // A new noise filter or microphone mid-call: the producer sends the new track at once.
+    this.micGate = new MicGate(this.settings, undefined, (track) => this.producer?.replaceTrack({ track }));
     const track = await this.micGate.start();
     if (this.closed) { track.stop(); return; }
     const producer = await this.send!.produce({

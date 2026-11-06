@@ -3,7 +3,7 @@ import { openMic, type Mic } from "../noise.ts";
 import type { DirectCall, GatewayEvent, ClientOp } from "@annoy/protocol";
 import { useSyncExternalStore } from "react";
 import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
-import { getState, setState, toast } from "../store.ts";
+import { getState, setState, toast, type Settings } from "../store.ts";
 import { savedDevice } from "../lib/devices.ts";
 import { playCallFeedback } from "../lib/voice-feedback.ts";
 import { deviceId } from "../lib/device-id.ts";
@@ -44,6 +44,9 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
 let peer: RTCPeerConnection | null = null, sessionId: string | null = null;
 let callMic: Mic | null = null;
+/** Settings the call's microphone was opened with; a new noise filter or device reopens it at once. */
+let callMicSettings: Settings | null = null;
+let callMicReopening = false;
 let preparing: Promise<RTCPeerConnection> | null = null;
 let candidates: RTCIceCandidateInit[] = [];
 export const useDirectCallMedia = () => useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => media);
@@ -51,7 +54,7 @@ export const useDirectCallMedia = () => useSyncExternalStore((listener) => { lis
 function cleanup() {
   sessionId = null; preparing = null; candidates = [];
   const connection = peer; peer = null; connection?.close();
-  callMic?.stop(); callMic = null;
+  callMic?.stop(); callMic = null; callMicSettings = null;
   media.local?.getTracks().forEach((track) => track.stop());
   media.remote?.getTracks().forEach((track) => track.stop());
   media = { local: null, remote: null, connected: false }; emit();
@@ -127,7 +130,7 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
     const settings = getState().settings;
     const mic = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters, settings.inputDeviceLabel);
     if (sessionId !== call.id) { mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
-    callMic = mic;
+    callMic = mic; callMicSettings = settings;
     const stream = new MediaStream([mic.track]);
     if (call.video) {
       const cameraId = await savedDevice("camera", settings);
@@ -148,6 +151,30 @@ export function updateDirectCallMute() {
   const settings = getState().settings;
   media.local?.getAudioTracks().forEach((track) => { track.enabled = !settings.selfMute && !settings.selfDeaf; });
   callMic?.setFilters(settings.micFilters);
+  if (callMic && callMicSettings && micChanged(callMicSettings, settings) && !callMicReopening) void reopenCallMic();
+}
+const micChanged = (a: Settings, b: Settings) => a.noiseFilter !== b.noiseFilter || a.inputDeviceId !== b.inputDeviceId || a.inputDeviceLabel !== b.inputDeviceLabel;
+/** Opens the new capture, swaps it into the call without renegotiating, then closes the old one. */
+async function reopenCallMic(): Promise<void> {
+  callMicReopening = true;
+  const session = sessionId;
+  try {
+    const settings = getState().settings;
+    const next = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters, settings.inputDeviceLabel);
+    if (session !== sessionId || !peer || !callMic) { next.stop(); return; }
+    next.track.enabled = !settings.selfMute && !settings.selfDeaf;
+    await peer.getSenders().find((sender) => sender.track?.kind === "audio")?.replaceTrack(next.track);
+    const old = callMic;
+    callMic = next; callMicSettings = settings;
+    media = { ...media, local: new MediaStream([next.track, ...(media.local?.getVideoTracks() ?? [])]) }; emit();
+    old.stop();
+  } catch (error) {
+    console.warn("call microphone reopen failed", error);
+  } finally {
+    callMicReopening = false;
+  }
+  // Changed again while the new capture was opening.
+  if (session === sessionId && callMic && callMicSettings && micChanged(callMicSettings, getState().settings)) void reopenCallMic();
 }
 export async function handleDirectCallEvent(accountId: string, event: Extract<GatewayEvent, { t: "CALL_UPDATE" | "CALL_SIGNAL" }>) {
   try {
