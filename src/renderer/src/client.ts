@@ -7,6 +7,7 @@ import { previewText } from "./format.tsx";
 import { Gateway, type RecoveryEvent } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
 import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
+import { savedDevice } from "./lib/devices.ts";
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
 import { CloudflareVoiceSession } from "./voice-cloudflare.ts";
@@ -812,7 +813,7 @@ export async function toggleCamera(): Promise<void> {
   if (!session) return;
   try {
     if (session.isSharing("camera")) await session.stopVideo("camera");
-    else await session.startVideo("camera", getState().settings.cameraDeviceId);
+    else await session.startVideo("camera", (await savedDevice("camera")) ?? "default");
   } catch (err) {
     toast(translate("common.c88e21593233",{p0:((err as Error).message)}));
   }

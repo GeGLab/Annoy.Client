@@ -2275,7 +2275,6 @@
   "servers.syncing": "Synchronisation de vos serveurs",
   "servers.syncingHint": "Les serveurs de votre compte Annoy apparaîtront ici dans un instant.",
   "servers.syncRetrying": "Le service de comptes n'a pas répondu. L'app réessaie toute seule ; vous n'avez rien à faire.",
-  "voice.mic.fallback": "Le microphone choisi n'est pas connecté. Utilisation du microphone par défaut du système.",
   "voice.mic.denied": "L'accès au microphone a été refusé. Autorisez-le dans les paramètres du système et réessayez.",
   "voice.mic.notFound": "Aucun microphone trouvé. Branchez-en un ou choisissez-en un autre dans les paramètres vocaux.",
   "voice.mic.busy": "Le microphone est utilisé par un autre programme ou n'a pas pu démarrer."

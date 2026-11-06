@@ -3,6 +3,7 @@ import {t as translate,onLocalizationChange} from "../../shared/localization/ind
 // sessions and the settings meter. Everything runs locally in AudioWorklets;
 // no audio leaves the machine before the filters.
 import { toast } from "./store.ts";
+import { resolveDevice } from "./lib/devices.ts";
 import { GtcrnWorkletNode, loadGtcrn, loadRnnoise, loadSpeex, RnnoiseWorkletNode, SpeexWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import gtcrnWasm from "@sapphi-red/web-noise-suppressor/gtcrn.wasm?url";
 import gtcrnWorklet from "@sapphi-red/web-noise-suppressor/gtcrnWorklet.js?url";
@@ -77,7 +78,7 @@ export interface Mic {
   stop(): void;
 }
 
-/** Chromium rejects a saved device that is gone with an OverconstrainedError whose message is empty. */
+/** Chromium rejects a device that is gone with an OverconstrainedError whose message is empty. */
 const MISSING_DEVICE = new Set(["OverconstrainedError", "NotFoundError"]);
 
 /** Turns getUserMedia failures into readable errors; several arrive with an empty message. */
@@ -90,8 +91,8 @@ function micError(err: unknown): Error {
   return err instanceof Error && message ? err : new Error(message || name || String(err));
 }
 
-/** Opens the chosen microphone, falling back to the system default when it is no longer connected. */
-async function captureMic(deviceId: string, filter: NoiseFilter): Promise<MediaStream> {
+/** Opens the saved microphone, or the system default while it is not connected. */
+async function captureMic(deviceId: string, deviceLabel: string, filter: NoiseFilter): Promise<MediaStream> {
   const open = (id: string | undefined) =>
     navigator.mediaDevices.getUserMedia({
       audio: {
@@ -102,22 +103,22 @@ async function captureMic(deviceId: string, filter: NoiseFilter): Promise<MediaS
         autoGainControl: true,
       },
     });
+  const id = await resolveDevice("input", deviceId, deviceLabel);
   try {
-    return await open(deviceId === "default" ? undefined : deviceId);
+    return await open(id);
   } catch (err) {
-    if (deviceId === "default" || !MISSING_DEVICE.has((err as { name?: string } | null)?.name ?? "")) throw micError(err);
+    // Unplugged between the lookup and the capture: the default device, as when it is not connected.
+    if (!id || !MISSING_DEVICE.has((err as { name?: string } | null)?.name ?? "")) throw micError(err);
   }
   try {
-    const stream = await open(undefined);
-    toast(translate("voice.mic.fallback"), 8000);
-    return stream;
+    return await open(undefined);
   } catch (err) {
     throw micError(err);
   }
 }
 
-export async function openMic(deviceId: string, filter: NoiseFilter, filters: MicFilters = DEFAULT_MIC_FILTERS): Promise<Mic> {
-  const stream = await captureMic(deviceId, filter);
+export async function openMic(deviceId: string, filter: NoiseFilter, filters: MicFilters = DEFAULT_MIC_FILTERS, deviceLabel = ""): Promise<Mic> {
+  const stream = await captureMic(deviceId, deviceLabel, filter);
   // The models run at 48 kHz, which is also what Opus sends.
   const ctx = new AudioContext({ sampleRate: 48000 });
   const nodes: ModelNode[] = [];

@@ -2275,7 +2275,6 @@
   "servers.syncing": "Sincronizzazione dei tuoi server",
   "servers.syncingHint": "I server del tuo account Annoy compariranno qui tra poco.",
   "servers.syncRetrying": "Il servizio account non ha risposto. L'app riprova da sola; non devi fare nulla.",
-  "voice.mic.fallback": "Il microfono scelto non è collegato. Viene usato il microfono predefinito del sistema.",
   "voice.mic.denied": "L'accesso al microfono è stato negato. Consentilo nelle impostazioni di sistema e riprova.",
   "voice.mic.notFound": "Nessun microfono trovato. Collegane uno o scegline un altro nelle impostazioni vocali.",
   "voice.mic.busy": "Il microfono è in uso da un altro programma o non è stato possibile avviarlo."

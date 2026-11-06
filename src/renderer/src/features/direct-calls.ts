@@ -4,6 +4,7 @@ import type { DirectCall, GatewayEvent, ClientOp } from "@distopic/protocol";
 import { useSyncExternalStore } from "react";
 import { apiFor, gatewayFor, leaveVoice } from "../client.ts";
 import { getState, setState, toast } from "../store.ts";
+import { savedDevice } from "../lib/devices.ts";
 import { playCallFeedback } from "../lib/voice-feedback.ts";
 import { deviceId } from "../lib/device-id.ts";
 import { CLOUD_ACCOUNT } from "../social/types.ts";
@@ -124,12 +125,13 @@ function prepare(accountId: string, call: DirectCall): Promise<RTCPeerConnection
   };
   preparing = (async () => {
     const settings = getState().settings;
-    const mic = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters);
+    const mic = await openMic(settings.inputDeviceId, settings.noiseFilter, settings.micFilters, settings.inputDeviceLabel);
     if (sessionId !== call.id) { mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
     callMic = mic;
     const stream = new MediaStream([mic.track]);
     if (call.video) {
-      const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(settings.cameraDeviceId !== "default" && { deviceId: { exact: settings.cameraDeviceId } }) } });
+      const cameraId = await savedDevice("camera", settings);
+      const camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, ...(cameraId && { deviceId: { exact: cameraId } }) } });
       if (sessionId !== call.id) { camera.getTracks().forEach((track) => track.stop()); mic.stop(); throw new Error(translate("common.b868f5fbf270")); }
       camera.getVideoTracks().forEach((track) => stream.addTrack(track));
     }

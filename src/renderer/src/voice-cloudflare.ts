@@ -12,6 +12,7 @@ import { toast, type Settings } from "./store.ts";
 import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
 import { playbackVolume, volumeKindOf } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
+import { savedDevice } from "./lib/devices.ts";
 
 interface Remote {
   source: MediaSource;
@@ -354,7 +355,7 @@ export class CloudflareVoiceSession {
 
   private async applySink(audio: HTMLAudioElement): Promise<void> {
     try {
-      await audio.setSinkId(this.settings.outputDeviceId === "default" ? "" : this.settings.outputDeviceId);
+      await audio.setSinkId((await savedDevice("output", this.settings)) ?? "");
     } catch {
       // Device disappeared; keep the current output.
     }

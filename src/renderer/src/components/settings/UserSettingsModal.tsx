@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
 import { apiFor, applyUserUpdate, removeAccount, updateVoiceSettings } from "../../client.ts";
 import { getState, setState, toast, useStore, type Settings } from "../../store.ts";
+import { deviceChoice, shownDevice } from "../../lib/devices.ts";
 import { applyTheme } from "../../lib/theme.ts";
 import { registerNavigationGuard, requestNavigation } from "../../lib/navigation-guard.ts";
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
@@ -58,7 +59,10 @@ let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(localizationPreferences().region);
 
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
-function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
+const SLOT = { inputDeviceId: "input", outputDeviceId: "output", cameraDeviceId: "camera" } as const;
+const LABEL = { inputDeviceId: "inputDeviceLabel", outputDeviceId: "outputDeviceLabel", cameraDeviceId: "cameraDeviceLabel" } as const;
+
+function MicMeter({ deviceId, deviceLabel, threshold, filter, filters }: { deviceId: string; deviceLabel: string; threshold: number; filter: NoiseFilter; filters: MicFilters }) {
   const [enabled, setEnabled] = useState(false);
   const live = useRef<Mic | null>(null);
   const latest = useRef(filters);
@@ -73,7 +77,7 @@ function MicMeter({ deviceId, threshold, filter, filters }: { deviceId: string; 
     let stopped = false,
       frame = 0;
     let mic: Mic | null = null;
-    void openMic(deviceId, filter, latest.current)
+    void openMic(deviceId, filter, latest.current, deviceLabel)
       .then((value) => {
         if (stopped) return value.stop();
         mic = value;
@@ -358,7 +362,7 @@ export function UserSettingsModal() {
     key: "inputDeviceId" | "outputDeviceId" | "cameraDeviceId",
   ) => (
     <Field label={label}>
-      <Select aria-label={label} value={value} onChange={(event) => update({ [key]: event.target.value })} disabled={saving}>
+      <Select aria-label={label} value={shownDevice(value, draft[LABEL[key]], devices.filter((d) => d.kind === kind))} onChange={(event) => update(deviceChoice(SLOT[key], event.target.value, devices))} disabled={saving}>
         <option value="default">{translate("common.f48584be4417")}</option>
         {devices
           .filter((d) => d.kind === kind && d.deviceId !== "default")
@@ -545,7 +549,7 @@ export function UserSettingsModal() {
                   <MicFiltersEditor value={draft.micFilters} disabled={saving} onChange={(micFilters) => update({ micFilters })} />
                 </PreferenceCard>
                 <PreferenceCard icon="mic" title={translate("settings.1633f9ec8fb3")} description={translate("settings.c86b8e23e03c")}>
-                <MicMeter deviceId={draft.inputDeviceId} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
+                <MicMeter deviceId={draft.inputDeviceId} deviceLabel={draft.inputDeviceLabel} threshold={draft.inputMode === "vad" ? draft.vadThreshold : 0} filter={draft.noiseFilter} filters={draft.micFilters} />
                 </PreferenceCard>
               </section>
             )}

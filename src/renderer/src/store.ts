@@ -132,6 +132,10 @@ export interface Settings extends LocalizationPreferences {
   inputDeviceId: string;
   outputDeviceId: string;
   cameraDeviceId: string;
+  /** Device names saved with the IDs above; IDs change, names find the same device again. */
+  inputDeviceLabel: string;
+  outputDeviceLabel: string;
+  cameraDeviceLabel: string;
   selfMute: boolean;
   selfDeaf: boolean;
   notifications: boolean;
@@ -238,6 +242,9 @@ const DEFAULT_SETTINGS: Settings = {
   inputDeviceId: "default",
   outputDeviceId: "default",
   cameraDeviceId: "default",
+  inputDeviceLabel: "",
+  outputDeviceLabel: "",
+  cameraDeviceLabel: "",
   selfMute: false,
   selfDeaf: false,
   notifications: true,

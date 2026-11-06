@@ -10,6 +10,7 @@ import { Button } from "./ui/button.tsx";
 import { UserVolumeControl } from "./UserVolumeControl.tsx";
 import { userVolume } from "../../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "../lib/remote-audio.ts";
+import { savedDevice } from "../lib/devices.ts";
 import { CLOUD_ACCOUNT } from "../social/types.ts";
 import { cloudUser } from "./social/SocialHome.tsx";
 
@@ -60,7 +61,7 @@ export function DirectCallPanel() {
     const stream = amplified.current.stream;
     let active = true;
     element.muted = settings.selfDeaf;
-    const sink = "setSinkId" in element ? element.setSinkId(settings.outputDeviceId === "default" ? "" : settings.outputDeviceId).catch(() => undefined) : Promise.resolve();
+    const sink = "setSinkId" in element ? savedDevice("output", settings).then((id) => element.setSinkId(id ?? "")).catch(() => undefined) : Promise.resolve();
     void sink.then(() => { if (active && element.srcObject === stream) void element.play().catch(() => undefined); });
     return () => { active = false; };
   }, [audioTracks, entry?.call.id, settings.selfDeaf, settings.outputDeviceId]);
