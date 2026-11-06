@@ -2277,5 +2277,7 @@
   "servers.syncRetrying": "账户服务没有响应。应用会自动重试，你无需任何操作。",
   "voice.mic.denied": "麦克风访问被拒绝。请在系统设置中允许后重试。",
   "voice.mic.notFound": "未找到麦克风。请连接一个麦克风或在语音设置中选择其他麦克风。",
-  "voice.mic.busy": "麦克风正被其他程序占用或无法启动。"
+  "voice.mic.busy": "麦克风正被其他程序占用或无法启动。",
+  "voice.streamWindow": "在单独窗口中打开",
+  "voice.streamWindowTitle": "{p0}的直播"
 }

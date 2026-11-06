@@ -2277,5 +2277,7 @@
   "servers.syncRetrying": "The account service did not answer. The app tries again on its own; you don't need to do anything.",
   "voice.mic.denied": "Microphone access was denied. Allow it in the system settings and try again.",
   "voice.mic.notFound": "No microphone found. Connect one or choose another in the voice settings.",
-  "voice.mic.busy": "The microphone is in use by another program or could not be started."
+  "voice.mic.busy": "The microphone is in use by another program or could not be started.",
+  "voice.streamWindow": "Open in separate window",
+  "voice.streamWindowTitle": "{p0}'s stream"
 }

@@ -2277,5 +2277,7 @@
   "servers.syncRetrying": "Il servizio account non ha risposto. L'app riprova da sola; non devi fare nulla.",
   "voice.mic.denied": "L'accesso al microfono è stato negato. Consentilo nelle impostazioni di sistema e riprova.",
   "voice.mic.notFound": "Nessun microfono trovato. Collegane uno o scegline un altro nelle impostazioni vocali.",
-  "voice.mic.busy": "Il microfono è in uso da un altro programma o non è stato possibile avviarlo."
+  "voice.mic.busy": "Il microfono è in uso da un altro programma o non è stato possibile avviarlo.",
+  "voice.streamWindow": "Apri in una finestra separata",
+  "voice.streamWindowTitle": "Trasmissione di {p0}"
 }

@@ -334,9 +334,28 @@ function createWindow(): void {
       backgroundThrottling: false,
     },
   });
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // A screen share in its own window: the renderer fills this blank page with the video.
+    if (url === "about:blank" && frameName.startsWith("annoy-stream:")) {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 1280,
+          height: 720,
+          backgroundColor: "#000000",
+          autoHideMenuBar: true,
+          icon: appIcon.path(),
+          webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
+        },
+      };
+    }
     openExternal(url);
     return { action: "deny" };
+  });
+  win.webContents.on("did-create-window", (child) => {
+    child.setMenu(null);
+    child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    child.webContents.on("will-navigate", (event) => event.preventDefault());
   });
   win.webContents.on("will-navigate", (event, url) => {
     if (url !== win?.webContents.getURL()) {
