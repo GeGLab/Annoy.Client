@@ -2302,5 +2302,7 @@
   "social.audienceCommunity": "Anyone with an Annoy account",
   "social.historyHelp": "Off at first. After you save your consent, it keeps up to three finished sessions for up to 30 days, visible to you and your friends. Turning it off deletes the history. Files, projects and local paths are never recorded.",
   "activity.annoySteamTitle": "Steam · Annoy account",
-  "activity.annoySteamHelp": "Connect your account in the browser to complement local detection. Your password stays with Steam. The link belongs to your Annoy account, on every server."
+  "activity.annoySteamHelp": "Connect your account in the browser to complement local detection. Your password stays with Steam. The link belongs to your Annoy account, on every server.",
+  "account.localDeleteWarning": "This is a local account on {p0}, with no Annoy account. Its data cannot be recovered afterwards.",
+  "account.localDeleteConfirm": "Delete the local account on {p0}? The data cannot be recovered."
 }

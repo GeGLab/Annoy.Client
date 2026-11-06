@@ -2302,5 +2302,7 @@
   "social.audienceCommunity": "Cualquier persona con cuenta Annoy",
   "social.historyHelp": "Desactivado al principio. Después de guardar el consentimiento, guarda hasta tres sesiones terminadas durante hasta 30 días, visibles para ti y tus amigos. Desactivarlo borra el historial. Los archivos, proyectos y rutas locales no se registran.",
   "activity.annoySteamTitle": "Steam · Cuenta Annoy",
-  "activity.annoySteamHelp": "Conecta tu cuenta en el navegador para complementar la detección local. Tu contraseña queda en Steam. El vínculo es de tu cuenta Annoy, en todos los servidores."
+  "activity.annoySteamHelp": "Conecta tu cuenta en el navegador para complementar la detección local. Tu contraseña queda en Steam. El vínculo es de tu cuenta Annoy, en todos los servidores.",
+  "account.localDeleteWarning": "Esta es una cuenta local de {p0}, sin cuenta Annoy. No será posible recuperar los datos después.",
+  "account.localDeleteConfirm": "¿Eliminar la cuenta local de {p0}? Los datos no se podrán recuperar."
 }

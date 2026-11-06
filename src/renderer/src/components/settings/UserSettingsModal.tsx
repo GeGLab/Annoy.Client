@@ -135,58 +135,6 @@ function MicMeter({ deviceId, deviceLabel, threshold, filter, filters }: { devic
   );
 }
 
-function AccountActions({ accountId, busy }: { accountId: string; busy: boolean }) {
-  const requests = useRequestOwner(accountId);
-  const account = useStore((s) => s.accounts.find((a) => a.id === accountId));
-  const [discord, setDiscord] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  useEffect(() => {
-    if (!account) return;
-    const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, requests.signal]);
-    void fetchInfo(account.url, signal).then((info) => { signal.throwIfAborted(); setDiscord(info.discordLogin); })
-      .catch((error) => { if (!isCancellation(error)) setDiscord(false); });
-    return () => controller.abort();
-  }, [account?.url]);
-  const sync = async () => {
-    if (!account || syncing) return;
-    const signal = requests.signal;
-    setSyncing(true);
-    try {
-      await discordLogin(
-        account.url,
-        () => apiFor(accountId).post<DiscordLoginBegin>("/auth/discord/begin", { link: true }, signal),
-        signal,
-      );
-      signal.throwIfAborted();
-      toast(translate("settings.c20a38d028a4"));
-    } catch (error) {
-      if (!isCancellation(error)) toast((error as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  };
-  return (
-    <div className="account-actions">
-      {discord && (
-        <Button variant="secondary" size="sm" disabled={busy} loading={syncing} onClick={() => requestNavigation(() => void sync())}>{translate("settings.70aae5a6660f")}</Button>
-      )}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={busy}
-        onClick={() =>
-          requestNavigation(async () => {
-            if (await confirmAction(translate("common.4acd3c09c649",{p0:(account?.instanceName)}))) removeAccount(accountId, "signOut");
-          })
-        }
-      >{translate("settings.b73f3ff34b4b")}</Button>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => openModal({ kind: "deleteAccount", accountId })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
-    </div>
-  );
-}
-
-
 export function UserSettingsModal() {
   const requests = useRequestOwner("user-settings");
   const [page, setPage] = useState(() => {
@@ -451,29 +399,23 @@ export function UserSettingsModal() {
                     <div className="account-actions global-account-actions">
                       <a className="ui-button ui-button-secondary ui-button-sm" href={`${accountWebsite()}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
                       <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</Button>
+                      <a className="ui-button ui-button-ghost ui-button-sm" href={`${accountWebsite()}/conta#excluir`} target="_blank" rel="noreferrer">{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</a>
                     </div>
                     <CloudProfileEditor />
                   </div>
                 )}
-                {shownAccounts.map((account) => {
+                {/* User settings hold only Annoy-account things. Servers signed in with the Annoy
+                    account are left in the server menu ("Sair do servidor"). A local account (no Annoy
+                    account) only has "Excluir conta" here. */}
+                {shownAccounts.filter((account) => !account.annoy).map((account) => {
                   const user = instances[account.id]?.user;
                   return (
                     user && (
-                      <div className="settings-account" key={account.id}>
-                        {account.annoy && annoy && <p className="annoy-account-row"><span className="account-badge" title={translate("common.cb4b27522bb8")}>{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span><span className="muted">{annoy.email}</span><button type="button" className="link-button" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</button></p>}
-                        {/* Signed in with the Annoy account: the profile is the Annoy one above; the server only shows it. */}
-                        {account.annoy && annoy ? (
-                          <p className="annoy-server-account"><strong>{account.instanceName}</strong> <span className="muted small">@{user.username} · {account.url}</span></p>
-                        ) : (
-                          <ProfileEditor
-                            account={account}
-                            user={user}
-                            draft={profiles[account.id] ?? { displayName: user.displayName }}
-                            onChange={(value) => setProfiles((current) => ({ ...current, [account.id]: value }))}
-                            disabled={saving}
-                          />
-                        )}
-                        <AccountActions accountId={account.id} busy={saving} />
+                      <div className="settings-account local-account" key={account.id}>
+                        <p><strong>{account.instanceName}</strong> <span className="muted small">@{user.username} · {account.url}</span></p>
+                        <div className="account-actions">
+                          <Button variant="ghost" size="sm" disabled={saving} onClick={() => openModal({ kind: "deleteAccount", accountId: account.id })}>{rich("common.87f77d3d21b7",{p0:(<Icon name="trash" size={14} />)})}</Button>
+                        </div>
                       </div>
                     )
                   );

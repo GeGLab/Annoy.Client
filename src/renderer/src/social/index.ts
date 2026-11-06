@@ -143,6 +143,16 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       sendWatch();
       for (const handler of callHandlers) handler(event);
       return;
+    // The other person deleted their Annoy account: the conversation is gone.
+    case "DM_REMOVE": {
+      const dmId = String(event.d.dmId ?? "");
+      setSocial((s) => {
+        s.dms = s.dms.filter((d) => d.id !== dmId);
+        delete s.threads[dmId];
+        delete s.unread[dmId];
+      });
+      return;
+    }
     case "DM_CREATE":
     case "DM_UPDATE":
       setSocial((s) => {

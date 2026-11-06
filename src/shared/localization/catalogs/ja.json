@@ -2302,5 +2302,7 @@
   "social.audienceCommunity": "Annoy アカウントを持つ全員",
   "social.historyHelp": "最初はオフです。同意を保存すると、終了したセッションを最大 3 件、最長 30 日間保存し、あなたとフレンドに表示されます。オフにすると履歴は削除されます。ファイル、プロジェクト、ローカルパスは記録されません。",
   "activity.annoySteamTitle": "Steam · Annoy アカウント",
-  "activity.annoySteamHelp": "ブラウザでアカウントを接続し、ローカル検出を補います。パスワードは Steam に残ります。連携は Annoy アカウントに属し、すべてのサーバーで使われます。"
+  "activity.annoySteamHelp": "ブラウザでアカウントを接続し、ローカル検出を補います。パスワードは Steam に残ります。連携は Annoy アカウントに属し、すべてのサーバーで使われます。",
+  "account.localDeleteWarning": "これは {p0} のローカルアカウントで、Annoy アカウントではありません。削除後はデータを復元できません。",
+  "account.localDeleteConfirm": "{p0} のローカルアカウントを削除しますか？データは復元できません。"
 }

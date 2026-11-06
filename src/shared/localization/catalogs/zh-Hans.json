@@ -2302,5 +2302,7 @@
   "social.audienceCommunity": "任何拥有 Annoy 账户的人",
   "social.historyHelp": "默认关闭。保存同意后，最多保留三个已结束的会话，最长 30 天，你和你的好友可见。关闭会删除历史记录。文件、项目和本地路径不会被记录。",
   "activity.annoySteamTitle": "Steam · Annoy 账户",
-  "activity.annoySteamHelp": "在浏览器中连接你的账户，以补充本地检测。你的密码留在 Steam。此关联属于你的 Annoy 账户，适用于所有服务器。"
+  "activity.annoySteamHelp": "在浏览器中连接你的账户，以补充本地检测。你的密码留在 Steam。此关联属于你的 Annoy 账户，适用于所有服务器。",
+  "account.localDeleteWarning": "这是 {p0} 上的本地账户，没有 Annoy 账户。之后将无法恢复数据。",
+  "account.localDeleteConfirm": "删除 {p0} 上的本地账户？数据将无法恢复。"
 }
