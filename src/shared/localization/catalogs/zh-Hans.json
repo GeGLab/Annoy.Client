@@ -2279,5 +2279,10 @@
   "voice.mic.notFound": "未找到麦克风。请连接一个麦克风或在语音设置中选择其他麦克风。",
   "voice.mic.busy": "麦克风正被其他程序占用或无法启动。",
   "voice.streamWindow": "在单独窗口中打开",
-  "voice.streamWindowTitle": "{p0}的直播"
+  "voice.streamWindowTitle": "{p0}的直播",
+  "expression.gifFavorites": "收藏",
+  "expression.gifFavorite": "添加到收藏",
+  "expression.gifUnfavorite": "从收藏中移除",
+  "expression.gifFavoritesEmpty": "没有收藏的 GIF",
+  "expression.gifFavoritesHint": "点击 GIF 上的星标即可保存到这里。"
 }

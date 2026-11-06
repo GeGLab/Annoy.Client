@@ -2279,5 +2279,10 @@
   "voice.mic.notFound": "No se encontró ningún micrófono. Conecte uno o elija otro en la configuración de voz.",
   "voice.mic.busy": "El micrófono está en uso por otro programa o no se pudo iniciar.",
   "voice.streamWindow": "Abrir en ventana separada",
-  "voice.streamWindowTitle": "Transmisión de {p0}"
+  "voice.streamWindowTitle": "Transmisión de {p0}",
+  "expression.gifFavorites": "Favoritos",
+  "expression.gifFavorite": "Añadir a favoritos",
+  "expression.gifUnfavorite": "Quitar de favoritos",
+  "expression.gifFavoritesEmpty": "Ningún GIF favorito",
+  "expression.gifFavoritesHint": "Haga clic en la estrella de un GIF para guardarlo aquí."
 }

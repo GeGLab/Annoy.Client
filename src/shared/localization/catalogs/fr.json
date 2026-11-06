@@ -2279,5 +2279,10 @@
   "voice.mic.notFound": "Aucun microphone trouvé. Branchez-en un ou choisissez-en un autre dans les paramètres vocaux.",
   "voice.mic.busy": "Le microphone est utilisé par un autre programme ou n'a pas pu démarrer.",
   "voice.streamWindow": "Ouvrir dans une fenêtre séparée",
-  "voice.streamWindowTitle": "Diffusion de {p0}"
+  "voice.streamWindowTitle": "Diffusion de {p0}",
+  "expression.gifFavorites": "Favoris",
+  "expression.gifFavorite": "Ajouter aux favoris",
+  "expression.gifUnfavorite": "Retirer des favoris",
+  "expression.gifFavoritesEmpty": "Aucun GIF favori",
+  "expression.gifFavoritesHint": "Cliquez sur l'étoile d'un GIF pour le garder ici."
 }

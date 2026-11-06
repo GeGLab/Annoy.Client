@@ -2279,5 +2279,10 @@
   "voice.mic.notFound": "マイクが見つかりません。マイクを接続するか、音声設定で別のマイクを選択してください。",
   "voice.mic.busy": "マイクが別のプログラムで使用中か、起動できませんでした。",
   "voice.streamWindow": "別ウィンドウで開く",
-  "voice.streamWindowTitle": "{p0}の配信"
+  "voice.streamWindowTitle": "{p0}の配信",
+  "expression.gifFavorites": "お気に入り",
+  "expression.gifFavorite": "お気に入りに追加",
+  "expression.gifUnfavorite": "お気に入りから削除",
+  "expression.gifFavoritesEmpty": "お気に入りのGIFはありません",
+  "expression.gifFavoritesHint": "GIFの星をクリックするとここに保存されます。"
 }
