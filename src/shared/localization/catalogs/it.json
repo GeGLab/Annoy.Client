@@ -2284,5 +2284,15 @@
   "expression.gifFavorite": "Aggiungi ai preferiti",
   "expression.gifUnfavorite": "Rimuovi dai preferiti",
   "expression.gifFavoritesEmpty": "Nessuna GIF preferita",
-  "expression.gifFavoritesHint": "Fai clic sulla stella di una GIF per tenerla qui."
+  "expression.gifFavoritesHint": "Fai clic sulla stella di una GIF per tenerla qui.",
+  "expression.serverStickerFrom": "Sticker di {p0}",
+  "settings.stickers.tab": "Sticker",
+  "settings.stickers.hint": "I membri possono inviare questi sticker ovunque; mostrano il nome di questo server.",
+  "settings.stickers.count": "{p0} di {p1} sticker.",
+  "settings.stickers.name": "Nome",
+  "settings.stickers.image": "Immagine (PNG, WebP o GIF, fino a 8 MB)",
+  "settings.stickers.add": "Aggiungi",
+  "settings.stickers.full": "Questo server ha raggiunto il limite di {p0} sticker.",
+  "settings.stickers.remove": "Rimuovi sticker",
+  "settings.stickers.removeConfirm": "Rimuovere lo sticker \"{p0}\"?"
 }

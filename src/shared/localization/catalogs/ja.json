@@ -2284,5 +2284,15 @@
   "expression.gifFavorite": "お気に入りに追加",
   "expression.gifUnfavorite": "お気に入りから削除",
   "expression.gifFavoritesEmpty": "お気に入りのGIFはありません",
-  "expression.gifFavoritesHint": "GIFの星をクリックするとここに保存されます。"
+  "expression.gifFavoritesHint": "GIFの星をクリックするとここに保存されます。",
+  "expression.serverStickerFrom": "{p0}のスタンプ",
+  "settings.stickers.tab": "スタンプ",
+  "settings.stickers.hint": "メンバーはこれらのスタンプをどこでも送れます。このサーバーの名前が表示されます。",
+  "settings.stickers.count": "{p0} / {p1} 個のスタンプ。",
+  "settings.stickers.name": "名前",
+  "settings.stickers.image": "画像（PNG、WebP、GIF、8 MB まで）",
+  "settings.stickers.add": "追加",
+  "settings.stickers.full": "このサーバーはスタンプの上限 {p0} 個に達しました。",
+  "settings.stickers.remove": "スタンプを削除",
+  "settings.stickers.removeConfirm": "スタンプ「{p0}」を削除しますか？"
 }

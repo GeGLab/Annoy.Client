@@ -164,6 +164,13 @@ export class Api {
     return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
+  /** A sticker for the server's own pack; the name goes before the image. */
+  async uploadSticker<T>(serverId: string, name: string, image: Blob, signal?: AbortSignal): Promise<T> {
+    this.requireConnection();
+    const body = new FormData(); body.append("name", name); body.append("image", image, "sticker");
+    return this.fetch(`/servers/${serverId}/stickers`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
+  }
+
   async uploadAvatar<T>(photo: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
     const body = new FormData(); body.append("avatar", photo, "avatar.webp");

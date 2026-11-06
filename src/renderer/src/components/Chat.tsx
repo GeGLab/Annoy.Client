@@ -5,7 +5,7 @@ import { SecureAttachment } from "./SecureAttachment.tsx";
 import { REACTION_SHORTCUTS, ReactionChips } from "../features/expression/MessageReactions.tsx";
 import { EmojiMenu, MediaPicker } from "../features/expression/MediaPicker.tsx";
 import { GiphyMessage } from "../features/expression/giphy.tsx";
-import { AnnoySticker, annoyStickerOf } from "../features/expression/AnnoySticker.tsx";
+import { isStickerMessage, StickerMessage } from "../features/expression/AnnoySticker.tsx";
 import { confirmAction } from "./ui/action-dialog.tsx";
 import { LIMITS, type Message } from "@distopic/protocol";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -302,7 +302,7 @@ function MessageRow({
               <span className="muted small">{translate("chat.057d64271e1c")}</span>
             </div>
           ) : (
-            message.content && !annoyStickerOf(message.content) && (
+            message.content && !isStickerMessage(message.content) && (
               <div className="message-content">
                 {renderContent(message.content, nameOf, me, channelOf)}
                 {message.editedAt && <span className="edited">{translate("chat.9629ca339f1f")}</span>}
@@ -310,7 +310,7 @@ function MessageRow({
             )
           )}
           <GiphyMessage accountId={accountId} content={message.content} />
-          {annoyStickerOf(message.content) && <AnnoySticker url={annoyStickerOf(message.content)!} />}
+          {message.content && <StickerMessage content={message.content} />}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
           <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} onToggle={(emoji) => void react(emoji)} />
         </div>

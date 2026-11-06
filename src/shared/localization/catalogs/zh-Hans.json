@@ -2284,5 +2284,15 @@
   "expression.gifFavorite": "添加到收藏",
   "expression.gifUnfavorite": "从收藏中移除",
   "expression.gifFavoritesEmpty": "没有收藏的 GIF",
-  "expression.gifFavoritesHint": "点击 GIF 上的星标即可保存到这里。"
+  "expression.gifFavoritesHint": "点击 GIF 上的星标即可保存到这里。",
+  "expression.serverStickerFrom": "来自 {p0} 的贴纸",
+  "settings.stickers.tab": "贴纸",
+  "settings.stickers.hint": "成员可以在任何地方发送这些贴纸；贴纸会显示此服务器的名称。",
+  "settings.stickers.count": "{p0} / {p1} 个贴纸。",
+  "settings.stickers.name": "名称",
+  "settings.stickers.image": "图片（PNG、WebP 或 GIF，最大 8 MB）",
+  "settings.stickers.add": "添加",
+  "settings.stickers.full": "此服务器已达到 {p0} 个贴纸的上限。",
+  "settings.stickers.remove": "移除贴纸",
+  "settings.stickers.removeConfirm": "移除贴纸“{p0}”？"
 }

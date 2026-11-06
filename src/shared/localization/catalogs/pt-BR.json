@@ -2284,5 +2284,15 @@
   "expression.gifFavorite": "Adicionar aos favoritos",
   "expression.gifUnfavorite": "Remover dos favoritos",
   "expression.gifFavoritesEmpty": "Nenhum GIF favorito",
-  "expression.gifFavoritesHint": "Clique na estrela de um GIF para guardá-lo aqui."
+  "expression.gifFavoritesHint": "Clique na estrela de um GIF para guardá-lo aqui.",
+  "expression.serverStickerFrom": "Figurinha de {p0}",
+  "settings.stickers.tab": "Figurinhas",
+  "settings.stickers.hint": "Os membros podem enviar estas figurinhas em qualquer lugar; elas mostram o nome deste servidor.",
+  "settings.stickers.count": "{p0} de {p1} figurinhas.",
+  "settings.stickers.name": "Nome",
+  "settings.stickers.image": "Imagem (PNG, WebP ou GIF, até 8 MB)",
+  "settings.stickers.add": "Adicionar",
+  "settings.stickers.full": "Este servidor chegou ao limite de {p0} figurinhas.",
+  "settings.stickers.remove": "Remover figurinha",
+  "settings.stickers.removeConfirm": "Remover a figurinha \"{p0}\"?"
 }

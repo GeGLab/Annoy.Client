@@ -1,6 +1,6 @@
 import type { User } from "@distopic/protocol";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { AnnoySticker, annoyStickerOf } from "../../features/expression/AnnoySticker.tsx";
+import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { navigate } from "../../client.ts";
 import { formatClock, formatDay, formatTime, renderContent } from "../../format.tsx";
@@ -300,7 +300,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
               />
             </div>
           ) : (
-            message.content && (annoyStickerOf(message.content) ? <AnnoySticker url={annoyStickerOf(message.content)!} /> : (
+            message.content && (isStickerMessage(message.content) ? <StickerMessage content={message.content} /> : (
               <div className="message-content">
                 {renderContent(message.content, nameOf, me)}
                 {message.editedAt && <span className="edited">{translate("social.edited")}</span>}

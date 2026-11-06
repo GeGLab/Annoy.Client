@@ -2284,5 +2284,15 @@
   "expression.gifFavorite": "Ajouter aux favoris",
   "expression.gifUnfavorite": "Retirer des favoris",
   "expression.gifFavoritesEmpty": "Aucun GIF favori",
-  "expression.gifFavoritesHint": "Cliquez sur l'étoile d'un GIF pour le garder ici."
+  "expression.gifFavoritesHint": "Cliquez sur l'étoile d'un GIF pour le garder ici.",
+  "expression.serverStickerFrom": "Autocollant de {p0}",
+  "settings.stickers.tab": "Autocollants",
+  "settings.stickers.hint": "Les membres peuvent envoyer ces autocollants partout ; ils affichent le nom de ce serveur.",
+  "settings.stickers.count": "{p0} sur {p1} autocollants.",
+  "settings.stickers.name": "Nom",
+  "settings.stickers.image": "Image (PNG, WebP ou GIF, 8 Mo max.)",
+  "settings.stickers.add": "Ajouter",
+  "settings.stickers.full": "Ce serveur a atteint la limite de {p0} autocollants.",
+  "settings.stickers.remove": "Retirer l'autocollant",
+  "settings.stickers.removeConfirm": "Retirer l'autocollant « {p0} » ?"
 }
