@@ -10,7 +10,7 @@ import { FavoriteStar, GiphyAttribution, GifsUnavailable, giphyByIds, giphyImage
 import { loadGifFavorites, useGifFavorites } from "./gif-favorites.ts";
 import { readServerStickerPacks, type ServerStickerPack } from "./server-stickers.ts";
 import { registerMediaPicker } from "./navigation.ts";
-import { annoyImage, readAnnoyItems } from "./annoy-set.ts";
+import { annoyImage, readAnnoyItems, refreshAnnoySet } from "./annoy-set.ts";
 
 export function ItemImage({ item }: { item: MediaItem }) {
   const [url,setUrl] = useState(item.remote ? undefined : item.url);
@@ -39,12 +39,14 @@ export function EmojiMenu({ onSelect, disabled=false, stickers=false }: { onSele
   const common = ["😂", "❤️", "👍", "🔥", "👀", "🎉", "😢", "👏", "😀", "🥰", "🤔", "😳", "💀", "🙏", "✅", "💪"];
   const items = query.trim() || expanded ? EMOJIS.filter((item)=>matches(item,query)) : common.flatMap((emoji)=>EMOJIS.filter((item)=>item.emoji===emoji));
   const [annoyStickers,setAnnoyStickers]=useState<MediaItem[]>([]), [serverPacks,setServerPacks]=useState<ServerStickerPack[]>([]), [loadingStickers,setLoadingStickers]=useState(false);
+  const [menuRevision,setMenuRevision]=useState(0);
+  useEffect(()=>{if(open&&stickers)void refreshAnnoySet().then(()=>setMenuRevision((value)=>value+1)).catch(()=>undefined);},[open,stickers]);
   useEffect(()=>{
     if(!open||tab!=="sticker")return;
     let disposed=false;
     void readAnnoyItems("sticker",query).then((found)=>{if(!disposed)setAnnoyStickers(found);}).catch(()=>undefined);
     return()=>{disposed=true;};
-  },[open,tab,query]);
+  },[open,tab,query,menuRevision]);
   useEffect(()=>{
     if(!open||tab!=="sticker")return;
     const controller=new AbortController();setLoadingStickers(true);
@@ -76,6 +78,9 @@ export function MediaPicker({accountId,canAttach,onEmoji,onFile,onLink,onSticker
   openRef.current = open;
   const [provider,setProvider]=useState<"favorites"|"giphy">("giphy"), [unavailable,setUnavailable]=useState(false);
   const [annoyItems,setAnnoyItems]=useState<MediaItem[]>([]);
+  // New items added in admannoy show as soon as the picker opens.
+  const [setRevision,setSetRevision]=useState(0);
+  useEffect(()=>{if(open)void refreshAnnoySet().then(()=>setSetRevision((value)=>value+1)).catch(()=>undefined);},[open]);
   // The Annoy set comes from the local cache; cdnannoy is asked at most every 2 hours.
   useEffect(()=>{
     setAnnoyItems([]);
@@ -84,7 +89,7 @@ export function MediaPicker({accountId,canAttach,onEmoji,onFile,onLink,onSticker
     let disposed=false;
     void readAnnoyItems(tab,query).then((items)=>{if(!disposed)setAnnoyItems(items);}).catch(()=>undefined);
     return()=>{disposed=true;};
-  },[open,tab,query,provider]);
+  },[open,tab,query,provider,setRevision]);
   const favoriteIds=useGifFavorites();
   // Sticker packs of the servers the user is in, read each time the sticker tab opens.
   const [serverPacks,setServerPacks]=useState<ServerStickerPack[]>([]);
