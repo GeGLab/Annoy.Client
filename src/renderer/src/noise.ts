@@ -2,7 +2,7 @@ import {t as translate,onLocalizationChange} from "../../shared/localization/ind
 // Microphone capture with optional neural noise suppression, shared by voice
 // sessions and the settings meter. Everything runs locally in AudioWorklets;
 // no audio leaves the machine before the filters.
-import { toast } from "./store.ts";
+import { getState, setState, toast } from "./store.ts";
 import { GtcrnWorkletNode, loadGtcrn, loadRnnoise, loadSpeex, RnnoiseWorkletNode, SpeexWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import gtcrnWasm from "@sapphi-red/web-noise-suppressor/gtcrn.wasm?url";
 import gtcrnWorklet from "@sapphi-red/web-noise-suppressor/gtcrnWorklet.js?url";
@@ -109,7 +109,11 @@ async function captureMic(deviceId: string, filter: NoiseFilter): Promise<MediaS
   }
   try {
     const stream = await open(undefined);
-    toast(translate("voice.mic.fallback"), 8000);
+    // Device IDs change when the app's storage is cleared; forget the stale one so this happens once.
+    if (getState().settings.inputDeviceId === deviceId) {
+      setState((s) => { s.settings.inputDeviceId = "default"; });
+      toast(translate("voice.mic.fallback"), 8000);
+    }
     return stream;
   } catch (err) {
     throw micError(err);
