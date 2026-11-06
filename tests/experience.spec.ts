@@ -905,15 +905,11 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
     });
     await page.route("https://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null, ...route.request().postDataJSON() }) }));
     await page.route("https://experience.test/api/info", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ name: "Instância de teste", registrationOpen: true, registration: "open", discordLogin: false, accountMode: "local" }) }));
+    // A local account has no profile editor in the user settings, only "Excluir conta".
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
-    const bio = page.getByRole("textbox", { name: "Biografia de tester", exact: true });
-    await bio.fill("Uma biografia de teste com conteúdo para conferir o limite e a apresentação. ".repeat(14).slice(0, 1000));
-    await expect(bio).toHaveAttribute("maxlength", "1000");
-    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Biografia de tester", exact: true })).toHaveCount(0);
+    await expect(page.locator(".local-account").getByRole("button", { name: "Excluir conta", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Fechar", exact: true }).click();
-    await page.getByRole("button", { name: "Abrir meu perfil", exact: true }).click();
-    await expect(page.locator(".self-profile .profile-bio")).toHaveCSS("-webkit-line-clamp", "3");
-    await page.keyboard.press("Escape");
     await page.evaluate(async () => { const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`); openModal({ kind: "screenPicker" }); });
     await page.getByRole("combobox", { name: "Resolução da transmissão", exact: true }).click();
     await page.getByRole("option", { name: "2K (2048 × 1080)", exact: true }).click();
@@ -1403,72 +1399,6 @@ test("animated menus, custom selects, color history and unsaved settings", async
   }
 });
 
-test("profile crop, deferred upload, save and removal failure retain draft", async () => {
-  const { page, close } = await launch();
-  let uploads = 0,
-    failRemoval = false;
-  let user: { id: string; username: string; displayName: string; avatarUrl: string | null } = {
-    id: "person",
-    username: "tester",
-    displayName: "Pessoa de teste",
-    avatarUrl: null,
-  };
-  try {
-    await seed(page);
-    await page.route("https://experience.test/api/users/@me", (route) => {
-      const body = route.request().postDataJSON();
-      if (failRemoval && body.avatarUrl === null)
-        return route.fulfill({
-          status: 500,
-          contentType: "application/json",
-          body: JSON.stringify({ message: "Falha de teste ao remover foto" }),
-        });
-      user = { ...user, ...body };
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify(user) });
-    });
-    await page.route("https://experience.test/api/users/@me/avatar", (route) => {
-      uploads++;
-      expect(route.request().postDataBuffer()!.length).toBeGreaterThan(1000);
-      user.avatarUrl = "https://experience.test/avatar.png";
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify(user) });
-    });
-    await page.route("https://experience.test/avatar.png", async (route) =>
-      route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }),
-    );
-    await page.getByRole("button", { name: "Configurações", exact: true }).click();
-    await page.getByLabel("Selecionar foto de tester").setInputFiles("build/icon.png");
-    await expect(page.getByRole("heading", { name: "Encontre o melhor enquadramento" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Usar este recorte", exact: true })).toBeEnabled();
-    await page.screenshot({ path: join(capture, "avatar-crop.png") });
-    await page.getByRole("button", { name: "Usar este recorte", exact: true }).click();
-    expect(uploads).toBe(0);
-    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", /^blob:/);
-    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
-    await expect(page.locator(".settings-savebar")).toHaveCount(0);
-    expect(uploads).toBe(1);
-    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
-    expect(
-      await page
-        .locator(".modal-body")
-        .first()
-        .evaluate((element) => element.scrollWidth <= element.clientWidth),
-    ).toBe(true);
-    await page.screenshot({ path: join(capture, "profile-settings.png") });
-    failRemoval = true;
-    await page.getByRole("button", { name: "Remover foto", exact: true }).click();
-    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Falha de teste ao remover foto" })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "Falha de teste ao remover foto" })).toBeInViewport();
-    await page.screenshot({ path: join(capture, "profile-save-error.png") });
-    await expect(page.locator(".settings-savebar")).toBeVisible();
-    await page.getByRole("button", { name: "Redefinir", exact: true }).click();
-    await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src", user.avatarUrl!);
-    await page.keyboard.press("Escape");
-  } finally {
-    await close();
-  }
-});
-
 test("server, role and channel settings share pending-save and exit guards", async () => {
   const { page, close } = await launch();
   const writes: { url: string; body: unknown }[] = [];
@@ -1758,9 +1688,10 @@ test("emoji reactions toggle, the Annoy set shows for everyone and the library i
     await page.screenshot({path:join(capture,"sticker-library-dark.png")});
     const sent=await uiSendFixture(app);
     await picker.getByRole("button",{name:"Gato",exact:true}).click();await expect.poll(()=>sent.sends.map((send)=>send.content)).toEqual([`https://cdn.experience.test/i/${"1".repeat(40)}.png`]);await expect(page.locator(".composer textarea")).toHaveValue("😀");await expect(page.locator(".pending-file")).toHaveCount(0);
+    // The GIF tab has only Favorites and GIPHY; imported GIFs stay in Manage.
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"GIFs",exact:true}).click();
-    await expect(picker.getByRole("button",{name:"profile-animation.gif",exact:true})).toBeVisible();
-    await picker.getByRole("button",{name:"profile-animation.gif",exact:true}).click();await expect(page.locator(".pending-file")).toHaveCount(1);
+    await expect(picker.getByRole("button",{name:"profile-animation.gif",exact:true})).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await page.setViewportSize({width:940,height:620});
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme="light";});});
     await page.getByRole("button",{name:"Emojis, GIFs e figurinhas",exact:true}).click();await picker.getByRole("tab",{name:"Figurinhas",exact:true}).click();
@@ -1791,23 +1722,6 @@ test("GIPHY goes through cdnannoy with no key in the app and shares a link witho
   expect(gifRequests.every((url)=>url.startsWith("https://cdn.experience.test/v1/gifs")&&!url.includes("api_key"))).toBe(true);
  }finally{await close();}
 });
-
-test("profile editor stages an animated GIF without flattening it through cropping",async()=>{
- const {page,close}=await launch();let bytes:Buffer|undefined;
- try{
-  await seed(page);
-  await page.evaluate(async()=>{const {Api}=await import(/* @vite-ignore */ `${location.origin}/src/api.ts`);const original=Api.prototype.uploadAvatar;Api.prototype.uploadAvatar=async function<T>(photo:Blob):Promise<T>{(window as any).stagedAvatarType=photo.type;(window as any).stagedAvatarHeader=new TextDecoder().decode((await photo.arrayBuffer()).slice(0,6));return original.call(this,photo) as Promise<T>;};});
-  await page.route("https://experience.test/api/users/@me/avatar",async(route)=>{bytes=route.request().postDataBuffer()!;await route.fulfill({contentType:"application/json",body:JSON.stringify({id:"person",username:"tester",displayName:"Pessoa de teste",avatarUrl:"https://experience.test/profile.gif"})});});
-  await page.route("https://experience.test/profile.gif",async(route)=>route.fulfill({contentType:"image/gif",body:await readFile("tests/fixtures/profile-animation.gif")}));
-  await page.getByRole("button",{name:"Configurações",exact:true}).click();
-  await page.getByLabel("Selecionar foto de tester",{exact:true}).setInputFiles("tests/fixtures/profile-animation.gif");
-  await expect(page.getByRole("dialog",{name:/recorte/i})).toHaveCount(0);expect(bytes).toBeUndefined();
-  await expect(page.locator(".profile-live-preview img").first()).toHaveAttribute("src",/^blob:/);
-  await page.getByRole("button",{name:"Salvar alterações",exact:true}).click();
-  await expect(page.locator(".settings-savebar")).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>(window as any).stagedAvatarHeader)).toBe("GIF89a");expect(await page.evaluate(()=>(window as any).stagedAvatarType)).toBe("image/gif");
- }finally{await close();}
-});
-
 
 test("stream start has a distinct room cue and message senders stay silent",async()=>{
  const {page,close}=await launch();let socket:WebSocketRoute;
@@ -1979,33 +1893,31 @@ test("Annoy stickers are sent as their cdnannoy link and drawn at their admannoy
   } finally { await close(); }
 });
 
-test("profile preview follows unsaved drafts and the Annoy account has no separate page", async () => {
+test("a local account has only Excluir conta in the user settings, with a second confirmation; the Annoy account has no separate page", async () => {
   const { page, close } = await launch();
   try {
     await seed(page);
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     await expect(page.locator(".global-signin-form")).toHaveCount(0);
-    const preview = page.getByRole("complementary", { name: "Prévia do perfil" });
-    await page.getByLabel("Nome de exibição de tester", { exact: true }).fill("Meu nome em prévia");
-    await page.getByLabel("Biografia de tester", { exact: true }).fill("Uma biografia que muda enquanto eu edito.\nAinda não foi salva.");
-    await page.getByLabel("Selecionar foto de tester", { exact: true }).setInputFiles("tests/fixtures/profile-animation.gif");
-    await expect(preview.locator("strong")).toHaveText("Meu nome em prévia");
-    await expect(preview.locator(".profile-bio")).toContainText("Ainda não foi salva.");
-    await expect(preview.locator("img")).toHaveAttribute("src", /^blob:/);
-    expect(await preview.locator(".profile-preview-card").evaluate((element) => element.getBoundingClientRect().right <= element.closest(".settings-content")!.getBoundingClientRect().right)).toBe(true);
-    expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.user.displayName)).toBe("Pessoa de teste");
-    await page.screenshot({ path: join(capture, "profile-live-preview-dark.png") });
-    await page.setViewportSize({ width: 940, height: 620 });
-    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
-    await preview.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: join(capture, "profile-live-preview-light-minimum.png") });
+    const local = page.locator(".local-account");
+    await expect(local).toContainText("Instância de teste");
+    await expect(page.getByLabel("Nome de exibição de tester", { exact: true })).toHaveCount(0);
+    await expect(local.getByRole("button")).toHaveCount(1);
+    let deletes = 0;
+    await page.route("https://experience.test/api/users/@me", (route) => { if (route.request().method() === "DELETE") deletes++; return route.fulfill({ contentType: "application/json", body: "{}" }); });
+    await local.getByRole("button", { name: "Excluir conta", exact: true }).click();
+    await expect(page.getByText("Esta é uma conta local de Instância de teste, sem conta Annoy. Não será possível recuperar os dados depois.")).toBeVisible();
+    await page.getByLabel("Digite @tester para confirmar").fill("tester");
+    await page.getByRole("button", { name: "Excluir conta", exact: true }).last().click();
+    await expect(page.getByText("Excluir a conta local de Instância de teste? Os dados não poderão ser recuperados.")).toBeVisible();
+    await page.getByRole("button", { name: "Cancelar", exact: true }).last().click();
+    expect(deletes).toBe(0);
+    await page.screenshot({ path: join(capture, "local-account-delete.png") });
     // The Annoy account lives in "Meu perfil e contas": no separate page and no sign-in form here.
     await expect(page.getByRole("button", { name: "Conta global", exact: true })).toHaveCount(0);
     await expect(page.locator(".global-signin-form")).toHaveCount(0);
-    await expect(page.locator(".settings-savebar")).toBeVisible();
   } finally { await close(); }
 });
-
 test("friend message reactions explain an old server and work when support is advertised", async () => {
   const { app, page, close } = await launch();
   try {
@@ -2087,12 +1999,14 @@ test("compact reactions expand and search while library management lives in sett
   } finally { await close(); }
 });
 
-test("using media from settings respects unsaved profile changes and works without an active chat", async () => {
+test("using media from settings respects unsaved settings and works without an active chat", async () => {
   const { page, close } = await launch();
   try {
     await seed(page);
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
-    await page.getByLabel("Nome de exibição de tester", { exact: true }).fill("Nome ainda não salvo");
+    // Any unsaved user setting: a theme change.
+    await page.getByRole("button", { name: "Aparência", exact: true }).click();
+    await page.getByLabel("Claro", { exact: true }).click();
     await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
     const library = page.locator(".media-library-settings");
     await library.getByLabel("Importar imagens da biblioteca", { exact: true }).setInputFiles("tests/fixtures/profile-animation.gif");

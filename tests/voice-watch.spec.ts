@@ -107,12 +107,13 @@ test("a screen share is received only after Assistir, has its own volume, and fi
     await expect(offer).toHaveCount(0);
     await b.page.screenshot({ path: test.info().outputPath("2-watching.png") });
 
-    // The stream volume is separate from the voice volume and goes to 300%.
+    // The stream volume is separate from the voice volume, goes to 300% and lives in the stream's right-click menu.
     const card = b.page.locator(".stage-card.video.screen");
-    await card.hover();
-    const streamSlider = card.getByRole("slider", { name: `Volume da transmissão de ana_${stamp}` });
+    await card.click({ button: "right" });
+    const streamSlider = b.page.getByRole("menu").getByRole("slider", { name: `Volume da transmissão de ana_${stamp}` });
     await expect(streamSlider).toBeVisible();
     await expect(streamSlider).toHaveAttribute("aria-valuemax", "300");
+    await b.page.keyboard.press("Escape");
     await b.page.evaluate(async ({ accountId, userId }) => {
       const c = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
       c.setUserVolume(accountId, userId, 250, "stream");
@@ -165,10 +166,13 @@ test("a screen share is received only after Assistir, has its own volume, and fi
       m.setUserVolume(accountId, mute, 0, "stream");
       m.setUserVolume(accountId, keep, 100, "stream");
     }, { accountId: beto.accountId, mute: ana.userId, keep: carla.userId });
-    const sliders = await screens.evaluateAll((cards) => cards.map((card) => {
-      const slider = card.querySelector('[role="slider"]');
-      return [slider?.getAttribute("aria-label"), slider?.getAttribute("aria-valuenow")];
-    }));
+    const sliders: (string | null)[][] = [];
+    for (let i = 0; i < 2; i++) {
+      await screens.nth(i).click({ button: "right" });
+      const slider = b.page.getByRole("menu").getByRole("slider");
+      sliders.push([await slider.getAttribute("aria-label"), await slider.getAttribute("aria-valuenow")]);
+      await b.page.keyboard.press("Escape");
+    }
     expect(sliders.sort()).toEqual([[`Volume da transmissão de ana_${stamp}`, "0"], [`Volume da transmissão de carla_${stamp}`, "100"]]);
     await b.page.screenshot({ path: test.info().outputPath("3-two-streams.png") });
 
