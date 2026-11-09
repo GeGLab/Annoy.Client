@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { discordLogin, fetchInfo } from "../../api.ts";
 import { apiFor, applyUserUpdate, removeAccount, updateVoiceSettings } from "../../client.ts";
 import { getState, setState, toast, useStore, type Settings } from "../../store.ts";
-import { deviceChoice, savedDevice, shownDevice } from "../../lib/devices.ts";
+import { deviceChoice, savedDevice, selectableDevices, shownDevice } from "../../lib/devices.ts";
 import { applyTheme } from "../../lib/theme.ts";
 import { registerNavigationGuard, requestNavigation } from "../../lib/navigation-guard.ts";
 import { AppearanceSettings } from "../AppearanceSettings.tsx";
@@ -251,7 +251,7 @@ export function UserSettingsModal() {
     const refresh = () =>
       void navigator.mediaDevices.enumerateDevices().then(
         (list) => {
-          if (active) setDevices(list);
+          if (active) setDevices(selectableDevices(list));
         },
         () => undefined,
       );

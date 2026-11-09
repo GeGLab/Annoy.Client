@@ -17,6 +17,7 @@ import { startUpdater } from "./updater.ts";
 import { registerActivity } from "./activity/index.ts";
 import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
+import { startScreenAudio, stopScreenAudio, stopScreenAudioNow } from "./screen-audio-linux.ts";
 
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
@@ -51,6 +52,7 @@ function createTray(): void {
 }
 const stopActivity = registerActivity(ipcMain, () => win, () => appAccess.getState().allowed, event => trustedRenderer(event, win));
 app.on("will-quit", stopActivity);
+app.on("will-quit", stopScreenAudioNow);
 /** One sandboxed view per browser service, created on first open and kept alive. */
 const views = new Map<string, { view: WebContentsView; service: Service }>();
 let shownService: string | null = null;
@@ -377,6 +379,9 @@ function createWindow(): void {
   };
   win.webContents.on("did-start-loading", resetRendererAccess);
   win.webContents.on("render-process-gone", resetRendererAccess);
+  // A reloaded or crashed renderer can't stop its screen share any more.
+  win.webContents.on("did-start-loading", () => void stopScreenAudio());
+  win.webContents.on("render-process-gone", () => void stopScreenAudio());
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
   win.on("unmaximize", sendWindowState);
@@ -427,6 +432,10 @@ ipcMain.handle("secrets:set", (event, name: unknown, value: unknown) => {
 });
 
 // Native browsing stays locked until credentials are independently validated here.
+// Screen-share sound on Linux: a virtual microphone with every app's sound except Annoy's.
+ipcMain.handle("screen-audio:start", event => fromRenderer(event) && appAccess.getState().allowed ? startScreenAudio() : null);
+ipcMain.handle("screen-audio:stop", event => fromRenderer(event) ? stopScreenAudio() : undefined);
+
 ipcMain.handle("auth:get", event => fromRenderer(event) ? appAccess.getState() : { allowed: false, global: false, localAccounts: [] });
 ipcMain.handle("auth:global-url", event => fromRenderer(event) ? globalUrl : null);
 ipcMain.handle("auth:cloud-urls", event => fromRenderer(event) ? cloudUrls : null);

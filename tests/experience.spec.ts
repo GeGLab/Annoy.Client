@@ -1598,6 +1598,10 @@ test("both voice backends send screen audio separately and explain incompatible 
         session.send = { produce: async (options: any) => { published.push(options.appData.source); return { id: options.appData.source, close() {} }; } };
         session.pc = { createOffer: async () => ({}), setLocalDescription: async () => {}, localDescription: { sdp: "" } };
         session.publish = async (_track: any, _kind: string, source: string) => { published.push(source); return { trackName: source, transceiver: { sender: { replaceTrack: async () => {} }, stop() {} } }; };
+        // Linux takes the sound from a PipeWire virtual microphone, absent on machines without PipeWire.
+        const linux = window.annoy?.platform === "linux";
+        const linuxSound = linux && (await window.annoy!.screenAudio.start()) !== null;
+        if (linux) await window.annoy!.screenAudio.stop();
         try {
           session.serverScreenAudio = true;
           await session.startVideo("screen");
@@ -1609,13 +1613,14 @@ test("both voice backends send screen audio separately and explain incompatible 
           await session.startVideo("screen");
           const explanation = getState().toast?.text;
           await session.stopVideo("screen");
-          return { requested, published, stopped, explanation, supportsAudio: window.annoy?.platform === "win32" };
+          return { requested, published, stopped, explanation, supported: window.annoy?.platform === "win32" || linux, displayAudio: window.annoy?.platform === "win32", supportsAudio: window.annoy?.platform === "win32" || linuxSound };
         } finally { navigator.mediaDevices.getDisplayMedia = original; await ctx.close(); }
       }, backend);
-      expect(result.requested).toEqual([result.supportsAudio, false]);
+      // Only Windows asks the screen capture itself for sound.
+      expect(result.requested).toEqual([result.displayAudio, false]);
       expect(result.published).toEqual(result.supportsAudio ? ["screen", "screen_audio", "screen"] : ["screen", "screen"]);
       if (result.supportsAudio) expect(result.stopped).toBe("ended");
-      expect(result.explanation).toContain(result.supportsAudio ? "screen_audio" : "Windows");
+      expect(result.explanation).toContain(result.supported ? "screen_audio" : "Windows");
     }
   } finally { await close(); }
 });

@@ -31,6 +31,11 @@ const bridge = {
     set: (values:LocalizationPreferences) => ipcRenderer.invoke("localization:set",values) as Promise<LocalizationPreferences>,
   },
   platform: process.platform,
+  /** Linux only: the device name of a virtual microphone with the computer's sound minus Annoy's, or null. */
+  screenAudio: {
+    start: () => ipcRenderer.invoke("screen-audio:start") as Promise<string | null>,
+    stop: () => ipcRenderer.invoke("screen-audio:stop") as Promise<void>,
+  },
 
   auth: {
     get: () => ipcRenderer.invoke("auth:get") as Promise<AppAccessState>,

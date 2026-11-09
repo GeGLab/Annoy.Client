@@ -3,7 +3,7 @@ import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, updateVoiceSettings } from "../client.ts";
 import { setState, useStore } from "../store.ts";
-import { deviceChoice, shownDevice } from "../lib/devices.ts";
+import { deviceChoice, selectableDevices, shownDevice } from "../lib/devices.ts";
 import { Icon } from "./ui.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import {
@@ -28,7 +28,7 @@ export function DeviceMenu({ kind }: { kind: "input" | "output" }) {
     void navigator.mediaDevices.enumerateDevices().then(
       (list) => {
         if (active)
-          setDevices(list.filter((d) => d.kind === (kind === "input" ? "audioinput" : "audiooutput") && d.deviceId !== "default"));
+          setDevices(selectableDevices(list).filter((d) => d.kind === (kind === "input" ? "audioinput" : "audiooutput") && d.deviceId !== "default"));
       },
       () => undefined,
     );

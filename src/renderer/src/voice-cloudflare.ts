@@ -9,7 +9,7 @@ import { clearTiles, dropTile, putTile, setStreamOffers } from "./media.ts";
 import { isStreamSource, streamOffers } from "./lib/stream-watch.ts";
 import { MicGate } from "./mic.ts";
 import { toast, type Settings } from "./store.ts";
-import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, SCREEN_AUDIO_CONSTRAINTS, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
+import { alignExtmap, CAMERA_PROFILE, OPUS_SCREEN, OPUS_VOICE, captureScreen, screenAudioSupported, tuneOpus } from "./media-profiles.ts";
 import { playbackVolume, volumeKindOf } from "../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "./lib/remote-audio.ts";
 import { savedDevice } from "./lib/devices.ts";
@@ -284,7 +284,7 @@ export class CloudflareVoiceSession {
     const stream =
       source === "camera"
         ? await navigator.mediaDevices.getUserMedia({ video: { ...profile.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } })
-        : await navigator.mediaDevices.getDisplayMedia({ video: profile.constraints, audio: withAudio ? SCREEN_AUDIO_CONSTRAINTS : false });
+        : await captureScreen(profile.constraints, withAudio);
     for (const captured of stream.getTracks()) this.capturedTracks.add(captured);
     const track = stream.getVideoTracks()[0];
     const sound = stream.getAudioTracks()[0];

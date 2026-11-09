@@ -30,8 +30,43 @@ export function screenProfile(quality: ScreenQuality): { constraints: MediaTrack
   }
 }
 
-/** Only Windows can capture the system's sound together with the screen (WASAPI loopback). */
-export const screenAudioSupported = () => window.annoy?.platform === "win32";
+/** Windows captures the system's sound with the screen (WASAPI loopback); Linux through a PipeWire virtual microphone. */
+export const screenAudioSupported = () => window.annoy?.platform === "win32" || window.annoy?.platform === "linux";
+
+/** Name of the Linux screen-share microphone (see src/main/screen-audio-linux.ts); never offered as a microphone. */
+export const SCREEN_AUDIO_DEVICE = "Annoy screen audio";
+
+/**
+ * The screen, plus its sound when asked. On Linux Chromium's loopback would
+ * also record the call, so the sound comes from Annoy's virtual microphone,
+ * which stops together with its track.
+ */
+export async function captureScreen(video: MediaTrackConstraints, withAudio: boolean): Promise<MediaStream> {
+  const linux = window.annoy?.platform === "linux";
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: withAudio && !linux ? SCREEN_AUDIO_CONSTRAINTS : false });
+  if (!withAudio || !linux || !window.annoy) return stream;
+  const bridge = window.annoy.screenAudio;
+  try {
+    const label = await bridge.start();
+    const device = label ? (await navigator.mediaDevices.enumerateDevices()).find((d) => d.kind === "audioinput" && d.label === label) : undefined;
+    if (!device) throw new Error("screen audio device missing");
+    const sound = (
+      await navigator.mediaDevices.getUserMedia({ audio: { ...SCREEN_AUDIO_CONSTRAINTS, deviceId: { exact: device.deviceId }, channelCount: 2 } })
+    ).getAudioTracks()[0];
+    if (!sound) throw new Error("screen audio track missing");
+    // Every path that ends the share stops this track; the virtual microphone goes with it.
+    const stop = sound.stop.bind(sound);
+    sound.stop = () => {
+      stop();
+      void bridge.stop();
+    };
+    stream.addTrack(sound);
+  } catch (error) {
+    console.warn("screen audio failed", error);
+    void bridge.stop();
+  }
+  return stream;
+}
 
 /**
  * Audio for a screen share, minus Annoy's own playback so viewers don't hear

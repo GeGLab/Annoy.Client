@@ -5,6 +5,10 @@
 // the same device is found again under its new ID. The saved choice itself is
 // never changed here.
 import { getState, setState, type Settings } from "../store.ts";
+import { SCREEN_AUDIO_DEVICE } from "../media-profiles.ts";
+
+/** Devices to offer: Annoy's own screen-share microphone (Linux) is not one. */
+export const selectableDevices = (list: readonly MediaDeviceInfo[]) => list.filter((d) => d.label !== SCREEN_AUDIO_DEVICE);
 
 export type DeviceSlot = "input" | "output" | "camera";
 
@@ -27,7 +31,7 @@ export async function resolveDevice(slot: DeviceSlot, id: string, label: string)
   if (!id || id === "default") return undefined;
   let devices: MediaDeviceInfo[];
   try {
-    devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === KIND[slot] && d.deviceId !== "default");
+    devices = selectableDevices(await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === KIND[slot] && d.deviceId !== "default");
   } catch {
     return id;
   }
