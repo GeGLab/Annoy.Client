@@ -30,6 +30,9 @@ const appIcon = appIconController(() => win, () => tray);
 appIcon.register(ipcMain);
 let quitting = false;
 app.on("before-quit", () => { quitting = true; });
+// Released builds never keep DevTools open (Electron's default menu still binds Ctrl+Shift+I):
+// code pasted there could read the account's keys and sessions. Development builds keep them.
+if (app.isPackaged) app.on("web-contents-created", (_event, contents) => contents.on("devtools-opened", () => contents.closeDevTools()));
 function restoreWindow(): void {
   if (!win) return;
   win.show();
