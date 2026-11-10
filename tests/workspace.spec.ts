@@ -159,6 +159,43 @@ test("M3 opens at persisted unread, advances only visible reading and loads pinn
   }finally{await cleanup();}
 });
 
+test("message pin buttons update without a gateway echo and survive opening pinned context", async () => {
+  const {page,cleanup}=await launch();
+  const writes:string[]=[];
+  let pin:any=null;
+  try {
+    await seed(page);
+    const message=await page.evaluate(async()=>{
+      const {getState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().instances.workspace.messages.general.items.at(-1);
+    });
+    await page.route(`${origin}/api/channels/general/pins?*`,route=>route.fulfill({json:{items:pin?[pin]:[],nextCursor:null}}));
+    await page.route(`${origin}/api/channels/general/pins/${message.id}`,route=>{
+      const method=route.request().method();writes.push(method);
+      pin=method==="PUT"?{message,pinnedBy:message.author,pinnedAt:new Date().toISOString()}:null;
+      return route.fulfill({json:pin??{}});
+    });
+    await page.route(`${origin}/api/channels/general/messages?around=*`,route=>route.fulfill({json:[message]}));
+    await page.evaluate(async()=>{
+      const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s:any)=>{s.instances.workspace.instance={messagePins:true};});
+    });
+    const row=page.locator(`[data-message-id="${message.id}"]`);
+    await row.hover();
+    await row.getByRole("button",{name:"Fixar mensagem",exact:true}).click();
+    await expect(row.getByRole("button",{name:"Desafixar mensagem",exact:true})).toHaveAttribute("aria-pressed","true");
+    await page.getByRole("button",{name:"Mensagens fixadas",exact:true}).click();
+    await page.locator(".pinned-message").click();
+    await expect(row).toBeInViewport();
+    await row.hover();
+    await row.getByRole("button",{name:"Desafixar mensagem",exact:true}).click();
+    await expect(row.getByRole("button",{name:"Fixar mensagem",exact:true})).toHaveAttribute("aria-pressed","false");
+    await page.getByRole("button",{name:"Mensagens fixadas",exact:true}).click();
+    await expect(page.getByText("Nenhuma mensagem fixada.", {exact:true})).toBeVisible();
+    expect(writes).toEqual(["PUT","DELETE"]);
+  }finally{await cleanup();}
+});
+
 test("latest messages, personal colors, saved panels, voice and scoped reconnect", async () => {
   const { app, page, cleanup } = await launch();
   const errors: string[] = [];

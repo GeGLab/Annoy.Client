@@ -24,7 +24,7 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
-import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping } from "../client.ts";
+import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -220,6 +220,8 @@ function MessageRow({
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
   const stickerReactions = useStore((s) => s.instances[accountId]?.instance?.stickerReactions === true);
   const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
+  const [pinning, setPinning] = useState(false);
+  const pinningRef = useRef(false);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
     if (reacting || !reactionsEnabled || !canReact) return;
@@ -330,9 +332,12 @@ function MessageRow({
           <button className="icon-btn tiny" title={translate("chat.8630a0dc25e2")} onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
-          {canPin && <button className="icon-btn tiny" title={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-pressed={isPinned} onClick={async () => {
-            try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
+          {canPin && <button className={`icon-btn tiny${isPinned?" on":""}`} title={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-label={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-pressed={isPinned} disabled={pinning} onClick={async () => {
+            if(pinningRef.current)return;
+            pinningRef.current=true;setPinning(true);
+            try { await setMessagePinned(accountId,message.channelId,message.id,!isPinned); }
             catch(error){toast((error as Error).message);}
+            finally{pinningRef.current=false;setPinning(false);}
           }}><Icon name="pin" size={16} /></button>}
           {own && (
             <button

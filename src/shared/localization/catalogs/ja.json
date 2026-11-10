@@ -2304,5 +2304,6 @@
   "activity.annoySteamTitle": "Steam · Annoy アカウント",
   "activity.annoySteamHelp": "ブラウザでアカウントを接続し、ローカル検出を補います。パスワードは Steam に残ります。連携は Annoy アカウントに属し、すべてのサーバーで使われます。",
   "account.localDeleteWarning": "これは {p0} のローカルアカウントで、Annoy アカウントではありません。削除後はデータを復元できません。",
-  "account.localDeleteConfirm": "{p0} のローカルアカウントを削除しますか？データは復元できません。"
+  "account.localDeleteConfirm": "{p0} のローカルアカウントを削除しますか？データは復元できません。",
+  "social.sharedPins": "会話で共有されます。固定されたメッセージは固定を解除するまで保存されます。"
 }

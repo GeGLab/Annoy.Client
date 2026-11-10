@@ -2304,5 +2304,6 @@
   "activity.annoySteamTitle": "Steam · Account Annoy",
   "activity.annoySteamHelp": "Collega il tuo account nel browser per completare il rilevamento locale. La password resta su Steam. Il collegamento appartiene al tuo account Annoy, su tutti i server.",
   "account.localDeleteWarning": "Questo è un account locale di {p0}, senza account Annoy. Non sarà possibile recuperare i dati dopo.",
-  "account.localDeleteConfirm": "Eliminare l'account locale di {p0}? I dati non potranno essere recuperati."
+  "account.localDeleteConfirm": "Eliminare l'account locale di {p0}? I dati non potranno essere recuperati.",
+  "social.sharedPins": "Condivisi nella conversazione. I messaggi fissati vengono conservati finché non vengono rimossi."
 }

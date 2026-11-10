@@ -6,7 +6,7 @@ import { cloud, cloudFetch } from "./cloud.ts";
 import * as dm from "./dm-crypto.ts";
 import * as local from "./local-db.ts";
 import { cloudDevice, displayName, runtime, setSocial, social } from "./runtime.ts";
-import type { CloudDm, CloudProfile, DmAttachment, DmMessage, DmPayload } from "./types.ts";
+import type { CloudDm, CloudProfile, DmAttachment, DmMessage, DmPayload, DmPin } from "./types.ts";
 
 /**
  * DMs (TODO item 1.2 and 3.4): encrypted here, delivered by chatannoy, kept on
@@ -30,8 +30,10 @@ interface Envelope {
 const MAX_FILE = 25 * 1024 * 1024;
 let myKeys: Promise<dm.DmKeyPair> | null = null;
 const keys = new Map<string, Promise<CryptoKey>>();
+const pinLoads=new Map<string,symbol>();
 
 export function resetDms(): void {
+  pinLoads.clear();
   myKeys = null;
   keys.clear();
   pendingAcks.clear();
@@ -96,6 +98,8 @@ function upsertMessage(message: DmMessage, replaceId?: string): void {
   setSocial((s) => {
     const thread = s.threads[message.conversationId];
     if (!thread) return;
+    const pin=thread.pins?.find(p=>p.message.id===message.id);
+    if(pin)pin.message=message;
     const i = thread.items.findIndex((m) => m.id === (replaceId ?? message.id) || m.id === message.id);
     if (i >= 0) thread.items[i] = message;
     else {
@@ -140,6 +144,7 @@ export async function loadThread(conversationId: string, older = false): Promise
   if (thread?.loaded && !older) return;
   const before = older ? thread?.items.find((m) => !m.state)?.id : undefined;
   if (!thread) setSocial((s) => void (s.threads[conversationId] = { items: [], loaded: false, hasMoreRemote: false }));
+  if(!older)void loadDmPins(conversationId);
   const conversation = social().dms.find((d) => d.id === conversationId);
   if (conversation && (conversation.store.mine || conversation.store.theirs)) {
     try {
@@ -166,6 +171,41 @@ export async function loadThread(conversationId: string, older = false): Promise
     t.items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     t.loaded = true;
   });
+}
+
+/** Pin snapshots stay sealed in IndexedDB and on chatannoy, including with history off. */
+export async function loadDmPins(conversationId:string):Promise<void> {
+  const me=runtime.me,generation=runtime.generation,request=Symbol();
+  if(!me||!social().threads[conversationId])return;
+  pinLoads.set(conversationId,request);
+  const active=()=>runtime.me===me&&runtime.generation===generation&&pinLoads.get(conversationId)===request;
+  const show=async(pins:local.StoredPin[])=>{
+    const decoded:DmPin[]=await Promise.all(pins.map(async pin=>({...pin,message:await decrypt(pin.message)})));
+    if(active())setSocial(s=>{const thread=s.threads[conversationId];if(thread)thread.pins=decoded;});
+  };
+  setSocial(s=>{const thread=s.threads[conversationId];if(thread){thread.pinsLoading=true;thread.pinsError=null;}});
+  try {
+    if(!social().threads[conversationId]?.pins)await show(await local.getPins(me,conversationId));
+    const pins=await cloud<local.StoredPin[]>("chat",`/v1/dms/${encodeURIComponent(conversationId)}/pins`);
+    if(!active())return;
+    await local.putPins(me,conversationId,pins);
+    if(active())await show(pins);
+  }catch(error){if(active())setSocial(s=>{const thread=s.threads[conversationId];if(thread)thread.pinsError=(error as Error).message;});}
+  finally{if(active()){pinLoads.delete(conversationId);setSocial(s=>{const thread=s.threads[conversationId];if(thread)thread.pinsLoading=false;});}}
+}
+
+export async function setDmPinned(message:DmMessage,pinned:boolean):Promise<void> {
+  const me=runtime.me,generation=runtime.generation;
+  if(!me||message.state)return;
+  const path=`/v1/dms/${encodeURIComponent(message.conversationId)}/pins/${encodeURIComponent(message.id)}`;
+  if(pinned){
+    const original=await local.getMessage(me,message.id);
+    // Reuse the original ciphertext: the other person verifies the same message AAD.
+    if(!original)throw new Error(translate("common.5121cfab4e9c"));
+    if(runtime.me!==me||runtime.generation!==generation)return;
+    await cloud("chat",path,{method:"PUT",body:{...original,blobs:message.attachments.map(a=>a.blobId)}});
+  }else await cloud("chat",path,{method:"DELETE"});
+  if(runtime.me===me&&runtime.generation===generation)await loadDmPins(message.conversationId);
 }
 
 // --- Sending ------------------------------------------------------------------------
@@ -228,7 +268,7 @@ export async function deleteDm(message: DmMessage): Promise<void> {
   await local.deleteMessage(me, message.id);
   setSocial((s) => {
     const t = s.threads[message.conversationId];
-    if (t) t.items = t.items.filter((m) => m.id !== message.id);
+    if (t) {t.items = t.items.filter((m) => m.id !== message.id);t.pins=t.pins?.filter(p=>p.message.id!==message.id);}
   });
 }
 
@@ -312,7 +352,7 @@ export async function receiveEnvelope(envelope: Envelope, live: boolean): Promis
         await local.deleteMessage(me, envelope.messageId);
         setSocial((s) => {
           const t = s.threads[envelope.conversationId];
-          if (t) t.items = t.items.filter((m) => m.id !== envelope.messageId);
+          if (t) {t.items = t.items.filter((m) => m.id !== envelope.messageId);t.pins=t.pins?.filter(p=>p.message.id!==envelope.messageId);}
         });
       } else if (envelope.nonce && envelope.ciphertext) {
         const stored = { ...original, nonce: envelope.nonce, ciphertext: envelope.ciphertext, editedAt: envelope.createdAt };

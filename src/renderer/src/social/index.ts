@@ -4,7 +4,7 @@ import { handleAccountEvent, signedIn as globalSignedIn } from "../auth/session.
 import { getState, setState, subscribe, toast } from "../store.ts";
 import { cloud, cloudUrls } from "./cloud.ts";
 import * as dm from "./dm-crypto.ts";
-import { loadDms, myDmKeys, publishDmKey, receiveEnvelope, resetDms, syncPending } from "./dms.ts";
+import { loadDms, loadDmPins, myDmKeys, publishDmKey, receiveEnvelope, resetDms, syncPending } from "./dms.ts";
 import { CloudGateway, type CloudEvent } from "./gateway.ts";
 import * as local from "./local-db.ts";
 import { cloudDevice, runtime, setSocial, social } from "./runtime.ts";
@@ -104,6 +104,7 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       // A reconnect may have missed relationship or DM changes.
       void loadRelationships().catch(() => undefined);
       void loadDms().catch(() => undefined);
+      for(const id of Object.keys(social().threads))void loadDmPins(id);
       return;
     case "PRESENCES":
       for (const view of Object.values(event.d as Record<string, PresenceView>)) await applyPresence(view);
@@ -162,6 +163,8 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       });
       sendWatch();
       return;
+    case "DM_PINS_UPDATE":
+      return loadDmPins(String(event.d.conversationId));
     case "ENVELOPE":
       return receiveEnvelope(event.d, true).catch((error) => console.warn("DM receive failed", (error as Error).message));
     case "TYPING":

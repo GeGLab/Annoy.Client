@@ -33,6 +33,7 @@
     "predev": "node scripts/ensure-electron.mjs",
     "prestart": "node scripts/ensure-electron.mjs",
     "test:disconnect": "playwright test tests/disconnect.spec.ts",
+    "test:pins": "node --experimental-strip-types --test scripts/tests/message-pins.test.mjs",
     "test:history": "node --experimental-strip-types --test scripts/tests/message-window.test.mjs"
   },
   "engines": {

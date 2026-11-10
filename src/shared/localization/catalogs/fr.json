@@ -2304,5 +2304,6 @@
   "activity.annoySteamTitle": "Steam · Compte Annoy",
   "activity.annoySteamHelp": "Connectez votre compte dans le navigateur pour compléter la détection locale. Votre mot de passe reste chez Steam. Le lien appartient à votre compte Annoy, sur tous les serveurs.",
   "account.localDeleteWarning": "Ceci est un compte local de {p0}, sans compte Annoy. Ses données ne pourront pas être récupérées ensuite.",
-  "account.localDeleteConfirm": "Supprimer le compte local de {p0} ? Les données ne pourront pas être récupérées."
+  "account.localDeleteConfirm": "Supprimer le compte local de {p0} ? Les données ne pourront pas être récupérées.",
+  "social.sharedPins": "Partagés dans la conversation. Les messages épinglés sont conservés jusqu’à leur retrait."
 }

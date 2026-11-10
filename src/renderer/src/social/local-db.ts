@@ -14,7 +14,8 @@ export interface StoredMessage {
   editedAt: string | null;
 }
 
-const VERSION = 1;
+export interface StoredPin { message: StoredMessage; pinnedBy: string; pinnedAt: string }
+const VERSION = 2;
 let opened: { userId: string; db: Promise<IDBDatabase> } | null = null;
 
 const dbName = (userId: string) => `annoy-dm-${userId}`;
@@ -25,9 +26,12 @@ function open(userId: string): Promise<IDBDatabase> {
   const db = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(dbName(userId), VERSION);
     req.onupgradeneeded = () => {
-      const messages = req.result.createObjectStore("messages", { keyPath: "id" });
-      messages.createIndex("conversation", ["conversationId", "id"]);
-      req.result.createObjectStore("files");
+      if (!req.result.objectStoreNames.contains("messages")) {
+        const messages = req.result.createObjectStore("messages", { keyPath: "id" });
+        messages.createIndex("conversation", ["conversationId", "id"]);
+        req.result.createObjectStore("files");
+      }
+      if (!req.result.objectStoreNames.contains("pins")) req.result.createObjectStore("pins");
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -57,6 +61,15 @@ export async function putMessages(userId: string, messages: StoredMessage[]): Pr
 
 export async function getMessage(userId: string, id: string): Promise<StoredMessage | undefined> {
   return result((await open(userId)).transaction("messages").objectStore("messages").get(id));
+}
+
+export async function getPins(userId:string,conversationId:string):Promise<StoredPin[]> {
+  return (await result((await open(userId)).transaction("pins").objectStore("pins").get(conversationId)))??[];
+}
+export async function putPins(userId:string,conversationId:string,pins:StoredPin[]):Promise<void> {
+  const tx=(await open(userId)).transaction("pins","readwrite");
+  tx.objectStore("pins").put(pins,conversationId);
+  await done(tx);
 }
 
 export async function deleteMessage(userId: string, id: string): Promise<void> {
