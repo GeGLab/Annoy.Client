@@ -10,3 +10,6 @@ tests/display.local.json
 .impeccable/review/
 
 
+
+# Local Rust build caches; source for these experiments lives in separate worktrees.
+native/**/target/

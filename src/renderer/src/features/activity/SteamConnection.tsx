@@ -1,4 +1,3 @@
-import {rich} from "../../lib/localization.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
 import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, UserActivity } from "@annoy/protocol";
@@ -7,7 +6,7 @@ import { useStore, type AppState } from "../../store.ts";
 import { cloudSteam } from "../../social/details.ts";
 import { Button } from "../../components/ui/button.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
-import { PreferenceCard } from "../../components/settings/PreferenceCard.tsx";
+import { Check, ExternalLink, Info, Link2, LoaderCircle, Unplug, UserRound } from "lucide-react";
 import { ActivityCard } from "./ActivityCard.tsx";
 
 interface SteamApi {
@@ -105,17 +104,43 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   };
-  return <PreferenceCard icon="radio" title={title} description={description}>
-    {status?.connection && <p className="row"><ProviderIcon provider="steam" /><a href={status.connection.profileUrl} target="_blank" rel="noreferrer">{rich("common.13e868e9ba0d",{p0:(status.connection.personaName || status.connection.steamId)})}</a></p>}
-    {status?.connection && ownGame && <ActivityCard activity={ownGame} />}
-    {status && <p className="muted small">{status.onlineActivityAvailable ? translate("activity.53b4251b7285") : translate("activity.f309480a1c0d")}</p>}
-    <div className="row">
-      {status && !status.connection && !busy && <Button variant="secondary" size="sm" onClick={() => void connect()}>{translate("activity.94665f4f307d")}</Button>}
-      {waiting && <Button variant="secondary" size="sm" onClick={() => { void disconnect(); }}>{translate("activity.c41cf256486d")}</Button>}
-      {status?.connection && !waiting && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void disconnect()}>{translate("activity.a606bbae3955")}</Button>}
-      {!status && error && <Button variant="secondary" size="sm" onClick={() => { void api.status().then(setStatus).catch((error) => setError(error.message)); }}>{translate("common.b9e10688be01")}</Button>}
+  const connection = status?.connection;
+  const profileName = connection?.personaName || connection?.steamId;
+  return <section className="preference-card steam-connection-card" aria-label={title}>
+    <header className="steam-connection-header">
+      <span className="steam-connection-logo"><ProviderIcon provider="steam" size={28} /></span>
+      <div className="steam-connection-heading">
+        <h4>{title}</h4>
+        <p>{connection ? translate("activity.steam.connectedHelp") : description}</p>
+      </div>
+      {status && <span className={`steam-connection-status${connection ? " is-connected" : ""}`}>
+        {connection && <Check size={12} aria-hidden />}
+        {translate(connection ? "common.79c5eb4810e5" : "common.c1f272b304da")}
+      </span>}
+    </header>
+    <div className="steam-connection-body">
+      {connection && <a className="steam-profile-link" href={connection.profileUrl} target="_blank" rel="noreferrer"
+        aria-label={translate("common.13e868e9ba0d", { p0: profileName })}>
+        <span className="steam-profile-symbol"><UserRound size={22} aria-hidden /></span>
+        <span className="steam-profile-copy"><strong>{profileName}</strong><span>{translate("activity.steam.viewProfile")}</span></span>
+        <ExternalLink size={16} aria-hidden />
+      </a>}
+      {connection && ownGame && <ActivityCard activity={ownGame} />}
+      {status && <div className="steam-activity-note">
+        <Info size={16} aria-hidden />
+        <div><strong>{translate(status.onlineActivityAvailable ? "activity.steam.onlineAvailable" : "activity.steam.onlineUnavailable")}</strong>
+          <p>{status.onlineActivityAvailable ? translate("activity.53b4251b7285") : translate("activity.f309480a1c0d")}</p>
+        </div>
+      </div>}
+      {!status && !error && <p className="steam-connection-loading" role="status"><LoaderCircle size={16} className="animate-spin" aria-hidden />{translate("activity.steam.loading")}</p>}
+      {waiting && <p role="status" className="steam-connection-loading"><LoaderCircle size={16} className="animate-spin" aria-hidden />{translate("activity.bdb251f0da37")}</p>}
+      {error && <p className="error small" role="alert">{error}</p>}
     </div>
-    {waiting && <p role="status" className="muted small">{translate("activity.bdb251f0da37")}</p>}
-    {error && <p className="error small" role="alert">{error}</p>}
-  </PreferenceCard>;
+    {(status || error) && <footer className="steam-connection-actions">
+      {status && !connection && !busy && <Button size="sm" onClick={() => void connect()}><Link2 size={15} aria-hidden />{translate("activity.94665f4f307d")}</Button>}
+      {waiting && <Button variant="secondary" size="sm" onClick={() => { void disconnect(); }}>{translate("activity.c41cf256486d")}</Button>}
+      {connection && !waiting && <Button className="steam-disconnect" variant="ghost" size="sm" loading={busy} onClick={() => void disconnect()}><Unplug size={14} aria-hidden />{translate("activity.a606bbae3955")}</Button>}
+      {!status && error && <Button variant="secondary" size="sm" onClick={() => { void api.status().then(setStatus).catch((error) => setError(error.message)); }}>{translate("common.b9e10688be01")}</Button>}
+    </footer>}
+  </section>;
 }

@@ -116,10 +116,12 @@ export interface VoiceUi {
   canStream: boolean;
   camera: boolean;
   screen: boolean;
+  screenBusy?: boolean;
 }
 
 export interface Settings extends LocalizationPreferences {
   theme: "dark" | "light" | "system";
+  themePreset: import("./lib/theme-presets.ts").ThemePreset;
   /** Annoy icon inside the app, on the window and in the tray. */
   appIcon: import("../../shared/app-icon.ts").AppIcon;
   accentColor: string | null;
@@ -232,6 +234,7 @@ const SERVICES_KEY = "annoy.services";
 const DEFAULT_SETTINGS: Settings = {
   ...defaultLocalization(navigator.language),
   theme: "dark",
+  themePreset: "classic",
   accentColor: null,
   surfaceColor: null,
   channelsWidth: 252,

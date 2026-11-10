@@ -11,6 +11,7 @@ import { osStorage } from "./safe-storage.ts";
 import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join,isAbsolute } from "node:path";
+import { parseOverlayMenuPick, parseOverlayMenuSpec, type OverlayMenuPick } from "../shared/overlay-menu.ts";
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
@@ -19,6 +20,7 @@ import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
 import { startScreenAudio, stopScreenAudio, stopScreenAudioNow } from "./screen-audio-linux.ts";
 
+const mediaWindowIds = new Set<number>();
 const MEDIA_PERMISSIONS = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
 
 let win: BrowserWindow | null = null;
@@ -115,6 +117,13 @@ registerLocalization(ipcMain,()=>win);
 const desktop=desktopController(()=>win,createTray,()=>!!tray&&!tray.isDestroyed(),()=>trayCapable,()=>{trayCapable=supportsTray();createTray();});
 onLocalizationChange(()=>{if(tray)createTray();});
 if (process.platform === "linux") app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
+// Capture, VAD and neural filters must keep their scheduling priority when another
+// window covers Annoy. backgroundThrottling:false controls page timers/rendering;
+// Windows renderer priority and native occlusion are separate Chromium policies.
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
 // Chromium picks the keychain by desktop name and falls back to no encryption
 // on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
 // (KWallet's ksecretd, GNOME Keyring, KeePassXC). Ask for it by its standard
@@ -170,8 +179,10 @@ function configureSession(s: Session, own: boolean): void {
   };
   // Using the app is consent to its terms: media is granted without asking, but only to
   // Annoy's own window and to the service tab on screen, never to other or hidden content.
-  s.setPermissionRequestHandler((wc,permission,callback,details) => callback(MEDIA_PERMISSIONS.has(permission) && trusted(wc,details.requestingUrl||wc.getURL())));
-  s.setPermissionCheckHandler((wc,permission,origin) => MEDIA_PERMISSIONS.has(permission) && trusted(wc,origin));
+  const allowed = (wc: Electron.WebContents | null, permission: string, origin: string) =>
+    MEDIA_PERMISSIONS.has(permission) && (trusted(wc, origin) || (own && permission === "fullscreen" && !!wc && appAccess.getState().allowed && mediaWindowIds.has(wc.id)));
+  s.setPermissionRequestHandler((wc,permission,callback,details) => callback(allowed(wc,permission,details.requestingUrl||wc.getURL())));
+  s.setPermissionCheckHandler((wc,permission,origin) => allowed(wc,permission,origin));
   s.setDisplayMediaRequestHandler(
     async (request, callback) => {
       if (!appAccess.getState().allowed) { callback({}); return; }
@@ -237,6 +248,7 @@ function ensureView(service: Service): WebContentsView {
 
 function showService(service: Service | null): void {
   if (service && !appAccess.getState().allowed) return;
+  if (menuPending) closeMenuOverlay(null);
   for (const [id, entry] of views) if (id !== service?.id) entry.view.setVisible(false);
   shownService = service?.id ?? null;
   if (!service) {
@@ -247,6 +259,58 @@ function showService(service: Service | null): void {
   layoutService();
   view.setVisible(true);
   view.webContents.focus();
+  // Load the menu layer while the service is on screen, so the first right-click opens at once.
+  ensureMenuOverlay();
+}
+
+/**
+ * Native views cover the page, so a menu drawn in it would sit behind a browser service.
+ * Menus opened over a service are drawn in this transparent layer, put above every view
+ * only while a menu is open; it uses the app's own page and styles.
+ */
+let menuOverlay: { view: WebContentsView; ready: Promise<void> } | null = null;
+let menuPending: { token: number; resolve: (pick: OverlayMenuPick | null) => void } | null = null;
+let menuToken = 0;
+
+function ensureMenuOverlay(): { view: WebContentsView; ready: Promise<void> } | null {
+  if (menuOverlay) return menuOverlay;
+  if (!win) return null;
+  const view = new WebContentsView({ webPreferences: { preload: join(import.meta.dirname, "../preload/overlay.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, nodeIntegrationInSubFrames: false, spellcheck: false } });
+  view.setBackgroundColor("#00000000");
+  const wc = view.webContents;
+  wc.setWindowOpenHandler(() => ({ action: "deny" }));
+  wc.on("will-navigate", event => event.preventDefault());
+  // Ready once the page itself says it listens; loading alone happens before React subscribes.
+  const ready = new Promise<void>(resolve => {
+    const onReady = (event: Electron.IpcMainEvent) => { if (event.sender === wc) { ipcMain.off("overlay-menu:ready", onReady); resolve(); } };
+    ipcMain.on("overlay-menu:ready", onReady);
+  });
+  void (!app.isPackaged && process.env.ELECTRON_RENDERER_URL
+    ? wc.loadURL(new URL("overlay.html", process.env.ELECTRON_RENDERER_URL.replace(/\/?$/, "/")).href)
+    : wc.loadFile(join(import.meta.dirname, "../renderer/overlay.html"))).catch(() => undefined);
+  view.setVisible(false);
+  win.contentView.addChildView(view);
+  wc.on("render-process-gone", () => { if (menuOverlay?.view === view) { closeMenuOverlay(null); win?.contentView.removeChildView(view); menuOverlay = null; } });
+  menuOverlay = { view, ready };
+  return menuOverlay;
+}
+
+function closeMenuOverlay(pick: OverlayMenuPick | null): void {
+  const pending = menuPending;
+  menuPending = null;
+  if (menuOverlay) {
+    menuOverlay.view.webContents.send("overlay-menu:close");
+    menuOverlay.view.setVisible(false);
+  }
+  const shown = shownService ? views.get(shownService) : undefined;
+  if (shown) shown.view.webContents.focus(); else win?.webContents.focus();
+  pending?.resolve(pick);
+}
+
+function layoutMenuOverlay(): void {
+  if (!win || !menuOverlay) return;
+  const { width, height } = win.getContentBounds();
+  menuOverlay.view.setBounds({ x: 0, y: 0, width, height });
 }
 
 /** Closes a removed service and forgets its login. */
@@ -340,7 +404,7 @@ function createWindow(): void {
     },
   });
   win.webContents.setWindowOpenHandler(({ url, frameName }) => {
-    // A screen share in its own window: the renderer fills this blank page with the video.
+    // Media windows are filled by the original renderer; navigation and Node stay disabled.
     if (url === "about:blank" && frameName.startsWith("annoy-stream:")) {
       return {
         action: "allow",
@@ -358,6 +422,9 @@ function createWindow(): void {
     return { action: "deny" };
   });
   win.webContents.on("did-create-window", (child) => {
+    const id = child.webContents.id;
+    mediaWindowIds.add(id);
+    child.on("closed", () => mediaWindowIds.delete(id));
     child.setMenu(null);
     child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     child.webContents.on("will-navigate", (event) => event.preventDefault());
@@ -398,7 +465,13 @@ function createWindow(): void {
     win = null;
     views.clear();
     shownService = null;
+    menuOverlay = null;
+    menuPending?.resolve(null);
+    menuPending = null;
   });
+  // A menu belongs to the spot it opened at; moving or resizing the window closes it.
+  win.on("resize", () => { if (menuPending) closeMenuOverlay(null); });
+  win.on("move", () => { if (menuPending) closeMenuOverlay(null); });
 
   win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
   if (!app.isPackaged&&process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -488,6 +561,28 @@ ipcMain.on("file:download", (event, url: unknown) => {
 ipcMain.handle("system:idle", (event) => fromRenderer(event) ? powerMonitor.getSystemIdleTime() : 0);
 ipcMain.handle("window:maximized", (event) => fromRenderer(event) && win!.isMaximized());
 
+ipcMain.handle("overlay-menu:open", async (event, raw: unknown) => {
+  if (!authorized(event) || !win) return null;
+  const spec = parseOverlayMenuSpec(raw);
+  const overlay = spec && ensureMenuOverlay();
+  if (!spec || !overlay) return null;
+  closeMenuOverlay(null);
+  const loaded = await Promise.race([overlay.ready.then(() => true), new Promise<false>(resolve => setTimeout(() => resolve(false), 3000))]);
+  if (!loaded || !win || menuOverlay !== overlay) return null;
+  const token = ++menuToken;
+  const answer = new Promise<OverlayMenuPick | null>(resolve => { menuPending = { token, resolve }; });
+  // Adding a child view again moves it above the others.
+  win.contentView.addChildView(overlay.view);
+  layoutMenuOverlay();
+  overlay.view.setVisible(true);
+  overlay.view.webContents.focus();
+  overlay.view.webContents.send("overlay-menu:show", token, spec);
+  return answer;
+});
+ipcMain.on("overlay-menu:done", (event, token: unknown, raw: unknown) => {
+  if (!menuOverlay || event.sender !== menuOverlay.view.webContents || token !== menuPending?.token) return;
+  closeMenuOverlay(raw === null ? null : parseOverlayMenuPick(raw));
+});
 ipcMain.on("service:show", (event, raw: unknown) => {
   if (!authorized(event)) return;
   const service = parseService(raw);

@@ -1,15 +1,17 @@
+import { closeCallWindow, focusCallWindow, openCallWindow, useCallWindow } from "../features/call-window.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { UserProfile } from "./UserProfile.tsx";
 import type { Channel, ServerState, VoiceState } from "@annoy/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { joinVoice, leaveVoice, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting, watchStream } from "../client.ts";
+import { joinVoice, leaveVoice, openScreenShareSettings, updateScreenShareQuality, startScreenShare, toggleCamera, toggleScreenShare, toggleVoiceSetting, watchStream } from "../client.ts";
 import { useStreamOffers, useVideoTiles, type VideoTile } from "../media.ts";
 import { UserVolumeControl } from "./UserVolumeControl.tsx";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu.tsx";
 import { popOutStream, usePoppedOutStreams } from "../features/stream-popout.ts";
 import { displayNameOf } from "../perms.ts";
-import { setState, useStore } from "../store.ts";
+import { setState, toast, useStore } from "../store.ts";
+import { Minimize } from "lucide-react";
 import { Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
 import { Select } from "./ui/select.tsx";
 import { SCREEN_RESOLUTIONS, screenQualityLabel } from "../lib/screen-profile.ts";
@@ -31,6 +33,15 @@ interface Person {
 
 function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoTile; person: Person | undefined; focused: boolean; onFocus: () => void; accountId: string }) {
   const card = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const owner = card.current?.ownerDocument ?? document;
+    const changed = () => setFullscreen(owner.fullscreenElement === card.current);
+    changed();
+    owner.addEventListener("fullscreenchange", changed);
+    return () => owner.removeEventListener("fullscreenchange", changed);
+  }, []);
+  const fullscreenLabel = translate(fullscreen ? "voice.exitFullscreen" : "common.cdd35dea1ee3");
   const remoteScreen = tile.source === "screen" && !tile.local;
   const popOut = () => popOutStream(tile, translate("voice.streamWindowTitle", { p0: person?.name ?? "…" }));
   const view = (
@@ -44,6 +55,7 @@ function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoT
         </span>
       </div>
       <div className="stage-corner">
+        {tile.local && tile.source === "screen" && <button className="icon-btn" title={translate("voice.shareSettings")} aria-label={translate("voice.shareSettings")} onClick={event => { event.stopPropagation(); void openScreenShareSettings(event.currentTarget.ownerDocument); }}><Icon name="sliders" size={16} /></button>}
         {remoteScreen && (
           <button
             className="icon-btn"
@@ -58,13 +70,18 @@ function VideoCard({ tile, person, focused, onFocus, accountId }: { tile: VideoT
         )}
         <button
           className="icon-btn"
-          title={translate("common.cdd35dea1ee3")}
+          title={fullscreenLabel}
+          aria-label={fullscreenLabel}
+          aria-pressed={fullscreen}
           onClick={(e) => {
             e.stopPropagation();
-            void card.current?.requestFullscreen();
+            const element = card.current;
+            if (!element) return;
+            const action = element.ownerDocument.fullscreenElement === element ? element.ownerDocument.exitFullscreen() : element.requestFullscreen();
+            void action.catch(() => toast(translate("common.2de9dc35cfe3")));
           }}
         >
-          <Icon name="maximize" size={16} />
+          {fullscreen ? <Minimize className="icon" size={16} strokeWidth={1.75} aria-hidden /> : <Icon name="maximize" size={16} />}
         </button>
       </div>
       {remoteScreen && (
@@ -122,11 +139,12 @@ function PersonCard({ person, accountId }: { person: Person; accountId: string }
 }
 
 /** Voice channel view: everyone in the call, with cameras and screen shares. */
-export function VoiceStage({ accountId, state, channel, embedded = false, canConnect = true }: { accountId: string; state: ServerState; channel: Channel; embedded?: boolean; canConnect?: boolean }) {
+export function VoiceStage({ accountId, state, channel, embedded = false, canConnect = true, detached = false }: { accountId: string; state: ServerState; channel: Channel; embedded?: boolean; canConnect?: boolean; detached?: boolean }) {
   const voice = useStore((s) => s.voice);
   const settings = useStore((s) => s.settings);
   const tiles = useVideoTiles();
   const poppedOut = usePoppedOutStreams();
+  const callWindow = useCallWindow();
   const offers = useStreamOffers();
   const [focus, setFocus] = useState<string | null>(null);
   const connected = voice?.accountId === accountId && voice.channelId === channel.id;
@@ -165,7 +183,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
         </header>
       )}
 
-      {!connected && !canConnect ? (
+      {connected && callWindow && !detached ? <div className="stage-empty"><Icon name="external" size={32} /><h2>{translate("voice.callInWindow")}</h2><div className="row"><button className="btn" onClick={focusCallWindow}>{translate("voice.showCallWindow")}</button><button className="btn btn-ghost" onClick={closeCallWindow}>{translate("voice.dockCall")}</button></div></div> : !connected && !canConnect ? (
         <div className="stage-empty" role="status"><Icon name="lock" size={30} /><h2>{translate("common.6e1b48552704")}</h2><p className="muted">{translate("common.36614b7fc786")}</p></div>
       ) : !connected ? (
         <div className="stage-empty">
@@ -202,6 +220,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
             </div>
           </div>
           <div className="stage-controls">
+            <div className="stage-control-buttons">
             <button className={`round-btn${settings.selfMute ? " off" : ""}`} onClick={() => toggleVoiceSetting("selfMute")} title={settings.selfMute ? translate("common.2c42f42f33a1") : translate("common.8953cc8c3228")}>
               <Icon name={settings.selfMute ? "micOff" : "mic"} size={20} />
             </button>
@@ -224,9 +243,14 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
             >
               <Icon name="monitor" size={20} />
             </button>
+            {voice.screen && <button className="round-btn" disabled={voice.screenBusy} title={translate("voice.shareSettings")} aria-label={translate("voice.shareSettings")} onClick={event => void openScreenShareSettings(event.currentTarget.ownerDocument)}><Icon name="sliders" size={20} /></button>}
             <button className="round-btn hangup" onClick={() => leaveVoice()} title={translate("common.df851ef5297e")}>
               <Icon name="hangup" size={20} />
             </button>
+            </div>
+            <div className="stage-window-controls">
+              <button className="icon-btn" title={translate(detached ? "voice.dockCall" : "voice.popoutCall")} aria-label={translate(detached ? "voice.dockCall" : "voice.popoutCall")} onClick={() => detached ? closeCallWindow() : openCallWindow(channel.name)}><Icon name={detached ? "panelLeft" : "external"} size={20} /></button>
+            </div>
           </div>
         </>
       )}
@@ -244,6 +268,13 @@ interface Source {
 /** Choose a screen or window to share (Windows, macOS and X11; Wayland uses the system portal). */
 export function ScreenPickerModal() {
   const settings = useStore((s) => s.settings);
+  const sharing = useStore(s => !!s.voice?.screen);
+  const busy = useStore(s => !!s.voice?.screenBusy);
+  const changeQuality = (patch: Partial<Pick<typeof settings, "screenHeight" | "screenFps">>) => {
+    if (sharing) void updateScreenShareQuality({ screenHeight: settings.screenHeight, screenFps: settings.screenFps, ...patch });
+    else setState(s => { Object.assign(s.settings, patch); });
+  };
+  const choose = async (id: string | null) => { if (await startScreenShare(id)) closeModal(); };
   const [system, setSystem] = useState(false);
   const [sources, setSources] = useState<Source[] | null>(null);
   const [tab, setTab] = useState<"screen" | "window">("screen");
@@ -255,13 +286,13 @@ export function ScreenPickerModal() {
   }, []);
   const list = sources?.filter((s) => s.kind === tab) ?? [];
   return (
-    <Modal title={translate("common.b1f3d8d4c916")} wide>
-      <p className="muted small">{translate("common.cf987bb7e740")}</p>
+    <Modal title={translate(sharing ? "voice.shareSettings" : "common.b1f3d8d4c916")} wide busy={busy}>
+      <p className="muted small">{translate(sharing ? "voice.shareSettingsHint" : "common.cf987bb7e740")}</p>
       <div className="grid-2 screen-quality-options">
-        <Field label={translate("common.742773f345e2")}><Select aria-label={translate("common.431d2cdd9597")} value={String(settings.screenHeight)} onChange={(event) => setState((s) => { s.settings.screenHeight = Number(event.target.value); })}>{SCREEN_RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field>
-        <Field label={translate("common.00cd80cc7714")}><Select aria-label={translate("common.309c8286f5f5")} value={String(settings.screenFps)} onChange={(event) => setState((s) => { s.settings.screenFps = Number(event.target.value); })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? translate("common.31007b4e277a",{p0:(fps)}) : translate("common.b669ba5781e9")}</option>)}</Select></Field>
+        <Field label={translate("common.742773f345e2")}><Select aria-label={translate("common.431d2cdd9597")} value={String(settings.screenHeight)} disabled={busy} onChange={(event) => changeQuality({ screenHeight: Number(event.target.value) })}>{SCREEN_RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field>
+        <Field label={translate("common.00cd80cc7714")}><Select aria-label={translate("common.309c8286f5f5")} value={String(settings.screenFps)} disabled={busy} onChange={(event) => changeQuality({ screenFps: Number(event.target.value) })}>{[0, 15, 24, 30, 60, 120].map((fps) => <option key={fps} value={fps}>{fps ? translate("common.31007b4e277a",{p0:(fps)}) : translate("common.b669ba5781e9")}</option>)}</Select></Field>
       </div>
-      {system ? <button className="btn" onClick={() => { closeModal(); void startScreenShare(null); }}>{rich("common.bbbccb1b874e",{p0:(<Icon name="monitor" />)})}</button> : <>
+      {system ? <button className="btn" onClick={() => void choose(null)}>{rich("common.bbbccb1b874e",{p0:(<Icon name="monitor" />)})}</button> : <>
       <div className="tabs">
         <button className={tab === "screen" ? "tab active" : "tab"} onClick={() => setTab("screen")}>{translate("common.9fd84e06e26a")}</button>
         <button className={tab === "window" ? "tab active" : "tab"} onClick={() => setTab("window")}>{translate("common.3466640973b1")}</button>
@@ -276,10 +307,7 @@ export function ScreenPickerModal() {
             <button
               key={src.id}
               className="source-card"
-              onClick={() => {
-                closeModal();
-                void startScreenShare(src.id);
-              }}
+              onClick={() => void choose(src.id)}
             >
               <img src={src.thumbnail} alt="" />
               <span className="truncate">{src.name}</span>
@@ -288,6 +316,7 @@ export function ScreenPickerModal() {
         </div>
       )}
       </>}
+      {sharing && <button className="btn btn-ghost" disabled={busy} onClick={() => void toggleScreenShare().then(closeModal)}><Icon name="square" size={15} />{translate("common.c3ce13ec2b48")}</button>}
     </Modal>
   );
 }

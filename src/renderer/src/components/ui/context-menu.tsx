@@ -18,11 +18,11 @@ const useMenu = () => {
 };
 
 /** Reuse Radix's menu focus, keyboard and dismissal behavior, anchored at the pointer. */
-export function ContextMenu({ children }: { children: ReactNode }) {
+export function ContextMenu({ children, intercept }: { children: ReactNode; intercept?: (point: { x: number; y: number }) => boolean }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
   const point = useRef({ x: 0, y: 0 });
-  return <Context.Provider value={{ trigger, point, open, setOpen }}>
+  return <Context.Provider value={{ trigger, point, open, setOpen: (next) => { if (!next || !intercept?.(point.current)) setOpen(next); } }}>
     <Menu.Root open={open} onOpenChange={setOpen}>{children}</Menu.Root>
   </Context.Provider>;
 }
@@ -52,7 +52,7 @@ export function ContextMenuContent({ className, ...props }: ComponentProps<typeo
   const anchor = useRef({ getBoundingClientRect: () => DOMRect.fromRect({ ...menu.point.current, width: 0, height: 0 }) });
   return <>
     <Menu.Anchor virtualRef={anchor} />
-    <Menu.Portal><Menu.Content side="right" align="start" sideOffset={2} collisionPadding={10} loop
+    <Menu.Portal container={menu.trigger.current?.ownerDocument.fullscreenElement ?? menu.trigger.current?.ownerDocument.body}><Menu.Content side="right" align="start" sideOffset={2} collisionPadding={10} loop
       {...props} className={cn("ui-dropdown-content ui-context-content", className)}
       onInteractOutside={(event) => { props.onInteractOutside?.(event); outside.current = true; }}
       onCloseAutoFocus={(event) => {

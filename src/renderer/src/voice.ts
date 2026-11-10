@@ -1,5 +1,6 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
+import { applyScreenQuality, replaceScreenCapture, type ScreenSettings } from "./lib/screen-share.ts";
 import type { Device } from "mediasoup-client";
 import type { types as ms } from "mediasoup-client";
 import type { GatewayEvent, MediaSource } from "@annoy/protocol";
@@ -258,8 +259,34 @@ export class VoiceSession {
     }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });
     // The OS "stop sharing" control (or an unplugged camera) ends the track.
-    track.addEventListener("ended", () => void this.stopVideo(source));
+    track.addEventListener("ended", () => { if (this.video.get(source)?.track === track) void this.stopVideo(source); });
     this.onLocalMedia();
+  }
+
+  /** Change the captured display while retaining the sender and its viewers. */
+  async replaceScreen(): Promise<void> {
+    const entry = this.video.get("screen");
+    if (!entry) return this.startVideo("screen");
+    await replaceScreenCapture({
+      settings: this.settings, previous: entry.track, captured: this.capturedTracks,
+      current: () => !this.closed && this.video.get("screen") === entry,
+      replace: async track => { await entry.producer.replaceTrack({ track }); },
+      commit: track => {
+        entry.track = track;
+        putTile({ key: "local:screen", userId: this.selfId, source: "screen", stream: new MediaStream([track]), local: true });
+        track.addEventListener("ended", () => { if (this.video.get("screen")?.track === track) void this.stopVideo("screen"); });
+        this.onLocalMedia();
+      },
+    });
+  }
+
+  async updateScreenQuality(settings: ScreenSettings): Promise<void> {
+    const entry = this.video.get("screen");
+    if (!entry) throw new Error(translate("common.99e2847d16e5"));
+    await applyScreenQuality(entry.track, settings, this.settings, async maxBitrate => {
+      await entry.producer.setRtpEncodingParameters({ maxBitrate });
+    }, () => !this.closed && this.video.get("screen") === entry);
+    this.settings = { ...this.settings, ...settings };
   }
 
   async stopVideo(source: "camera" | "screen"): Promise<void> {

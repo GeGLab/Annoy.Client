@@ -1,4 +1,5 @@
 import type { Settings } from "../store.ts";
+import { themePreset } from "./theme-presets.ts";
 
 const HEX = /^#[\da-f]{6}$/i;
 export function validColor(value: unknown): value is string {
@@ -39,6 +40,9 @@ export function readableColor(color: string, background: string) {
 }
 
 const CUSTOM_PROPERTIES = [
+  "--text",
+  "--text-soft",
+  "--text-muted",
   "--accent",
   "--accent-hover",
   "--accent-strong",
@@ -58,13 +62,23 @@ const CUSTOM_PROPERTIES = [
   "--border",
   "--border-strong",
 ];
-export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfaceColor">) {
+export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfaceColor"> & Partial<Pick<Settings, "themePreset">>) {
   const root = document.documentElement;
   for (const key of CUSTOM_PROPERTIES) root.style.removeProperty(key);
   const light = root.dataset.theme === "light";
-  if (validColor(settings.surfaceColor)) {
+  const preset = themePreset(settings.themePreset);
+  root.dataset.themePreset = preset.id;
+  const curated = preset.id !== "classic";
+  if (curated) {
+    const base = light ? preset.light : preset.dark;
+    root.style.setProperty("--text", mix(base, light ? "#000000" : "#ffffff", light ? 0.86 : 0.94));
+    root.style.setProperty("--text-soft", mix(base, light ? "#000000" : "#ffffff", light ? 0.73 : 0.78));
+    root.style.setProperty("--text-muted", readableColor(mix(base, light ? "#000000" : "#ffffff", 0.58), base));
+  }
+  if (curated || validColor(settings.surfaceColor)) {
     // Limit tint saturation to preserve neutral surfaces and text contrast.
-    const base = mix(light ? "#fcfbf9" : "#171621", settings.surfaceColor, 0.12);
+    const paletteBase = light ? preset.light : preset.dark;
+    const base = validColor(settings.surfaceColor) ? mix(paletteBase, settings.surfaceColor, 0.12) : paletteBase;
     for (const [key, amount] of Object.entries({
       "--bg-rail": 0.3,
       "--bg-channels": 0.14,
@@ -74,6 +88,8 @@ export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfac
       "--bg-active": -0.14,
       "--bg-input": -0.05,
       "--bg-deep": 0.2,
+      "--border": -0.16,
+      "--border-strong": -0.28,
     })) {
       root.style.setProperty(
         key,
@@ -81,9 +97,9 @@ export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfac
       );
     }
   }
-  if (validColor(settings.accentColor)) {
+  if (curated || validColor(settings.accentColor)) {
     const background = getComputedStyle(root).getPropertyValue("--bg-main").trim();
-    const accent = readableColor(settings.accentColor, background);
+    const accent = readableColor(validColor(settings.accentColor) ? settings.accentColor : light ? preset.lightAccent : preset.accent, background);
     const foreground = contrast(accent, "#ffffff") >= 4.5 ? "#ffffff" : "#17191d";
     root.style.setProperty("--accent", accent);
     root.style.setProperty("--accent-hover", mix(accent, foreground === "#ffffff" ? "#000000" : "#ffffff", 0.08));

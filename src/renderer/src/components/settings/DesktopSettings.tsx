@@ -41,7 +41,7 @@ export function DesktopSettings({
             {t(loadError ? "desktop.loadError" : "desktop.loading")}
           </p>
           {loadError && (
-            <Button onClick={refresh}>{t("desktop.refresh")}</Button>
+            <Button onClick={refresh}>{t("common.b9e10688be01")}</Button>
           )}
         </>
       ) : (
@@ -113,9 +113,6 @@ export function DesktopSettings({
             <p className="muted">{t("desktop.trayUnavailable")}</p>
           )}
           {status.error && <p role="alert">{t("desktop.autostartError")}</p>}
-          <Button variant="ghost" disabled={disabled} onClick={refresh}>
-            {t("desktop.refresh")}
-          </Button>
         </>
       )}
     </section>

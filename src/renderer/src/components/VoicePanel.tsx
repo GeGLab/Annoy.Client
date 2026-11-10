@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
-import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, updateVoiceSettings } from "../client.ts";
+import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, openScreenShareSettings, updateVoiceSettings } from "../client.ts";
 import { setState, useStore } from "../store.ts";
 import { deviceChoice, selectableDevices, shownDevice } from "../lib/devices.ts";
 import { Icon } from "./ui.tsx";
@@ -136,6 +136,7 @@ export function VoicePanel() {
             <span>{voice.screen ? translate("common.6872fc989a63") : translate("common.85344dae041c")}</span>
           </button>
         </Tooltip>
+        {voice.screen && <button className="voice-share-settings" disabled={voice.screenBusy} title={translate("voice.shareSettings")} aria-label={translate("voice.shareSettings")} onClick={() => void openScreenShareSettings()}><Icon name="sliders" size={16} /></button>}
       </div>
       <span className="voice-panel-note">
         {connected ? counted(count || 1,"counts.room.one","counts.room.other") : translate("common.7372b662aff9")}

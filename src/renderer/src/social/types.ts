@@ -80,7 +80,12 @@ export interface DmThread {
   loaded: boolean;
   /** More stored history on chatannoy (only with "store"). */
   hasMoreRemote: boolean;
+  pins?: DmPin[];
+  pinsLoading?: boolean;
+  pinsError?: string | null;
 }
+
+export interface DmPin { message: DmMessage; pinnedBy: string; pinnedAt: string }
 
 export interface SocialState {
   /** "off": no Annoy account signed in. */

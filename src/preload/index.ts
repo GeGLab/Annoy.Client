@@ -6,6 +6,7 @@ import type { AppAccessState } from "../shared/app-access.ts";
 import type { UpdateState } from "../shared/update.ts";
 import type { UpdateChannel, UpdateChannelInfo } from "../shared/update-channels.ts";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../shared/activity.ts";
+import type { OverlayMenuPick, OverlayMenuSpec } from "../shared/overlay-menu.ts";
 
 export type TheaterSlot = "theater" | "music";
 export interface TheaterEvents {
@@ -88,6 +89,10 @@ const bridge = {
     },
   },
   flashWindow: () => ipcRenderer.send("window:flash"),
+  /** Context menus drawn in a transparent layer above browser services; resolves with the chosen row. */
+  overlayMenu: {
+    open: (spec: OverlayMenuSpec) => ipcRenderer.invoke("overlay-menu:open", spec) as Promise<OverlayMenuPick | null>,
+  },
   services: {
     show: (service: Service) => ipcRenderer.send("service:show", { id: service.id, kind: service.kind, name: service.name, url: service.url }),
     hide: () => ipcRenderer.send("service:hide"),

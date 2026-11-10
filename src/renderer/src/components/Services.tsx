@@ -1,12 +1,13 @@
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { ServiceLogo } from "./ServiceLogo.tsx";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { CATALOG, catalogEntry, teamspeakLink, type CatalogEntry, type Service, type TabDisplay, type TabPlacement, type TeamSpeakServer } from "../../../shared/services.ts";
 import { addService, navigate, openServer, removeService, setServiceHidden, updateService } from "../client.ts";
 import { initials } from "../format.tsx";
 import { getState, useStore, type Settings } from "../store.ts";
 import { closeModal, Field, Icon, Modal, openModal } from "./ui.tsx";
+import { EntryContextMenu, type MenuEntry } from "./ui/entry-menu.tsx";
 
 const newId = () => crypto.randomUUID();
 
@@ -27,19 +28,50 @@ export function tabLayout(service: Service, settings: Settings): { placement: Ta
   return { placement: service.placement ?? settings.servicePlacement, display: service.display ?? settings.serviceDisplay };
 }
 
+function confirmRemoveService(service: Service): void {
+  const what = service.kind === "teamspeak" ? translate("common.c1b93ab8707a") : translate("common.1ff423405b53");
+  if (confirm(translate("common.89627d35a828",{p0:(service.name),p1:(what)}))) void removeService(service.id);
+}
+
+/** Right-click options for a service tab; the full settings stay in the modal. */
+function ServiceTabMenu({ service, children }: { service: Service; children: ReactNode }) {
+  const defaults = useStore((s) => s.settings);
+  const entries: MenuEntry[] = [
+    { kind: "label", text: service.name },
+    ...(service.kind !== "teamspeak" ? [{ kind: "item", id: "reload", icon: "refresh", text: translate("common.9b6bb68d29b1"), run: () => window.annoy?.services.reload(service.id) } as const] : []),
+    { kind: "item", id: "hide", icon: "eyeOff", text: translate("common.dd680772877e"), run: () => setServiceHidden(service.id, true) },
+    { kind: "separator" },
+    { kind: "label", text: translate("common.c777cba8ebf0") },
+    { kind: "radio", id: "placement", value: service.placement ?? "", run: (value) => updateService(service.id, (sv) => void (sv.placement = (value || undefined) as TabPlacement | undefined)), options: [
+      { value: "", text: translate("common.c10b1cc04814", { p0: defaults.servicePlacement === "before" ? "antes" : "depois" }) },
+      { value: "before", text: translate("common.3b856d7cd0b4") },
+      { value: "after", text: translate("common.d0e145bc660d") },
+    ] },
+    { kind: "separator" },
+    { kind: "label", text: translate("common.0b4cf0d2ea73") },
+    { kind: "radio", id: "display", value: service.display ?? "", run: (value) => updateService(service.id, (sv) => void (sv.display = (value || undefined) as TabDisplay | undefined)), options: [
+      { value: "", text: translate("common.bcd11cd1c70f", { p0: defaults.serviceDisplay === "full" ? translate("common.c99567ffa8ae") : translate("common.6edd17148430") }) },
+      { value: "full", text: translate("common.593c128aa54e") },
+      { value: "icon", text: translate("common.e0520b5efa74") },
+    ] },
+    { kind: "separator" },
+    { kind: "item", id: "settings", icon: "gear", text: translate("common.76b0fb6ad189"), run: () => openModal({ kind: "serviceSettings", serviceId: service.id }) },
+    { kind: "separator" },
+    { kind: "item", id: "remove", icon: "trash", destructive: true, text: translate("common.ba25e7dd2cb3"), run: () => confirmRemoveService(service) },
+  ];
+  return <EntryContextMenu label={translate("common.63801f844138")} entries={entries}>{children}</EntryContextMenu>;
+}
+
 export function ServiceTab({ service }: { service: Service }) {
   const iconOnly = useStore((s) => tabLayout(service, s.settings).display === "icon");
   const active = useStore((s) => s.view.kind === "service" && s.view.serviceId === service.id);
   const badge = useStore((s) => s.serviceBadges[service.id]);
   const tile = tileOf(service);
   return (
+    <ServiceTabMenu service={service}>
     <button
       className={`tab-item service${active ? " active" : ""}${iconOnly ? " icon-only" : ""}`}
       onClick={() => navigate({ kind: "service", serviceId: service.id })}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        openModal({ kind: "serviceSettings", serviceId: service.id });
-      }}
       title={translate("common.2319674a134e",{p0:(service.name)})}
       aria-label={service.name}
       aria-current={active ? "page" : undefined}
@@ -50,6 +82,7 @@ export function ServiceTab({ service }: { service: Service }) {
       {!iconOnly && <span className="rail-label">{service.name}</span>}
       {badge && <span className="tab-badge">{badge}</span>}
     </button>
+    </ServiceTabMenu>
   );
 }
 
@@ -181,10 +214,7 @@ export function ServiceSettingsModal({ serviceId }: { serviceId: string }) {
     setServiceHidden(service.id, true);
     closeModal();
   };
-  const remove = () => {
-    const what = service.kind === "teamspeak" ? translate("common.c1b93ab8707a") : translate("common.1ff423405b53");
-    if (confirm(translate("common.89627d35a828",{p0:(service.name),p1:(what)}))) void removeService(service.id);
-  };
+  const remove = () => confirmRemoveService(service);
   return (
     <Modal title={service.name}>
       <form className="form" onSubmit={save}>

@@ -159,6 +159,136 @@ test("M3 opens at persisted unread, advances only visible reading and loads pinn
   }finally{await cleanup();}
 });
 
+test("message pin buttons update without a gateway echo and survive opening pinned context", async () => {
+  const {page,cleanup}=await launch();
+  const writes:string[]=[];
+  let pin:any=null;
+  try {
+    await seed(page);
+    const message=await page.evaluate(async()=>{
+      const {getState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return getState().instances.workspace.messages.general.items.at(-1);
+    });
+    await page.route(`${origin}/api/channels/general/pins?*`,route=>route.fulfill({json:{items:pin?[pin]:[],nextCursor:null}}));
+    await page.route(`${origin}/api/channels/general/pins/${message.id}`,route=>{
+      const method=route.request().method();writes.push(method);
+      pin=method==="PUT"?{message,pinnedBy:message.author,pinnedAt:new Date().toISOString()}:null;
+      return route.fulfill({json:pin??{}});
+    });
+    await page.route(`${origin}/api/channels/general/messages?around=*`,route=>route.fulfill({json:[message]}));
+    await page.evaluate(async()=>{
+      const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s:any)=>{s.instances.workspace.instance={messagePins:true};});
+    });
+    const row=page.locator(`[data-message-id="${message.id}"]`);
+    await row.hover();
+    await row.getByRole("button",{name:"Fixar mensagem",exact:true}).click();
+    await expect(row.getByRole("button",{name:"Desafixar mensagem",exact:true})).toHaveAttribute("aria-pressed","true");
+    await page.locator(".chat-header h1").click();
+    await expect(row.locator(".message-pin-label")).toHaveText("Mensagem fixada");
+    await expect(row).toHaveClass(/is-pinned/);
+    await expect(page.locator(".pin-summary .pins-count")).toHaveText("1");
+    await expect(row.locator(".lucide-pin-off")).toHaveCount(1);
+    await page.getByRole("button",{name:"Mensagens fixadas",exact:true}).click();
+    await page.locator(".pinned-message").click();
+    await expect(row).toBeInViewport();
+    await row.hover();
+    await row.getByRole("button",{name:"Desafixar mensagem",exact:true}).click();
+    await expect(row.getByRole("button",{name:"Fixar mensagem",exact:true})).toHaveAttribute("aria-pressed","false");
+    await expect(row.locator(".message-pin-label")).toHaveCount(0);
+    await expect(row).not.toHaveClass(/is-pinned/);
+    await expect(page.locator(".pin-summary .pins-count")).toHaveCount(0);
+    await page.getByRole("button",{name:"Mensagens fixadas",exact:true}).click();
+    await expect(page.getByText("Nenhuma mensagem fixada.", {exact:true})).toBeVisible();
+    expect(writes).toEqual(["PUT","DELETE"]);
+  }finally{await cleanup();}
+});
+
+for (const context of ["community", "dm"] as const) {
+  test(`${context} pins stay visible without hover in dark and light themes`, async () => {
+    const {page,cleanup}=await launch();
+    try {
+      await seed(page);
+      await page.evaluate(async context=>{
+        const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        const now=new Date().toISOString();
+        setState((s:any)=>{
+          if(context==="community"){
+            const inst=s.instances.workspace,base=inst.messages.general.items[0];
+            const normal={...base,id:"visual-normal",content:"Mensagem comum, sem destaque."};
+            const pinned={...base,id:"visual-pinned",content:"Esta mensagem está fixada e pode ser reconhecida sem passar o mouse."};
+            inst.instance={messagePins:true};
+            inst.messages.general={items:[normal,pinned],loading:false,hasMore:false,pins:[{message:pinned,pinnedBy:base.author,pinnedAt:now}]};
+          }else{
+            const profile=(id:string,name:string)=>({id,username:name,displayName:name,bio:null,avatar:null,banner:null,accentColor:null,dmKey:null,dmKeyVersion:null});
+            const me=profile("me","Pessoa de teste"),other=profile("other","Amigo de teste");
+            const base={conversationId:"dm-visual",senderId:"other",attachments:[],replyTo:null,createdAt:now,editedAt:null};
+            const normal={...base,id:"visual-normal",clientId:"normal-client",content:"Mensagem comum, sem destaque."};
+            const pinned={...base,id:"visual-pinned",clientId:"pinned-client",content:"Esta mensagem está fixada e pode ser reconhecida sem passar o mouse."};
+            s.social.me={...me,serverVisibility:"shared"};s.social.status="ready";
+            s.social.profiles={me,other};s.social.relationships=[];
+            s.social.dms=[{id:"dm-visual",recipientId:"other",store:{mine:false,theirs:false},lastMessageId:pinned.id,createdAt:now}];
+            s.social.threads={"dm-visual":{items:[normal,pinned],loaded:true,hasMoreRemote:false,pins:[{message:pinned,pinnedBy:"me",pinnedAt:now}]}};
+            s.view={kind:"home",accountId:null,dmId:"dm-visual"};
+          }
+        });
+      },context);
+      const pinned=page.locator('.message[data-message-id="visual-pinned"]');
+      const normal=page.locator('.message[data-message-id="visual-normal"]');
+      for(const theme of ["dark","light"]){
+        await page.evaluate(async theme=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.settings.theme=theme;});},theme);
+        await page.locator(".chat-header h1").click();
+        await expect(pinned).toHaveClass(/compact/);
+        await expect(pinned.locator(".message-pin-label")).toBeVisible();
+        await expect(pinned.locator(".message-pin-label")).toHaveText("Mensagem fixada");
+        await expect(normal.locator(".message-pin-label")).toHaveCount(0);
+        await expect(page.locator(".pin-summary .pins-count")).toHaveText("1");
+        const styles=await pinned.evaluate(el=>{const cs=getComputedStyle(el);return {shadow:cs.boxShadow,background:cs.backgroundColor,actions:getComputedStyle(el.querySelector(".message-actions")!).opacity};});
+        expect(styles.shadow).toContain("inset");expect(styles.background).not.toBe("rgba(0, 0, 0, 0)");expect(styles.actions).toBe("0");
+        await page.locator(".chat").screenshot({path:join(screenshots,`pins-${context}-${theme}.png`)});
+        await pinned.hover();
+        await pinned.getByRole("button",{name:"Responder",exact:true}).click();
+        await expect(page.locator(".reply-preview-author")).toContainText("Respondendo a");
+        await expect(page.locator(".reply-preview-excerpt")).toHaveText("Esta mensagem está fixada e pode ser reconhecida sem passar o mouse.");
+        await page.locator(".chat").screenshot({path:join(screenshots,`reply-${context}-${theme}.png`)});
+        // Two messages from the same person must produce different previews.
+        await normal.hover();
+        await normal.getByRole("button",{name:"Responder",exact:true}).click();
+        await expect(page.locator(".reply-preview-excerpt")).toHaveText("Mensagem comum, sem destaque.");
+        await page.locator(".reply-preview").getByRole("button",{name:"Cancelar resposta",exact:true}).click();
+        await expect(page.locator(".reply-preview")).toHaveCount(0);
+      }
+      await page.evaluate(async context=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{if(context==="community")s.instances.workspace.messages.general.pins=[];else s.social.threads["dm-visual"].pins=[];});},context);
+      await expect(pinned).not.toHaveClass(/is-pinned/);
+      await expect(pinned.locator(".message-pin-label")).toHaveCount(0);
+      // Media-only replies still identify the original message by filename.
+      await page.evaluate(async context=>{
+        const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        setState((s:any)=>{
+          const message=context==="community"?s.instances.workspace.messages.general.items[0]:s.social.threads["dm-visual"].items[0];
+          message.content="";
+          message.attachments=context==="community"?[{id:"file",filename:"planejamento.pdf",contentType:"application/pdf",size:1024,url:"/api/uploads/file/planejamento.pdf"}]:[{blobId:"file",name:"planejamento.pdf",type:"application/pdf",size:1024,key:"unused",nonce:"unused"}];
+        });
+      },context);
+      await normal.hover();
+      await normal.getByRole("button",{name:"Responder",exact:true}).click();
+      await expect(page.locator(".reply-preview-excerpt")).toHaveText("planejamento.pdf");
+      await page.locator(".reply-preview").getByRole("button",{name:"Cancelar resposta",exact:true}).click();
+      // Long, formatted text is normalized and ellipsized without widening the bar.
+      await page.evaluate(async context=>{
+        const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        setState((s:any)=>{
+          const message=context==="community"?s.instances.workspace.messages.general.items[0]:s.social.threads["dm-visual"].items[0];
+          message.content="**Detalhes**\n"+"mensagem longa ".repeat(100);message.attachments=[];
+        });
+      },context);
+      await normal.hover();await normal.getByRole("button",{name:"Responder",exact:true}).click();
+      await expect(page.locator(".reply-preview-excerpt")).toHaveText(/^Detalhes mensagem longa/);
+      await expect.poll(()=>page.locator(".reply-preview").evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    }finally{await cleanup();}
+  });
+}
+
 test("latest messages, personal colors, saved panels, voice and scoped reconnect", async () => {
   const { app, page, cleanup } = await launch();
   const errors: string[] = [];

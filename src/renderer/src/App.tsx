@@ -1,3 +1,5 @@
+import { bindVoiceShortcuts } from "./lib/voice-shortcuts.ts";
+import { CallWindow } from "./components/CallWindow.tsx";
 import {useLocalization,applyTextPreferences} from "./lib/localization.ts";
 import {requestNavigation} from "./lib/navigation-guard.ts";
 import {flushChatState} from "./chat-state.ts";
@@ -18,7 +20,7 @@ import { disconnectDirectCall } from "./features/direct-calls.ts";
 import { DirectCallPanel } from "./components/DirectCallPanel.tsx";
 import { News } from "./components/News.tsx";
 import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
-import { connectAll, leaveVoice, navigate, setPushToTalk, showServiceView } from "./client.ts";
+import { connectAll, leaveVoice, navigate, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
 import { initSocial, setWhere } from "./social/index.ts";
 import { startProfileSync } from "./social/profile-sync.ts";
@@ -124,7 +126,6 @@ function WorkspaceActivity() {
   return null;
 }
 
-const isTextTarget = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function App() {
   useEffect(()=>window.annoy?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.annoy?.desktop?.quit().catch(()=>{});})),[]);
@@ -138,6 +139,7 @@ export function App() {
   const blocking = useStore((s) => isBlocking(s.update));
   const bannerVisible = useBannerVisible();
   const theme = useStore(s => s.settings.theme);
+  const themePreset = useStore(s => s.settings.themePreset);
   const accentColor = useStore(s => s.settings.accentColor);
   const surfaceColor = useStore(s => s.settings.surfaceColor);
   const { accountId: blockedAccountId, continueOffline } = useConnectionBlocked();
@@ -150,12 +152,12 @@ export function App() {
   useEffect(() => { void window.annoy?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
 
   useEffect(() => {
-    applyTheme(theme, { accentColor, surfaceColor });
+    applyTheme(theme, { accentColor, surfaceColor, themePreset });
     const media = matchMedia("(prefers-color-scheme: dark)");
-    const change = () => applyTheme(theme, { accentColor, surfaceColor });
+    const change = () => applyTheme(theme, { accentColor, surfaceColor, themePreset });
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
-  }, [theme, accentColor, surfaceColor]);
+  }, [theme, accentColor, surfaceColor, themePreset]);
 
   useEffect(() => {
     const auth = window.annoy?.auth;
@@ -211,29 +213,7 @@ export function App() {
     return () => observer.disconnect();
   }, [access, barPosition, bannerVisible, inVoice]);
 
-  // Push-to-talk while the window has focus.
-  useEffect(() => {
-    const matches = (e: KeyboardEvent) => {
-      const s = getState().settings;
-      return s.inputMode === "ptt" && e.code === s.pttKey && !isTextTarget(e.target);
-    };
-    const down = (e: KeyboardEvent) => {
-      if (matches(e)) {
-        e.preventDefault();
-        setPushToTalk(true);
-      }
-    };
-    const up = (e: KeyboardEvent) => matches(e) && setPushToTalk(false);
-    const blur = () => setPushToTalk(false);
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", blur);
-    };
-  }, []);
+  useEffect(() => bindVoiceShortcuts(window), []);
 
   return (
     <MotionConfig reducedMotion="user"><LazyMotion features={motionFeatures} strict><TooltipProvider delayDuration={300}>
@@ -274,6 +254,7 @@ export function App() {
       <MandatoryUpdate />
       <ActionDialogHost />
       {access && <DirectCallPanel />}
+      {access && <CallWindow />}
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}

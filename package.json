@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.10.0-alpha.7",
+  "version": "0.11.0-alpha.1",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
@@ -33,6 +33,7 @@
     "predev": "node scripts/ensure-electron.mjs",
     "prestart": "node scripts/ensure-electron.mjs",
     "test:disconnect": "playwright test tests/disconnect.spec.ts",
+    "test:pins": "node --experimental-strip-types --test scripts/tests/message-pins.test.mjs",
     "test:history": "node --experimental-strip-types --test scripts/tests/message-window.test.mjs"
   },
   "engines": {

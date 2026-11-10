@@ -6,7 +6,7 @@ import { Api, fetchInfo } from "./api.ts";
 import { previewText } from "./format.tsx";
 import { Gateway, type RecoveryEvent } from "./gateway.ts";
 import { displayNameOf } from "./perms.ts";
-import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type View } from "./store.ts";
+import { emptyInstance, getState, setState, subscribe, toast, type Account, type InstanceState, type Settings, type View } from "./store.ts";
 import { savedDevice } from "./lib/devices.ts";
 import type { Service } from "../../shared/services.ts";
 import { VoiceSession } from "./voice.ts";
@@ -22,6 +22,7 @@ import { cancelled, isCancellation, RequestError } from "../../shared/requests.t
 import { clearAccountChatState, clearChatAnchor, clearRecoveryReturn, flushChatState, readChatAnchor, readRecoveryReturn, type RecoveryReturn } from "./chat-state.ts";
 
 import { mergeMessageWindow, reconcileMessageWindow, boundMessageCaches, type MessageMutation } from "../../shared/message-window.ts";
+import { updateMessagePins } from "../../shared/message-pins.ts";
 
 const PAGE = 50;
 const TYPING_MS = 8000;
@@ -38,6 +39,9 @@ let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | n
 let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
 const messageReads = new Map<string, AbortController>();
+const pinReads = new Map<string, AbortController>();
+const pinVersions = new Map<string, number>();
+let pinSequence=0;
 let messageEventSequence=0;
 const messageMutations=new Map<string,MessageMutation & {accountId:string;channelId:string}>();
 function recordMessageMutation(accountId:string,channelId:string,messageId:string,kind:MessageMutation["kind"],message:Message|null):void {
@@ -52,6 +56,11 @@ let observedView = getState().view;
 const messageKey = (accountId: string, channelId: string) => JSON.stringify([accountId, channelId]);
 
 function clearAccountWork(accountId: string): void {
+  for(const key of pinVersions.keys())if(JSON.parse(key)[0]===accountId)pinVersions.delete(key);
+  for (const [key, controller] of pinReads) if (JSON.parse(key)[0] === accountId) {
+    controller.abort();
+    pinReads.delete(key);
+  }
   for(const [key,change]of messageMutations)if(change.accountId===accountId)messageMutations.delete(key);
   for (const [key, pending] of refreshTimers) if (pending.accountId === accountId) {
     clearTimeout(pending.timer);
@@ -366,13 +375,21 @@ export function connectAll(): void {
 
 /** Clear only this community's counters; unrelated servers and DMs keep their unread state. */
 export function markServerRead(accountId: string, serverId: string): void {
-  setState((s) => {
-    const instance = s.instances[accountId];
-    if (!instance) return;
-    for (const channel of instance.serverStates[serverId]?.channels ?? []) {
-      if(instance.instance?.historyWindow)void apiFor(accountId).get<MessageWindow>(`/channels/${encodeURIComponent(channel.id)}/messages/window?limit=1`).then(page=>{const id=page.items.at(-1)?.id;if(id)return markChannelRead(accountId,channel.id,id);}).catch(()=>undefined);
-      else delete instance.unread[channel.id];
-    }
+  const instance = getState().instances[accountId];
+  if (!instance) return;
+  // Never fetch messages here: the server moves every cursor itself and answers with read states only.
+  if (instance.status === "ready" && instance.instance?.serverReadState) {
+    void apiFor(accountId).put<ChannelReadState[]>(`/servers/${encodeURIComponent(serverId)}/read-state`, {}).then((states) => patchInstance(accountId, (inst) => {
+      for (const state of states) {
+        const entry = inst.messages[state.channelId]; if (entry) entry.readState = state;
+        if (state.unread) inst.unread[state.channelId] = state.unread;
+      }
+    })).catch((error) => { if (!isCancellation(error)) toast((error as Error).message); });
+    return;
+  }
+  // Servers without that endpoint only get the local counters cleared.
+  patchInstance(accountId, (inst) => {
+    for (const channel of inst.serverStates[serverId]?.channels ?? []) delete inst.unread[channel.id];
   });
 }
 
@@ -645,7 +662,8 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
       if(read?.unread) i.unread[channelId]=read.unread;
       boundMessages(i,channelId,accountId);
     });
-    void loadPinnedMessages(accountId,channelId);
+    // Chat requests pins when the channel opens; only refill them when this reload dropped the cache entry.
+    if(!getState().instances[accountId]?.messages[channelId]?.pins) void loadPinnedMessages(accountId,channelId);
   } catch(error) {
     if(messageReads.get(key)!==controller) return;
     patchInstance(accountId,i=>{const entry=i.messages[channelId];if(!entry)return;entry.loading=false;if(!isCancellation(error))entry.error=(error as Error).message;});
@@ -662,8 +680,9 @@ export async function jumpToMessage(accountId:string,channelId:string,messageId:
   if(!window.items.some(message=>message.id===messageId))throw new RequestError(404,translate("common.5121cfab4e9c"),"http");
   messageReads.get(messageKey(accountId, channelId))?.abort();
   messageReads.delete(messageKey(accountId, channelId));
+  const previous=getState().instances[accountId]?.messages[channelId];
   navigate(serverId?{kind:"server",accountId,serverId,channelId}:{kind:"home",accountId,dmId:channelId});
-  setState(s=>{s.instances[accountId]!.messages[channelId]={lastAccessed:Date.now(),items:window.items,hasMore:window.hasMoreBefore,hasMoreAfter:window.hasMoreAfter,loading:false};boundMessages(s.instances[accountId]!,channelId,accountId);s.messageFocus={accountId,channelId,messageId};s.modal=null;});
+  setState(s=>{s.instances[accountId]!.messages[channelId]={...previous,lastAccessed:Date.now(),items:window.items,hasMore:window.hasMoreBefore,hasMoreAfter:window.hasMoreAfter,loading:false,error:null,initialPosition:null,unreadBoundary:null};boundMessages(s.instances[accountId]!,channelId,accountId);s.messageFocus={accountId,channelId,messageId};s.modal=null;});
 }
 
 export async function loadReadStates(accountId:string):Promise<void> {
@@ -678,12 +697,43 @@ export async function markChannelRead(accountId:string,channelId:string,messageI
   } catch { /* Read cursor sync retries when the channel becomes visible again. */ }
 }
 export async function loadPinnedMessages(accountId:string,channelId:string,more=false):Promise<void> {
-  const inst=getState().instances[accountId];if(!inst?.instance?.messagePins || inst.messages[channelId]?.pinsLoading)return;
+  const inst=getState().instances[accountId];if(!inst?.instance?.messagePins || !inst.messages[channelId])return;
+  const key=messageKey(accountId,channelId);
+  if(pinReads.has(key))return;
+  const controller=new AbortController();pinReads.set(key,controller);
   const api=apiFor(accountId),generation=api.generation;
+  const sequence=messageEventSequence;
+  const active=()=>currentApi(accountId,api,generation)&&pinReads.get(key)===controller;
   patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=true;entry.pinsError=null;}});
-  try {const page=await api.get<PinnedMessagePage>(`/channels/${encodeURIComponent(channelId)}/pins?limit=50${more&&inst.messages[channelId]?.pinsNextCursor?`&before=${encodeURIComponent(inst.messages[channelId]!.pinsNextCursor!)}`:""}`);
-    if(currentApi(accountId,api,generation))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pins=more?[...new Map([...(entry.pins??[]),...page.items].map(pin=>[pin.message.id,pin])).values()].slice(0,100):page.items;entry.pinsNextCursor=page.nextCursor;entry.pinsLoading=false;}});
-  } catch(error){if(!isCancellation(error))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsLoading=false;entry.pinsError=(error as Error).message;if(error instanceof RequestError&&[403,404].includes(error.status))entry.pins=[];}});}
+  try {const page=await api.get<PinnedMessagePage>(`/channels/${encodeURIComponent(channelId)}/pins?limit=100${more&&inst.messages[channelId]?.pinsNextCursor?`&before=${encodeURIComponent(inst.messages[channelId]!.pinsNextCursor!)}`:""}`,controller.signal);
+    const byId=new Map(page.items.map(pin=>[pin.message.id,pin]));
+    const pins=reconcileMessageWindow(page.items.map(pin=>pin.message),pendingMutations(accountId,channelId),sequence,false).map(message=>({...byId.get(message.id)!,message})).sort((a,b)=>b.message.id.localeCompare(a.message.id));
+    if(active())patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pins=more?[...new Map([...(entry.pins??[]),...pins].map(pin=>[pin.message.id,pin])).values()].slice(0,100):pins;entry.pinsNextCursor=page.nextCursor;}});
+  } catch(error){if(active()&&!isCancellation(error))patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry){entry.pinsError=(error as Error).message;if(error instanceof RequestError&&[403,404].includes(error.status))entry.pins=[];}});}
+  finally{if(active()){pinReads.delete(key);patchInstance(accountId,i=>{const entry=i.messages[channelId];if(entry)entry.pinsLoading=false;});}}
+}
+
+function applyMessagePin(accountId:string,channelId:string,messageId:string,pin:PinnedMessage|null):void {
+  const versionKey=JSON.stringify([accountId,channelId,messageId]);
+  pinVersions.delete(versionKey);pinVersions.set(versionKey,++pinSequence);
+  if(pinVersions.size>2000)pinVersions.delete(pinVersions.keys().next().value!);
+  const key=messageKey(accountId,channelId);
+  const refresh=pinReads.has(key);
+  pinReads.get(key)?.abort();pinReads.delete(key);
+  patchInstance(accountId,inst=>{
+    const entry=inst.messages[channelId];if(!entry)return;
+    entry.pins=updateMessagePins(entry.pins??[],messageId,pin);
+    entry.pinsLoading=false;entry.pinsError=null;
+  });
+  if(refresh)void loadPinnedMessages(accountId,channelId);
+}
+
+export async function setMessagePinned(accountId:string,channelId:string,messageId:string,pinned:boolean):Promise<void> {
+  const api=apiFor(accountId),generation=api.generation;
+  const key=JSON.stringify([accountId,channelId,messageId]),version=pinVersions.get(key);
+  const path=`/channels/${encodeURIComponent(channelId)}/pins/${encodeURIComponent(messageId)}`;
+  const pin=pinned?await api.put<PinnedMessage>(path):(await api.del(path),null);
+  if(currentApi(accountId,api,generation)&&pinVersions.get(key)===version)applyMessagePin(accountId,channelId,messageId,pin);
 }
 
 export function returnToLatest(accountId:string,channelId:string) {
@@ -856,17 +906,50 @@ export async function toggleScreenShare(): Promise<void> {
   }
 }
 
-export async function startScreenShare(sourceId: string | null): Promise<void> {
+/** Open controls from either the call stage or the persistent voice panel. */
+export async function openScreenShareSettings(ownerDocument: Document = document): Promise<void> {
+  if (!voice || getState().voice?.screenBusy) return;
+  if (ownerDocument.fullscreenElement) await ownerDocument.exitFullscreen();
+  window.focus();
+  setState(s => { s.modal = { kind: "screenPicker" }; });
+}
+
+export async function startScreenShare(sourceId: string | null): Promise<boolean> {
   const session = voice?.session;
-  if (!session) return;
+  if (!session || getState().voice?.screenBusy) return false;
+  setState(s => { if (s.voice) s.voice.screenBusy = true; });
   if (sourceId) window.annoy?.screen.choose(sourceId);
   try {
     session.updateSettings(getState().settings);
-    await session.startVideo("screen");
+    if (session.isSharing("screen")) await session.replaceScreen();
+    else await session.startVideo("screen");
+    if (voice?.session !== session || !session.isSharing("screen")) return false;
     updateVoiceSettings();
+    return true;
   } catch (err) {
-    // Closing the system picker rejects with NotAllowedError; that's a cancel, not a failure.
+    // Cancelling the system picker leaves the previous capture in place.
     if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
+    return false;
+  } finally {
+    if (voice?.session === session) setState(s => { if (s.voice) s.voice.screenBusy = false; });
+  }
+}
+
+export async function updateScreenShareQuality(settings: Pick<Settings, "screenHeight" | "screenFps">): Promise<boolean> {
+  const session = voice?.session;
+  if (!session || getState().voice?.screenBusy) return false;
+  setState(s => { if (s.voice) s.voice.screenBusy = true; });
+  try {
+    await session.updateScreenQuality(settings);
+    if (voice?.session !== session || !session.isSharing("screen")) return false;
+    setState(s => { Object.assign(s.settings, settings); });
+    updateVoiceSettings();
+    return true;
+  } catch (err) {
+    toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
+    return false;
+  } finally {
+    if (voice?.session === session) setState(s => { if (s.voice) s.voice.screenBusy = false; });
   }
 }
 
@@ -1058,6 +1141,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
     case "MESSAGE_DELETE":
       recordMessageMutation(accountId,event.d.channelId,event.d.messageId,"delete",null);
       emitRoomEvent(accountId, event);
+      applyMessagePin(accountId,event.d.channelId,event.d.messageId,null);
       return patchInstance(accountId, (inst) => {
         const list = inst.messages[event.d.channelId];
         if (list) list.items = list.items.filter((m) => m.id !== event.d.messageId);
@@ -1070,12 +1154,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         if(event.d.state.unread) inst.unread[event.d.state.channelId]=event.d.state.unread;
       });
     case "CHANNEL_PIN_UPDATE":
-      return patchInstance(accountId,inst=>{
-        const entry=inst.messages[event.d.channelId]; if(!entry) return;
-        entry.pins ??=[];
-        entry.pins=entry.pins.filter(pin=>pin.message.id!==event.d.messageId);
-        if(event.d.message) entry.pins.unshift(event.d.message);entry.pins=entry.pins.slice(0,100);
-      });
+      return applyMessagePin(accountId,event.d.channelId,event.d.messageId,event.d.message);
     case "TYPING_START":
       return patchInstance(accountId, (inst) => {
         (inst.typing[event.d.channelId] ??= {})[event.d.userId] = Date.now() + TYPING_MS;

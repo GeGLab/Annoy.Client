@@ -4,7 +4,7 @@ import {FullProfileButton} from "./FullProfile.tsx";
 import { canViewActivity } from "../features/activity/access.ts";
 import * as Popover from "@radix-ui/react-popover";
 import type { User } from "@annoy/protocol";
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { apiFor, openDm } from "../client.ts";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";
 import { startDirectCall } from "../features/direct-calls.ts";
@@ -33,6 +33,8 @@ function useFriend(accountId: string, user: User) {
 }
 
 export function UserProfile({ user: supplied, accountId, children }: { user: User; accountId: string; children: ReactNode }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
   const user = useStore((s) => {
     const instance = s.instances[accountId];
     return (instance?.user?.id === supplied.id ? instance.user : instance?.relationships.find((item) => item.user.id === supplied.id)?.user ?? Object.values(instance?.serverStates ?? {}).flatMap((state) => state.members).find((member) => member.user.id === supplied.id)?.user) ?? supplied;
@@ -41,7 +43,7 @@ export function UserProfile({ user: supplied, accountId, children }: { user: Use
   const { rel, editNickname } = useFriend(accountId, user);
   const activities = useStore((s) => s.instances[accountId]?.user?.id === user.id ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities[user.id] ?? EMPTY_ACTIVITIES);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
-  return <Popover.Root><Popover.Trigger className="profile-trigger" aria-label={translate("common.bb51fa235d84",{p0:(rel?.nickname || user.displayName)})}>{children}</Popover.Trigger><Popover.Portal><Popover.Content className="member-card member-profile" side="right" align="start" sideOffset={10} collisionPadding={12} role="dialog" aria-label={translate("common.bb51fa235d84",{p0:(user.displayName)})}>
+  return <Popover.Root open={open} onOpenChange={setOpen}><Popover.Trigger ref={trigger} className="profile-trigger" aria-label={translate("common.bb51fa235d84",{p0:(rel?.nickname || user.displayName)})}>{children}</Popover.Trigger><Popover.Portal container={trigger.current?.ownerDocument.body}><Popover.Content className="member-card member-profile" side="right" align="start" sideOffset={10} collisionPadding={12} role="dialog" aria-label={translate("common.bb51fa235d84",{p0:(user.displayName)})}>
     <div className="member-card-head"><Avatar user={user} size={56} /><div><strong>{rel?.nickname || user.displayName}</strong><div className="muted">@{user.username}</div></div></div>
     {user.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
     <FullProfileButton accountId={accountId} user={user}/>

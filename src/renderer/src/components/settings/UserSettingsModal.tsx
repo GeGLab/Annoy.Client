@@ -36,7 +36,7 @@ import { NOISE_FILTERS, type NoiseFilter } from "../../noise.ts";
 import { MicGate } from "../../mic.ts";
 import { opusLoopback, type OpusLoopback } from "../../audio/opus-loopback.ts";
 import { HiddenServices } from "../Services.tsx";
-import { screenAudioSupported } from "../../media-profiles.ts";
+import { CAMERA_PROFILE, screenAudioSupported } from "../../media-profiles.ts";
 import { PreferenceCard } from "./PreferenceCard.tsx";
 import { MicFiltersEditor } from "./MicFiltersEditor.tsx";
 import type { MicFilters } from "../../audio/mic-filters.ts";
@@ -63,6 +63,44 @@ const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u03
 /** Live level of the filtered microphone, optionally played back so you can hear the filter. */
 const SLOT = { inputDeviceId: "input", outputDeviceId: "output", cameraDeviceId: "camera" } as const;
 const LABEL = { inputDeviceId: "inputDeviceLabel", outputDeviceId: "outputDeviceLabel", cameraDeviceId: "cameraDeviceLabel" } as const;
+
+/** Shows the chosen camera with the same capture settings as a call; off until asked. */
+function CameraPreview({ settings }: { settings: Settings }) {
+  const [enabled, setEnabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
+  const camera = settings.cameraDeviceId;
+  useEffect(() => {
+    if (!enabled) return;
+    let stopped = false, stream: MediaStream | null = null;
+    void savedDevice("camera", settings)
+      .then((deviceId) => navigator.mediaDevices.getUserMedia({ video: { ...CAMERA_PROFILE.constraints, ...(deviceId && deviceId !== "default" && { deviceId: { exact: deviceId } }) } }))
+      .then((captured) => {
+        if (stopped) return captured.getTracks().forEach((track) => track.stop());
+        stream = captured;
+        if (video.current) { video.current.srcObject = captured; void video.current.play().catch(() => undefined); }
+      })
+      .catch(() => {
+        if (stopped) return;
+        setError(translate("settings.cameraTestError"));
+        setEnabled(false);
+      });
+    return () => {
+      stopped = true;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (video.current) video.current.srcObject = null;
+    };
+  }, [enabled, camera]);
+  return (
+    <>
+      {enabled && <div className="camera-preview"><video ref={video} autoPlay playsInline muted /></div>}
+      <Button variant="secondary" size="sm" onClick={() => { setError(null); setEnabled((value) => !value); }}>
+        {enabled ? translate("settings.50729949a7d2") : translate("settings.cameraTest")}
+      </Button>
+      {error && <p className="error small" role="alert">{error}</p>}
+    </>
+  );
+}
 
 function MicMeter({ settings }: { settings: Settings }) {
   const [enabled, setEnabled] = useState(false);
@@ -226,7 +264,7 @@ export function UserSettingsModal() {
       const current = getState().settings;
       applyTheme(current.theme, current);
     };
-  }, [draft.theme, draft.accentColor, draft.surfaceColor]);
+  }, [draft.theme, draft.accentColor, draft.surfaceColor, draft.themePreset]);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const change = () => applyTheme(draft.theme, draft);
@@ -459,6 +497,7 @@ export function UserSettingsModal() {
                   {deviceSelect(translate("settings.62bebedcf69e"), "audiooutput", draft.outputDeviceId, "outputDeviceId")}
                 </div>
                 {deviceSelect(translate("common.dafb61aca12d"), "videoinput", draft.cameraDeviceId, "cameraDeviceId")}
+                <CameraPreview settings={draft} />
                 </PreferenceCard>
                 <PreferenceCard icon="monitor" title={translate("settings.e2cff36ee101")} description={translate("settings.c90117711485")}>
                   <label className="check">

@@ -8,7 +8,7 @@ import { setState, toast, useStore } from "../../store.ts";
 import { ActivityStack } from "../../features/activity/ActivityCard.tsx";
 import { startDirectCall } from "../../features/direct-calls.ts";
 import { acceptFriend, addFriend, displayName, ensureProfiles, removeFriend, setFriendNickname } from "../../social/index.ts";
-import { deleteDm, editDm, loadThread, markDmRead, openAttachment, openDmWith, retryDm, sendDm, sendDmTyping, setStore } from "../../social/dms.ts";
+import { deleteDm, editDm, loadDmPins, loadThread, markDmRead, openAttachment, openDmWith, retryDm, sendDm, sendDmTyping, setStore, setDmPinned } from "../../social/dms.ts";
 import { imageUrl } from "../../social/cloud.ts";
 import { CLOUD_ACCOUNT, type CloudPresence, type CloudProfile, type CloudRelationship, type DmAttachment, type DmMessage } from "../../social/types.ts";
 import { ResizablePanel } from "../layout/ResizablePanel.tsx";
@@ -17,8 +17,10 @@ import { Button } from "../ui/button.tsx";
 import { confirmAction, promptText } from "../ui/action-dialog.tsx";
 import { Input } from "../ui/input.tsx";
 import { Textarea } from "../ui/textarea.tsx";
+import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
+import { ReplyPreview } from "../ReplyPreview.tsx";
 
 const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
@@ -254,6 +256,10 @@ function AttachmentView({ attachment }: { attachment: DmAttachment }) {
 
 function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: DmMessage; compact: boolean; me: string; nameOf: (id: string) => string | undefined; replyTo: DmMessage | undefined; onReply: () => void }) {
   const profile = useStore((s) => s.social.profiles[message.senderId]);
+  const isPinned=useStore(s=>s.social.threads[message.conversationId]?.pins?.some(p=>p.message.id===message.id)??false);
+  const connected=useStore(s=>s.social.status==="ready");
+  const [pinning,setPinning]=useState(false);
+  const pinningRef=useRef(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const own = message.senderId === me;
@@ -267,7 +273,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
     }
   };
   return (
-    <div data-message-id={message.id} className={`message${compact ? " compact" : ""}${message.state ? ` message-${message.state}` : ""}`}>
+    <div data-message-id={message.id} className={`message${compact ? " compact" : ""}${isPinned ? " is-pinned" : ""}${message.state ? ` message-${message.state}` : ""}`}>
       {message.replyTo && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -286,6 +292,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
           {formatClock(message.createdAt)}
         </time>
         <div className="message-body">
+          {isPinned && <div className="message-pin-label"><Icon name="pin" size={14} /><span>{translate("chat.pinnedLabel")}</span></div>}
           {!compact && (
             <div className="message-head">
               <Avatar user={cloudUser(profile, message.senderId)} size={22} />
@@ -337,6 +344,12 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
       </div>
       {!editing && !message.state && (
         <div className="message-actions">
+          <button className={`icon-btn tiny message-pin-button${isPinned?" on":""}`} title={translate(isPinned?"chat.39b764469fcf":"chat.0cc3fad10ab0")} aria-label={translate(isPinned?"chat.39b764469fcf":"chat.0cc3fad10ab0")} aria-pressed={isPinned} disabled={pinning||!connected} onClick={async()=>{
+            if(pinningRef.current)return;
+            pinningRef.current=true;setPinning(true);
+            try{await setDmPinned(message,!isPinned);}catch(error){toast((error as Error).message);}
+            finally{pinningRef.current=false;setPinning(false);}
+          }}><Icon name={isPinned ? "pinOff" : "pin"} size={16}/></button>
           <button className="icon-btn tiny" title={translate("social.reply")} aria-label={translate("social.reply")} onClick={onReply}>
             <Icon name="reply" size={16} />
           </button>
@@ -384,6 +397,10 @@ function DmConversation({ dmId }: { dmId: string }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
+  const [pinsOpen,setPinsOpen]=useState(false);
+  const [previewPin,setPreviewPin]=useState<string|null>(null);
+  const pinsButton=useRef<HTMLButtonElement>(null);
+  const preview=thread?.pins?.find(pin=>pin.message.id===previewPin)?.message;
   const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const items = thread?.items ?? EMPTY;
@@ -430,6 +447,7 @@ function DmConversation({ dmId }: { dmId: string }) {
   return (
     <section
       className="chat"
+      onKeyDown={event=>{if(pinsOpen&&event.key==="Escape"){event.preventDefault();setPinsOpen(false);pinsButton.current?.focus();}}}
       onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -441,6 +459,7 @@ function DmConversation({ dmId }: { dmId: string }) {
         <h1 className="truncate">{title}</h1>
         <span className="chat-topic truncate">{presenceLabel(presence)}</span>
         <span className="spacer" />
+        <button ref={pinsButton} className={`icon-btn pin-summary${pinsOpen?" on":""}${thread?.pins?.length?" has-pins":""}`} aria-label={translate("chat.dd5705122a58")} title={translate("chat.dd5705122a58")} aria-expanded={pinsOpen} onClick={()=>{setPinsOpen(value=>!value);void loadDmPins(dmId);}}><Icon name="pin"/>{!!thread?.pins?.length&&<span className="pins-count" aria-hidden="true">{thread.pins.length}</span>}</button>
         <button className={`icon-btn${stored ? " on" : ""}`} aria-pressed={conversation.store.mine} title={stored ? translate("social.storeOnTitle") : translate("social.storeOffTitle")} aria-label={translate("social.store")} onClick={() => void toggleStore()}>
           <Icon name="save" />
         </button>
@@ -463,6 +482,20 @@ function DmConversation({ dmId }: { dmId: string }) {
           <Icon name={muted ? "bellOff" : "bell"} />
         </button>
       </header>
+      {pinsOpen&&<div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
+        <div className="pins-panel-title"><strong>{translate("chat.dd5705122a58")}</strong><button className="icon-btn tiny" aria-label={translate("chat.0f2cac634ffa")} onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
+        <p className="muted small">{translate("social.sharedPins")}</p>
+        {thread?.pinsLoading&&<p role="status">{translate("chat.705ff05e88ed")}</p>}
+        {thread?.pinsError&&<p role="alert">{thread.pinsError} <button className="btn btn-ghost" onClick={()=>void loadDmPins(dmId)}>{translate("common.b9e10688be01")}</button></p>}
+        {!thread?.pinsLoading&&!thread?.pinsError&&!thread?.pins?.length&&<p className="muted small">{translate("chat.ccd83eb43bb7")}</p>}
+        {thread?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{
+          const row=scroller.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(pin.message.id)}"]`);
+          setPinsOpen(false);
+          if(row){row.scrollIntoView({block:"center"});row.tabIndex=-1;row.focus({preventScroll:true});}
+          else setPreviewPin(pin.message.id);
+        }}><span><strong>{nameOf(pin.message.senderId)}</strong><small>{formatTime(pin.pinnedAt)}</small></span><span className="pinned-message-content">{pin.message.state==="undecryptable"?translate("social.undecryptable"):pin.message.content||translate("common.e186297c35aa")}</span></button>)}
+      </div>}
+      <Dialog open={!!preview} onOpenChange={open=>{if(!open)setPreviewPin(null);}}><DialogContent aria-describedby={undefined}><DialogTitle>{translate("chat.dd5705122a58")}</DialogTitle>{preview&&<DmRow message={preview} compact={false} me={me.id} nameOf={nameOf} replyTo={preview.replyTo?byId.get(preview.replyTo):undefined} onReply={()=>{setReplyTo(preview);setPreviewPin(null);}}/>}</DialogContent></Dialog>
       <div className="messages" ref={scroller}>
         <div className="message-log">
           <div className="channel-start">
@@ -490,14 +523,7 @@ function DmConversation({ dmId }: { dmId: string }) {
           })}
         </div>
       </div>
-      {replyTo && (
-        <div className="reply-bar">
-          <span className="truncate">{translate("social.replyingTo", { p0: nameOf(replyTo.senderId) ?? "" })}</span>
-          <button className="icon-btn tiny" aria-label={translate("social.cancel")} onClick={() => setReplyTo(null)}>
-            <Icon name="x" size={14} />
-          </button>
-        </div>
-      )}
+      {replyTo && <ReplyPreview author={nameOf(replyTo.senderId) ?? ""} content={replyTo.content} attachmentNames={replyTo.attachments.map(file => file.name)} nameOf={nameOf} onCancel={() => setReplyTo(null)} />}
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (

@@ -24,7 +24,7 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
-import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping } from "../client.ts";
+import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -34,6 +34,7 @@ import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
+import { ReplyPreview } from "./ReplyPreview.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation, RequestError } from "../../../shared/requests.ts";
 import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
@@ -220,6 +221,8 @@ function MessageRow({
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
   const stickerReactions = useStore((s) => s.instances[accountId]?.instance?.stickerReactions === true);
   const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
+  const [pinning, setPinning] = useState(false);
+  const pinningRef = useRef(false);
   const [reacting, setReacting] = useState(false);
   const react = async (emoji: string) => {
     if (reacting || !reactionsEnabled || !canReact) return;
@@ -263,7 +266,7 @@ function MessageRow({
   };
 
   return (
-    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${highlighted?" search-highlight":""}`}>
+    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${isPinned ? " is-pinned" : ""}${highlighted?" search-highlight":""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -282,6 +285,7 @@ function MessageRow({
           {formatClock(message.createdAt)}
         </time>
         <div className="message-body">
+          {isPinned && <div className="message-pin-label"><Icon name="pin" size={14} /><span>{translate("chat.pinnedLabel")}</span></div>}
           {message.sharedBy&&<small className="muted">{rich("common.4ed74142d755",{p0:(nameOf(message.sharedBy)??message.sharedBy)})}</small>}
           {!compact && (
             <div className="message-head">
@@ -330,10 +334,13 @@ function MessageRow({
           <button className="icon-btn tiny" title={translate("chat.8630a0dc25e2")} onClick={() => onReply(message)}>
             <Icon name="reply" size={16} />
           </button>
-          {canPin && <button className="icon-btn tiny" title={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-pressed={isPinned} onClick={async () => {
-            try { const path=`/channels/${encodeURIComponent(message.channelId)}/pins/${encodeURIComponent(message.id)}`; if(isPinned) await apiFor(accountId).del(path); else await apiFor(accountId).put(path); await loadPinnedMessages(accountId,message.channelId); }
+          {canPin && <button className={`icon-btn tiny message-pin-button${isPinned?" on":""}`} title={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-label={isPinned ? translate("chat.39b764469fcf") : translate("chat.0cc3fad10ab0")} aria-pressed={isPinned} disabled={pinning} onClick={async () => {
+            if(pinningRef.current)return;
+            pinningRef.current=true;setPinning(true);
+            try { await setMessagePinned(accountId,message.channelId,message.id,!isPinned); }
             catch(error){toast((error as Error).message);}
-          }}><Icon name="pin" size={16} /></button>}
+            finally{pinningRef.current=false;setPinning(false);}
+          }}><Icon name={isPinned ? "pinOff" : "pin"} size={16} /></button>}
           {own && (
             <button
               className="icon-btn tiny"
@@ -397,6 +404,7 @@ function Composer({
   onRetryReply,
   draftPersistenceFailed,
   nameOf,
+  channelOf,
 }: {
   dropRef: RefObject<((files: FileList) => void) | null>;
   accountId: string;
@@ -416,6 +424,7 @@ function Composer({
   onRetryReply: () => void;
   draftPersistenceFailed: boolean;
   nameOf: NameOf;
+  channelOf?: NameOf;
 }) {
   const text = draft.text;
   const [files, setFiles] = useState<File[]>(() => readPendingFiles(accountId, channelId));
@@ -557,13 +566,7 @@ function Composer({
           ))}
         </div>
       )}
-      {replyTo && (
-        <div className="reply-bar">{translate("chat.040c7dc9f553")}<strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
-          <button className="icon-btn tiny" onClick={onClearReply} title={translate("chat.c0ec9adf7f1d")}>
-            <Icon name="x" size={14} />
-          </button>
-        </div>
-      )}
+      {replyTo && <ReplyPreview author={nameOf(replyTo.author.id) ?? replyTo.author.displayName} content={replyTo.content} attachmentNames={replyTo.attachments.map(file => file.filename)} nameOf={nameOf} channelOf={channelOf} onCancel={onClearReply} />}
       {replyToId && !replyTo && <div className="reply-bar" role="status">
         <span>{replyValid ? translate("chat.daa628ee773b") : replyStatus === "checking" ? translate("chat.32ece7067212") : translate("chat.555f78669b82")}</span>
         <button className="btn btn-ghost" disabled={replyValid || replyStatus === "checking"} onClick={onRetryReply}>{translate("chat.861c025f8735")}</button>
@@ -900,7 +903,7 @@ export function Chat(props: ChatProps) {
         <h1 className="truncate">{props.title}</h1>
         {props.topic && <span className="chat-topic truncate">{props.topic}</span>}
         <span className="spacer" />
-        <button ref={pinsButton} className={`icon-btn${pinsOpen ? " on" : ""}`} aria-label={translate("chat.dd5705122a58")} aria-expanded={pinsOpen} title={translate("chat.dd5705122a58")} onClick={() => {if(!pinsSupported){toast(translate("chat.f752af7c401b"));return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} /></button>
+        <button ref={pinsButton} className={`icon-btn pin-summary${pinsOpen ? " on" : ""}${entry?.pins?.length ? " has-pins" : ""}`} aria-label={translate("chat.dd5705122a58")} aria-expanded={pinsOpen} title={translate("chat.dd5705122a58")} onClick={() => {if(!pinsSupported){toast(translate("chat.f752af7c401b"));return;}setPinsOpen(value=>!value);void loadPinnedMessages(accountId,channelId);}}><Icon name="pin" size={17} />{!!entry?.pins?.length && <span className="pins-count" aria-hidden="true">{entry.pins.length}</span>}</button>
         {props.headerExtra}
       </header>
       {pinsOpen && <div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
@@ -995,6 +998,7 @@ export function Chat(props: ChatProps) {
           setReplyResolution(null);
         }}
         nameOf={nameOf}
+        channelOf={props.channelOf}
       />
       <TypingLine accountId={accountId} channelId={channelId} me={me} nameOf={nameOf} />
       {dragging && <div className="drop-overlay">{translate("chat.dc29e3aa63fe")}</div>}

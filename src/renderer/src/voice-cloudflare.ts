@@ -1,5 +1,6 @@
 import {t as translate} from "../../shared/localization/index.ts";
 import { screenProfile } from "./lib/screen-profile.ts";
+import { applyScreenQuality, replaceScreenCapture, type ScreenSettings } from "./lib/screen-share.ts";
 // Voice session for instances using Cloudflare's Realtime SFU. One
 // RTCPeerConnection carries everything; the Annoy server relays every
 // negotiation to Cloudflare and decides what we may publish or receive.
@@ -28,7 +29,7 @@ export class CloudflareVoiceSession {
   /** Offer/answer exchanges on one connection must not interleave. */
   private queue: Promise<unknown> = Promise.resolve();
   private mic: MicGate | null = null;
-  private video = new Map<"camera" | "screen", { trackName: string; transceiver: RTCRtpTransceiver; track: MediaStreamTrack }>();
+  private video = new Map<"camera" | "screen", { trackName: string; transceiver: RTCRtpTransceiver; track: MediaStreamTrack; maxBitrate: number }>();
   /** Sound shared together with the screen, published as its own track. */
   private screenAudio: { trackName: string; transceiver: RTCRtpTransceiver; track: MediaStreamTrack } | null = null;
   /** Opus parameters for each of our audio sections, re-applied to every remote description. */
@@ -301,7 +302,7 @@ export class CloudflareVoiceSession {
     catch (error) { stream.getTracks().forEach((captured) => captured.stop()); throw error; }
     if (this.closed) { stream.getTracks().forEach((captured) => captured.stop()); return; }
     const { trackName, transceiver } = publishedVideo;
-    this.video.set(source, { trackName, transceiver, track });
+    this.video.set(source, { trackName, transceiver, track, maxBitrate: profile.maxBitrate });
     if (sound) {
       try {
         const published = await this.publish(sound, "audio", "screen_audio", undefined, OPUS_SCREEN);
@@ -314,8 +315,37 @@ export class CloudflareVoiceSession {
       }
     }
     putTile({ key: `local:${source}`, userId: this.selfId, source, stream: new MediaStream([track]), local: true });
-    track.addEventListener("ended", () => void this.stopVideo(source));
+    track.addEventListener("ended", () => { if (this.video.get(source)?.track === track) void this.stopVideo(source); });
     this.onLocalMedia();
+  }
+
+  /** Change the captured display while retaining the sender and its viewers. */
+  async replaceScreen(): Promise<void> {
+    const entry = this.video.get("screen");
+    if (!entry) return this.startVideo("screen");
+    await replaceScreenCapture({
+      settings: this.settings, previous: entry.track, captured: this.capturedTracks,
+      current: () => !this.closed && this.video.get("screen") === entry,
+      replace: async track => { await entry.transceiver.sender.replaceTrack(track); },
+      commit: track => {
+        entry.track = track;
+        putTile({ key: "local:screen", userId: this.selfId, source: "screen", stream: new MediaStream([track]), local: true });
+        track.addEventListener("ended", () => { if (this.video.get("screen")?.track === track) void this.stopVideo("screen"); });
+        this.onLocalMedia();
+      },
+    });
+  }
+
+  async updateScreenQuality(settings: ScreenSettings): Promise<void> {
+    const entry = this.video.get("screen");
+    if (!entry) throw new Error(translate("common.99e2847d16e5"));
+    await applyScreenQuality(entry.track, settings, this.settings, async maxBitrate => {
+      // Keep the original SFU budget reservation valid while changing capture quality.
+      const sender = entry.transceiver.sender, parameters = sender.getParameters();
+      for (const encoding of parameters.encodings) encoding.maxBitrate = Math.min(maxBitrate, entry.maxBitrate);
+      await sender.setParameters(parameters);
+    }, () => !this.closed && this.video.get("screen") === entry);
+    this.settings = { ...this.settings, ...settings };
   }
 
   async stopVideo(source: "camera" | "screen"): Promise<void> {

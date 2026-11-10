@@ -191,3 +191,42 @@
 @keyframes saved-pop { from { transform: scale(0); } 70% { transform: scale(1.12); } to { transform: scale(1); } }
 @keyframes saved-draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .settings-saved, .saved-check-circle { animation: none; } .saved-check-mark { animation: none; stroke-dashoffset: 0; } }
+
+/* Camera test in voice settings: the own camera is mirrored, as in a call. */
+.camera-preview { width: 100%; max-width: 360px; aspect-ratio: 16 / 9; margin: 4px 0 10px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-deep); }
+.camera-preview video { display: block; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+
+.expression-zip-preview { display: grid; gap: 14px; margin: 18px 0 24px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-input); }
+.expression-zip-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.expression-zip-heading h4, .expression-zip-preview > p { margin: 0; }
+.expression-zip-preview > p { line-height: 1.6; }
+.expression-zip-name { display: grid; gap: 8px; font-size: .85714rem; }
+.expression-zip-all { display: flex; align-items: center; gap: 8px; font-size: .85714rem; }
+.expression-zip-list { display: grid; gap: 8px; max-height: 380px; overflow-y: auto; padding: 3px; }
+.expression-zip-row { display: grid; grid-template-columns: auto 48px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.expression-zip-row.has-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.expression-zip-thumb { display: grid; place-items: center; height: 48px; background: var(--bg-main); border-radius: 6px; overflow: hidden; }
+.expression-zip-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.expression-zip-fields { display: grid; gap: 7px; min-width: 0; }
+.expression-zip-fields > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expression-zip-fields > div { display: grid; grid-template-columns: minmax(0, 1fr) 125px; gap: 8px; }
+.expression-zip-fields input { min-width: 0; width: 100%; }
+@media (max-width: 680px) { .expression-zip-fields > div { grid-template-columns: minmax(0, 1fr); } .expression-zip-row { gap: 8px; grid-template-columns: auto 36px minmax(0, 1fr); } }
+
+.voice-share-settings { display: grid; place-items: center; flex: none; width: 30px; border: 1px solid var(--accent-line); border-radius: 7px; color: var(--accent-strong); background: var(--accent-soft); }
+.voice-share-settings:hover { background: var(--bg-hover); }
+.call-window { margin: 0; background: var(--bg-main); color: var(--text); }
+#call-window-root { display: flex; width: 100vw; height: 100dvh; overflow: hidden; }
+#call-window-root > .stage { flex: 1; min-width: 0; }
+#call-window-root .stage-grid { overflow: hidden; }
+#call-window-root .stage-tiles { flex: 1; min-height: 0; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); grid-auto-rows: minmax(0, 1fr); }
+#call-window-root .stage-card { min-height: 0; aspect-ratio: auto; }
+#call-window-root .stage-grid.has-focus .stage-tiles { flex: 0 0 140px; grid-template-columns: repeat(auto-fit, minmax(160px, 200px)); }
+#call-window-root .stage-controls { flex-wrap: wrap; }
+
+
+.stage-controls { position: relative; padding-inline: 56px; }
+.stage-control-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; }
+.stage-window-controls { position: absolute; right: 12px; bottom: 18px; display: flex; align-items: center; }
+.stage-window-controls .icon-btn { width: 34px; height: 34px; color: var(--text-muted); }
+.stage-window-controls .icon-btn:hover { color: var(--text); background: var(--bg-hover); }

@@ -170,3 +170,76 @@ test("the Annoy emoji set comes from the local cache and asks cdnannoy at most e
   });
 });
 
+
+test("ZIP import previews selected images, retains names and types, and persists without setting display sizes", async ({ libraryPage: page }) => {
+  const { mediaZip } = await import("./fixtures/media-zip.ts");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=", "base64");
+  const zip = mediaZip([
+    { name: "pasta/café.png", data: png, method: 0 },
+    { name: "animado.gif", data: await readFile("tests/fixtures/profile-animation.gif") },
+    { name: "outra/café.png", data: png },
+    { name: "falso.png", data: Buffer.from("not an image") },
+    { name: "__MACOSX/._café.png", data: png },
+    { name: "leia.txt", data: Buffer.from("text") },
+  ]);
+  await page.getByRole("button", { name: "Configurações", exact: true }).click();
+  await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
+  const input = page.getByLabel("Importar ZIP da biblioteca", { exact: true });
+  await input.setInputFiles({ name: "Minha coleção.zip", mimeType: "application/zip", buffer: zip });
+  const preview = page.getByRole("region", { name: "Prévia do ZIP", exact: true });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText("4 imagens · 3 marcadas");
+  await expect(preview.getByRole("checkbox", { name: "Importar falso.png", exact: true })).toBeDisabled();
+  await expect(preview.locator("img")).toHaveCount(3);
+  await expect(preview.getByRole("spinbutton")).toHaveCount(0);
+  await preview.getByLabel("Nome do pacote", { exact: true }).fill("Meu pacote ZIP");
+  await preview.getByLabel("Nome para pasta/café.png", { exact: true }).fill("Café especial");
+  await preview.getByRole("combobox", { name: "Tipo de pasta/café.png", exact: true }).click();
+  await page.getByRole("option", { name: "Emoji", exact: true }).click();
+  await preview.getByRole("checkbox", { name: "Importar outra/café.png", exact: true }).uncheck();
+  await page.screenshot({ path: ".impeccable/review/media-zip-preview.png" });
+  await preview.getByRole("button", { name: "Importar marcados", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.locator(".expression-installed")).toContainText("Meu pacote ZIP");
+  await page.reload();
+  const saved = await page.evaluate(async () => {
+    const lib = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/library.ts`);
+    const meta = (await lib.readPackPage()).items.find((pack: any) => pack.name === "Meu pacote ZIP");
+    const pack = await lib.readPack(meta!.id);
+    return pack!.items.map((item: any) => ({ name: item.name, kind: item.kind, type: item.blob.type, size: item.size ?? null }));
+  });
+  expect(saved).toHaveLength(2);
+  expect(saved).toEqual(expect.arrayContaining([{ name: "Café especial", kind: "emoji", type: "image/png", size: null }, { name: "animado", kind: "gif", type: "image/gif", size: null }]));
+  await page.getByRole("button", { name: "Configurações", exact: true }).click();
+  await page.getByRole("button", { name: "Emojis e mídia", exact: true }).click();
+  await input.setInputFiles({ name: "Cancelar.zip", mimeType: "application/zip", buffer: zip });
+  await preview.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await input.setInputFiles({ name: "Inválido.zip", mimeType: "application/zip", buffer: zip.subarray(0, 20) });
+  await expect(page.getByRole("alert")).toContainText("ZIP inválido");
+  await expect(page.locator(".expression-installed")).toContainText("Meu pacote ZIP");
+});
+
+test("ZIP reader bounds decompression and rejects invalid archives, encryption and corrupt image data", async ({ libraryPage: page }) => {
+  const { mediaZip } = await import("./fixtures/media-zip.ts");
+  const data = Buffer.concat([Buffer.from("\x89PNG\r\n\x1a\n", "binary"), Buffer.alloc(1024)]);
+  const zip = mediaZip([
+    { name: "oversized.png", data, declaredSize: 1 },
+    { name: "crc.png", data, badCrc: true },
+    { name: "encrypted.png", data, flags: 1 },
+    { name: "method.png", data, method: 99 },
+    { name: "huge.png", data, declaredSize: 9 * 1024 * 1024 },
+    { name: "valid.png", data },
+  ]);
+  const result = await page.evaluate(async ({ bytes, empty }) => {
+    const { readImageZip } = await import(/* @vite-ignore */ `${location.origin}/src/features/expression/zip.ts`);
+    const file = new Blob([Uint8Array.from(bytes)]);
+    const rows = await readImageZip(file);
+    const aborted = new AbortController(); aborted.abort();
+    let cancelled = false, rejectedEmpty = false;
+    try { await readImageZip(file, aborted.signal); } catch (error) { cancelled = (error as Error).name === "AbortError"; }
+    try { await readImageZip(new Blob([Uint8Array.from(empty)])); } catch { rejectedEmpty = true; }
+    return { valid: rows.filter((row: any) => row.blob).map((row: any) => row.path), errors: rows.filter((row: any) => row.problem).length, cancelled, rejectedEmpty };
+  }, { bytes: [...zip], empty: [...mediaZip([{ name: "readme.txt", data: Buffer.from("text") }])] });
+  expect(result).toEqual({ valid: ["valid.png"], errors: 5, cancelled: true, rejectedEmpty: true });
+});

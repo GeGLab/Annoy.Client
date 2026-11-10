@@ -2054,3 +2054,394 @@ test("using media from settings respects unsaved settings and works without an a
     await expect(library).toContainText("Abra uma conversa para usar seus pacotes.");
   } finally { await close(); }
 });
+
+test("curated themes preview, follow system mode, reset overrides and persist only after saving", async () => {
+  const { page, close } = await launch();
+  try {
+    const open = async () => {
+      await page.getByRole("button", { name: "Configurações", exact: true }).click();
+      await page.getByRole("button", { name: "Aparência", exact: true }).click();
+    };
+    await open();
+    const gallery = page.getByRole("group", { name: "Temas", exact: true });
+    const root = page.locator("html");
+    for (const mode of ["Claro", "Escuro"]) {
+      await page.getByRole("button", { name: mode, exact: true }).click();
+      for (const [name, id] of [["Clássico", "classic"], ["Meia-noite", "midnight"], ["Oceano", "ocean"], ["Aurora", "aurora"], ["Sakura", "sakura"], ["Café", "coffee"]]) {
+        await gallery.getByRole("button", { name, exact: true }).click();
+        await expect(root).toHaveAttribute("data-theme-preset", id!);
+        await expect(gallery.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "true");
+        // Every curated palette must keep body text and interactive accents readable.
+        const ratios = await page.evaluate(() => {
+          const style = getComputedStyle(document.documentElement);
+          const lum = (hex: string) => {
+            const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4);
+            return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722;
+          };
+          const ratio = (a: string, b: string) => { const x = lum(style.getPropertyValue(a).trim()), y = lum(style.getPropertyValue(b).trim()); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+          return [ratio("--text", "--bg-main"), ratio("--accent", "--bg-main"), ratio("--on-accent", "--accent")];
+        });
+        for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    await gallery.getByRole("button", { name: "Oceano", exact: true }).click();
+    await page.screenshot({ path: join(capture, "themes-ocean-dark.png") });
+    await page.getByRole("button", { name: "Sistema", exact: true }).click();
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(root).toHaveAttribute("data-theme", "light");
+    await page.screenshot({ path: join(capture, "themes-ocean-light.png") });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(root).toHaveAttribute("data-theme", "dark");
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await page.reload();
+    await expect(root).toHaveAttribute("data-theme-preset", "ocean");
+    await open();
+    await gallery.getByRole("button", { name: "Sakura", exact: true }).click();
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+    await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+    await expect(root).toHaveAttribute("data-theme-preset", "ocean");
+    await open();
+    await gallery.getByRole("button", { name: "Clássico", exact: true }).click();
+    expect(await root.evaluate(el => el.style.getPropertyValue("--bg-main"))).toBe("");
+    await page.getByRole("button", { name: "Cor de destaque", exact: true }).click();
+    await page.getByRole("textbox", { name: "Código hexadecimal de Cor de destaque", exact: true }).fill("#ff8877");
+    await page.locator(".color-popover").getByRole("button", { name: "Usar cor", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Restaurar cores originais", exact: true })).toBeEnabled();
+    await gallery.getByRole("button", { name: "Oceano", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Restaurar cores originais", exact: true })).toBeDisabled();
+  } finally { await close(); }
+});
+
+test("own screen share fullscreen button toggles and tracks browser fullscreen changes", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { putTile } = await import(/* @vite-ignore */ `${location.origin}/src/media.ts`);
+      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#143552"; context.fillRect(0, 0, canvas.width, canvas.height);
+      putTile({ key: "local:screen", userId: "person", source: "screen", stream: canvas.captureStream(1), local: true });
+      setState((s: any) => {
+        s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "voice" };
+        s.voice = { accountId: "test", serverId: "server", channelId: "voice", status: "connected", canStream: true, camera: false, screen: true };
+        s.instances.test.serverStates.server.voiceStates = [{ userId: "person", channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: false, screen: true }];
+      });
+    });
+    const card = page.locator(".stage-card.video.screen");
+    await expect(card).toBeVisible();
+    const toggle = card.locator(".stage-corner button").last();
+    await card.hover();
+    await toggle.click();
+    await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+    await card.hover();
+    await toggle.click();
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await expect(toggle).toHaveAttribute("title", "Tela cheia");
+    await toggle.click();
+    await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+    await expect(toggle).toHaveAttribute("title", "Sair da tela cheia");
+    // Browser-initiated exit emits fullscreenchange, just as leaving with Escape does.
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await expect(toggle).toHaveAttribute("title", "Tela cheia");
+    await expect(card.locator("video")).toBeVisible();
+  } finally { await close(); }
+});
+
+test("screen sources and quality change on both voice backends without ending the stream", async () => {
+  const { page, close } = await launch();
+  try {
+    for (const backend of ["builtin", "cloudflare"]) {
+      const result = await page.evaluate(async backend => {
+        const { VoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice.ts`);
+        const { CloudflareVoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice-cloudflare.ts`);
+        const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+        const { videoTiles } = await import(/* @vite-ignore */ `${location.origin}/src/media.ts`);
+        const original = navigator.mediaDevices.getDisplayMedia;
+        const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360;
+        const tracks: MediaStreamTrack[] = [], caps: number[] = [], constraints: any[] = [];
+        let cancelled = false, replaced = 0, closed = 0, publications = 0, rejectReplace = false, rejectQuality = false;
+        navigator.mediaDevices.getDisplayMedia = async () => {
+          if (cancelled) throw new DOMException("Cancelled", "NotAllowedError");
+          const track = canvas.captureStream(1).getVideoTracks()[0]!; tracks.push(track);
+          const apply = track.applyConstraints.bind(track);
+          track.applyConstraints = async options => { constraints.push(options); await apply(options); };
+          return new MediaStream([track]);
+        };
+        const replace = async () => { if (rejectReplace) throw new Error("replacement failed"); replaced++; };
+        const bitrate = async (cap: number) => { if (rejectQuality) { rejectQuality = false; throw new Error("encoder failed"); } caps.push(cap); };
+        const producer = { id: "same-screen", replaceTrack: replace, setRtpEncodingParameters: async ({ maxBitrate }: any) => bitrate(maxBitrate), close: () => { closed++; } };
+        const sender = { replaceTrack: replace, getParameters: () => ({ encodings: [{}] }), setParameters: async ({ encodings }: any) => bitrate(encodings[0].maxBitrate) };
+        const Session = backend === "builtin" ? VoiceSession : CloudflareVoiceSession;
+        const session: any = new Session({ voice: async () => ({}) } as any, "channel", "me", { ...getState().settings, screenAudio: false }, () => {}, () => {}, "account");
+        session.canStream = true;
+        session.send = { produce: async () => { publications++; return producer; } };
+        session.pc = { close() {} };
+        session.publish = async () => { publications++; return { trackName: "same-screen", transceiver: { sender } }; };
+        const audio = new AudioContext(), sound = audio.createMediaStreamDestination().stream.getAudioTracks()[0]!;
+        try {
+          await session.startVideo("screen");
+          const entry = session.video.get("screen"), initial = entry.track;
+          session.screenAudio = backend === "builtin" ? { producer, track: sound } : { trackName: "sound", transceiver: { sender }, track: sound };
+          cancelled = true;
+          try { await session.replaceScreen(); } catch { /* OS picker was cancelled. */ }
+          const cancellationKept = entry.track === initial && initial.readyState === "live";
+          cancelled = false;
+          await session.replaceScreen();
+          const current = entry.track;
+          initial.dispatchEvent(new Event("ended"));
+          const keptSender = session.video.get("screen") === entry;
+          await session.updateScreenQuality({ screenHeight: 720, screenFps: 60 });
+          const updated = constraints.at(-1), savedFps = session.settings.screenFps;
+          rejectQuality = true;
+          try { await session.updateScreenQuality({ screenHeight: 480, screenFps: 15 }); } catch { /* Roll back the capture and encoder together. */ }
+          const rolledBack = session.settings.screenFps === savedFps && constraints.at(-1).frameRate.max === 60;
+          rejectReplace = true;
+          try { await session.replaceScreen(); } catch { /* Failed sender replacement also preserves the old capture. */ }
+          const failureKept = entry.track === current && current.readyState === "live";
+          const preview = videoTiles().find((tile: any) => tile.key === "local:screen");
+          const result = { cancellationKept, keptSender, failureKept, rolledBack, oldEnded: initial.readyState === "ended", audioLive: sound.readyState === "live", previewMatches: preview?.stream.getVideoTracks()[0] === current, publications, replaced, closed, fps: updated.frameRate.max, height: updated.height.max, caps: caps.length, failedTrackEnded: tracks.at(-1)!.readyState === "ended" };
+          // A share ending while the system picker is open must not revive it.
+          session.unpublish = async () => {};
+          const capture = navigator.mediaDevices.getDisplayMedia;
+          let release!: (value: MediaStream) => void;
+          navigator.mediaDevices.getDisplayMedia = () => new Promise(resolve => { release = resolve; });
+          rejectReplace = false;
+          const pending = session.replaceScreen();
+          await session.stopVideo("screen");
+          const stale = canvas.captureStream(1);
+          release(stale); await pending;
+          return { ...result, stoppedStaysStopped: !session.isSharing("screen") && stale.getTracks().every(track => track.readyState === "ended") };
+        } finally { navigator.mediaDevices.getDisplayMedia = original; tracks.forEach(track => track.stop()); sound.stop(); await audio.close(); }
+      }, backend);
+      expect(result).toEqual({ cancellationKept: true, keptSender: true, failureKept: true, rolledBack: true, oldEnded: true, audioLive: true, previewMatches: true, publications: 1, replaced: 1, closed: 0, fps: 60, height: 720, caps: 2, failedTrackEnded: true, stoppedStaysStopped: true });
+    }
+  } finally { await close(); }
+});
+
+test("camera keeps the full frame and call window shares controls and returns media on close", async () => {
+  const { app, page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { putTile } = await import(/* @vite-ignore */ `${location.origin}/src/media.ts`);
+      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
+      const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#143552"; ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = "#f0b429"; for (const [x, y] of [[0, 0], [560, 0], [0, 400], [560, 400]]) ctx.fillRect(x!, y!, 80, 80);
+      putTile({ key: "local:camera", userId: "person", source: "camera", stream: canvas.captureStream(1), local: true });
+      setState((s: any) => {
+        s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "voice" };
+        s.voice = { accountId: "test", serverId: "server", channelId: "voice", status: "connected", canStream: true, camera: true, screen: false };
+        s.instances.test.serverStates.server.voiceStates = [{ userId: "person", channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: true, screen: false }];
+        const peer = { id: "peer", username: "peer", displayName: "Pessoa na chamada", avatarUrl: null };
+        s.instances.test.serverStates.server.members.push({ user: peer, nick: null, presence: "online", roleIds: ["server"], joinedAt: new Date().toISOString() });
+        s.instances.test.serverStates.server.voiceStates.push({ userId: peer.id, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: false, screen: false });
+      });
+    });
+    const camera = page.locator(".stage-card.camera");
+    await expect(camera).toBeVisible();
+    await expect(camera.locator("video")).toHaveCSS("object-fit", "contain");
+    const openWindow = page.getByRole("button", { name: "Abrir chamada em janela separada", exact: true });
+    await expect(openWindow).toHaveCount(1);
+    await expect(page.locator(".stage-window-controls").getByRole("button", { name: "Abrir chamada em janela separada", exact: true })).toBeVisible();
+    const controlBounds = await page.locator(".stage-controls").boundingBox(), buttonBounds = await openWindow.boundingBox();
+    expect(buttonBounds!.y).toBeGreaterThanOrEqual(controlBounds!.y);
+    expect(buttonBounds!.x).toBeGreaterThan(controlBounds!.x + controlBounds!.width / 2);
+    await expect(page.locator(".chat-header, .voice-panel").getByRole("button", { name: "Abrir chamada em janela separada", exact: true })).toHaveCount(0);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.setWindowOpenHandler(() => ({ action: "deny" })));
+    await openWindow.click();
+    await expect(page.getByRole("status").filter({ hasText: "Não foi possível abrir a janela da chamada" })).toBeVisible();
+    await expect(camera).toBeVisible();
+    expect(app.windows()).toHaveLength(1);
+    await page.screenshot({ path: join(capture, "call-window-bottom-button.png") });
+    // The existing media-window policy must also accept the call window.
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]!.webContents.setWindowOpenHandler(({ url, frameName }) => ({
+        action: url === "about:blank" && frameName.startsWith("annoy-stream:") ? "allow" : "deny",
+      }));
+    });
+    const popupEvent = app.waitForEvent("window");
+    await page.getByRole("button", { name: "Abrir chamada em janela separada", exact: true }).first().click();
+    const popup = await popupEvent;
+    const remoteCamera = popup.locator(".stage-card.camera");
+    await expect(remoteCamera).toBeVisible();
+    await expect(camera).toHaveCount(0);
+    await expect(remoteCamera.locator("video")).toHaveCSS("object-fit", "contain");
+    await popup.locator(".stage-card.person .profile-trigger").click();
+    await expect(popup.locator(".member-profile")).toBeVisible();
+    await expect(page.locator(".member-profile")).toHaveCount(0);
+    await popup.keyboard.press("Escape");
+    const mic = popup.locator(".stage-controls button").first();
+    await mic.click();
+    expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().settings.selfMute)).toBe(true);
+    await remoteCamera.hover();
+    await remoteCamera.getByRole("button", { name: "Tela cheia", exact: true }).click();
+    await expect.poll(() => popup.evaluate(() => !!document.fullscreenElement)).toBe(true);
+    await expect(remoteCamera.locator("video")).toHaveCSS("object-fit", "contain");
+    await remoteCamera.getByRole("button", { name: "Sair da tela cheia", exact: true }).click();
+    await expect.poll(() => popup.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    const bounds = await remoteCamera.boundingBox(), controls = await popup.locator(".stage-controls").boundingBox();
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(controls!.y + 1);
+    await popup.screenshot({ path: join(capture, "call-window-camera.png") });
+    await popup.getByRole("button", { name: "Voltar para a janela principal", exact: true }).click();
+    await expect(camera).toBeVisible();
+    const nextWindow = app.waitForEvent("window");
+    await page.getByRole("button", { name: "Abrir chamada em janela separada", exact: true }).first().click();
+    const next = await nextWindow; await expect(next.locator(".stage-card.camera")).toBeVisible();
+    await next.close();
+    await expect(camera).toBeVisible();
+    expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/media.ts`)).videoTiles()[0].stream.getVideoTracks()[0].readyState)).toBe("live");
+  } finally { await close(); }
+});
+
+test("live stream settings switch sources and apply resolution and FPS from the call controls", async () => {
+  const { app, page, close } = await launch();
+  try {
+    await seed(page);
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("screen:mode"); ipcMain.handle("screen:mode", () => "app");
+      ipcMain.removeHandler("screen:sources"); ipcMain.handle("screen:sources", () => [
+        { id: "screen:test", name: "Tela de teste", kind: "screen", thumbnail: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" },
+        { id: "window:test", name: "Janela de teste", kind: "window", thumbnail: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" },
+      ]);
+    });
+    await page.evaluate(async () => {
+      const { VoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice.ts`);
+      const { joinVoice, startScreenShare } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360;
+      (window as any).screenCaptures = []; (window as any).cancelScreenCapture = false;
+      navigator.mediaDevices.getDisplayMedia = async () => {
+        if ((window as any).cancelScreenCapture) throw new DOMException("cancelled", "NotAllowedError");
+        const stream = canvas.captureStream(1); (window as any).screenCaptures.push(stream); return stream;
+      };
+      VoiceSession.prototype.start = async function () {
+        const session = this as any; session.canStream = true;
+        session.send = { close() {}, produce: async () => ({ id: "screen", close() {}, replaceTrack: async () => {}, setRtpEncodingParameters: async () => {} }) };
+      };
+      setState((s: any) => { s.settings.screenAudio = false; s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "voice" }; });
+      await joinVoice("test", "server", "voice");
+      await startScreenShare(null);
+    });
+    const camera = page.locator(".stage-card.video.screen");
+    await expect(camera).toBeVisible();
+    await page.getByRole("button", { name: "Configurar transmissão", exact: true }).first().click();
+    const settings = page.getByRole("dialog", { name: "Configurar transmissão", exact: true });
+    await expect(settings).toBeVisible();
+    await settings.getByRole("combobox", { name: "FPS da transmissão", exact: true }).click();
+    await page.getByRole("option", { name: "60 FPS", exact: true }).click();
+    await expect(settings.getByRole("combobox", { name: "FPS da transmissão", exact: true })).toHaveText("60 FPS");
+    await settings.getByRole("combobox", { name: "Resolução da transmissão", exact: true }).click();
+    await page.getByRole("option", { name: "720p HD", exact: true }).click();
+    await expect(settings.getByRole("combobox", { name: "Resolução da transmissão", exact: true })).toHaveText("720p HD");
+    await settings.getByRole("button", { name: "Janelas", exact: true }).click();
+    await settings.getByRole("button", { name: "Janela de teste", exact: true }).click();
+    await expect(settings).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).screenCaptures.map((stream: MediaStream) => stream.getVideoTracks()[0]!.readyState))).toEqual(["ended", "live"]);
+    await page.getByRole("button", { name: "Configurar transmissão", exact: true }).first().click();
+    await page.evaluate(() => { (window as any).cancelScreenCapture = true; });
+    await settings.getByRole("button", { name: "Tela de teste", exact: true }).click();
+    await expect(settings).toBeVisible();
+    await settings.getByRole("button", { name: "Fechar", exact: true }).click();
+    await expect(camera).toBeVisible();
+    expect(await page.evaluate(async () => {
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      return { sharing: getState().voice!.screen, busy: getState().voice!.screenBusy, resolution: getState().settings.screenHeight, fps: getState().settings.screenFps, captures: (window as any).screenCaptures.length };
+    })).toEqual({ sharing: true, busy: false, resolution: 720, fps: 60, captures: 2 });
+    await page.evaluate(async () => {
+      const { VoiceSession } = await import(/* @vite-ignore */ `${location.origin}/src/voice.ts`);
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      (window as any).pttEvents = [];
+      VoiceSession.prototype.setPushToTalk = function (down: boolean) { (window as any).pttEvents.push(down); };
+      setState((s: any) => { s.settings.inputMode = "ptt"; s.settings.pttKey = "Space"; });
+    });
+    const popupEvent = app.waitForEvent("window");
+    await page.getByRole("button", { name: "Abrir chamada em janela separada", exact: true }).first().click();
+    const popup = await popupEvent;
+    await expect(popup.locator(".stage-card.screen")).toBeVisible();
+    await popup.keyboard.press("Space");
+    expect(await page.evaluate(() => (window as any).pttEvents)).toEqual([true, false]);
+    await popup.close();
+  } finally { await close(); }
+});
+
+test("microphone audio keeps flowing when the app is covered, hidden and restored", async () => {
+  const { app, page, close } = await launch({ fakeMedia: true });
+  try {
+    const policy = await app.evaluate(({ app, BrowserWindow }) => ({
+      platform: process.platform,
+      occlusionDisabled: app.commandLine.hasSwitch("disable-backgrounding-occluded-windows"),
+      rendererPriorityKept: app.commandLine.hasSwitch("disable-renderer-backgrounding"),
+      backgroundThrottling: BrowserWindow.getAllWindows()[0]!.webContents.getBackgroundThrottling(),
+    }));
+    if (policy.platform === "win32") {
+      expect(policy.occlusionDisabled).toBe(true);
+      expect(policy.rendererPriorityKept).toBe(true);
+    }
+    expect(policy.backgroundThrottling).toBe(false);
+    await page.evaluate(async () => {
+      const { MicGate } = await import(/* @vite-ignore */ `${location.origin}/src/mic.ts`);
+      const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const original = navigator.mediaDevices.getUserMedia;
+      const input = new AudioContext(), tone = input.createOscillator(), gain = input.createGain(), source = input.createMediaStreamDestination();
+      tone.frequency.value = 440; gain.gain.value = .3;
+      tone.connect(gain).connect(source); tone.start(); await input.resume();
+      navigator.mediaDevices.getUserMedia = async () => new MediaStream(source.stream.getAudioTracks().map(track => track.clone()));
+      const gate = new MicGate({ ...getState().settings, selfMute: false, selfDeaf: false, noiseFilter: "off", inputMode: "vad", vadThreshold: 1 });
+      const sender = new RTCPeerConnection({ iceServers: [] }), receiver = new RTCPeerConnection({ iceServers: [] });
+      const player = new Audio(); player.autoplay = true;
+      const remoteTrack = new Promise<void>(resolve => { receiver.ontrack = event => { player.srcObject = new MediaStream([event.track]); resolve(); }; });
+      sender.onicecandidate = event => { if (event.candidate) void receiver.addIceCandidate(event.candidate); };
+      receiver.onicecandidate = event => { if (event.candidate) void sender.addIceCandidate(event.candidate); };
+      try {
+        const track = await gate.start();
+        sender.addTrack(track);
+        await sender.setLocalDescription(await sender.createOffer());
+        await receiver.setRemoteDescription(sender.localDescription!);
+        await receiver.setLocalDescription(await receiver.createAnswer());
+        await sender.setRemoteDescription(receiver.localDescription!);
+        await remoteTrack; await player.play();
+      } finally { navigator.mediaDevices.getUserMedia = original; }
+      (window as any).backgroundVoice = { input, tone, gate, sender, receiver, player };
+    });
+    const stats = () => page.evaluate(async () => {
+      const { gate, receiver } = (window as any).backgroundVoice;
+      const reports = [...(await receiver.getStats()).values()];
+      const inbound = reports.find((report: any) => report.type === "inbound-rtp" && report.kind === "audio");
+      return { packets: inbound?.packetsReceived ?? 0, energy: inbound?.totalAudioEnergy ?? 0, context: gate.output.context.state, track: gate.track.readyState, enabled: gate.track.enabled };
+    });
+    await expect.poll(async () => (await stats()).energy).toBeGreaterThan(0);
+    for (const phase of ["covered", "hidden", "restored"] as const) {
+      await app.evaluate(async ({ BrowserWindow }, phase) => {
+        const main = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes("127.0.0.1:5178"))!;
+        if (phase === "covered") {
+          const cover = new BrowserWindow({ ...main.getBounds(), frame: false, alwaysOnTop: true, backgroundColor: "#202020", show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+          await cover.loadURL("data:text/html,<title>Audio background test</title><body style='background:%23202020'>Test window</body>");
+          cover.showInactive();
+        } else if (phase === "hidden") main.hide();
+        else { for (const window of BrowserWindow.getAllWindows()) if (window !== main) window.destroy(); main.showInactive(); }
+      }, phase);
+      // Give the native occlusion/background policy time to settle before sampling RTP.
+      await page.waitForTimeout(1500);
+      const before = await stats();
+      await page.waitForTimeout(1500);
+      const after = await stats();
+      expect(after.context, phase).toBe("running");
+      expect(after.track, phase).toBe("live");
+      expect(after.enabled, phase).toBe(true);
+      expect(after.packets - before.packets, phase).toBeGreaterThan(20);
+      expect(after.energy - before.energy, phase).toBeGreaterThan(0.001);
+    }
+  } finally {
+    await page.evaluate(async () => {
+      const audio = (window as any).backgroundVoice;
+      if (!audio) return;
+      audio.gate.stop(); audio.sender.close(); audio.receiver.close(); audio.player.pause(); audio.player.srcObject = null;
+      audio.tone.stop(); await audio.input.close();
+    }).catch(() => undefined);
+    await close();
+  }
+});

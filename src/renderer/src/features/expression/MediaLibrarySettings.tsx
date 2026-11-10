@@ -1,6 +1,6 @@
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Download, Trash2, Upload, ImagePlus } from "lucide-react";
+import { Download, Trash2, Upload, ImagePlus, FileArchive } from "lucide-react";
 import { Button } from "../../components/ui/button.tsx";
 import { Icon } from "../../components/ui.tsx";
 import { setState, toast } from "../../store.ts";
@@ -11,22 +11,27 @@ import { PackCredits } from "./PackCredits.tsx";
 import { PageEnd, useMediaPages } from "./paging.tsx";
 import { hasMediaPicker, openMediaPicker, subscribeMediaPicker } from "./navigation.ts";
 
+import { readImageZip, type ZipImage } from "./zip.ts";
+import { ZipImportPreview } from "./ZipImportPreview.tsx";
+
 export function MediaLibrarySettings() {
   const canUse = useSyncExternalStore(subscribeMediaPicker, hasMediaPicker);
   const [revision, setRevision] = useState(0), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [zip, setZip] = useState<{ name: string; images: ZipImage[] } | null>(null);
+  const archive = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLInputElement>(null), manifest = useRef<HTMLInputElement>(null);
   const operation = useRef<AbortController | null>(null), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; operation.current?.abort(); }; }, []);
   const load = useCallback((after: string | null) => readPackPage({ after }), [revision]);
   const packs = useMediaPages(load);
-  const perform = async (action: (signal: AbortSignal) => Promise<unknown>) => {
+  const perform = async (action: (signal: AbortSignal) => Promise<unknown>, notify = true) => {
     if (operation.current) return;
     const controller = new AbortController(); operation.current = controller;
     setBusy(true); setError(null); setProgress(null);
     try {
       await action(controller.signal);
-      if (mounted.current) { setRevision((value) => value + 1); toast(translate("expression.catalog.33a394820fe5")); }
+      if (mounted.current && notify) { setRevision((value) => value + 1); toast(translate("expression.catalog.33a394820fe5")); }
     } catch (error) {
       if (mounted.current && !controller.signal.aborted) setError(error instanceof Error ? error.message : translate("expression.catalog.839de709c336"));
     } finally {
@@ -73,8 +78,13 @@ export function MediaLibrarySettings() {
     {error && <p className="expression-error" role="alert">{error}</p>}
     <div className="expression-import-actions">
       <Button variant="secondary" size="sm" disabled={busy} onClick={() => input.current?.click()}><ImagePlus size={15} />{translate("expression.c8630e10d977")}</Button>
+      <Button variant="secondary" size="sm" disabled={busy} onClick={() => archive.current?.click()}><FileArchive size={15} />{translate("expression.zip.import")}</Button>
       <Button variant="secondary" size="sm" disabled={busy} onClick={() => manifest.current?.click()}><Upload size={15} />{translate("expression.99e439de4649")}</Button>
     </div>
+    {zip && <ZipImportPreview images={zip.images} name={zip.name} busy={busy} cancel={() => { setZip(null); setError(null); }} importItems={(name, items) => void perform(async signal => {
+      await savePack({ id: `import-${crypto.randomUUID()}`, name, author: translate("expression.b21e91730d18"), license: translate("expression.catalog.c10c5f263014"), source: "local", items }, signal);
+      if (mounted.current) setZip(null);
+    })} />}
     <section className="expression-installed" aria-label={translate("expression.8a8b5ccdce78")}><h4>{translate("expression.8a8b5ccdce78")}</h4>
       {packs.items.map((pack) => <div key={pack.id}>
         <span><strong>{pack.name}</strong><small>{translate("expression.catalog.summary", { count: pack.itemCount, p0: pack.author })} · {pack.license}</small><PackCredits pack={pack} /></span>
@@ -85,6 +95,15 @@ export function MediaLibrarySettings() {
       <PageEnd page={packs} empty={translate("expression.catalog.8acaaf6537db")} end={translate("expression.catalog.ab91d3f0db4d")} />
     </section>
     <input ref={input} type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("expression.1cdcd529e1bd")} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void perform((signal) => importFiles(files, signal)); }} />
+    <input ref={archive} type="file" hidden accept=".zip,application/zip,application/x-zip-compressed" aria-label={translate("expression.zip.input")} onChange={event => {
+      const file = event.target.files?.[0]; event.target.value = "";
+      if (file) void perform(async signal => {
+        setZip(null);
+        const images = await readImageZip(file, signal);
+        signal.throwIfAborted();
+        if (mounted.current) setZip({ name: file.name.replace(/\.zip$/i, ""), images });
+      }, false);
+    }} />
     <input ref={manifest} type="file" hidden accept="application/json,.json" aria-label={translate("expression.catalog.b81f4e711dcd")} onChange={(event) => {
       const file = event.target.files?.[0]; event.target.value = "";
       if (file) void perform(async (signal) => {

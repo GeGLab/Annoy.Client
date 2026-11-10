@@ -297,3 +297,35 @@
 .server-sticker-grid .icon-btn { position: absolute; top: 0; right: 0; opacity: 0; }
 .server-sticker-grid figure:hover .icon-btn, .server-sticker-grid .icon-btn:focus-visible { opacity: 1; }
 @media (max-width: 640px) { .server-sticker-add { grid-template-columns: 1fr; } }
+
+.steam-connection-card { padding: 0; overflow: hidden; margin-top: 12px; }
+.steam-connection-card > .steam-connection-header { align-items: center; gap: 14px; margin: 0; padding: 20px; }
+.steam-connection-logo { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg-main); }
+.steam-connection-heading { flex: 1; min-width: 0; }
+.steam-connection-card .steam-connection-heading h4 { margin: 0 0 4px; }
+.steam-connection-status { display: inline-flex; align-items: center; flex: none; gap: 5px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: .71429rem; font-weight: 600; }
+.steam-connection-status.is-connected { color: var(--ok); background: color-mix(in srgb, var(--ok) 9%, transparent); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
+.steam-connection-body { display: grid; gap: 16px; padding: 0 20px 20px; }
+.steam-profile-link { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-main); color: var(--text); text-decoration: none; transition: background var(--duration), border-color var(--duration); }
+.steam-profile-link:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); text-decoration: none; }
+.steam-profile-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.steam-profile-symbol { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--bg-elev); color: var(--text-muted); }
+.steam-profile-copy { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.steam-profile-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .92857rem; }
+.steam-profile-copy > span { font-size: .78571rem; color: var(--text-muted); }
+.steam-profile-link > svg { flex: none; color: var(--text-muted); }
+.steam-activity-note { display: flex; align-items: flex-start; gap: 9px; padding: 0 2px; }
+.steam-activity-note > svg { flex: none; margin-top: 2px; color: var(--text-muted); }
+.steam-activity-note strong { display: block; color: var(--text-soft); font-size: .78571rem; font-weight: 600; }
+.steam-activity-note p { margin: 5px 0 0; color: var(--text-muted); font-size: .78571rem; line-height: 1.65; }
+.steam-connection-loading { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: .85714rem; }
+.steam-connection-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg-main) 45%, transparent); }
+.steam-disconnect { color: var(--text-muted); }
+.steam-disconnect:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+@media (max-width: 680px) {
+  .steam-connection-card > .steam-connection-header { flex-wrap: wrap; padding: 16px; gap: 12px; }
+  .steam-connection-heading { flex-basis: calc(100% - 60px); }
+  .steam-connection-status { margin-left: 60px; }
+  .steam-connection-body { padding: 0 16px 16px; }
+  .steam-connection-actions { padding: 10px 16px; }
+}

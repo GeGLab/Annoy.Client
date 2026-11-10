@@ -9,7 +9,7 @@ export default defineConfig({
     // Sandboxed preloads must be CommonJS.
     build: {
       rollupOptions: {
-        input: { index: resolve(import.meta.dirname, "src/preload/index.ts"), theater: resolve(import.meta.dirname, "src/preload/theater.ts") },
+        input: { index: resolve(import.meta.dirname, "src/preload/index.ts"), theater: resolve(import.meta.dirname, "src/preload/theater.ts"), overlay: resolve(import.meta.dirname, "src/preload/overlay.ts") },
         output: { format: "cjs", entryFileNames: "[name].cjs" },
       },
     },
@@ -18,6 +18,6 @@ export default defineConfig({
     root: resolve(import.meta.dirname, "src/renderer"),
     resolve: { alias: { "@": resolve(import.meta.dirname, "src/renderer/src") } },
     plugins: [react(), tailwindcss()],
-    build: { minify: true, cssMinify: true },
+    build: { minify: true, cssMinify: true, rollupOptions: { input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), overlay: resolve(import.meta.dirname, "src/renderer/overlay.html") } } },
   },
 });

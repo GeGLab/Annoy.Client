@@ -1,7 +1,7 @@
 import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ServerSummary, ServerSummaryPage } from "@annoy/protocol";
 import { apiFor, navigate, openServer, reconnect, resumeRecoveredView } from "../client.ts";
 import { RequestError } from "../api.ts";
@@ -15,7 +15,8 @@ import { Select } from "./ui/select.tsx";
 
 const checkedLabel = (at: number | null) => at === null ? translate("common.88bad3263261")
   : new Intl.DateTimeFormat(localizationPreferences().region, { dateStyle: "short", timeStyle: "short",hourCycle:localizationPreferences().hourCycle }).format(at);
-type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: number; loading: boolean; error: string | null; cached: boolean };
+type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: number; loading: boolean; error: string | null; cached: boolean; key: string; term: string };
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function ServerDirectory() {
   const accounts = useStore((s) => s.accounts);
@@ -25,39 +26,65 @@ export function ServerDirectory() {
   const [query, setQuery] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [pages, setPages] = useState<Record<string, DirectoryPage>>({});
-  const normalized = query.trim().toLocaleLowerCase(localizationPreferences().region);
+  const [normalized, setNormalized] = useState("");
+  const inflight = useRef(new Map<string, { key: string; controller: AbortController }>());
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
   const connectionSignature = accounts.map((account) => `${account.id}:${instances[account.id]?.status ?? "none"}`).join("|");
   const summarySignature = accounts.map((account) => `${account.id}:${(instances[account.id]?.servers ?? []).map((server) => `${server.id}/${server.name}`).join(",")}`).join("|");
-  useEffect(() => { document.getElementById("server-directory-title")?.focus(); }, []);
-
   useEffect(() => {
-    const controller = new AbortController();
+    const next = query.trim().toLocaleLowerCase(localizationPreferences().region);
+    const timer = setTimeout(() => setNormalized(next), next ? SEARCH_DEBOUNCE_MS : 0);
+    return () => clearTimeout(timer);
+  }, [query]);
+  useEffect(() => { document.getElementById("server-directory-title")?.focus(); }, []);
+  useEffect(() => () => { for (const { controller } of inflight.current.values()) controller.abort(); inflight.current.clear(); }, []);
+
+  // Each instance is its own server, so the instance filter only decides which servers are queried:
+  // a page already fetched for the same term and server state is reused instead of requested again.
+  useEffect(() => {
+    const region = localizationPreferences().region;
     const candidates = accounts.filter((account) => accountFilter === "all" || account.id === accountFilter);
-    setPages(Object.fromEntries(candidates.map((account) => [account.id, { servers: [], cursor: null, total: 0, loading: true, error: null, cached: false }])));
-    void Promise.all(candidates.map(async (account) => {
+    const wanted = new Map(candidates.map((account) => {
       const instance = instances[account.id];
-      const accountMatches = account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized);
-      const term = normalized && !accountMatches ? normalized : "";
-      if (instance?.status === "ready") {
-        const params = new URLSearchParams({ limit: "50", q: term });
+      const term = normalized && !account.instanceName.toLocaleLowerCase(region).includes(normalized) ? normalized : "";
+      const serverSignature = (instance?.servers ?? []).map((server) => `${server.id}/${server.name}`).join(",");
+      return [account.id, { account, term, key: `${term}\u0000${instance?.status ?? "none"}\u0000${serverSignature}` }];
+    }));
+    for (const [accountId, request] of inflight.current) {
+      if (wanted.get(accountId)?.key === request.key) continue;
+      request.controller.abort();
+      inflight.current.delete(accountId);
+    }
+    for (const { account, term, key } of wanted.values()) {
+      if (inflight.current.get(account.id)?.key === key) continue;
+      const existing = pagesRef.current[account.id];
+      if (existing && existing.key === key && !existing.loading) continue;
+      const instance = instances[account.id];
+      const fromCache = (error: string | null): DirectoryPage => {
+        const cached = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase(region).includes(term));
+        return { servers: cached.slice(0, 50), cursor: cached.length > 50 ? "50" : null, total: cached.length, loading: false, error, cached: true, key, term };
+      };
+      if (instance?.status !== "ready") { setPages((current) => ({ ...current, [account.id]: fromCache(null) })); continue; }
+      const controller = new AbortController();
+      inflight.current.set(account.id, { key, controller });
+      setPages((current) => ({ ...current, [account.id]: { servers: [], cursor: null, total: 0, error: null, cached: false, key, term, loading: true } }));
+      const settle = (page: DirectoryPage) => {
+        if (controller.signal.aborted) return;
+        inflight.current.delete(account.id);
+        setPages((current) => ({ ...current, [account.id]: page }));
+      };
+      void (async () => {
         try {
-          const page = await apiFor(account.id).get<ServerSummaryPage>(`/servers?${params}`, controller.signal);
+          const page = await apiFor(account.id).get<ServerSummaryPage>(`/servers?${new URLSearchParams({ limit: "50", q: term })}`, controller.signal);
           if (!Array.isArray(page?.servers) || typeof page.total !== "number") throw new Error(translate("common.eab1543a1723"));
-          if (!controller.signal.aborted) setPages((current) => ({ ...current, [account.id]: { servers: page.servers, cursor: page.nextCursor, total: page.total, loading: false, error: null, cached: false } }));
-          return;
+          settle({ servers: page.servers, cursor: page.nextCursor, total: page.total, loading: false, error: null, cached: false, key, term });
         } catch (reason) {
           if (controller.signal.aborted || isCancellation(reason)) return;
-          if (!(reason instanceof RequestError) || reason.status !== 404) {
-            const cached = instance.servers.filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
-            setPages((current) => ({ ...current, [account.id]: { servers: cached.slice(0, 50), cursor: cached.length > 50 ? "50" : null, total: cached.length, loading: false, error: (reason as Error).message, cached: true } }));
-            return;
-          }
+          settle(fromCache(reason instanceof RequestError && reason.status === 404 ? null : (reason as Error).message));
         }
-      }
-      const cached = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
-      if (!controller.signal.aborted) setPages((current) => ({ ...current, [account.id]: { servers: cached.slice(0, 50), cursor: cached.length > 50 ? "50" : null, total: cached.length, loading: false, error: null, cached: true } }));
-    }));
-    return () => controller.abort();
+      })();
+    }
   }, [accounts, accountFilter, normalized, connectionSignature, summarySignature]);
 
   const groups = useMemo(() => accounts
@@ -69,26 +96,25 @@ export function ServerDirectory() {
 
   const loadMore = async (accountId: string) => {
     const current = pages[accountId];
-    if (!current?.cursor || current.loading) return;
-    const account = accounts.find((item) => item.id === accountId);
-    if (!account) return;
+    if (!current?.cursor || current.loading || inflight.current.has(accountId)) return;
     const instance = instances[accountId];
+    const { key, term } = current;
+    const stillCurrent = () => pagesRef.current[accountId]?.key === key;
     setPages((value) => ({ ...value, [accountId]: { ...current, loading: true, error: null } }));
     try {
       if (instance?.status === "ready" && !current.cached) {
-        const params = new URLSearchParams({ limit: "50", after: current.cursor, q: normalized && !account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized) ? normalized : "" });
-        const next = await apiFor(accountId).get<ServerSummaryPage>(`/servers?${params}`);
-        setPages((value) => ({ ...value, [accountId]: { servers: [...(value[accountId]?.servers ?? []), ...next.servers], cursor: next.nextCursor, total: next.total, loading: false, error: null, cached: false } }));
+        const next = await apiFor(accountId).get<ServerSummaryPage>(`/servers?${new URLSearchParams({ limit: "50", after: current.cursor, q: term })}`);
+        if (!stillCurrent()) return;
+        setPages((value) => ({ ...value, [accountId]: { servers: [...(value[accountId]?.servers ?? []), ...next.servers], cursor: next.nextCursor, total: next.total, loading: false, error: null, cached: false, key, term } }));
       } else {
-        const term = normalized && !account.instanceName.toLocaleLowerCase(localizationPreferences().region).includes(normalized) ? normalized : "";
         const all = (instance?.servers ?? []).filter((server) => !term || server.name.toLocaleLowerCase(localizationPreferences().region).includes(term));
         const offset = Number(current.cursor);
         const next = all.slice(offset, offset + 50);
         const nextOffset = offset + next.length;
-        setPages((value) => ({ ...value, [accountId]: { servers: [...(value[accountId]?.servers ?? []), ...next], cursor: nextOffset < all.length ? String(nextOffset) : null, total: all.length, loading: false, error: null, cached: true } }));
+        setPages((value) => ({ ...value, [accountId]: { servers: [...(value[accountId]?.servers ?? []), ...next], cursor: nextOffset < all.length ? String(nextOffset) : null, total: all.length, loading: false, error: null, cached: true, key, term } }));
       }
     } catch (reason) {
-      setPages((value) => ({ ...value, [accountId]: { ...current, loading: false, error: (reason as Error).message } }));
+      if (stillCurrent()) setPages((value) => ({ ...value, [accountId]: { ...current, loading: false, error: (reason as Error).message } }));
     }
   };
 
