@@ -9,6 +9,7 @@ import { confirmAction } from "./ui/action-dialog.tsx";
 import { RELEASES_URL, type UpdateState } from "../../../shared/update.ts";
 import { setState, useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
+import { Button } from "./ui/button.tsx";
 
 export const BANNER_HEIGHT = 40;
 
@@ -230,7 +231,7 @@ export function UpdateSettings() {
         <ChannelSetting />
       </div>
       {(update.status === "disabled" || update.status === "error") && (
-        <a className="btn btn-ghost" href={update.status === "error" ? update.releaseUrl : `${RELEASES_URL}/latest`} target="_blank" rel="noreferrer">{translate("common.1cc3470af5d1")}</a>
+        <Button variant="outline" onClick={() => window.open(update.status === "error" ? update.releaseUrl : `${RELEASES_URL}/latest`, "_blank", "noopener")}>{translate("common.1cc3470af5d1")}</Button>
       )}
       {update.status === "available" && (
         <button className="btn" onClick={() => void api?.download()}>{translate("common.dafb59613e12")}</button>
