@@ -9,9 +9,11 @@ export interface CloudUrls {
   users: string;
   chat: string;
   cdn: string;
+  /** devannoy: the store catalog and the account's integrations. */
+  dev: string;
 }
 
-const DEFAULTS: CloudUrls = { users: "https://usersannoy.geg.dev.br", chat: "https://chatannoy.geg.dev.br", cdn: "https://cdnannoy.geg.dev.br" };
+const DEFAULTS: CloudUrls = { users: "https://usersannoy.geg.dev.br", chat: "https://chatannoy.geg.dev.br", cdn: "https://cdnannoy.geg.dev.br", dev: "https://devannoy.geg.dev.br" };
 let urls: CloudUrls = DEFAULTS;
 let loaded: Promise<CloudUrls> | null = null;
 

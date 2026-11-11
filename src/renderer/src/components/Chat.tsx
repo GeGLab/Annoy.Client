@@ -1,3 +1,4 @@
+import { IntegrationIcon } from "../features/integrations/Setup.tsx";
 import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
@@ -289,8 +290,18 @@ function MessageRow({
           {message.sharedBy&&<small className="muted">{rich("common.4ed74142d755",{p0:(nameOf(message.sharedBy)??message.sharedBy)})}</small>}
           {!compact && (
             <div className="message-head">
-              <Avatar user={message.author} size={22} />
-              <UserProfile accountId={accountId} user={message.author}><span className="message-author">{name}</span></UserProfile>
+              {message.integration ? (
+                <>
+                  <IntegrationIcon integration={{ icon: message.integration.iconUrl, name: message.integration.name }} size={22} />
+                  <span className="message-author">{message.integration.name}</span>
+                  <span className="integration-tag">{translate("integrations.tag")}</span>
+                </>
+              ) : (
+                <>
+                  <Avatar user={message.author} size={22} />
+                  <UserProfile accountId={accountId} user={message.author}><span className="message-author">{name}</span></UserProfile>
+                </>
+              )}
             </div>
           )}
           {editing ? (
@@ -341,7 +352,7 @@ function MessageRow({
             catch(error){toast((error as Error).message);}
             finally{pinningRef.current=false;setPinning(false);}
           }}><Icon name={isPinned ? "pinOff" : "pin"} size={16} /></button>}
-          {own && (
+          {own && !message.integration && (
             <button
               className="icon-btn tiny"
               title={translate("chat.2eba946b2e1e")}
@@ -942,6 +953,7 @@ export function Chat(props: ChatProps) {
               !!prev &&
               !m.replyToId &&
               prev.author.id === m.author.id &&
+              !m.integration && !prev.integration &&
               Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
               <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start-virtualizer.options.scrollMargin}px)` }}>

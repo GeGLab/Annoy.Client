@@ -21,6 +21,11 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { DmIntegrationsDialog } from "../../features/integrations/DmIntegrations.tsx";
+import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
+import { answerDmIntegration, controlText } from "../../features/integrations/dm.ts";
+import { useIntegrations } from "../../features/integrations/state.ts";
 
 const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
@@ -263,6 +268,32 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const own = message.senderId === me;
+  const meta = message.integration;
+  const link = useIntegrations((s) => (meta ? s.account.dms[message.conversationId]?.[meta.id] : undefined));
+  const [answering, setAnswering] = useState(false);
+  if (meta && meta.op !== "reply") {
+    const canAnswer = meta.op === "request" && !own && link?.status === "pending" && link.owner === message.senderId && !message.state;
+    const answer = async (accept: boolean) => {
+      setAnswering(true);
+      try { await answerDmIntegration(message.conversationId, meta.id, meta.name, accept); }
+      catch (error) { toast((error as Error).message); }
+      finally { setAnswering(false); }
+    };
+    return (
+      <div data-message-id={message.id} className="message integration-event" role="note">
+        <Icon name="cable" size={15} />
+        <span>{controlText(meta, message.senderId)}</span>
+        <time className="muted small" dateTime={message.createdAt} title={formatTime(message.createdAt)}>{formatClock(message.createdAt)}</time>
+        {canAnswer && (
+          <span className="integration-event-actions">
+            <Button size="sm" loading={answering} disabled={answering} onClick={() => void answer(true)}>{translate("integrations.accept")}</Button>
+            <Button size="sm" variant="secondary" disabled={answering} onClick={() => void answer(false)}>{translate("integrations.decline")}</Button>
+          </span>
+        )}
+      </div>
+    );
+  }
+  const reply = meta?.op === "reply" ? meta : null;
   const save = async () => {
     const content = draft.trim();
     try {
@@ -295,8 +326,9 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
           {isPinned && <div className="message-pin-label"><Icon name="pin" size={14} /><span>{translate("chat.pinnedLabel")}</span></div>}
           {!compact && (
             <div className="message-head">
-              <Avatar user={cloudUser(profile, message.senderId)} size={22} />
-              <span className="message-author">{nameOf(message.senderId)}</span>
+              {reply ? <IntegrationIcon integration={{ icon: reply.icon, name: reply.name }} size={22} /> : <Avatar user={cloudUser(profile, message.senderId)} size={22} />}
+              <span className="message-author">{reply ? reply.name : nameOf(message.senderId)}</span>
+              {reply && <span className="integration-tag">{translate("integrations.tag")}</span>}
             </div>
           )}
           {message.state === "undecryptable" ? (
@@ -353,7 +385,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
           <button className="icon-btn tiny" title={translate("social.reply")} aria-label={translate("social.reply")} onClick={onReply}>
             <Icon name="reply" size={16} />
           </button>
-          {own && (
+          {own && !reply && (
             <button
               className="icon-btn tiny"
               title={translate("social.edit")}
@@ -398,6 +430,7 @@ function DmConversation({ dmId }: { dmId: string }) {
   const [files, setFiles] = useState<File[]>([]);
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
   const [pinsOpen,setPinsOpen]=useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [previewPin,setPreviewPin]=useState<string|null>(null);
   const pinsButton=useRef<HTMLButtonElement>(null);
   const preview=thread?.pins?.find(pin=>pin.message.id===previewPin)?.message;
@@ -509,7 +542,7 @@ function DmConversation({ dmId }: { dmId: string }) {
           {items.map((m, i) => {
             const prev = items[i - 1];
             const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
-            const compact = !newDay && !!prev && !m.replyTo && prev.senderId === m.senderId && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
+            const compact = !newDay && !!prev && !m.replyTo && prev.senderId === m.senderId && !m.integration && !prev.integration && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
               <div key={m.clientId}>
                 {newDay && (
@@ -537,9 +570,18 @@ function DmConversation({ dmId }: { dmId: string }) {
         </div>
       )}
       <div className="composer">
-        <button className="icon-btn" disabled={!ready} title={translate("social.attach")} aria-label={translate("social.attach")} onClick={() => fileInput.current?.click()}>
-          <Icon name="plus" size={20} />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="icon-btn" disabled={!ready} title={translate("social.attach")} aria-label={translate("social.attach")}>
+              <Icon name="plus" size={20} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top">
+            <DropdownMenuItem onSelect={() => setIntegrationsOpen(true)}><Icon name="cable" />{translate("integrations.addMenu")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => fileInput.current?.click()}><Icon name="paperclip" />{translate("integrations.attachMenu")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {integrationsOpen && <DmIntegrationsDialog conversationId={dmId} me={me.id} otherName={title} onClose={() => setIntegrationsOpen(false)} />}
         <input
           ref={fileInput}
           type="file"
