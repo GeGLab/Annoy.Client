@@ -4,6 +4,7 @@ import { localizationPreferences, t as translate } from "../../../../shared/loca
 import { loadThread, openAttachment, sendDm, setDmMessageHook } from "../../social/dms.ts";
 import { displayName, runtime, social } from "../../social/runtime.ts";
 import type { DmIntegrationMeta, DmMessage } from "../../social/types.ts";
+import { toast } from "../../store.ts";
 import { iconOf, integrationById, integrations, loadCatalog, updateAccount, type DmLink } from "./state.ts";
 import { integrationHttp } from "./transport.ts";
 
@@ -98,7 +99,24 @@ async function answer(message: DmMessage, local: boolean): Promise<void> {
     return integration && isCallable(integration, "dm") ? [integration] : [];
   });
   const trigger = findTrigger(message.content, mine);
-  if (!trigger) return;
+  if (!trigger) {
+    if (local) {
+      const pending = Object.entries(dmLinks(message.conversationId)).flatMap(([id, link]) => {
+        const integration = link.status === "pending" ? integrationById(id) : undefined;
+        return integration && isCallable(integration, "dm") ? [integration] : [];
+      });
+      const pendingTrigger = findTrigger(message.content, pending);
+      if (pendingTrigger) {
+        const other = social().dms.find((d) => d.id === message.conversationId)?.recipientId;
+        const link = dmLinks(message.conversationId)[pendingTrigger.integration.id]!;
+        // Only the sender's app shows this notice; pending calls never leave the conversation.
+        toast(translate(link.owner === me ? "integrations.pending" : "integrations.requestText", link.owner === me
+          ? { p0: other ? nameOf(other) : translate("social.unknownUser") }
+          : { p0: nameOf(link.owner), p1: pendingTrigger.integration.name }));
+      }
+    }
+    return;
+  }
   const { integration } = trigger;
   const clientId = await replyClientId(message.id, integration.id);
   if (running.has(clientId)) return;

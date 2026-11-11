@@ -9,7 +9,7 @@ import { Button } from "../ui/button.tsx";
 import { Input } from "../ui/input.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { Avatar } from "../ui.tsx";
-import { cloudUser } from "./SocialHome.tsx";
+import { cloudUser } from "../../social/profile.ts";
 
 /**
  * The Annoy account's public profile (usersannoy): the one profile. Friends and

@@ -9,6 +9,76 @@ import { dirname, basename, resolve, join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const capture = resolve(".impeccable/review");
+
+test("the Annoy profile stays identical across friends, DMs, linked servers and settings", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.route("https://cdn.experience.test/i/**", async route => route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }));
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.accounts[0].annoy = { serverId: "linked-server", identity: "identity" };
+        // Deliberately different login and server data: neither is the public profile.
+        s.global.name = "login-name";
+        s.instances.test.user = { id: "person", username: "old-server-name", displayName: "Old server profile", avatarUrl: null };
+        const me = { id: "annoy-person", username: "gordziilla", displayName: "Gordziilla", avatar: "own-photo", bio: "My Annoy biography", banner: null, accentColor: null, dmKey: null, dmKeyVersion: null };
+        const other = { ...me, id: "friend", username: "friend", displayName: "Friend", avatar: null };
+        // An offline server must not change which identity the app displays.
+        s.social.status = "offline";
+        s.social.me = me;
+        s.social.profiles = { [me.id]: me, friend: other };
+        s.social.dms = [{ id: "cloud-dm", recipientId: "friend", store: { mine: false, theirs: false }, lastMessageId: null }];
+        s.social.threads["cloud-dm"] = { loaded: true, items: [], hasMoreRemote: false };
+        s.view = { kind: "home", accountId: "test", dmId: null };
+      });
+    });
+    const identity = page.locator(".user-panel .user-identity");
+    const assertProfile = async () => {
+      await expect(identity.locator("strong")).toHaveText("Gordziilla");
+      await expect(identity).toContainText("@gordziilla");
+      await expect(identity.locator("img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
+    };
+    await assertProfile();
+    // These are the two navigation paths in the reported screenshots.
+    await page.locator(".channel.dm").filter({ hasText: "Friend" }).click();
+    await assertProfile();
+    await page.screenshot({ path: join(capture, "annoy-profile-dm.png") });
+    await page.locator(".channel").filter({ hasText: "Amigos" }).first().click();
+    await assertProfile();
+    await page.screenshot({ path: join(capture, "annoy-profile-friends.png") });
+    await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openServer("test", "server"));
+    await assertProfile();
+    await identity.click();
+    await expect(page.locator(".self-profile .member-card-name")).toHaveText("Gordziilla");
+    await expect(page.locator(".self-profile .profile-bio")).toHaveText("My Annoy biography");
+    await page.keyboard.press("Escape");
+    await page.locator(".user-panel").getByRole("button", { name: "Configurações", exact: true }).click();
+    await expect(page.locator(".settings-identity strong")).toHaveText("Gordziilla");
+    await expect(page.locator(".settings-identity img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
+    await expect(page.locator(".cloud-profile-head img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
+    await page.screenshot({ path: join(capture, "annoy-profile-settings.png") });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        s.modal = null;
+        s.social.me.displayName = "Updated Annoy name";
+        s.social.me.avatar = "updated-photo";
+      });
+    });
+    await expect(identity.locator("strong")).toHaveText("Updated Annoy name");
+    await expect(identity.locator("img")).toHaveAttribute("src", "https://cdn.experience.test/i/updated-photo");
+    // Independent local accounts still display their own profile.
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { delete s.accounts[0].annoy; });
+    });
+    await expect(identity.locator("strong")).toHaveText("Old server profile");
+    await expect(identity).toContainText("@old-server-name");
+    await expect(identity.locator("img")).toHaveCount(0);
+  } finally { await close(); }
+});
+
 async function fullyInside(page: Page, selector: string, top = 12) {
   let observed:unknown;
   await expect

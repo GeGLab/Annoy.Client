@@ -1,4 +1,3 @@
-import type { User } from "@annoy/protocol";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
@@ -9,8 +8,8 @@ import { ActivityStack } from "../../features/activity/ActivityCard.tsx";
 import { startDirectCall } from "../../features/direct-calls.ts";
 import { acceptFriend, addFriend, displayName, ensureProfiles, removeFriend, setFriendNickname } from "../../social/index.ts";
 import { deleteDm, editDm, loadDmPins, loadThread, markDmRead, openAttachment, openDmWith, retryDm, sendDm, sendDmTyping, setStore, setDmPinned } from "../../social/dms.ts";
-import { imageUrl } from "../../social/cloud.ts";
-import { CLOUD_ACCOUNT, type CloudPresence, type CloudProfile, type CloudRelationship, type DmAttachment, type DmMessage } from "../../social/types.ts";
+import { cloudUser } from "../../social/profile.ts";
+import { CLOUD_ACCOUNT, type CloudPresence, type CloudRelationship, type DmAttachment, type DmMessage } from "../../social/types.ts";
 import { ResizablePanel } from "../layout/ResizablePanel.tsx";
 import { UserPanel } from "../TopBar.tsx";
 import { Button } from "../ui/button.tsx";
@@ -33,13 +32,6 @@ const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
  * Home of the Annoy account (TODO item 1): friends and DMs from the Annoy
  * cloud. Works with no server open; servers never see any of this.
  */
-
-export const cloudUser = (p: CloudProfile | undefined, fallbackId = ""): User => ({
-  id: p?.id ?? fallbackId,
-  username: p?.username ?? "",
-  displayName: displayName(p) || translate("social.unknownUser"),
-  avatarUrl: imageUrl(p?.avatar),
-});
 
 const isOnline = (p: CloudPresence | undefined) => !!p && p.status !== "offline";
 const GROUP_WINDOW_MS = 7 * 60_000;
@@ -268,11 +260,13 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const own = message.senderId === me;
+  const recipientId = useStore((s) => s.social.dms.find((d) => d.id === message.conversationId)?.recipientId);
   const meta = message.integration;
   const link = useIntegrations((s) => (meta ? s.account.dms[message.conversationId]?.[meta.id] : undefined));
   const [answering, setAnswering] = useState(false);
   if (meta && meta.op !== "reply") {
-    const canAnswer = meta.op === "request" && !own && link?.status === "pending" && link.owner === message.senderId && !message.state;
+    const pending = meta.op === "request" && link?.status === "pending" && link.owner === message.senderId && !message.state;
+    const canAnswer = pending && !own;
     const answer = async (accept: boolean) => {
       setAnswering(true);
       try { await answerDmIntegration(message.conversationId, meta.id, meta.name, accept); }
@@ -284,6 +278,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
         <Icon name="cable" size={15} />
         <span>{controlText(meta, message.senderId)}</span>
         <time className="muted small" dateTime={message.createdAt} title={formatTime(message.createdAt)}>{formatClock(message.createdAt)}</time>
+        {pending && own && <span>{translate("integrations.pending", { p0: (recipientId && nameOf(recipientId)) || translate("social.unknownUser") })}</span>}
         {canAnswer && (
           <span className="integration-event-actions">
             <Button size="sm" loading={answering} disabled={answering} onClick={() => void answer(true)}>{translate("integrations.accept")}</Button>

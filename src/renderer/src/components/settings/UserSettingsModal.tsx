@@ -44,6 +44,7 @@ import { accountWebsite, signOut as signOutGlobal } from "../../auth/session.ts"
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 import { SavedNotice, useSavedNotice } from "./SavedNotice.tsx";
+import { ownCloudUser } from "../../social/profile.ts";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
@@ -216,9 +217,10 @@ export function UserSettingsModal() {
     return id ?? (state.global ? null : state.accounts[0]?.id ?? null);
   });
   const annoy = useStore((s) => s.global);
-  const annoyMode = selected === null && !!annoy;
+  const annoyMode = !!annoy && (selected === null || !!accounts.find((account) => account.id === selected)?.annoy);
   const shownAccounts = accounts.filter((account) => account.id === selected);
-  const profileUser = annoyMode ? { id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null } : shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined;
+  const cloudProfile = useStore((s) => s.social.me);
+  const profileUser = annoyMode ? ownCloudUser(cloudProfile, annoy!) : shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined;
   const saved = useStore((s) => s.settings);
   const [desktopStatus,setDesktopStatus]=useState<DesktopSnapshot|null>(null);
   const [desktopDraft,setDesktopDraft]=useState<DesktopPreferences|null>(null);
@@ -459,7 +461,7 @@ export function UserSettingsModal() {
                 {annoyMode && (
                   <div className="settings-account annoy-profile global-account-panel">
                     <span className="account-badge">{rich("common.841a23466805",{p0:(<Icon name="check" size={12} />)})}</span>
-                    <p><strong>{annoy!.name}</strong> <span className="muted">({annoy!.email})</span></p>
+                    <p><strong>{profileUser?.displayName}</strong> <span className="muted">({annoy!.email})</span></p>
                     <div className="account-actions global-account-actions">
                       <a className="ui-button ui-button-secondary ui-button-sm" href={`${accountWebsite()}/conta`} target="_blank" rel="noreferrer">{translate("settings.1ea5d01cdfe6")}</a>
                       <Button variant="ghost" size="sm" onClick={() => void signOutGlobal()}>{translate("common.63783041b62a")}</Button>
