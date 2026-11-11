@@ -101,3 +101,15 @@ test("an invalid session and OS offline affect only the selected account", () =>
   assert.equal(affectedAccountId({ kind: "server", accountId: "b" }, instances, network), null);
   assert.equal(affectedAccountId({ kind: "server", accountId: "b" }, instances, observeNetwork(false, 10)), "b");
 });
+
+
+test("a required client update stops network recovery deadlines without marking the session invalid", () => {
+  const previous = { ...unknownEndpoint(), authentication: "valid", cause: "service", nextRetryAt: 2000, recoveryDeadline: 60_000, restartUntil: 90_000 };
+  const outdated = observeTransport(previous, "outdated", 1000, network);
+  assert.equal(outdated.availability, "available");
+  assert.equal(outdated.authentication, "valid");
+  assert.equal(outdated.cause, null);
+  assert.equal(outdated.nextRetryAt, null);
+  assert.equal(outdated.recoveryDeadline, null);
+  assert.equal(outdated.restartUntil, null);
+});

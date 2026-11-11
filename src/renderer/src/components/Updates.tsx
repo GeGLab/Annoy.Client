@@ -6,7 +6,7 @@ import {t as translate,onLocalizationChange} from "../../../shared/localization/
 import { useEffect, useState } from "react";
 import type { UpdateChannel, UpdateChannelInfo } from "../../../shared/update-channels.ts";
 import { confirmAction } from "./ui/action-dialog.tsx";
-import type { UpdateState } from "../../../shared/update.ts";
+import { RELEASES_URL, type UpdateState } from "../../../shared/update.ts";
 import { setState, useStore } from "../store.ts";
 import { Icon } from "./ui.tsx";
 
@@ -229,6 +229,9 @@ export function UpdateSettings() {
         {text && <div className="muted small">{text}</div>}
         <ChannelSetting />
       </div>
+      {(update.status === "disabled" || update.status === "error") && (
+        <a className="btn btn-ghost" href={update.status === "error" ? update.releaseUrl : `${RELEASES_URL}/latest`} target="_blank" rel="noreferrer">{translate("common.1cc3470af5d1")}</a>
+      )}
       {update.status === "available" && (
         <button className="btn" onClick={() => void api?.download()}>{translate("common.dafb59613e12")}</button>
       )}

@@ -124,6 +124,11 @@ function writeCache(accountId: string): void {
 }
 
 export function reconnect(accountId?: string): void {
+  if (accountId && getState().instances[accountId]?.status === "outdated") {
+    requestNavigation(() => setState(s => { s.modal = { kind: "userSettings", section: "updates" }; }));
+    void window.annoy?.updates.check().catch(() => toast(translate("update.networkError")));
+    return;
+  }
   for (const [id, entry] of live) if (!accountId || id === accountId) entry.gateway.reconnectNow();
   // Servers of the Annoy account not signed in yet retry the Annoy sign-in instead.
   if (getState().accounts.some((a) => a.pending && (!accountId || a.id === accountId))) void import("./auth/servers.ts").then((g) => g.syncVault());

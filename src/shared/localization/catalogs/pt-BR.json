@@ -2421,5 +2421,8 @@
   "integrations.vpngo.noProfiles": "O VPNGo não tem perfis. Importe um perfil WireGuard no VPNGo.",
   "integrations.vpngo.noServers": "Nenhum servidor conectado.",
   "integrations.vpngo.failed": "A conexão pelo VPNGo não abriu: {p0}. Este servidor fica sem conexão até ela abrir.",
-  "integrations.vpngo.voiceNote": "A voz de um servidor ligado pelo VPNGo passa só pela VPN, por TCP. A qualidade pode cair."
+  "integrations.vpngo.voiceNote": "A voz de um servidor ligado pelo VPNGo passa só pela VPN, por TCP. A qualidade pode cair.",
+  "connection.updateAction": "Atualizar Annoy",
+  "connection.updateRequired": "Atualização necessária",
+  "connection.updateHint": "O servidor está online, mas exige uma versão mais recente do Annoy. Atualize o aplicativo para conectar."
 }

@@ -196,3 +196,34 @@ for (const type of ['song', 'theater']) test(`${type} playback ends on disconnec
   await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.status)).toBe('ready');
   await expect(page.locator('video')).toHaveCount(0);
 });
+
+test('an outdated client can open updates from the server directory and download manually', async ({ page }) => {
+  const fixture = await setup(page);
+  fixture.stop(4011);
+  await expect.poll(() => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().instances.test.status)).toBe('outdated');
+  await page.evaluate(async () => {
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    setState((s: any) => { s.update = { status: 'disabled', currentVersion: '0.10.0-alpha.7' }; });
+    (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).navigate({ kind: 'servers' });
+  });
+  await expect(page.locator('.server-directory-status')).toHaveText('Atualização necessária');
+  await expect(page.locator('.server-directory-group')).toContainText('O servidor está online');
+  await expect(page.locator('.server-directory-group').getByRole('button', { name: /Reconectar/ })).toHaveCount(0);
+  await page.locator('.server-directory-group').getByRole('button', { name: 'Atualizar Annoy' }).click();
+  await expect(page.locator('.update-settings')).toBeVisible();
+  await expect(page.locator('.update-settings').getByRole('link', { name: 'Baixar manualmente' })).toHaveAttribute('href', 'https://github.com/GeGLab/annoy-client/releases/latest');
+  expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().accounts.some((a: any) => a.id === 'test'))).toBe(true);
+});
+
+test('an outdated client recovery panel offers updates instead of retrying a blocked gateway', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.evaluate(async () => {
+    const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+    setState((s: any) => { s.update = { status: 'disabled', currentVersion: '0.10.0-alpha.7' }; });
+  });
+  fixture.stop(4011);
+  await expect(page.locator('.connection-recovery').getByRole('heading', { name: 'Atualização necessária' })).toBeVisible();
+  await page.locator('.connection-recovery').getByRole('button', { name: 'Atualizar Annoy' }).click();
+  await expect(page.locator('.update-settings')).toBeVisible();
+  await expect(page.locator('.update-settings').getByRole('link', { name: 'Baixar manualmente' })).toBeVisible();
+});
