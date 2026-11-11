@@ -211,7 +211,7 @@ test('an outdated client can open updates from the server directory and download
   await expect(page.locator('.server-directory-group').getByRole('button', { name: /Reconectar/ })).toHaveCount(0);
   await page.locator('.server-directory-group').getByRole('button', { name: 'Atualizar Annoy' }).click();
   await expect(page.locator('.update-settings')).toBeVisible();
-  await expect(page.locator('.update-settings').getByRole('link', { name: 'Baixar manualmente' })).toHaveAttribute('href', 'https://github.com/GeGLab/annoy-client/releases/latest');
+  await expect(page.locator('.update-settings').getByRole('button', { name: 'Baixar manualmente' })).toHaveClass(/ui-button-outline/);
   expect(await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().accounts.some((a: any) => a.id === 'test'))).toBe(true);
 });
 
@@ -225,5 +225,5 @@ test('an outdated client recovery panel offers updates instead of retrying a blo
   await expect(page.locator('.connection-recovery').getByRole('heading', { name: 'Atualização necessária' })).toBeVisible();
   await page.locator('.connection-recovery').getByRole('button', { name: 'Atualizar Annoy' }).click();
   await expect(page.locator('.update-settings')).toBeVisible();
-  await expect(page.locator('.update-settings').getByRole('link', { name: 'Baixar manualmente' })).toBeVisible();
+  await expect(page.locator('.update-settings').getByRole('button', { name: 'Baixar manualmente' })).toBeVisible();
 });
