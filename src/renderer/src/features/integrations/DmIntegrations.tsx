@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button.tsx";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog.tsx";
 import { toast } from "../../store.ts";
 import { IntegrationIcon } from "./Setup.tsx";
-import { removeDmIntegration, requestDmIntegration } from "./dm.ts";
+import { answerDmIntegration, removeDmIntegration, requestDmIntegration } from "./dm.ts";
 import { loadCatalog, useIntegrations } from "./state.ts";
 
 /** "Adicionar integração" of a DM: the integrations this account connected, and the ones already in the conversation. */
@@ -42,7 +42,12 @@ export function DmIntegrationsDialog({ conversationId, me, otherName, onClose }:
                       {!link ? integration.summary : link.status === "active" ? (mine ? translate("integrations.active") : translate("integrations.addedBy", { p0: otherName })) : mine ? translate("integrations.pending", { p0: otherName }) : translate("integrations.requestText", { p0: otherName, p1: integration.name })}
                     </span>
                   </div>
-                  {link ? (
+                  {link?.status === "pending" && !mine ? (
+                    <div className="integration-event-actions">
+                      <Button size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => answerDmIntegration(conversationId, integration.id, integration.name, true))}>{translate("integrations.accept")}</Button>
+                      <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void run(integration.id, () => answerDmIntegration(conversationId, integration.id, integration.name, false))}>{translate("integrations.decline")}</Button>
+                    </div>
+                  ) : link ? (
                     <Button variant="secondary" size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => removeDmIntegration(conversationId, integration.id, integration.name))}>{translate("integrations.remove")}</Button>
                   ) : (
                     <Button size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => requestDmIntegration(conversationId, integration))}>{translate("integrations.add")}</Button>

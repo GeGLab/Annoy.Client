@@ -16,6 +16,7 @@ import { visibleUserActivities } from "../../../shared/activity.ts";
 import { ServerTabMenu } from "./ServerTabMenu.tsx";
 import { Select } from "./ui/select.tsx";
 import { presenceLabel, type ManualPresence } from "../../../shared/presence.ts";
+import { ownCloudUser } from "../social/profile.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -56,20 +57,26 @@ export function UserPanel() {
   const view = useStore((s) => s.view);
   const accounts = useStore((s) => s.accounts);
   const annoy = useStore((s) => s.global);
-  // The Annoy account selected in the switcher: the panel shows it, not a server account.
-  const annoyMode = "accountId" in view && view.accountId === null && !!annoy;
-  const accountId = annoyMode ? undefined : "accountId" in view && view.accountId ? view.accountId : accounts[0]?.id;
-  const user = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
-  const ownPresence = useStore((s) => accountId && user ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[user.id] ?? "online" : "offline" : undefined);
-  const manualSupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
-  const groupActivitySupported = useStore((s) => !!accountId && !!s.instances[accountId]?.instance?.groupActivity);
+  const identityAccountId = useStore((s) => identityAccountIds(s)[0]);
+  const accountId = "accountId" in view ? view.accountId ?? undefined : identityAccountId;
+  const account = accounts.find((a) => a.id === accountId);
+  const annoyMode = !!annoy && (!accountId || !!account?.annoy);
+  const profile = useStore((s) => s.social.me);
+  const serverUser = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
+  const user = annoyMode ? ownCloudUser(profile, annoy!) : serverUser;
+  const cloudPresence = useStore((s) => s.social.me ? s.social.presences[s.social.me.id] : undefined);
+  const cloudStatus = useStore((s) => s.social.status);
+  const serverPresence = useStore((s) => accountId && serverUser ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[serverUser.id] ?? "online" : "offline" : undefined);
+  const ownPresence = annoyMode ? cloudStatus === "ready" ? cloudPresence?.status ?? settings.manualPresence : "offline" : serverPresence;
+  const manualSupported = useStore((s) => annoyMode || !!accountId && !!s.instances[accountId]?.instance?.manualPresence);
+  const groupActivitySupported = useStore((s) => annoyMode || !!accountId && !!s.instances[accountId]?.instance?.groupActivity);
   const snapshot = useStore((s) => s.desktopActivity);
-  const reported = useStore((s) => (accountId && user ? s.instances[accountId]?.activities[user.id] : undefined) ?? EMPTY_ACTIVITIES);
+  const reported = useStore((s) => (annoyMode ? cloudPresence?.activities : accountId && serverUser ? s.instances[accountId]?.activities[serverUser.id] : undefined) ?? EMPTY_ACTIVITIES);
   const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: snapshot?.activities, reported });
 
   const openSettings = () =>
     setState((s) => {
-      s.modal = { kind: "userSettings", ...(accountId && { accountId }) };
+      s.modal = { kind: "userSettings", ...(!annoyMode && accountId && { accountId }) };
     });
 
   return (
@@ -79,18 +86,18 @@ export function UserPanel() {
         <Popover.Root>
           <Popover.Trigger asChild>
           <button className="user-identity" aria-label={translate("common.5c9cb6831931")}>
-            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={32} /> : <Brand size={32} />}
+            {user ? <Avatar user={user} size={32} presence={ownPresence} /> : <Brand size={32} />}
             <span className="user-identity-text">
-              <strong className="truncate">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>
-              <span>{user ? `@${user.username}` : annoyMode ? translate("common.21c5709ca7b8") : translate("common.423f69a38f8e")}</span>
+              <strong className="truncate">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>
+              <span>{user ? `@${user.username}` : translate("common.423f69a38f8e")}</span>
             </span>
           </button>
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content className="member-card member-profile self-profile" side="top" align="start" sideOffset={12} collisionPadding={12} role="dialog" aria-label={translate("common.9edbcdb31d91")}>
               <div className="member-card-head">
-                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : annoyMode ? <Avatar user={{ id: annoy!.id, username: annoy!.name, displayName: annoy!.name, avatarUrl: null }} size={56} /> : <Brand size={48} />}
-                <div><strong className="member-card-name">{user?.displayName ?? (annoyMode ? annoy!.name : translate("common.0d6cbcd9b64d"))}</strong>{user ? <div className="muted">@{user.username}</div> : annoyMode && <div className="muted">{rich("common.9084c4085ca7",{p0:(annoy!.email)})}</div>}</div>
+                {user ? <Avatar user={user} size={56} presence={ownPresence} /> : <Brand size={48} />}
+                <div><strong className="member-card-name">{user?.displayName ?? translate("common.0d6cbcd9b64d")}</strong>{user && <div className="muted">@{user.username}</div>}</div>
               </div>
               {user?.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
               <label className="profile-status-choice">{translate("common.87c9043c582f")}<Select aria-label={translate("common.87c9043c582f")} value={settings.manualPresence} onChange={(event) => setState((s) => { s.settings.manualPresence = event.target.value as ManualPresence; })}>

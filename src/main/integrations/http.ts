@@ -7,11 +7,14 @@ import { BlockList, isIP } from "node:net";
  * computer, from its own in-memory session (no cookies, no cache, never the
  * VPN routes). Public HTTPS only, no redirects, bounded answers.
  */
-const blocked = new BlockList();
-for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3]] as const) blocked.addSubnet(net, bits, "ipv4");
-for (const [net, bits] of [["::", 127], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["64:ff9b::", 96], ["::ffff:0:0", 96]] as const) blocked.addSubnet(net, bits, "ipv6");
+// Keep address families separate: an IPv4-mapped IPv6 subnet also matches
+// native IPv4 addresses in Node BlockList.
+const blockedIPv4 = new BlockList();
+const blockedIPv6 = new BlockList();
+for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3]] as const) blockedIPv4.addSubnet(net, bits, "ipv4");
+for (const [net, bits] of [["::", 127], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["64:ff9b::", 96], ["::ffff:0:0", 96]] as const) blockedIPv6.addSubnet(net, bits, "ipv6");
 
-const HEADERS = new Set(["content-type", "authorization", "user-agent", "x-annoy-integration"]);
+const HEADERS = new Set(["content-type", "authorization", "user-agent", "x-annoy-integration", "x-annoy-timestamp", "x-annoy-signature", "x-annoy-key-id"]);
 const MAX_BYTES = 40 * 1024 * 1024;
 const MAX_BODY = 32 * 1024 * 1024;
 
@@ -51,7 +54,7 @@ async function request(input: IntegrationRequest): Promise<IntegrationResponse> 
   const timeout = Math.min(180_000, Math.max(1000, Number(input.timeoutMs) || 0));
   try {
     const addresses = await lookup(url.hostname, { all: true });
-    if (!addresses.length || addresses.some((a) => blocked.check(a.address, a.family === 6 ? "ipv6" : "ipv4"))) return { ok: false };
+    if (!addresses.length || addresses.some((a) => (a.family === 6 ? blockedIPv6.check(a.address, "ipv6") : blockedIPv4.check(a.address, "ipv4")))) return { ok: false };
     const res = await session.fromPartition("annoy-integrations", { cache: false }).fetch(url.href, {
       method: input.method, headers, body: input.method === "POST" ? input.body : undefined,
       cache: "no-store", credentials: "omit", redirect: "error", bypassCustomProtocolHandlers: true, signal: AbortSignal.timeout(timeout),

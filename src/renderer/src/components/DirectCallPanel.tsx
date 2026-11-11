@@ -12,7 +12,7 @@ import { userVolume } from "../../../shared/user-volume.ts";
 import { RemoteAudioMixer, type AmplifiedAudio } from "../lib/remote-audio.ts";
 import { savedDevice } from "../lib/devices.ts";
 import { CLOUD_ACCOUNT } from "../social/types.ts";
-import { cloudUser } from "./social/SocialHome.tsx";
+import { cloudUser } from "../social/profile.ts";
 
 function CallVideo({ stream, local = false }: { stream: MediaStream | null; local?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
