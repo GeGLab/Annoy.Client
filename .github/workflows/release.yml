@@ -28,7 +28,7 @@ jobs:
           - os: windows-latest
             target: --win --x64
             files: dist/Annoy-Setup-x64.exe dist/Annoy-Setup-x64.exe.blockmap dist/latest.yml
-          - os: ubuntu-24.04
+          - os: ubuntu-latest
             target: --linux
             files: dist/Annoy-x86_64.AppImage dist/latest-linux.yml
     runs-on: ${{ matrix.os }}
