@@ -606,14 +606,14 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
       <div className="offline-icon">
         <Icon name="refresh" size={26} />
       </div>
-      <h2>{status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)})}</h2>
+      <h2>{status === "outdated" ? translate("connection.updateRequired") : status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)})}</h2>
       <p className="muted">
-        {status === "invalid"
+        {status === "outdated" ? translate("connection.updateHint") : status === "invalid"
           ? translate("common.5a3f23aabc32")
           : translate("common.d83ab6d4e968")}
       </p>
       <button className="btn" onClick={() => (status === "invalid" ? openModal({ kind: "addAccount", accountId }) : reconnect(accountId))}>
-        {status === "invalid" ? translate("common.63034958f0db") : translate("common.1bff678f4f0f")}
+        {status === "outdated" ? translate("connection.updateAction") : status === "invalid" ? translate("common.63034958f0db") : translate("common.1bff678f4f0f")}
       </button>
     </div>
   );

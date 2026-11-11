@@ -42,7 +42,7 @@ export function observeTransport(previous: EndpointObservation, status: Transpor
   if (status === "ready") return { ...unknownEndpoint(), availability: "available", authentication: "valid", observedAt: at };
   if (status === "invalid") return { ...unknownEndpoint(), availability: "available", authentication: "invalid", cause: "unauthorized", observedAt: at };
   // The server answered and asked for a newer app: reachable, but no session until the update.
-  if (status === "outdated") return { ...previous, availability: "available", cause: null, observedAt: at, nextRetryAt: null };
+  if (status === "outdated") return { ...previous, availability: "available", cause: null, observedAt: at, nextRetryAt: null, recoveryDeadline: null, restartUntil: null };
   return { ...previous, availability: "unavailable", cause: network.status === "offline" ? "system-offline" : "network", observedAt: at, nextRetryAt: null };
 }
 

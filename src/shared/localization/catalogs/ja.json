@@ -2421,5 +2421,8 @@
   "integrations.vpngo.noProfiles": "VPNGo has no profiles. Import a WireGuard profile in VPNGo.",
   "integrations.vpngo.noServers": "No server connected.",
   "integrations.vpngo.failed": "The VPNGo connection did not open: {p0}. This server stays offline until it opens.",
-  "integrations.vpngo.voiceNote": "Voice of a server routed through VPNGo goes only through the VPN, over TCP. Quality may drop."
+  "integrations.vpngo.voiceNote": "Voice of a server routed through VPNGo goes only through the VPN, over TCP. Quality may drop.",
+  "connection.updateAction": "Annoy を更新",
+  "connection.updateRequired": "更新が必要です",
+  "connection.updateHint": "サーバーはオンラインですが、新しいバージョンの Annoy が必要です。接続するにはアプリを更新してください。"
 }

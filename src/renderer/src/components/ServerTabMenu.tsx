@@ -51,7 +51,7 @@ export function ServerTabMenu({ account, server, inst, children }: {
     { kind: "separator" },
     { kind: "item", id: "copyId", icon: "restore", text: translate("common.ffaee7643680",{p0:""}), run: () => void copy(server.id, translate("common.5c27b420a68b")) },
     { kind: "item", id: "copyUrl", icon: "link", text: translate("common.7e16118133a2",{p0:""}), run: () => void copy(account.url, translate("common.236589b57f24")) },
-    ...(!ready ? [{ kind: "item", id: "reconnect", icon: "refresh", text: inst?.status === "invalid" ? translate("common.05d410b61f11") : translate("common.3a4cc1faed8c"), run: () => inst?.status === "invalid" ? openModal({ kind: "addAccount", rememberedId: account.id }) : reconnect(account.id) } as const] : []),
+    ...(!ready ? [{ kind: "item", id: "reconnect", icon: "refresh", text: inst?.status === "invalid" ? translate("common.05d410b61f11") : inst?.status === "outdated" ? translate("connection.updateAction") : translate("common.3a4cc1faed8c"), run: () => inst?.status === "invalid" ? openModal({ kind: "addAccount", rememberedId: account.id }) : reconnect(account.id) } as const] : []),
     { kind: "separator" },
     ...(ready && !owner ? [{ kind: "item", id: "leave", icon: "logout", destructive: true, text: translate("common.fd41f9870c0a",{p0:""}), run: () => void leave() } as const] : []),
     { kind: "item", id: "remove", icon: "trash", destructive: true, disabled: !removable, text: translate("common.04ad962fd414",{p0:""}), run: () => void remove() },

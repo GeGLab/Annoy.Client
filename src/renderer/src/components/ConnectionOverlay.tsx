@@ -54,7 +54,7 @@ export function ConnectionNotice({ accountId }: { accountId: string }) {
   if (status === "ready") return null;
   return <div className="connection-notice" role="status">
     <Icon name="wifiOff" size={18} />
-    <span>{rich("common.beda4b70d735",{p0:(status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)}))})}</span>
+    <span>{status === "outdated" ? translate("connection.updateHint") : rich("common.beda4b70d735",{p0:(status === "invalid" ? translate("common.69883ff8a543") : translate("common.cfd16b7c6734",{p0:(name)}))})}</span>
   </div>;
 }
 
@@ -80,6 +80,17 @@ export function ConnectionOverlay({ accountId, onContinue }: { accountId: string
   }, []);
   if (!account) return null;
   const invalid = status === "invalid";
+  if (status === "outdated") return <div className="connection-recovery">
+    <section ref={panel} className="connection-dialog" tabIndex={-1} aria-labelledby="connection-title" aria-describedby="connection-description">
+      <Icon name="download" size={32} />
+      <h2 id="connection-title">{translate("connection.updateRequired")}</h2>
+      <p id="connection-description">{translate("connection.updateHint")}</p>
+      <div className="form-actions center">
+        <Button onClick={() => reconnect(accountId)}>{translate("connection.updateAction")}</Button>
+        <Button variant="ghost" onClick={onContinue}>{translate("common.ab4ed7a4199c")}</Button>
+      </div>
+    </section>
+  </div>;
   return (
     <div className="connection-recovery">
       <section ref={panel} className="connection-dialog" tabIndex={-1} aria-labelledby="connection-title" aria-describedby="connection-description">

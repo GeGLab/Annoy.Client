@@ -151,6 +151,7 @@ export function ServerDirectory() {
       {groups.map(({ account, instance, page, recoveryReturn }) => {
         const ready = instance?.status === "ready";
         const invalid = instance?.status === "invalid";
+        const outdated = instance?.status === "outdated";
         const servers = page?.servers ?? [];
         const awaiting = !!page?.loading && !servers.length && !recoveryReturn;
         const resumeServer = recoveryReturn?.kind === "server" ? instance?.servers.find((server) => server.id === recoveryReturn.serverId) : undefined;
@@ -158,13 +159,14 @@ export function ServerDirectory() {
         return <section className="server-directory-group" key={account.id} aria-labelledby={`server-account-${account.id}`}>
           <header><div className="server-directory-instance-icon" aria-hidden="true">{initials(account.instanceName)}</div>
             <div className="server-directory-instance-copy"><h2 id={`server-account-${account.id}`}>{account.instanceName}</h2>
-              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? translate("common.7444e37ea660") : invalid ? translate("common.69883ff8a543") : translate("common.879b012449c1")}</span>
+              <span className={`server-directory-status ${ready ? "ready" : invalid ? "invalid" : "offline"}`}><span aria-hidden="true" />{ready ? translate("common.7444e37ea660") : invalid ? translate("common.69883ff8a543") : outdated ? translate("connection.updateRequired") : translate("common.879b012449c1")}</span>
             </div>
             {!ready && (invalid
               ? <Button variant="secondary" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}>{translate("common.05d410b61f11")}</Button>
-              : <Button variant="secondary" onClick={() => reconnect(account.id)}>{rich("common.7c87f7d3a1c8",{p0:(<Icon name="refresh" size={16} />)})}</Button>)}
+              : <Button variant="secondary" onClick={() => reconnect(account.id)}>{outdated ? <><Icon name="download" size={16} />{translate("connection.updateAction")}</> : rich("common.7c87f7d3a1c8",{p0:(<Icon name="refresh" size={16} />)})}</Button>)}
             {ready && recoveryReturn && <Button variant="secondary" onClick={() => void resumeRecoveredView(account.id)}>{rich("common.dcb5610cefb3",{p0:(<Icon name="left" size={16} />),p1:(resumeServer ? ` a ${resumeServer.name}` : recoveryReturn.kind === "home" ? translate("common.6f9369b08e82") : translate("common.c4e831d91b82"))})}</Button>}
           </header>
+          {outdated && <p className="server-directory-no-results" role="status">{translate("connection.updateHint")}</p>}
           {resumeError && <p className="server-directory-no-results" role="alert">{resumeError}</p>}
           {page?.error && <p className="server-directory-no-results" role="alert">{rich("common.4fde0860898a",{p0:(page.error)})}</p>}
           <p className="server-directory-freshness"><Icon name={ready ? "check" : "clock"} size={14} />
