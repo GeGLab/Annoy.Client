@@ -53,12 +53,30 @@ export interface DmAttachment {
   size: number;
 }
 
+/**
+ * A store integration in a DM (features/integrations/dm.ts). "request", "accept",
+ * "decline" and "remove" manage it between the two people; "reply" marks an answer
+ * of the integration, sent by the app of whoever added it.
+ */
+export type DmIntegrationMeta =
+  | { op: "request" | "accept" | "decline" | "remove"; id: string; name: string }
+  | { op: "reply"; id: string; name: string; icon: string | null };
+
+export function readDmIntegrationMeta(raw: unknown): DmIntegrationMeta | undefined {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  if (!r || typeof r.id !== "string" || !/^[a-z][a-z0-9-]{2,31}$/.test(r.id) || typeof r.name !== "string" || !r.name || r.name.length > 32) return undefined;
+  if (r.op === "reply") return { op: "reply", id: r.id, name: r.name, icon: typeof r.icon === "string" && r.icon.length <= 300 ? r.icon : null };
+  if (r.op === "request" || r.op === "accept" || r.op === "decline" || r.op === "remove") return { op: r.op, id: r.id, name: r.name };
+  return undefined;
+}
+
 /** What goes inside the encrypted message. */
 export interface DmPayload {
   v: 1;
   content: string;
   attachments?: DmAttachment[];
   replyTo?: string | null;
+  integration?: DmIntegrationMeta;
 }
 
 export interface DmMessage {
@@ -73,6 +91,7 @@ export interface DmMessage {
   createdAt: string;
   editedAt: string | null;
   state?: "sending" | "failed" | "undecryptable";
+  integration?: DmIntegrationMeta;
 }
 
 export interface DmThread {

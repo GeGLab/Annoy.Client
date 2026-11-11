@@ -179,6 +179,7 @@ export function TopBar() {
       <span className="rail-divider rail-home-divider" aria-hidden="true" />
       <nav className="tabs-strip" aria-label={translate("common.0beb691c8956")}>
         <Tooltip content={translate("common.1f43b76f4112")}><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label={translate("common.c1158df03518")} aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">{translate("common.c1158df03518")}</span></button></Tooltip>
+        <Tooltip content={translate("integrations.store")}><button className={`tab-item directory-tab store-tab${view.kind === "marketplace" ? " active" : ""}`} aria-label={translate("integrations.store")} aria-current={view.kind === "marketplace" ? "page" : undefined} onClick={() => navigate({ kind: "marketplace", accountId: null, serverId: null })}><span className="tab-tile"><Icon name="store" size={19} /></span><span className="rail-label">{translate("integrations.store")}</span></button></Tooltip>
         {directMessages.map(({ account, dm, unread }) => {
           const user = dm.recipients[0];
           if (!user) return null;

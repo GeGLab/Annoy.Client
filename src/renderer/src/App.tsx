@@ -45,7 +45,7 @@ const ChannelSettingsModal = lazy(() => import("./components/Settings.tsx").then
 const CreateChannelModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.CreateChannelModal })));
 const InviteModal = lazy(() => import("./components/Settings.tsx").then(m => ({ default: m.InviteModal })));
 const motionFeatures = () => import("./lib/motion-features.ts").then(m => m.default);
-const Marketplace = lazy(() => import("./features/bots/Marketplace.tsx"));
+const Store = lazy(() => import("./features/integrations/Store.tsx"));
 const SearchDialog = lazy(() => import("./features/search/SearchDialog.tsx"));
 
 function Modals() {
@@ -182,7 +182,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();startProfileSync();});});
+    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>import("./features/integrations/vpngo.ts")).then(v=>v.initVpngoRoutes()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();startProfileSync();});});
     if (getState().view.kind !== "home") navigate(getState().view);
     return window.annoy?.services.onBadge((id, badge) =>
       setState((s) => {
@@ -238,7 +238,7 @@ export function App() {
             <ServicePlaceholder service={service} />
           )
         ) : view.kind === "marketplace" ? (
-          <Suspense fallback={<ChatSkeleton />}><Marketplace accountId={view.accountId} serverId={view.serverId} /></Suspense>
+          <Suspense fallback={<ChatSkeleton />}><Store /></Suspense>
         ) : view.kind === "server" ? (
           <ServerView accountId={view.accountId} serverId={view.serverId} channelId={view.channelId} />
         ) : (

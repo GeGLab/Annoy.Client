@@ -1,3 +1,5 @@
+import { ProfilePanels } from "../features/integrations/ProfilePanels.tsx";
+import { CLOUD_ACCOUNT } from "../social/types.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
@@ -142,6 +144,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
                 <p className="muted small">{translate("common.a887eaea4bd8")}</p>
               )}
             </section>
+            <ProfilePanels annoyId={accountId === CLOUD_ACCOUNT ? user.id : user.annoyId} />
             <section>
               <h3>{translate("common.83549f764bc9")}</h3>
               {details.history.visibility === "disabled" ? (

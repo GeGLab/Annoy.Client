@@ -7,6 +7,8 @@ import type { UpdateState } from "../shared/update.ts";
 import type { UpdateChannel, UpdateChannelInfo } from "../shared/update-channels.ts";
 import type { ActivityPreferences, DesktopActivitySnapshot } from "../shared/activity.ts";
 import type { OverlayMenuPick, OverlayMenuSpec } from "../shared/overlay-menu.ts";
+import type { IntegrationRequest, IntegrationResponse } from "../main/integrations/http.ts";
+import type { VpngoApplied, VpngoRoutes, VpngoStatus } from "../main/integrations/vpngo.ts";
 
 export type TheaterSlot = "theater" | "music";
 export interface TheaterEvents {
@@ -43,7 +45,7 @@ const bridge = {
     globalUrl: () => ipcRenderer.invoke("auth:global-url") as Promise<string>,
     authUrl: () => ipcRenderer.invoke("auth:auth-url") as Promise<string>,
     wipe: (serviceIds: string[]) => ipcRenderer.invoke("auth:wipe", serviceIds) as Promise<void>,
-    cloudUrls: () => ipcRenderer.invoke("auth:cloud-urls") as Promise<{ users: string; chat: string; cdn: string }>,
+    cloudUrls: () => ipcRenderer.invoke("auth:cloud-urls") as Promise<{ users: string; chat: string; cdn: string; dev: string }>,
     global: (token: string) => ipcRenderer.invoke("auth:global", token) as Promise<{ id: string; name: string; email: string; cryptoMigrationRequired?:boolean }>,
     local: async (account: { id: string; url: string; token: string; userId: string }): Promise<void> => {
       const response = await ipcRenderer.invoke("auth:local", account) as { ok: true } | { ok: false; message: string };
@@ -69,6 +71,16 @@ const bridge = {
       ipcRenderer.on("activity:snapshot", handler);
       return () => ipcRenderer.off("activity:snapshot", handler);
     },
+  },
+  /** Store integrations: calls leave this computer from the main process (public HTTPS only). */
+  integrations: {
+    request: (input: IntegrationRequest) => ipcRenderer.invoke("integrations:request", input) as Promise<IntegrationResponse>,
+  },
+  /** VPNGo integration: connections to chosen annoy-servers go through a VPNGo profile. */
+  vpngo: {
+    status: () => ipcRenderer.invoke("vpngo:status") as Promise<VpngoStatus>,
+    apply: (routes: VpngoRoutes) => ipcRenderer.invoke("vpngo:apply", routes) as Promise<VpngoApplied>,
+    voice: (host: string | null) => ipcRenderer.invoke("vpngo:voice", host) as Promise<boolean>,
   },
   /** Appends to errors.log in the app's data folder; nothing leaves the computer. */
   logError: (text: string) => ipcRenderer.send("log:error", text),

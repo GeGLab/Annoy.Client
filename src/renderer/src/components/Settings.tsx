@@ -31,6 +31,7 @@ import { displayNameOf, rankOf } from "../perms.ts";
 import { getState, setState, toast, useStore, type CreatableChannel } from "../store.ts";
 import { act, closeModal, Field, Icon, Modal, type IconName } from "./ui.tsx";
 import { HiddenServices } from "./Services.tsx";
+import { ServerIntegrations } from "../features/integrations/ServerIntegrations.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 import { Brand } from "./Brand.tsx";
 import { ColorPicker } from "./ui/color-picker.tsx";
@@ -237,8 +238,9 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const requests = useRequestOwner(JSON.stringify([accountId, serverId, "server-settings"]));
   const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
-  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "stickers">("overview");
+  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "stickers" | "integrations">("overview");
   const stickersSupported = useStore((s) => s.instances[accountId]?.instance?.serverStickers === true);
+  const integrationsSupported = useStore((s) => s.instances[accountId]?.instance?.integrations === true);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [name, setName] = useState(state?.server.name ?? "");
   const [icon, setIcon] = useState<File | null | undefined>();
@@ -318,6 +320,9 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         )}
         {canStickers && (
           <button className={tab === "stickers" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("stickers"))}>{translate("settings.stickers.tab")}</button>
+        )}
+        {integrationsSupported && (
+          <button className={tab === "integrations" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("integrations"))}>{translate("integrations.server.tab")}</button>
         )}
       </div>
 
@@ -410,6 +415,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
 
       {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
       {tab === "stickers" && canStickers && <ServerStickers accountId={accountId} serverId={serverId} />}
+      {tab === "integrations" && integrationsSupported && <ServerIntegrations accountId={accountId} serverId={serverId} isOwner={isOwner} />}
     </Modal>
   );
 }

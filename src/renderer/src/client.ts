@@ -1,3 +1,4 @@
+import { vpngoVoice } from "./features/integrations/vpngo.ts";
 import { requestNavigation } from "./lib/navigation-guard.ts";
 import {t as translate} from "../../shared/localization/index.ts";
 import type { ChannelReadState, DmChannel, GatewayEvent, ImportJob, MemberPage, Message, MessageWindow, PinnedMessage, PinnedMessagePage, ServerState, ServerSummary, User } from "@annoy/protocol";
@@ -771,6 +772,9 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   leaveVoice();
   const gateway = gatewayFor(accountId);
   if (!gateway) return;
+  // A server routed through VPNGo: WebRTC may only use the VPN for this call (no UDP outside it).
+  const voiceUrl = getState().accounts.find((a) => a.id === accountId)?.url ?? null;
+  await vpngoVoice(voiceUrl);
   const selfId = getState().instances[accountId]?.user?.id ?? "";
   // The instance says where media flows; both sessions behave the same for the UI.
   const Session = getState().instances[accountId]?.instance?.voiceBackend === "cloudflare" ? CloudflareVoiceSession : VoiceSession;
@@ -814,6 +818,7 @@ export function leaveVoice(notifyServer = true): void {
   if (notifyServer) rejoinVoice = null;
   const connected = getState().voice?.status === "connected";
   voice?.session.close(notifyServer);
+  if (voice) void vpngoVoice(null);
   voice = null;
   setState((s) => {
     s.voice = null;

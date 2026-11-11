@@ -1,3 +1,5 @@
+import { initDmIntegrations } from "../features/integrations/dm.ts";
+import { accountIntegrationsChanged, startIntegrations, stopIntegrations } from "../features/integrations/state.ts";
 import { t as translate } from "../../../shared/localization/index.ts";
 import type { UserActivity } from "@annoy/protocol";
 import { handleAccountEvent, signedIn as globalSignedIn } from "../auth/session.ts";
@@ -35,6 +37,7 @@ let initialized = false;
 export function initSocial(): void {
   if (initialized) return;
   initialized = true;
+  initDmIntegrations();
   let signedIn = false;
   const check = () => {
     const now = !!getState().global && globalSignedIn();
@@ -61,6 +64,7 @@ async function start(): Promise<void> {
       s.me = me;
       s.profiles[me.id] = me;
     });
+    void startIntegrations(me.id);
     await Promise.all([publishDmKey().catch(() => undefined), loadRelationships(), loadDms()]);
   } catch (error) {
     if (generation !== runtime.generation) return;
@@ -86,6 +90,7 @@ function stop(): void {
   runtime.gateway = null;
   runtime.me = null;
   resetDms();
+  stopIntegrations();
   setSocial((s) => Object.assign(s, emptySocial()));
   // Signing out removes this device's copy of the DMs (TODO item 2.3).
   if (userId) void local.wipe(userId);
@@ -182,6 +187,9 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
     case "VAULT_CHANGED":
       // A server was added or removed on another install: follow it now.
       void import("../auth/servers.ts").then((m) => m.vaultChanged());
+      return;
+    case "INTEGRATIONS_CHANGED":
+      void accountIntegrationsChanged();
       return;
     case "INVALID_SESSION":
       return;

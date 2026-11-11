@@ -7,6 +7,8 @@ import {trustedRenderer} from './trusted-renderer.ts';
 import {secureHttpUrl} from '../shared/transport.ts';
 import {nativeApiFetch} from './native-api-fetch.ts';
 import {registerPrivateDownload} from './private-download.ts';
+import {registerIntegrationHttp} from './integrations/http.ts';
+import {registerVpngo} from './integrations/vpngo.ts';
 import { osStorage } from "./safe-storage.ts";
 import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
@@ -72,6 +74,7 @@ const cloudUrls = {
   users: (process.env.ANNOY_USERS_URL || "https://usersannoy.geg.dev.br").replace(/\/+$/, ""),
   chat: (process.env.ANNOY_CHAT_URL || "https://chatannoy.geg.dev.br").replace(/\/+$/, ""),
   cdn: (process.env.ANNOY_CDN_URL || "https://cdnannoy.geg.dev.br").replace(/\/+$/, ""),
+  dev: (process.env.ANNOY_DEV_URL || "https://devannoy.geg.dev.br").replace(/\/+$/, ""),
 };
 let resettingRenderer = false;
 const appAccess = createAppAccess(authUrl, state => {
@@ -99,6 +102,9 @@ const fromRenderer = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
 const authorized = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => fromRenderer(event) && appAccess.getState().allowed;
 const stopDownloads=registerPrivateDownload(()=>win,authorized,authenticatedMainFetch);
 app.on("before-quit",stopDownloads);
+registerIntegrationHttp(ipcMain,authorized);
+const stopVpngo=registerVpngo(ipcMain,authorized,()=>win);
+app.on("before-quit",stopVpngo);
 
 /** The page's main area, reported by the renderer: the bar can sit on the side or on top, with banners above. */
 let serviceArea = { x: 0, y: 0, width: 0, height: 0 };
