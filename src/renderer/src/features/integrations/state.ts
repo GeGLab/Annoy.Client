@@ -194,16 +194,22 @@ export function updateAccount(change: (account: AccountIntegrations) => void): P
   return result;
 }
 
-export function connectIntegration(integration: StoreIntegration, key: string | null, settings: unknown): Promise<void> {
-  return updateAccount((account) => {
+/** The developer's statistics count connected accounts; devannoy learns which integrations this account uses, never the key. */
+const registerConnection = (id: string, on: boolean) => void cloud("dev", `/v1/me/connections/${id}`, { method: on ? "PUT" : "DELETE" }).catch(() => undefined);
+
+export async function connectIntegration(integration: StoreIntegration, key: string | null, settings: unknown): Promise<void> {
+  const isNew = !state.account.connected[integration.id];
+  await updateAccount((account) => {
     account.connected[integration.id] = { key: key?.trim() || null, settings: cleanSettings(integration, settings), connectedAt: account.connected[integration.id]?.connectedAt || new Date().toISOString() };
   });
+  if (isNew) registerConnection(integration.id, true);
 }
 
-export function disconnectIntegration(id: string): Promise<void> {
-  return updateAccount((account) => {
+export async function disconnectIntegration(id: string): Promise<void> {
+  await updateAccount((account) => {
     delete account.connected[id];
   });
+  registerConnection(id, false);
 }
 
 export async function setProfilePanel(id: string, shown: boolean): Promise<void> {

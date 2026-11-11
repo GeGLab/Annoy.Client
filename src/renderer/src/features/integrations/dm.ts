@@ -1,4 +1,5 @@
-import { findTrigger, imageKind, INTEGRATION_LIMITS, IntegrationError, isCallable, runIntegration, type IntegrationFile, type IntegrationHistoryItem, type StoreIntegration } from "@annoy/protocol";
+import { findTrigger, imageKind, INTEGRATION_LIMITS, IntegrationError, isCallable, runIntegration, type IntegrationFile, type IntegrationHistoryItem, type IntegrationSignature, type StoreIntegration } from "@annoy/protocol";
+import { cloud } from "../../social/cloud.ts";
 import { localizationPreferences, t as translate } from "../../../../shared/localization/index.ts";
 import { loadThread, openAttachment, sendDm, setDmMessageHook } from "../../social/dms.ts";
 import { displayName, runtime, social } from "../../social/runtime.ts";
@@ -129,6 +130,9 @@ async function answer(message: DmMessage, local: boolean): Promise<void> {
     try {
       const output = await runIntegration(integrationHttp, {
         trigger, scope: "dm", locale: localizationPreferences().language, invoker: ownName(message.senderId), history, attachments, settings: connected.settings, apiKey: connected.key,
+        // devannoy signs the body hash so the developer knows the call comes from Annoy; it never sees the content.
+        sign: (integration, bodySha256) => cloud<IntegrationSignature>("dev", "/v1/calls/sign", { body: { integration, scope: "dm", bodySha256 } }),
+        report: (integration, ok) => void cloud("dev", "/v1/calls/result", { body: { integration, scope: "dm", ok } }).catch(() => undefined),
       });
       text = output.text;
       files = output.images.map((image) => new File([image.data as BlobPart], image.name, { type: image.type }));
