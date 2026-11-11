@@ -25,6 +25,8 @@ import { DmIntegrationsDialog } from "../../features/integrations/DmIntegrations
 import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
 import { answerDmIntegration, controlText } from "../../features/integrations/dm.ts";
 import { useIntegrations } from "../../features/integrations/state.ts";
+import { useCommandSuggestions } from "../../features/integrations/CommandSuggestions.tsx";
+import { useDmCommandChoices } from "../../features/integrations/command-choices.ts";
 
 const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
@@ -299,7 +301,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
     }
   };
   return (
-    <div data-message-id={message.id} className={`message${compact ? " compact" : ""}${isPinned ? " is-pinned" : ""}${message.state ? ` message-${message.state}` : ""}`}>
+    <div data-message-id={message.id} className={`message${reply ? " integration-message" : ""}${compact ? " compact" : ""}${isPinned ? " is-pinned" : ""}${message.state ? ` message-${message.state}` : ""}`}>
       {message.replyTo && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -430,6 +432,9 @@ function DmConversation({ dmId }: { dmId: string }) {
   const pinsButton=useRef<HTMLButtonElement>(null);
   const preview=thread?.pins?.find(pin=>pin.message.id===previewPin)?.message;
   const fileInput = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const commands = useDmCommandChoices(dmId, text.startsWith("/"));
+  const slash = useCommandSuggestions(text, commands, setText, input);
   const scroller = useRef<HTMLDivElement>(null);
   const items = thread?.items ?? EMPTY;
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
@@ -460,6 +465,7 @@ function DmConversation({ dmId }: { dmId: string }) {
     await sendDm(dmId, content, picked, reply);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || slash.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void send();
@@ -564,6 +570,8 @@ function DmConversation({ dmId }: { dmId: string }) {
           ))}
         </div>
       )}
+      <div className="composer-wrap dm-composer-wrap">
+      {slash.menu}
       <div className="composer">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -588,6 +596,8 @@ function DmConversation({ dmId }: { dmId: string }) {
           }}
         />
         <Textarea
+          {...slash.inputProps}
+          ref={input}
           rows={1}
           value={text}
           maxLength={4000}
@@ -606,6 +616,7 @@ function DmConversation({ dmId }: { dmId: string }) {
         <Button variant="ghost" size="icon" className="composer-send" disabled={!text.trim() && !files.length} onClick={() => void send()} aria-label={translate("social.send")}>
           <Icon name="send" size={19} />
         </Button>
+      </div>
       </div>
       <div className="typing-line" aria-live="polite">{typing ? translate("social.typing", { p0: title }) : ""}</div>
     </section>

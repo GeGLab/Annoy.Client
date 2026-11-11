@@ -2356,6 +2356,7 @@
   "integrations.cancel": "Cancel",
   "integrations.scopeDm": "Direct messages",
   "integrations.scopeServer": "Servers",
+  "integrations.commandKeys": "↑ ↓ 导航 · Tab / Enter 选择 · Esc 关闭",
   "integrations.commands": "Commands",
   "integrations.mention": "@{p0} in the message",
   "integrations.receives": "What the integration receives",

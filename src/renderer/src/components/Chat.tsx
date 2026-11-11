@@ -1,4 +1,6 @@
 import { IntegrationIcon } from "../features/integrations/Setup.tsx";
+import { useCommandSuggestions } from "../features/integrations/CommandSuggestions.tsx";
+import { useServerCommandChoices } from "../features/integrations/command-choices.ts";
 import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
@@ -267,7 +269,7 @@ function MessageRow({
   };
 
   return (
-    <div data-message-id={message.id} className={`message${arrival}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${isPinned ? " is-pinned" : ""}${highlighted?" search-highlight":""}`}>
+    <div data-message-id={message.id} className={`message${arrival}${message.integration ? " integration-message" : ""}${compact ? " compact" : ""}${mentioned ? " mentioned" : ""}${isPinned ? " is-pinned" : ""}${highlighted?" search-highlight":""}`}>
       {message.replyToId && (
         <div className="reply-ref">
           <Icon name="reply" size={12} />
@@ -399,6 +401,7 @@ function TypingLine({ accountId, channelId, me, nameOf }: { accountId: string; c
 function Composer({
   dropRef,
   accountId,
+  serverId,
   channelId,
   placeholder,
   canSend,
@@ -419,6 +422,7 @@ function Composer({
 }: {
   dropRef: RefObject<((files: FileList) => void) | null>;
   accountId: string;
+  serverId?: string | null;
   channelId: string;
   placeholder: string;
   canSend: boolean;
@@ -448,6 +452,8 @@ function Composer({
   const [sel, setSel] = useState(0);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const commands = useServerCommandChoices(accountId, serverId, channelId, canSend && text.startsWith("/"));
+  const slash = useCommandSuggestions(text, commands.choices, (value) => onDraftChange({ text: value }), input, commands.loading);
 
   useEffect(() => {
     if (replyTo) input.current?.focus();
@@ -536,6 +542,8 @@ function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (slash.onKeyDown(e)) return;
     if (suggestions.length > 0) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -567,6 +575,7 @@ function Composer({
 
   return (
     <div className="composer-wrap">
+      {slash.menu}
       {suggestions.length > 0 && (
         <div className="suggestions">
           <div className="section-label">{translate("chat.d5fe73508340")}</div>
@@ -620,6 +629,7 @@ function Composer({
           </>
         )}
         <Textarea
+          {...slash.inputProps}
           ref={input}
           aria-label={placeholder}
           rows={1}
@@ -634,7 +644,7 @@ function Composer({
           }}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          onBlur={() => setQuery(null)}
+          onBlur={() => { slash.inputProps.onBlur(); setQuery(null); }}
         />
         <MediaPicker accountId={accountId} canAttach={canAttach} disabled={sending || !connected} onEmoji={insertExpression} onFile={(file) => addFiles([file])} onLink={(link) => insertExpression(`${text.trim() ? " " : ""}${link}`)} onSticker={(url) => void sendSticker(url)} />
         <Button
@@ -991,6 +1001,7 @@ export function Chat(props: ChatProps) {
       <Composer
         dropRef={dropTarget}
         accountId={accountId}
+        serverId={props.serverId}
         channelId={channelId}
         placeholder={translate("chat.5b0d728f295a",{p0:(props.icon === "hash" ? "#" : ""),p1:(props.title)})}
         canSend={props.canSend}

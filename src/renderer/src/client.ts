@@ -1228,6 +1228,8 @@ function onEvent(accountId: string, event: GatewayEvent): void {
         inst.relationships = inst.relationships.filter((r) => r.user.id !== event.d.userId);
         if (!Object.values(inst.serverStates).some((state) => state.members.some((member) => member.user.id === event.d.userId))) delete inst.activities[event.d.userId];
       });
+    case "SERVER_INTEGRATIONS_UPDATE":
+      return patchInstance(accountId, (inst) => { inst.integrationRevision = (inst.integrationRevision ?? 0) + 1; });
     case "IMPORT_PROGRESS": {
       const prev = getState().instances[accountId]?.imports[event.d.id];
       patchInstance(accountId, (inst) => {
