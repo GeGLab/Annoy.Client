@@ -10,6 +10,88 @@ import { dirname, basename, resolve, join } from "node:path";
 const require = createRequire(import.meta.url);
 const capture = resolve(".impeccable/review");
 
+test("slash preview lists installed commands, fills without sending and respects channel permissions", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const steam = { id: "steamprofiler", name: "SteamProfiler", scopes: ["server", "dm"], runtime: { type: "http" }, commands: [{ name: "steam", description: "Steam profile card or comparison", usage: "profile <id> | versus <id1> <id2>" }] };
+    let writes = 0, reads = 0;
+    await page.route("https://experience.test/api/servers/server/integrations", async route => { reads++; await route.fulfill({ json: [{ integration: steam }] }); });
+    await page.route("https://experience.test/api/channels/general/messages", async route => {
+      if (route.request().method() === "POST") writes++;
+      await route.fulfill({ json: {} });
+    });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, integrations: true }; });
+    });
+    const input = page.getByRole("textbox", { name: "Conversar em #geral" });
+    await input.fill("/");
+    const menu = page.getByRole("listbox", { name: "Comandos" });
+    await expect(menu.getByRole("option")).toHaveCount(2);
+    await expect(menu).toContainText("/steam profile <id>");
+    await expect(menu).toContainText("/steam versus <id1> <id2>");
+    await page.screenshot({ path: join(capture, "slash-preview-dark.png") });
+    await input.press("ArrowDown");
+    await input.press("Enter");
+    await expect(input).toHaveValue("/steam versus ");
+    await expect(menu).toHaveCount(0);
+    await expect(page.locator(".command-hint")).toContainText("/steam versus <id1> <id2>");
+    expect(writes).toBe(0);
+    await input.fill("/steam p");
+    await expect(menu.getByRole("option")).toHaveCount(1);
+    await input.press("Tab");
+    await expect(input).toHaveValue("/steam profile ");
+    await input.fill("/steam profile gordziilla");
+    await expect(menu).toHaveCount(0);
+    await input.press("Enter");
+    await expect.poll(() => writes).toBe(1);
+    await expect(input).toHaveValue("");
+    await input.fill("/");
+    await expect(menu).toBeVisible();
+    await input.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(input).toHaveValue("/");
+    await input.fill("/ste");
+    await expect(menu).toBeVisible();
+    expect(reads).toBe(2);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const server = s.instances.test.serverStates.server;
+        server.server.ownerId = "another-person";
+        for (const role of server.roles) role.permissions = 1 | 2; // View and send, without Use integrations.
+      });
+    });
+    await expect(menu).toHaveCount(0);
+    await expect(input).toHaveValue("/ste");
+  } finally { await close(); }
+});
+
+test("large integration cards use the conversation width and still open in the image viewer", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const { Resvg } = await import("@resvg/resvg-js");
+    const image = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1390"><rect width="1600" height="1390" fill="#121b2e"/><text x="100" y="180" fill="white" font-size="68">Player comparison</text></svg>').render().asPng();
+    await page.route("https://experience.test/versus.png", route => route.fulfill({ contentType: "image/png", body: image }));
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const first = s.instances.test.messages.general.items[0];
+        first.integration = { id: "steamprofiler", name: "SteamProfiler", iconUrl: null };
+        first.attachments = [{ id: "versus", filename: "comparison.png", contentType: "image/png", size: 100000, url: "https://experience.test/versus.png" }];
+        first.content = "Two profiles · 42 games in common";
+      });
+    });
+    const card = page.locator(".integration-message .attachment-image");
+    await expect(card.locator("img")).toBeVisible();
+    await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(460);
+    await card.click();
+    await expect(page.locator(".image-viewer")).toBeVisible();
+  } finally { await close(); }
+});
+
 test("the Annoy profile stays identical across friends, DMs, linked servers and settings", async () => {
   const { page, close } = await launch();
   try {

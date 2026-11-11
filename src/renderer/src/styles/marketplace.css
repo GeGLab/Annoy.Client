@@ -77,3 +77,18 @@
 .profile-panel-image { display: block; max-width: 100%; height: auto; border-radius: 8px; }
 .server-integrations .installed-bot { padding: 14px 0; }
 .integration-links .link-button { background: none; border: 0; padding: 0; cursor: pointer; color: var(--link); text-decoration: underline; }
+.command-suggestions { left: 0; right: 0; max-height: min(420px, 50vh); overflow-y: auto; padding: 6px; box-shadow: 0 12px 32px #0003; }
+.command-suggestions-title { display: flex; align-items: center; gap: 8px; padding: 9px 10px; color: var(--text-muted); font-size: .78571rem; }
+.command-suggestions-title > span { margin-left: auto; }
+.command-suggestions button { display: flex; align-items: center; gap: 12px; padding: 10px; min-width: 0; }
+.command-symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid var(--border); border-radius: 9px; font-size: 1.5rem; color: var(--accent); }
+.command-suggestion-content { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.command-suggestion-content > strong { font-size: .92857rem; }
+.command-usage { font-size: .78571rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.command-suggestion-content > small { width: 100%; color: var(--text-muted); font-size: .78571rem; }
+.command-integration { max-width: 30%; color: var(--text-muted); font-size: .78571rem; overflow-wrap: anywhere; }
+.command-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 10px; color: var(--text-muted); font-size: .78571rem; }
+.command-hint code { color: var(--text-soft); overflow-wrap: anywhere; }
+.dm-composer-wrap > .composer { margin: 0; }
+.integration-message .attachment-image { max-width: min(960px, 100%); }
+.integration-message .attachment-image img { max-height: 860px; }

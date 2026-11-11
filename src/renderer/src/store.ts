@@ -72,6 +72,7 @@ export interface InstanceState {
   presences: Record<string, Presence>;
   activities: Record<string, import("@annoy/protocol").UserActivity[]>;
   profileRevision?: number;
+  integrationRevision?: number;
   messages: Record<string, ChannelMessages>;
   /** channelId -> userId -> expiry timestamp */
   typing: Record<string, Record<string, number>>;
