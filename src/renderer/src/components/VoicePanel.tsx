@@ -1,5 +1,5 @@
 import {rich} from "../lib/localization.ts";
-import {t as translate,counted} from "../../../shared/localization/index.ts";
+import {t as translate} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { leaveVoice, openChannel, toggleCamera, toggleScreenShare, openScreenShareSettings, updateVoiceSettings } from "../client.ts";
 import { setState, useStore } from "../store.ts";
@@ -84,7 +84,6 @@ export function VoicePanel() {
   if (!voice) return null;
   const channel = server?.channels.find((c) => c.id === voice.channelId);
   const connected = voice.status === "connected";
-  const count = server?.voiceStates.filter((s) => s.channelId === voice.channelId).length ?? 0;
   return (
     <div className={`voice-panel${connected ? " connected" : " connecting"}`}>
       <div className="voice-panel-heading">
@@ -138,9 +137,7 @@ export function VoicePanel() {
         </Tooltip>
         {voice.screen && <button className="voice-share-settings" disabled={voice.screenBusy} title={translate("voice.shareSettings")} aria-label={translate("voice.shareSettings")} onClick={() => void openScreenShareSettings()}><Icon name="sliders" size={16} /></button>}
       </div>
-      <span className="voice-panel-note">
-        {connected ? counted(count || 1,"counts.room.one","counts.room.other") : translate("common.7372b662aff9")}
-      </span>
+      {!connected && <span className="voice-panel-note">{translate("common.7372b662aff9")}</span>}
     </div>
   );
 }

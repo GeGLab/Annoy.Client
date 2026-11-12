@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { navigate } from "../../client.ts";
 import { formatClock, formatDay, formatTime, renderContent } from "../../format.tsx";
 import { setState, toast, useStore } from "../../store.ts";
 import { ActivityStack } from "../../features/activity/ActivityCard.tsx";
+import { GameInviteCard, sendGameInvite, useCurrentGame } from "../../features/game-invite.tsx";
 import { startDirectCall } from "../../features/direct-calls.ts";
 import { acceptFriend, addFriend, displayName, ensureProfiles, removeFriend, setFriendNickname } from "../../social/index.ts";
 import { deleteDm, editDm, loadDmPins, loadThread, markDmRead, openAttachment, openDmWith, retryDm, sendDm, sendDmTyping, setStore, setDmPinned } from "../../social/dms.ts";
@@ -57,6 +58,7 @@ function WhereLine({ presence }: { presence: CloudPresence | undefined }) {
 
 function FriendRow({ rel }: { rel: CloudRelationship }) {
   const presence = useStore((s) => s.social.presences[rel.user.id]);
+  const game = useCurrentGame();
   const ready = useStore((s) => s.social.status === "ready");
   const user = cloudUser(rel.user);
   const online = isOnline(presence);
@@ -90,6 +92,9 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
       <span className="spacer" />
       {rel.status === "friend" && (
         <>
+          {game && online && <button className="icon-btn" disabled={!ready} aria-label={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} title={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} onClick={() => void sendGameInvite({ userId: rel.user.id })}>
+            <Icon name="play" />
+          </button>}
           <button className="icon-btn" disabled={!ready || !online} aria-label={translate("social.voiceCall", { p0: user.displayName })} title={translate("social.voiceCall", { p0: user.displayName })} onClick={() => void startDirectCall(CLOUD_ACCOUNT, rel.user.id, false)}>
             <Icon name="phone" />
           </button>
@@ -143,6 +148,13 @@ function Friends({ initialTab = "online" }: { initialTab?: Tab }) {
   const pending = rels.filter((r) => r.status !== "friend");
   const incoming = pending.filter((r) => r.status === "incoming").length;
   const list = tab === "online" ? rels.filter((r) => r.status === "friend" && isOnline(presences[r.user.id])) : tab === "all" ? rels.filter((r) => r.status === "friend") : pending;
+  // Friends in a game first, like a "playing now" shelf; then the rest online, then offline.
+  const playing = (r: CloudRelationship) => isOnline(presences[r.user.id]) && !!presences[r.user.id]?.activities?.some((a) => a.kind === "game");
+  const sections = [
+    { key: "playing", label: translate("invite.playingNow"), rels: list.filter(playing) },
+    { key: "online", label: translate("social.online"), rels: list.filter((r) => !playing(r) && isOnline(presences[r.user.id])) },
+    { key: "offline", label: translate("social.offline"), rels: list.filter((r) => !isOnline(presences[r.user.id])) },
+  ];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -196,8 +208,15 @@ function Friends({ initialTab = "online" }: { initialTab?: Tab }) {
               </Button>
             )}
           </div>
-        ) : (
+        ) : tab === "pending" ? (
           list.map((r) => <FriendRow key={r.user.id} rel={r} />)
+        ) : (
+          sections.filter((section) => section.rels.length).map((section) => (
+            <section className="friends-section" key={section.key} aria-label={section.label}>
+              <h3 className="friends-section-title">{section.label} · {section.rels.length}</h3>
+              {section.rels.map((r) => <FriendRow key={r.user.id} rel={r} />)}
+            </section>
+          ))
         )}
       </div>
     </section>
@@ -345,6 +364,8 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
                 }}
               />
             </div>
+          ) : message.invite ? (
+            <GameInviteCard message={message} mine={own} />
           ) : (
             message.content && (isStickerMessage(message.content) ? <StickerMessage content={message.content} /> : (
               <div className="message-content">
@@ -436,6 +457,7 @@ function DmConversation({ dmId }: { dmId: string }) {
   const commands = useDmCommandChoices(dmId, text.startsWith("/"));
   const slash = useCommandSuggestions(text, commands, setText, input);
   const scroller = useRef<HTMLDivElement>(null);
+  const game = useCurrentGame();
   const items = thread?.items ?? EMPTY;
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
 
@@ -444,11 +466,26 @@ function DmConversation({ dmId }: { dmId: string }) {
     markDmRead(dmId);
     if (conversation) void ensureProfiles([conversation.recipientId]).catch(() => undefined);
   }, [dmId, conversation?.recipientId]);
-  useEffect(() => {
+  // A conversation opens at its newest message and stays there while the reader is at the end,
+  // also when images or embeds grow after the first paint.
+  const pinned = useRef(true);
+  const toEnd = () => { const el = scroller.current; if (el && pinned.current) el.scrollTop = el.scrollHeight; };
+  useLayoutEffect(() => { pinned.current = true; }, [dmId]);
+  useLayoutEffect(() => {
     markDmRead(dmId);
-    const el = scroller.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 400) el.scrollTop = el.scrollHeight;
+    toEnd();
+    const frame = requestAnimationFrame(toEnd);
+    return () => cancelAnimationFrame(frame);
   }, [items.length, dmId]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
+    const observer = new ResizeObserver(toEnd);
+    for (const child of [el, ...el.children]) observer.observe(child);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { observer.disconnect(); el.removeEventListener("scroll", onScroll); };
+  }, [dmId, items.length > 0]);
 
   if (!conversation || !me) return <div className="empty-main" />;
   const title = nickname || displayName(other) || translate("social.unknownUser");
@@ -515,6 +552,9 @@ function DmConversation({ dmId }: { dmId: string }) {
         >
           <Icon name={muted ? "bellOff" : "bell"} />
         </button>
+        {game && <Button size="sm" className="game-invite-action" disabled={!ready} onClick={() => void sendGameInvite({ conversationId: dmId })}>
+          <Icon name="play" size={14} />{translate("invite.action")}
+        </Button>}
       </header>
       {pinsOpen&&<div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
         <div className="pins-panel-title"><strong>{translate("chat.dd5705122a58")}</strong><button className="icon-btn tiny" aria-label={translate("chat.0f2cac634ffa")} onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>

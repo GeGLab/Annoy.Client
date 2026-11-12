@@ -77,6 +77,7 @@ export interface DmPayload {
   attachments?: DmAttachment[];
   replyTo?: string | null;
   integration?: DmIntegrationMeta;
+  invite?: GameInvite;
 }
 
 export interface DmMessage {
@@ -92,6 +93,28 @@ export interface DmMessage {
   editedAt: string | null;
   state?: "sending" | "failed" | "undecryptable";
   integration?: DmIntegrationMeta;
+  /** "Come play with me": the sender's game when the invite was sent. */
+  invite?: GameInvite;
+}
+
+/** A game invite travels inside the encrypted message; older clients just show its text. */
+export interface GameInvite {
+  name: string;
+  provider: string;
+  /** Steam app ID: lets the recipient launch the game. */
+  appId?: string;
+  /** Official HTTPS artwork only (never a data URL from the sender's machine). */
+  artwork?: string;
+  startedAt?: number;
+}
+
+export function readGameInvite(raw: unknown): GameInvite | undefined {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  if (!r || typeof r.name !== "string" || !r.name.trim() || r.name.length > 128 || typeof r.provider !== "string" || r.provider.length > 32) return undefined;
+  const appId = typeof r.appId === "string" && /^\d{1,10}$/.test(r.appId) ? r.appId : undefined;
+  const artwork = typeof r.artwork === "string" && r.artwork.length <= 500 && /^https:\/\//.test(r.artwork) ? r.artwork : undefined;
+  const startedAt = typeof r.startedAt === "number" && Number.isFinite(r.startedAt) ? r.startedAt : undefined;
+  return { name: r.name.trim(), provider: r.provider, ...(appId && { appId }), ...(artwork && { artwork }), ...(startedAt && { startedAt }) };
 }
 
 export interface DmThread {
