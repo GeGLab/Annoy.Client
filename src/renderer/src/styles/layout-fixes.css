@@ -1,0 +1,74 @@
+/*
+ * Layout fixes only (no colours or visual restyling): text that wraps or collides,
+ * the call stage filling its area, and focus that must not look like a selection.
+ * Imported last so it wins without !important.
+ */
+
+/* Headings and panels receive focus from code (so screen readers announce the new screen);
+   that must never look like a selection. */
+:where([tabindex="-1"]):focus, .server-directory-header h1:focus { outline: none; }
+:where(h1, h2, h3) { text-wrap: balance; }
+:where(p, li, .message-content, .muted) { text-wrap: pretty; }
+
+/* Single-line labels end in an ellipsis instead of overflowing. */
+.titlebar-context { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel .channel-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-header h1 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.voice-status-copy > strong { overflow: hidden; text-overflow: ellipsis; }
+:where(.member-name, .member-card-name, .list-row strong) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* Voice participants: the name keeps its room, extra badges give way first. */
+.channel-scroll .voice-users { container-type: inline-size; }
+.voice-user .profile-trigger { display: block; min-width: 0; }
+.voice-user-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.voice-user-status { min-width: 0; overflow: hidden; }
+@container (max-width: 250px) {
+  .voice-user .stream-quality { display: none; }
+}
+@container (max-width: 190px) {
+  .voice-user .voice-activity { display: none; }
+}
+
+/* Voice panel: channel and server read on up to two lines instead of being cut mid-word. */
+.voice-panel-location > span.truncate {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+/* Narrow sidebar: buttons keep their icons only (names stay in the tooltip) instead of wrapping. */
+.voice-panel { container-type: inline-size; }
+.voice-action { white-space: nowrap; }
+.voice-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 250px) {
+  .voice-action > span { display: none; }
+  .voice-action { padding-inline: 6px; }
+}
+
+/* User panel: the name gets the width; device pickers only take space while pointed at. */
+.user-identity-text strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-identity-text > span { max-width: none; }
+.user-control-pair .device-menu-trigger { width: 0; opacity: 0; overflow: hidden; transition: width 160ms var(--ease), opacity 120ms; }
+.user-control-pair:hover .device-menu-trigger,
+.user-control-pair:focus-within .device-menu-trigger,
+.user-control-pair .device-menu-trigger[data-state="open"] { width: 13px; opacity: 1; }
+
+/* Call stage: without a focused tile the tiles fill the stage. VoiceStage computes --tile-w so
+   every tile keeps 16:9 and is as large as fits; rows (the last one too) stay centred. */
+.stage-tiles.fit {
+  flex: 1; min-height: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: center;
+  gap: 10px; overflow: hidden;
+}
+.stage-tiles.fit > .stage-card { flex: none; width: var(--tile-w, 320px); aspect-ratio: 16 / 9; }
+.stage-label .truncate { min-width: 0; }
+
+/* Code in messages wraps instead of overflowing the conversation. */
+.message-content :where(pre, code) { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  .user-control-pair .device-menu-trigger { transition: none; }
+}

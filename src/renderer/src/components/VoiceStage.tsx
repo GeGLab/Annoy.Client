@@ -16,6 +16,35 @@ import { Avatar, closeModal, Field, Icon, Modal } from "./ui.tsx";
 import { Select } from "./ui/select.tsx";
 import { SCREEN_RESOLUTIONS, screenQualityLabel } from "../lib/screen-profile.ts";
 
+/**
+ * Sizes call tiles so they fill the stage as much as possible while keeping 16:9:
+ * tries every column count and keeps the one with the largest tile.
+ */
+function useFitTiles(count: number, enabled: boolean) {
+  const [el, ref] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!el) return;
+    if (!enabled || count === 0) { el.style.removeProperty("--tile-w"); return; }
+    const fit = () => {
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const { width, height } = el.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      let best = 0;
+      for (let cols = 1; cols <= count; cols++) {
+        const rows = Math.ceil(count / cols);
+        const w = Math.min((width - gap * (cols - 1)) / cols, ((height - gap * (rows - 1)) / rows) * (16 / 9));
+        if (w > best) best = w;
+      }
+      el.style.setProperty("--tile-w", `${Math.max(120, Math.floor(best))}px`);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, count, enabled]);
+  return ref;
+}
+
 function Video({ tile }: { tile: VideoTile }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -168,6 +197,8 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
   const focusedTile = ordered.find((t) => t.key === focus) ?? null;
   // Shares not being watched; the voice state confirms the share is still going on.
   const unwatched = connected ? offers.filter((o) => !o.watching && people.get(o.userId)?.state.screen) : [];
+  const tileCount = unwatched.length + ordered.length - (focusedTile ? 1 : 0) + audioOnly.length;
+  const tilesRef = useFitTiles(tileCount, !focusedTile);
 
 
   return (
@@ -205,7 +236,7 @@ export function VoiceStage({ accountId, state, channel, embedded = false, canCon
                 <VideoCard tile={focusedTile} person={people.get(focusedTile.userId)} focused onFocus={() => setFocus(null)} accountId={accountId} />
               </div>
             )}
-            <div className="stage-tiles">
+            <div className={`stage-tiles${focusedTile ? "" : " fit"}`} ref={tilesRef}>
               {unwatched.map((o) => (
                 <StreamOfferCard key={`offer:${o.userId}`} person={people.get(o.userId)} userId={o.userId} />
               ))}

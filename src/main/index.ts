@@ -14,9 +14,11 @@ import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { parseOverlayMenuPick, parseOverlayMenuSpec, type OverlayMenuPick } from "../shared/overlay-menu.ts";
-import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, powerSaveBlocker, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
+import { windowStateController } from "./window-state.ts";
+import { allowDevOriginForCloud } from "./dev-cors.ts";
 import { registerActivity } from "./activity/index.ts";
 import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
@@ -44,12 +46,14 @@ function restoreWindow(): void {
   win.focus();
 }
 function createTray(): void {
-  if (!trayCapable || !desktop.preferences().closeToTray) {
+  // Like other chat apps, Annoy always sits in the tray where one is available;
+  // "close to tray" only decides what the window's close button does.
+  if (!trayCapable) {
     tray?.destroy();tray=null;
     if(win&&!win.isVisible())restoreWindow();
     return;
   }
-  if(!tray){try{tray = new Tray(appIcon.path());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
+  if(!tray){try{tray = new Tray(appIcon.trayPath());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
@@ -129,6 +133,11 @@ if (process.platform === "linux") app.commandLine.appendSwitch("enable-features"
 if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
+  // Covering the window still let Windows mark it occluded and move the renderer into
+  // efficiency mode (EcoQoS), which starves WebRTC's audio decode and makes voices crackle.
+  app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,UseEcoQoSForBackgroundProcess");
+  // The out-of-process audio service gets the same priority Chrome gives it by policy.
+  app.commandLine.appendSwitch("audio-process-high-priority");
 }
 // Chromium picks the keychain by desktop name and falls back to no encryption
 // on ones it doesn't know (Hyprland, Sway…), even with a Secret Service running
@@ -387,9 +396,15 @@ function showNativeMenu(params: Electron.ContextMenuParams): void {
 
 function createWindow(): void {
   configureSession(session.defaultSession, true);
+  // `npm run dev` only: the Vite origin isn't on the production cloud's CORS allowlist.
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL)
+    allowDevOriginForCloud(session.defaultSession, new URL(process.env.ELECTRON_RENDERER_URL).origin, [authUrl, ...Object.values(cloudUrls)]);
+  const windowState = windowStateController({ width: 940, height: 560 });
+  const { initial } = windowState;
   win = new BrowserWindow({
-    width: 1320,
-    height: 840,
+    width: initial.width,
+    height: initial.height,
+    ...(initial.x !== undefined && initial.y !== undefined ? { x: initial.x, y: initial.y } : {}),
     minWidth: 940,
     minHeight: 560,
     show:false,
@@ -457,6 +472,9 @@ function createWindow(): void {
   win.webContents.on("render-process-gone", resetRendererAccess);
   // A reloaded or crashed renderer can't stop its screen share any more.
   win.webContents.on("did-start-loading", () => void stopScreenAudio());
+  // A reloaded renderer has left its call; it asks again once it rejoins.
+  win.webContents.on("did-start-loading", releaseCallBlocker);
+  win.webContents.on("render-process-gone", releaseCallBlocker);
   win.webContents.on("render-process-gone", () => void stopScreenAudio());
   const sendWindowState = () => win?.webContents.send("window:maximized", win.isMaximized());
   win.on("maximize", sendWindowState);
@@ -479,7 +497,8 @@ function createWindow(): void {
   win.on("resize", () => { if (menuPending) closeMenuOverlay(null); });
   win.on("move", () => { if (menuPending) closeMenuOverlay(null); });
 
-  win.once("ready-to-show",()=>{win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
+  windowState.track(win);
+  win.once("ready-to-show",()=>{if(initial.maximized)win?.maximize();win?.show();if(desktop.preferences().startMinimized)win?.minimize();});
   if (!app.isPackaged&&process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
@@ -525,7 +544,15 @@ ipcMain.handle("auth:global", async (event, token: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
   // The renderer must tell a refusal (sign in again) from a failure to reach authannoy (keep the session, retry).
   try { return await appAccess.verifyGlobal(token); }
-  catch (error) { throw new Error(error instanceof SessionRefused ? "SESSION_REFUSED" : "SESSION_UNREACHABLE"); }
+  catch (error) {
+    if (!(error instanceof SessionRefused)) {
+      // Keep the real cause (status, DNS, TLS, timeout): "unreachable" alone can't be diagnosed.
+      const cause = error instanceof Error ? `${error.name}: ${error.message}${error.cause ? ` <- ${String((error.cause as Error).message ?? error.cause)}` : ""}` : String(error);
+      logError(`auth:global unreachable (${authUrl}/v1/me): ${cause}`);
+      if (!app.isPackaged) console.error("[auth:global]", authUrl, error);
+    }
+    throw new Error(error instanceof SessionRefused ? "SESSION_REFUSED" : "SESSION_UNREACHABLE");
+  }
 });
 ipcMain.handle("auth:local", async (event, account: unknown) => {
   if (!fromRenderer(event)) throw new Error("Invalid authentication sender");
@@ -620,6 +647,14 @@ ipcMain.handle("screen:sources", async event => {
 ipcMain.on("screen:choose", (event, id: unknown) => {
   if (!authorized(event)) return;
   chosenScreenSource = typeof id === "string" ? id : null;
+});
+// While a call is up, Windows must not suspend or deprioritize Annoy (voices would crackle).
+let callBlocker: number | null = null;
+function releaseCallBlocker(): void { if (callBlocker !== null) { powerSaveBlocker.stop(callBlocker); callBlocker = null; } }
+ipcMain.on("voice:active", (event, active: unknown) => {
+  if (!authorized(event)) return;
+  if (active === true && callBlocker === null) callBlocker = powerSaveBlocker.start("prevent-app-suspension");
+  else if (active !== true) releaseCallBlocker();
 });
 ipcMain.on("window:flash", event => {
   if (!authorized(event)) return;

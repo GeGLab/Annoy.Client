@@ -150,6 +150,8 @@ export function App() {
   useUpdateState();
   // The window and tray icon live in the main process; keep them on the chosen icon.
   useEffect(() => { void window.annoy?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
+  // Windows throttles covered apps; during a call that crackles everyone's voice.
+  useEffect(() => { window.annoy?.voiceActive?.(inVoice); }, [inVoice]);
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor, themePreset });

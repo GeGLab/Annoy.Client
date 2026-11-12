@@ -388,7 +388,7 @@ export function markServerRead(accountId: string, serverId: string): void {
     void apiFor(accountId).put<ChannelReadState[]>(`/servers/${encodeURIComponent(serverId)}/read-state`, {}).then((states) => patchInstance(accountId, (inst) => {
       for (const state of states) {
         const entry = inst.messages[state.channelId]; if (entry) entry.readState = state;
-        if (state.unread) inst.unread[state.channelId] = state.unread;
+        setUnread(inst, state.channelId, state.unread);
       }
     })).catch((error) => { if (!isCancellation(error)) toast((error as Error).message); });
     return;
@@ -665,7 +665,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
       i.messages[channelId]={...entry,lastAccessed:Date.now(),items:merged.items,hasMore:(direction==="newer"?entry.hasMore:page.hasMoreBefore)||merged.evictedBefore,hasMoreAfter:(direction===true?entry.hasMoreAfter:page.hasMoreAfter)||merged.evictedAfter,loading:false,error:null,readState:read??null,
         unreadBoundary:paging?entry.unreadBoundary:read?.unread?.count?read.messageId:null,
         initialPosition:paging?entry.initialPosition:query.startsWith("after=")?page.items[0]?.id:null};
-      if(read?.unread) i.unread[channelId]=read.unread;
+      if(read) setUnread(i,channelId,read.unread);
       boundMessages(i,channelId,accountId);
     });
     // Chat requests pins when the channel opens; only refill them when this reload dropped the cache entry.
@@ -693,13 +693,19 @@ export async function jumpToMessage(accountId:string,channelId:string,messageId:
 
 export async function loadReadStates(accountId:string):Promise<void> {
   try { const states=await apiFor(accountId).get<Array<ChannelReadState & {unread:{count:number;mention:boolean}}>>("/users/@me/read-states");
-    patchInstance(accountId,inst=>{ for(const value of states){inst.unread[value.channelId]=value.unread; const entry=inst.messages[value.channelId]; if(entry) entry.readState={channelId:value.channelId,messageId:value.messageId,updatedAt:value.updatedAt};} });
+    patchInstance(accountId,inst=>{ for(const value of states){setUnread(inst,value.channelId,value.unread); const entry=inst.messages[value.channelId]; if(entry) entry.readState={channelId:value.channelId,messageId:value.messageId,updatedAt:value.updatedAt};} });
   } catch { /* Reconnect can retry without blocking READY. */ }
+}
+/** A read state with nothing new (count 0, no mention) clears the channel instead of marking it unread. */
+function setUnread(inst: { unread: Record<string, { count: number; mention: boolean }> }, channelId: string, unread: { count: number; mention: boolean } | null | undefined): void {
+  if (unread === undefined) return; // Older servers leave it out: keep what is known.
+  if (unread && (unread.count > 0 || unread.mention)) inst.unread[channelId] = unread;
+  else delete inst.unread[channelId];
 }
 export async function markChannelRead(accountId:string,channelId:string,messageId:string):Promise<void> {
   const inst=getState().instances[accountId]; if(inst?.status!=="ready" || !inst.instance?.historyWindow || !messageId || (inst.messages[channelId]?.readState?.messageId??"")>=messageId) return;
   try { const state=await apiFor(accountId).put<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,{messageId});
-    patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; if(state.unread) i.unread[channelId]=state.unread; });
+    patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; setUnread(i,channelId,state.unread); });
   } catch { /* Read cursor sync retries when the channel becomes visible again. */ }
 }
 export async function loadPinnedMessages(accountId:string,channelId:string,more=false):Promise<void> {
@@ -1161,7 +1167,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return patchInstance(accountId,inst=>{
         if(event.d.userId!==inst.user?.id) return;
         const entry=inst.messages[event.d.state.channelId]; if(entry) entry.readState=event.d.state;
-        if(event.d.state.unread) inst.unread[event.d.state.channelId]=event.d.state.unread;
+        setUnread(inst,event.d.state.channelId,event.d.state.unread);
       });
     case "CHANNEL_PIN_UPDATE":
       return applyMessagePin(accountId,event.d.channelId,event.d.messageId,event.d.message);

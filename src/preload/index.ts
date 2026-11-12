@@ -101,6 +101,8 @@ const bridge = {
     },
   },
   flashWindow: () => ipcRenderer.send("window:flash"),
+  /** Keeps Windows from suspending or deprioritizing Annoy while a call is up. */
+  voiceActive: (active: boolean) => ipcRenderer.send("voice:active", active),
   /** Context menus drawn in a transparent layer above browser services; resolves with the chosen row. */
   overlayMenu: {
     open: (spec: OverlayMenuSpec) => ipcRenderer.invoke("overlay-menu:open", spec) as Promise<OverlayMenuPick | null>,
