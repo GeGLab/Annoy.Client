@@ -593,7 +593,8 @@ function useSongInfo(item: PlaybackItem | null, duration: number | null): { info
     const timer = setTimeout(() => setWaited(id), 2500);
     return () => clearTimeout(timer);
   }, [id, knowsDuration]);
-  const ready = !!id && (knowsDuration || waited === id);
+  // YouTube lengths are read from the video itself by the lookup: no need to wait for the player.
+  const ready = !!id && (knowsDuration || waited === id || item?.kind === "youtube");
   const durationRef = useRef(duration);
   durationRef.current = duration;
   useEffect(() => {
@@ -677,6 +678,245 @@ function lineAt(lines: readonly LyricLine[], time: number): number {
   return found;
 }
 
+/** A word and when it is sung, in the lyrics' own time. */
+interface TimedWord { text: string; start: number; end: number }
+
+/**
+ * When each word of a line is sung. Word-synced lyrics say so; otherwise the line's singing
+ * time is spread over its words by length, at a realistic pace (a long gap before the next
+ * line is an instrumental break, not a slow line).
+ */
+function lineWords(line: LyricLine, next: number | undefined): TimedWord[] {
+  const nextTime = next ?? line.time + 8;
+  if (line.words?.length) {
+    const words = line.words;
+    const end = Math.min(line.end ?? nextTime, nextTime);
+    return words.map((w, i) => ({ text: w.text, start: w.time, end: Math.max(w.time + 0.05, Math.min(words[i + 1]?.time ?? end, end)) }));
+  }
+  const parts = line.text.match(/\S+\s*/g) ?? [];
+  if (!parts.length) return [];
+  const letters = parts.reduce((sum, part) => sum + part.trim().length, 0);
+  const span = Math.max(0.4, Math.min(nextTime - line.time - 0.1, Math.max(0.6, letters / 12 + 0.35)));
+  const weights = parts.map((part) => part.trim().length + 1.5);
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let at = line.time;
+  return parts.map((text, i) => {
+    const length = (span * weights[i]!) / total;
+    const word = { text, start: at, end: at + length };
+    at += length;
+    return word;
+  });
+}
+
+// Lyrics alignment ---------------------------------------------------------------------
+// Lyrics are timed to one recording; a music video is often another one (an intro, a scene
+// in the middle, a different edit). While the song plays here, the singing measured in the
+// audio (centre against sides in the singing band, from the theater preload) is matched
+// against where these lyrics expect singing, and the lyrics shift to follow the video.
+// It only steps in when the lyrics can't be trusted as they are: the video's length differs
+// from the recording they're timed to, or nobody knows that recording. A nudge by hand always
+// wins and is remembered for the video.
+
+const ALIGN_RATE = 10;
+const ALIGN_WINDOW = 40;
+
+interface Alignment {
+  /** The video (or file) these lyrics play over: hand-made offsets are remembered per video. */
+  key: string;
+  /** Lyrics time = media time − offset. */
+  offset: number;
+  source: "none" | "auto" | "manual";
+  /** The lyrics may be off: the audio is listened to. */
+  engaged: boolean;
+  /** The largest offset considered, in seconds. */
+  span: number;
+  /** Singing measure per tenth of a second of media time (NaN: not heard yet). */
+  heard: Float32Array;
+  /** 1 where the lyrics expect singing, per tenth of a second of lyrics time. */
+  expected: Float32Array;
+  checkedAt: number;
+  /** A better offset seen once: it must be seen again before the lyrics move. */
+  pending: { offset: number; count: number } | null;
+  /** The audio clearly agrees with the current offset. */
+  confirmed: boolean;
+  /** When the lyrics last moved by ear: they stay put for a while after. */
+  movedAt: number;
+}
+const alignments = new Map<string, Alignment>();
+
+const SYNC_KEY = "annoy.lyricsSync";
+const manualSync: Record<string, number> = readLocal(SYNC_KEY, (raw) => {
+  const value = JSON.parse(raw) as unknown;
+  return value && typeof value === "object" ? (value as Record<string, number>) : null;
+}, {});
+function rememberSync(key: string, offset: number | null): void {
+  if (offset === null) delete manualSync[key];
+  else manualSync[key] = Math.round(offset * 10) / 10;
+  const keys = Object.keys(manualSync);
+  for (const old of keys.slice(0, Math.max(0, keys.length - 300))) delete manualSync[old];
+  writeLocal(SYNC_KEY, JSON.stringify(manualSync));
+}
+
+function mediaKey(item: PlaybackItem): string {
+  const thumb = youtubeThumb(item);
+  return thumb ? `yt:${/\/vi\/([\w-]+)\//.exec(thumb)?.[1] ?? item.url}` : item.url;
+}
+
+function alignmentFor(item: PlaybackItem, info: SongInfo): Alignment | null {
+  const lines = info.synced;
+  if (!lines?.length) return null;
+  const existing = alignments.get(item.id);
+  if (existing) return existing;
+  const media = info.mediaDuration ?? durations.get(item.id) ?? info.duration ?? null;
+  const last = lines[lines.length - 1]!.time;
+  const delta = media && info.lyricsDuration ? media - info.lyricsDuration : null;
+  const expected = new Float32Array(Math.ceil((last + 15) * ALIGN_RATE));
+  lines.forEach((line, i) => {
+    const words = lineWords(line, lines[i + 1]?.time);
+    if (!words.length) return;
+    const from = Math.max(0, Math.round(words[0]!.start * ALIGN_RATE)), to = Math.min(expected.length, Math.round(words[words.length - 1]!.end * ALIGN_RATE));
+    for (let k = from; k < to; k++) expected[k] = 1;
+  });
+  const key = mediaKey(item);
+  const manual = manualSync[key];
+  const alignment: Alignment = {
+    key,
+    offset: manual ?? 0,
+    source: manual !== undefined ? "manual" : "none",
+    engaged: delta === null || Math.abs(delta) > 1.5,
+    span: Math.min(60, Math.max(6, (delta === null ? 12 : Math.abs(delta)) + 4)),
+    heard: new Float32Array(Math.ceil(((media ?? last + 60) + 10) * ALIGN_RATE)).fill(Number.NaN),
+    expected,
+    checkedAt: 0,
+    pending: null,
+    confirmed: false,
+    movedAt: 0,
+  };
+  alignments.set(item.id, alignment);
+  if (alignments.size > 40) alignments.delete(alignments.keys().next().value!);
+  return alignment;
+}
+
+const lyricsOffset = (itemId: string | undefined) => (itemId ? alignments.get(itemId)?.offset ?? 0 : 0);
+
+/** One reading of the audio at `position` (media time), from the player. */
+function feedVoice(item: PlaybackItem, position: number, vr: number | undefined, vl: number | undefined): void {
+  if (vr === undefined || vl === undefined) return;
+  const info = songInfos.get(item.id);
+  const alignment = info ? alignmentFor(item, info) : null;
+  if (!alignment) return;
+  const index = Math.round(position * ALIGN_RATE);
+  if (index < 0 || index >= alignment.heard.length) return;
+  // A quiet passage says nothing about singing: it counts as the least singing there is.
+  alignment.heard[index] = vl < -62 ? -6 : vr;
+  if (alignment.source === "manual" || !alignment.engaged) return;
+  const now = performance.now();
+  if (now - alignment.checkedAt < 2000) return;
+  alignment.checkedAt = now;
+  realign(alignment, index);
+}
+
+/**
+ * Finds the offset at which the expected singing best matches what was heard over the last
+ * ALIGN_WINDOW seconds (Pearson correlation). The lyrics move only for a clearly better match,
+ * seen twice in a row, so a noisy passage can't throw them around.
+ */
+function realign(alignment: Alignment, now: number): void {
+  const { heard, expected } = alignment;
+  const positions: number[] = [];
+  const values: number[] = [];
+  for (let j = Math.max(0, now - ALIGN_WINDOW * ALIGN_RATE); j <= now; j++) {
+    const value = heard[j]!;
+    if (!Number.isNaN(value)) { positions.push(j); values.push(value); }
+  }
+  const n = values.length;
+  if (n < 15 * ALIGN_RATE) return;
+  const meanX = values.reduce((sum, v) => sum + v, 0) / n;
+  const stdX = Math.sqrt(values.reduce((sum, v) => sum + (v - meanX) ** 2, 0) / n);
+  if (stdX < 0.5) return;
+  const reach = Math.round(alignment.span * ALIGN_RATE);
+  const currentK = Math.round(alignment.offset * ALIGN_RATE);
+  let best = -1, bestK = currentK, current = -1;
+  for (let k = -reach; k <= reach; k++) {
+    let sy = 0, sxy = 0;
+    for (let m = 0; m < n; m++) {
+      const at = positions[m]! - k;
+      const y = at >= 0 && at < expected.length ? expected[at]! : 0;
+      sy += y;
+      sxy += (values[m]! - meanX) * y;
+    }
+    // The window has to hold both singing and gaps at this offset to say anything.
+    const meanY = sy / n, varY = meanY - meanY * meanY;
+    if (sy < 3 * ALIGN_RATE || varY < 0.02) continue;
+    const corr = sxy / n / (stdX * Math.sqrt(varY));
+    if (corr > best) { best = corr; bestK = k; }
+    if (k === currentK) current = corr;
+  }
+  const offset = bestK / ALIGN_RATE;
+  const needed = n < 25 * ALIGN_RATE ? 0.45 : 0.32;
+  // The best match is where the lyrics already are, give or take what the measure can tell:
+  // they're right (the extra length is elsewhere).
+  if (best >= needed && Math.abs(offset - alignment.offset) < 0.5) {
+    alignment.pending = null;
+    if (!alignment.confirmed) { alignment.confirmed = true; notify(); }
+    return;
+  }
+  // Once lined up, moving again takes a clearly better match, seen three times, and not too soon.
+  const settled = alignment.source === "auto";
+  if (best < needed || best - current < (settled ? 0.15 : 0.1)) { alignment.pending = null; return; }
+  if (alignment.pending && Math.abs(alignment.pending.offset - offset) <= 0.3) alignment.pending.count++;
+  else alignment.pending = { offset, count: 1 };
+  if (alignment.pending.count < (settled ? 3 : 2)) return;
+  if (settled && performance.now() - alignment.movedAt < 20_000) return;
+  alignment.movedAt = performance.now();
+  alignment.offset = offset;
+  alignment.source = "auto";
+  alignment.pending = null;
+  alignment.confirmed = true;
+  notify();
+}
+
+function nudgeSync(item: PlaybackItem, info: SongInfo, seconds: number | null): void {
+  const alignment = alignmentFor(item, info);
+  if (!alignment) return;
+  if (seconds === null) {
+    rememberSync(alignment.key, null);
+    alignment.offset = 0;
+    alignment.source = "none";
+    alignment.checkedAt = 0;
+    alignment.pending = null;
+    alignment.confirmed = false;
+  } else {
+    alignment.offset = Math.round((alignment.offset + seconds) * 10) / 10;
+    alignment.source = "manual";
+    rememberSync(alignment.key, alignment.offset);
+  }
+  notify();
+}
+
+const signed = (seconds: number) => `${seconds > 0 ? "+" : seconds < 0 ? "−" : "±"}${Math.abs(seconds).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}s`;
+
+/** How the lyrics are lined up, and a nudge either way when the ear disagrees. */
+function SyncControl({ item, info }: { item: PlaybackItem; info: SongInfo }) {
+  const state = useSyncExternalStore(subscribe, () => {
+    const a = alignments.get(item.id);
+    return a ? `${a.source}|${a.offset}|${a.engaged && !a.confirmed ? 1 : 0}` : "none|0|0";
+  });
+  const [source, raw, engaged] = state.split("|");
+  const offset = Number(raw);
+  const label = source === "manual" ? translate("song.syncManual", { p0: signed(offset) })
+    : source === "auto" ? translate("song.syncAuto", { p0: signed(offset) })
+    : engaged === "1" ? translate("song.syncAligning") : translate("song.syncOk");
+  return (
+    <div className={`song-sync${source !== "none" ? " adjusted" : ""}`} role="group" aria-label={translate("song.sync")}>
+      <button type="button" title={translate("song.syncEarlier")} aria-label={translate("song.syncEarlier")} onClick={() => nudgeSync(item, info, -0.5)}><Icon name="minus" size={13} /></button>
+      <span className="song-sync-label">{source === "auto" && <Icon name="voice" size={12} />}{label}</span>
+      <button type="button" title={translate("song.syncLater")} aria-label={translate("song.syncLater")} onClick={() => nudgeSync(item, info, 0.5)}><Icon name="plus" size={13} /></button>
+      {source === "manual" && <button type="button" title={translate("song.syncReset")} aria-label={translate("song.syncReset")} onClick={() => nudgeSync(item, info, null)}><Icon name="reset" size={13} /></button>}
+    </div>
+  );
+}
+
 function LyricsLoading() {
   const line = useLoadingLine(LYRICS_LOADING, 1600);
   return (
@@ -687,42 +927,65 @@ function LyricsLoading() {
   );
 }
 
-/** Karaoke: big lines, the one being sung in the middle and filling up as it is sung. */
-function Lyrics({ info, loading, position, onSeek }: { info: SongInfo | null; loading: boolean; position: () => number; onSeek: ((seconds: number) => void) | null }) {
+/**
+ * Karaoke: big lines, the one being sung in the middle; inside it only the words already sung
+ * light up, the current one filling as it is sung, like a karaoke screen.
+ */
+function Lyrics({ item, info, loading, position, playing, onSeek }: { item: PlaybackItem; info: SongInfo | null; loading: boolean; position: () => number; playing: () => boolean; onSeek: ((seconds: number) => void) | null }) {
   const lines = info?.synced ?? null;
+  const timeline = useMemo(() => lines?.map((line, i) => lineWords(line, lines[i + 1]?.time)) ?? null, [lines]);
+  if (info && lines) alignmentFor(item, info);
   const box = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(-1);
   /** After the viewer scrolls the lyrics, leave them where they are for a while. */
   const manualUntil = useRef(0);
   const positionRef = useRef(position);
   positionRef.current = position;
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const itemId = item.id;
 
   useEffect(() => {
     setActive(-1);
     box.current?.scrollTo({ top: 0 });
-    if (!lines) return;
+    if (!lines || !timeline) return;
     let frame = 0;
-    let shown = -2;
+    let shownLine = -2;
+    /** How lit each word of the shown line is (0–100), so only changes touch the page. */
+    let lit: number[] = [];
     let last = 0;
+    /** The lyrics' own clock: steady, never wobbling back and forth with the player's reports. */
+    let clock = Number.NaN;
     const loop = (now: number) => {
       frame = requestAnimationFrame(loop);
-      // About 30 updates a second is plenty for a line filling up, and half the work of 60.
+      // About 30 updates a second is plenty for words filling up, and half the work of 60.
       if (now - last < 32 || document.hidden) return;
+      const elapsed = last ? Math.min(0.25, (now - last) / 1000) : 0;
       last = now;
-      // A little ahead, so a line lights up as it is sung rather than after.
-      const time = positionRef.current() + 0.2;
-      const index = lineAt(lines, time);
-      if (index !== shown) { shown = index; setActive(index); }
-      const line = index >= 0 ? box.current?.querySelector<HTMLElement>(`[data-line="${index}"]`) : null;
-      if (line) {
-        const start = lines[index]!.time;
-        const end = lines[index + 1]?.time ?? start + 4;
-        line.style.setProperty("--sung", `${Math.round(Math.min(1, Math.max(0, (time - start) / Math.max(0.6, end - start))) * 1000) / 10}%`);
+      // The player's position arrives in bursts and wobbles by a few hundredths of a second.
+      // Followed as is, a word on the edge lights and dims over and over: instead the clock runs
+      // on its own and leans towards the player's. Real jumps (a seek, a new offset) jump.
+      const target = positionRef.current() - lyricsOffset(itemId);
+      if (!playingRef.current() || !Number.isFinite(clock) || Math.abs(target - clock) > 1) clock = target;
+      else { const predicted = clock + elapsed; clock = predicted + (target - predicted) * 0.12; }
+      const time = clock;
+      // The line comes into place a moment before its first word.
+      const index = lineAt(lines, time + 0.3);
+      if (index !== shownLine) { shownLine = index; lit = []; setActive(index); }
+      const words = index >= 0 ? timeline[index]! : [];
+      const el = index >= 0 ? box.current?.querySelector<HTMLElement>(`[data-line="${index}"]`) : null;
+      if (!el || !words.length) return;
+      const spans = el.children;
+      for (let w = 0; w < words.length && w < spans.length; w++) {
+        const word = words[w]!;
+        const at = time + 0.04;
+        const fill = at >= word.end ? 100 : at <= word.start ? 0 : Math.round(((at - word.start) / Math.max(0.05, word.end - word.start)) * 100);
+        if (lit[w] !== fill) { lit[w] = fill; (spans[w] as HTMLElement).style.setProperty("--p", `${fill}%`); }
       }
     };
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [lines]);
+  }, [lines, timeline, itemId]);
 
   useEffect(() => {
     const el = box.current;
@@ -736,18 +999,19 @@ function Lyrics({ info, loading, position, onSeek }: { info: SongInfo | null; lo
 
   let body;
   if (loading) body = <LyricsLoading />;
-  else if (lines) {
+  else if (lines && timeline) {
     body = (
       <div ref={box} className="song-lyrics-lines synced" onWheel={holdScroll} onTouchMove={holdScroll} onKeyDown={holdScroll}>
         {lines.map((line, index) => {
           const state = index === active ? " active" : index < active ? " past" : index === active + 1 ? " next" : "";
-          const text = line.text || "♪";
+          const words = timeline[index]!;
           // How far from the sung line: drives the Apple Music-like scale, blur and stagger.
           const distance = active < 0 ? Math.min(6, index + 1) : Math.min(6, Math.abs(index - active));
+          const content = words.length ? words.map((word, w) => <span key={w} className="lyric-word">{word.text}</span>) : "♪";
           return onSeek ? (
-            <button key={index} type="button" data-line={index} className={`lyric-line${state}`} style={{ "--d": distance } as CSSProperties} title={translate("song.lyricsSeek")} onClick={() => { manualUntil.current = 0; onSeek(line.time); }}>{text}</button>
+            <button key={index} type="button" data-line={index} className={`lyric-line${state}`} style={{ "--d": distance } as CSSProperties} title={translate("song.lyricsSeek")} onClick={() => { manualUntil.current = 0; onSeek(line.time + lyricsOffset(itemId)); }}>{content}</button>
           ) : (
-            <p key={index} data-line={index} className={`lyric-line${state}`} style={{ "--d": distance } as CSSProperties}>{text}</p>
+            <p key={index} data-line={index} className={`lyric-line${state}`} style={{ "--d": distance } as CSSProperties}>{content}</p>
           );
         })}
       </div>
@@ -761,7 +1025,10 @@ function Lyrics({ info, loading, position, onSeek }: { info: SongInfo | null; lo
   return (
     <section className="song-lyrics" aria-label={translate("song.lyrics")}>
       {body}
-      {credit && <span className="song-lyrics-credit">{credit}</span>}
+      <div className="song-lyrics-foot">
+        {info && lines && <SyncControl item={item} info={info} />}
+        {credit && <span className="song-lyrics-credit">{credit}</span>}
+      </div>
     </section>
   );
 }
@@ -976,7 +1243,8 @@ function useDeckDriver(deck: Deck, playback: Playback, media: HTMLMediaElement |
       if (!url || !kind) return;
       // Joining mid-song starts there, not from the top (the sync loop then trims the rest).
       const { state, offset } = latest.current;
-      window.annoy?.theater.open(deck, url, kind, { start: state ? playbackPosition(state, offset) : 0 });
+      // A paused room opens held: no autoplayed second that the room then stops. Its play releases it.
+      window.annoy?.theater.open(deck, url, kind, { start: state ? playbackPosition(state, offset) : 0, hold: !!state?.paused });
       const made = viewDriver(deck, () => events.current!);
       setDriver(made.driver);
       return () => { made.dispose(); setDriver(null); };
@@ -1138,7 +1406,7 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
 }
 
 /** What someone who hasn't joined sees: what's on, big and inviting, and one button to come in. */
-function SongInvite({ playback, info, loading, names, channel, onJoin }: { playback: Playback; info: SongInfo | null; loading: boolean; names: Map<string, string>; channel: Channel; onJoin: () => void }) {
+function SongInvite({ playback, info, loading, names, channel, canControl, onJoin }: { playback: Playback; info: SongInfo | null; loading: boolean; names: Map<string, string>; channel: Channel; canControl: boolean; onJoin: () => void }) {
   const state = playback.state!;
   const item = currentItem(state)!;
   const index = state.queue.findIndex((entry) => entry.id === item.id);
@@ -1152,13 +1420,17 @@ function SongInvite({ playback, info, loading, names, channel, onJoin }: { playb
         <div className="song-invite-cover"><SongCover info={info} item={item} spinning={false} loading={loading} /></div>
       </div>
       <div className="song-invite-copy">
-        <span className="song-invite-eyebrow"><span className="song-live-dot" aria-hidden="true" /> {translate("song.liveIn", { p0: channel.name })}</span>
+        <span className="song-invite-eyebrow">
+          {state.paused ? <Icon name="pause" size={12} /> : <span className="song-live-dot" aria-hidden="true" />}
+          {translate(state.paused ? "song.pausedIn" : "song.liveIn", { p0: channel.name })}
+        </span>
         <h2 className="song-invite-title" title={item.title}>{info?.track ?? item.title}</h2>
         {loading && !info ? <span className="song-skeleton-line wide" aria-hidden="true" /> : <p className="song-invite-artist">{[info?.artist, album].filter(Boolean).join(" · ") || KIND_LABEL[item.kind]}</p>}
         {!songLite && <Visualizer playing={!state.paused} live={false} />}
         <button type="button" className="song-invite-join" onClick={onJoin} autoFocus>
-          <Icon name="headphones" size={20} /> {translate("song.listenHere")}
+          <Icon name={state.paused && canControl ? "play" : "headphones"} size={20} /> {translate(state.paused && canControl ? "song.playAndJoin" : "song.listenHere")}
         </button>
+        {state.paused && !canControl && <p className="song-invite-meta">{translate("song.roomPaused")}</p>}
         <p className="song-invite-meta">
           {translate("song.requestedBy", { p0: requester })} · {translate("song.positionOf", { p0: index + 1, p1: state.queue.length })}
           {next && <> · {translate("song.upNext")} <strong>{songInfos.get(next.id)?.track ?? next.title}</strong></>}
@@ -1197,8 +1469,16 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
   playbackRef.current = playback;
   const itemId = item?.id;
   const position = useCallback(() => positionOf(playbackRef.current, itemId, here), [itemId, here]);
+  const playing = useCallback(() => {
+    const room = playbackRef.current.state;
+    return !!room && !room.paused && (!here || sounding(itemId));
+  }, [itemId, here]);
   const seek = canControl && item ? (seconds: number) => void playback.send({ op: "seek", position: Math.max(0, seconds - 0.1) }) : null;
-  const join = () => withTransition(() => listenTo({ accountId, serverId: state.server.id, channelId: channel.id, name: channel.name }));
+  const join = () => {
+    withTransition(() => listenTo({ accountId, serverId: state.server.id, channelId: channel.id, name: channel.name }));
+    // Joining a paused room means wanting to hear it: whoever may control it plays it.
+    if (playback.state?.paused && item && canControl) void playback.send({ op: "play" });
+  };
   const leave = () => withTransition(() => listenTo(null));
   const inviting = !here && !!item;
   const cover = !lite ? info?.cover ?? null : null;
@@ -1224,7 +1504,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
       {firstLoad ? (
         <SongLoader />
       ) : inviting ? (
-        <SongInvite playback={playback} info={info} loading={loading} names={names} channel={channel} onJoin={join} />
+        <SongInvite playback={playback} info={info} loading={loading} names={names} channel={channel} canControl={canControl} onJoin={join} />
       ) : (
         <div className="song-body">
           <div className={`song-main${item ? "" : " idle"}`}>
@@ -1235,7 +1515,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
                 position={position} video={video} onVideo={setVideo} onSeek={seek} onQueue={() => setSide("queue")}
                 onRequest={() => { setSide("queue"); setRequested((n) => n + 1); }}
               />
-              {item && !lite && <Lyrics key={item.id} info={info} loading={loading} position={position} onSeek={seek} />}
+              {item && !lite && <Lyrics key={item.id} item={item} info={info} loading={loading} position={position} playing={playing} onSeek={seek} />}
             </div>
           </div>
           <aside className="theater-side song-side" aria-label={translate("song.chat")}>
@@ -1360,6 +1640,8 @@ function SongPlayer({ session }: { session: Listening }) {
       if (from !== deckRef.current) return;
       spectrum = { levels: payload.levels, at: performance.now() };
       tickLocal(itemId, payload.position, false);
+      const playing = currentItem(latest.current.state);
+      if (playing?.id === itemId) feedVoice(playing, payload.position, payload.vr, payload.vl);
     });
     return () => { offStatus(); offLevels(); spectrum = null; };
   }, [view, itemId, volume, wantLevels, deck]);

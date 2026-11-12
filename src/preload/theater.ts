@@ -265,6 +265,10 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
 // For the song room's visualizer, focused on the voice: about 140 Hz to 5 kHz, where
 // singing lives. The video is tapped through captureStream(), which copies its sound
 // instead of rerouting it. Media the page may not read throws, and the room animates on its own.
+//
+// Alongside, how much singing there is: lead vocals are mixed in the centre, so in the
+// singing band they show up in the centre (L+R) and cancel from the sides (L−R), while
+// double-tracked guitars, keys and reverbs fill both. The room lines the lyrics up with it.
 
 const BANDS = 48;
 const VOICE_LOW = 140, VOICE_HIGH = 5000;
@@ -291,6 +295,41 @@ function bands(bins: Uint8Array, hzPerBin: number): number[] {
   return out;
 }
 
+const SINGING_LOW = 300, SINGING_HIGH = 3400;
+
+/**
+ * Centre against sides in the singing band, in dB (vr), and the centre's loudness (vl).
+ * Mono media has no sides to compare: it reports nothing, and the room leaves the lyrics be.
+ */
+function voiceMeter(context: AudioContext, source: AudioNode, hzPerBin: number): () => { vr?: number; vl?: number } {
+  const split = context.createChannelSplitter(2);
+  source.connect(split);
+  const centre = new AnalyserNode(context, { fftSize: 1024, smoothingTimeConstant: 0.6 });
+  const sides = new AnalyserNode(context, { fftSize: 1024, smoothingTimeConstant: 0.6 });
+  const half = (gain: number) => new GainNode(context, { gain });
+  split.connect(half(0.5), 0).connect(centre);
+  split.connect(half(0.5), 1).connect(centre);
+  split.connect(half(0.5), 0).connect(sides);
+  split.connect(half(-0.5), 1).connect(sides);
+  const centreDb = new Float32Array(new ArrayBuffer(centre.frequencyBinCount * 4));
+  const sidesDb = new Float32Array(new ArrayBuffer(sides.frequencyBinCount * 4));
+  const from = Math.max(1, Math.floor(SINGING_LOW / hzPerBin)), to = Math.min(centre.frequencyBinCount - 1, Math.ceil(SINGING_HIGH / hzPerBin));
+  return () => {
+    centre.getFloatFrequencyData(centreDb);
+    sides.getFloatFrequencyData(sidesDb);
+    let c = 0, side = 0;
+    for (let i = from; i <= to; i++) {
+      c += 10 ** (centreDb[i]! / 10);
+      side += 10 ** (sidesDb[i]! / 10);
+    }
+    if (!(c > 0) || !Number.isFinite(c)) return {};
+    // Identical channels (mono) leave the sides empty: nothing to tell singing apart with.
+    if (side < c * 1e-6) return {};
+    const vr = 10 * Math.log10(c / side), vl = 10 * Math.log10(c);
+    return Number.isFinite(vr) && Number.isFinite(vl) ? { vr: Math.round(Math.max(-20, Math.min(40, vr)) * 10) / 10, vl: Math.round(Math.max(-140, Math.min(20, vl)) * 10) / 10 } : {};
+  };
+}
+
 function retap(): void {
   if (!levelsWanted || !video || holding) return untap();
   if (tap?.el === video) return;
@@ -307,14 +346,16 @@ function retap(): void {
     analyser.minDecibels = -88;
     analyser.maxDecibels = -14;
     // Analysed only, never connected to the speakers: the element already plays it.
-    context.createMediaStreamSource(capture).connect(analyser);
+    const source = context.createMediaStreamSource(capture);
+    source.connect(analyser);
     const bins = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
     const hzPerBin = context.sampleRate / analyser.fftSize;
+    const voice = voiceMeter(context, source, hzPerBin);
     const el = video;
     const timer = setInterval(() => {
       if (el.paused || el.ended) return;
       analyser.getByteFrequencyData(bins);
-      ipcRenderer.send("theater:levels", { position: el.currentTime, levels: bands(bins, hzPerBin) });
+      ipcRenderer.send("theater:levels", { position: el.currentTime, levels: bands(bins, hzPerBin), ...voice() });
     }, 33);
     tap = { el, context, timer };
   } catch {
@@ -350,8 +391,8 @@ function user(action: "play" | "pause" | "seek"): void {
 }
 
 const onPlay = () => {
-  // A held deck starts on its own (autoplay): stop it at the top until the room needs it.
-  if (holding && video) { video.pause(); video.currentTime = 0; return; }
+  // A held player starts on its own (autoplay): stop it where it is until the room plays.
+  if (holding && video) { video.pause(); return; }
   user("play");
 };
 const onPause = () => {
@@ -378,16 +419,27 @@ function attach(next: HTMLVideoElement | null): void {
   retap();
 }
 
+// Find the video as soon as the page has one (not on the first status tick a second later):
+// an autoplay that starts before then would go unseen, and the room would stop it after 1 s.
+const early = setInterval(() => {
+  const found = pick();
+  if (!found) return;
+  clearInterval(early);
+  if (found !== video) attach(found);
+}, 150);
+setTimeout(() => clearInterval(early), 30_000);
+
 setInterval(() => {
   const found = pick();
   if (found !== video) attach(found);
   if (!video) return;
+  // A held player still reports (paused), so the room's sync can see it and play it when due.
   if (holding) {
     if (!video.paused) video.pause();
-    return;
+  } else {
+    if (wanted !== null && !fade && !graph && Math.abs(video.volume - wanted * fxVolume) > 0.01) fadeVolume();
+    if (levelsWanted && tap?.el !== video) retap();
   }
-  if (wanted !== null && !fade && !graph && Math.abs(video.volume - wanted * fxVolume) > 0.01) fadeVolume();
-  if (levelsWanted && tap?.el !== video) retap();
   ipcRenderer.send("theater:status", {
     position: video.currentTime,
     duration: Number.isFinite(video.duration) ? video.duration : null,
