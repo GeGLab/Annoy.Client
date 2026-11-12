@@ -53,6 +53,7 @@ export function useDesktopActivity() {
   const screenSharing=useStore(s=>s.voice?.screen?s.voice.accountId:null);
   const cloud = useStore((s) => s.social.status);
   const snapshot = useStore((s) => s.desktopActivity);
+  const song = useStore((s) => s.songActivity);
   useEffect(() => {
     const controller = new AbortController();
     let inFlight = false;
@@ -69,6 +70,8 @@ export function useDesktopActivity() {
       const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(id) : undefined;
       const activities:UserActivity[] = [...withSteamFallback(local, remote)];
       if(visible&&s.voice?.accountId===id&&s.voice.screen&&instance.instance?.extendedActivity)activities.push({kind:"video",provider:"annoy-screen",name:translate("activity.81dadf9352cb")});
+      // A song room: servers only accept music from Spotify or Apple Music, so it goes as media.
+      if (visible && s.songActivity) activities.push(s.songActivity);
       const gateway = gatewayFor(id);
       if (!gateway) return;
       // Older instances validate activity strictly: don't disconnect their users with a new field.
@@ -91,6 +94,7 @@ export function useDesktopActivity() {
       const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(ANNOY_STEAM) : undefined;
       const activities: UserActivity[] = [...withSteamFallback(local, remote)];
       if (visible && s.voice?.screen) activities.push({ kind: "video", provider: "annoy-screen", name: translate("activity.81dadf9352cb") });
+      if (visible && s.songActivity) activities.push(s.songActivity);
       publishPresence({ activities });
     };
     const publish = () => {
@@ -132,7 +136,7 @@ export function useDesktopActivity() {
     publish();
     const timer = setInterval(publish, 25_000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [snapshot, ready, sharing, invisible, connectionsVersion, screenSharing, cloud]);
+  }, [snapshot, song, ready, sharing, invisible, connectionsVersion, screenSharing, cloud]);
 }
 
 

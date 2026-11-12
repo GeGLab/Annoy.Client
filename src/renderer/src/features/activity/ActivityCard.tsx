@@ -20,6 +20,8 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   const game = activity.kind === "game";
   const development = activity.kind === "development";
   const video=activity.kind==="video",generic=activity.kind==="generic";
+  // Media with an artist is music (a song room, or a player the system reports).
+  const listening = generic && !!activity.artist;
   const [failedArtwork, setFailedArtwork] = useState<string | null>(null);
   const artwork = activity.artwork ?? (game && activity.provider === "steam" && /^\d{1,10}$/.test(activity.appId ?? "")
     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${activity.appId}/header.jpg` : undefined);
@@ -28,10 +30,10 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
     <div className={`activity-card activity-${activity.kind}${compact ? " compact" : ""}`}>
       <span className={`activity-artwork${image ? "" : " no-artwork"}`}>
         {development ? <DevelopmentIcon name={activity.file ? activity.language ?? "code" : activity.provider} size={compact ? 28 : 44} /> : image ? <img src={artwork} alt={game ? translate("activity.29532ceb0b3e",{p0:(activity.name)}) : translate("activity.f3023eeabae2",{p0:(activity.album || activity.name)})} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedArtwork(artwork)} />
-          : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : video?<Monitor size={compact?20:28} aria-hidden/>:generic?<Activity size={compact?20:28} aria-hidden/>:<Headphones size={compact ? 20 : 28} aria-hidden />}
+          : game ? <Gamepad2 size={compact ? 20 : 28} aria-hidden /> : video?<Monitor size={compact?20:28} aria-hidden/>:generic&&!listening?<Activity size={compact?20:28} aria-hidden/>:<Headphones size={compact ? 20 : 28} aria-hidden />}
       </span>
       <div>
-        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? translate("common.1fdb45064aad",{p0:({ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": translate("activity.026bf2b64617") }[activity.provider as "vscode"] ?? activity.provider)}) : game ? translate("activity.476e526adee7") : video?translate("activity.e3f1fb46cae7"):generic?translate("activity.575a3b4743ee"):translate("activity.007e5ab5ceee",{p0:(activity.provider === "spotify" ? "Spotify" : translate("activity.3b00b32d64af"))})}</small>
+        <small className="activity-provider">{game ? <GameIcon activity={activity} size={compact ? 12 : 16} /> : <ProviderIcon provider={activity.provider} size={compact ? 12 : 16} />}{development ? translate("common.1fdb45064aad",{p0:({ vscode: "VS Code", intellij: "IntelliJ", dbeaver: "DBeaver", ssms: "SQL Server", "visual-studio": translate("activity.026bf2b64617") }[activity.provider as "vscode"] ?? activity.provider)}) : game ? translate("activity.476e526adee7") : video?translate("activity.e3f1fb46cae7"):listening?translate("activity.listening"):generic?translate("activity.575a3b4743ee"):translate("activity.007e5ab5ceee",{p0:(activity.provider === "spotify" ? "Spotify" : translate("activity.3b00b32d64af"))})}</small>
         <strong title={activity.name}>{activity.name}</strong>
         {activity.startedAt != null && Number.isFinite(activity.startedAt) && <span className="activity-elapsed" aria-label={translate("activity.8eb5c9eabcfb",{p0:(elapsed)})}>{rich("common.74971f0a4dcd",{p0:(elapsed)})}</span>}
         {activity.artist && <span title={activity.artist}>{activity.artist}</span>}

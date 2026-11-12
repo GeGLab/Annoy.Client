@@ -46,7 +46,7 @@ function ServerTab({ account, server, inst }: { account: Account; server: Server
       >
         <span className="tab-tile">{server.iconUrl ? <img className="server-icon" src={server.iconUrl} alt="" /> : initials(server.name)}</span>
         <span className="rail-label">{server.name}</span>
-        {unread.mention && <span className="tab-badge">{unread.count}</span>}
+        {unread.count > 0 && <span key={unread.count} className={`tab-badge${unread.mention ? " mention" : ""}`}>{unread.count > 99 ? "99+" : unread.count}</span>}
       </button>
     </ServerTabMenu>
   );

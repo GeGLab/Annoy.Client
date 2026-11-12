@@ -167,7 +167,7 @@ export function elementDriver(el: HTMLMediaElement, events: () => UserEvents): {
   return { driver, dispose: () => { handlers.forEach(([name, fn]) => el.removeEventListener(name, fn)); el.pause(); } };
 }
 
-type Slot = "theater" | "music";
+type Slot = "theater" | "music" | "musicB";
 
 /** Drives the YouTube or website view of a slot through the main process. */
 export function viewDriver(slot: Slot, events: () => UserEvents): { driver: Driver; dispose: () => void } {
