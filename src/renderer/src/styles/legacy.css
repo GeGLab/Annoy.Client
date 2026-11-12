@@ -1760,7 +1760,7 @@ img.avatar-face {
 .user-row-admin { gap: 12px; justify-content: flex-start; }
 .row-actions { display: flex; gap: 6px; align-items: center; flex: none; }
 .tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.tag.accent { background: var(--accent-soft); color: var(--accent); }
+.tag.accent { background: var(--accent-soft); color: var(--accent-strong); }
 .tag.danger { background: rgba(242, 85, 75, 0.15); color: var(--danger); }
 .account-row { flex-wrap: wrap; }
 

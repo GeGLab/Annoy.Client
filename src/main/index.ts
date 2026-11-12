@@ -393,7 +393,7 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 560,
     show:false,
-    backgroundColor: "#171621",
+    backgroundColor: "#0e151f",
     title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),

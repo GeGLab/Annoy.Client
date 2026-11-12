@@ -2231,7 +2231,7 @@ test("curated themes preview, follow system mode, reset overrides and persist on
             return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722;
           };
           const ratio = (a: string, b: string) => { const x = lum(style.getPropertyValue(a).trim()), y = lum(style.getPropertyValue(b).trim()); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
-          return [ratio("--text", "--bg-main"), ratio("--accent", "--bg-main"), ratio("--on-accent", "--accent")];
+          return [ratio("--text", "--bg-main"), ratio("--accent-strong", "--bg-main"), ratio("--on-accent", "--accent")];
         });
         for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5);
       }
