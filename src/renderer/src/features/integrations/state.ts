@@ -19,6 +19,8 @@ export interface Connected {
 export interface DmLink {
   owner: string;
   status: "pending" | "active";
+  name?: string;
+  controlId?: string;
 }
 export interface AccountIntegrations {
   v: 1;
@@ -118,7 +120,11 @@ function normalize(raw: unknown): AccountIntegrations {
   }
   for (const [dm, links] of Object.entries(r.dms ?? {}) as [string, any][]) {
     for (const [id, link] of Object.entries(links ?? {}) as [string, any][]) {
-      if (typeof link?.owner === "string" && (link.status === "pending" || link.status === "active")) (out.dms[dm] ??= {})[id] = { owner: link.owner, status: link.status };
+      if (typeof link?.owner === "string" && (link.status === "pending" || link.status === "active")) (out.dms[dm] ??= {})[id] = {
+        owner: link.owner, status: link.status,
+        ...(typeof link.name === "string" && { name: link.name.slice(0, 32) }),
+        ...(typeof link.controlId === "string" && { controlId: link.controlId }),
+      };
     }
   }
   return out;

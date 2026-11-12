@@ -134,6 +134,7 @@ test("a screen share is received only after Assistir, has its own volume, and fi
     // Watching again works, and when Ana stops sharing everything goes away.
     await offer.getByRole("button", { name: "Assistir" }).click();
     await expect(b.page.locator(".stage-card.video.screen video")).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => b.page.locator(".stage-card.video.screen video").evaluate((v: HTMLVideoElement) => v.videoWidth), { timeout: 20_000 }).toBeGreaterThan(0);
     await a.page.evaluate(async () => {
       const c = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
       await c.toggleScreenShare();

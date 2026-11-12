@@ -411,7 +411,7 @@ function createWindow(): void {
   });
   win.webContents.setWindowOpenHandler(({ url, frameName }) => {
     // Media windows are filled by the original renderer; navigation and Node stay disabled.
-    if (url === "about:blank" && frameName.startsWith("annoy-stream:")) {
+    if (url === "about:blank" && (frameName.startsWith("annoy-stream:") || frameName.startsWith("annoy-image:"))) {
       return {
         action: "allow",
         overrideBrowserWindowOptions: {

@@ -21,10 +21,11 @@ import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
-import { DmIntegrationsDialog } from "../../features/integrations/DmIntegrations.tsx";
+import { DmIntegrationsDialog, DmIntegrationRequests } from "../../features/integrations/DmIntegrations.tsx";
 import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
 import { answerDmIntegration, controlText } from "../../features/integrations/dm.ts";
-import { useIntegrations } from "../../features/integrations/state.ts";
+import type { DmLink } from "../../features/integrations/state.ts";
+import { useDmLinks } from "../../features/integrations/dm-links.ts";
 import { useCommandSuggestions } from "../../features/integrations/CommandSuggestions.tsx";
 import { useDmCommandChoices } from "../../features/integrations/command-choices.ts";
 
@@ -253,7 +254,7 @@ function AttachmentView({ attachment }: { attachment: DmAttachment }) {
   );
 }
 
-function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: DmMessage; compact: boolean; me: string; nameOf: (id: string) => string | undefined; replyTo: DmMessage | undefined; onReply: () => void }) {
+function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink }: { message: DmMessage; compact: boolean; me: string; nameOf: (id: string) => string | undefined; replyTo: DmMessage | undefined; onReply: () => void; integrationLink?: DmLink }) {
   const profile = useStore((s) => s.social.profiles[message.senderId]);
   const isPinned=useStore(s=>s.social.threads[message.conversationId]?.pins?.some(p=>p.message.id===message.id)??false);
   const connected=useStore(s=>s.social.status==="ready");
@@ -264,7 +265,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
   const own = message.senderId === me;
   const recipientId = useStore((s) => s.social.dms.find((d) => d.id === message.conversationId)?.recipientId);
   const meta = message.integration;
-  const link = useIntegrations((s) => (meta ? s.account.dms[message.conversationId]?.[meta.id] : undefined));
+  const link = integrationLink;
   const [answering, setAnswering] = useState(false);
   if (meta && meta.op !== "reply") {
     const pending = meta.op === "request" && link?.status === "pending" && link.owner === message.senderId && !message.state;
@@ -414,6 +415,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply }: { message: Dm
 }
 
 function DmConversation({ dmId }: { dmId: string }) {
+  const integrationLinks = useDmLinks(dmId);
   const conversation = useStore((s) => s.social.dms.find((d) => d.id === dmId));
   const thread = useStore((s) => s.social.threads[dmId]);
   const me = useStore((s) => s.social.me);
@@ -516,6 +518,7 @@ function DmConversation({ dmId }: { dmId: string }) {
           <Icon name={muted ? "bellOff" : "bell"} />
         </button>
       </header>
+      <DmIntegrationRequests conversationId={dmId} me={me.id} otherName={title} ready={ready} />
       {pinsOpen&&<div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
         <div className="pins-panel-title"><strong>{translate("chat.dd5705122a58")}</strong><button className="icon-btn tiny" aria-label={translate("chat.0f2cac634ffa")} onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
         <p className="muted small">{translate("social.sharedPins")}</p>
@@ -529,7 +532,7 @@ function DmConversation({ dmId }: { dmId: string }) {
           else setPreviewPin(pin.message.id);
         }}><span><strong>{nameOf(pin.message.senderId)}</strong><small>{formatTime(pin.pinnedAt)}</small></span><span className="pinned-message-content">{pin.message.state==="undecryptable"?translate("social.undecryptable"):pin.message.content||translate("common.e186297c35aa")}</span></button>)}
       </div>}
-      <Dialog open={!!preview} onOpenChange={open=>{if(!open)setPreviewPin(null);}}><DialogContent aria-describedby={undefined}><DialogTitle>{translate("chat.dd5705122a58")}</DialogTitle>{preview&&<DmRow message={preview} compact={false} me={me.id} nameOf={nameOf} replyTo={preview.replyTo?byId.get(preview.replyTo):undefined} onReply={()=>{setReplyTo(preview);setPreviewPin(null);}}/>}</DialogContent></Dialog>
+      <Dialog open={!!preview} onOpenChange={open=>{if(!open)setPreviewPin(null);}}><DialogContent aria-describedby={undefined}><DialogTitle>{translate("chat.dd5705122a58")}</DialogTitle>{preview&&<DmRow message={preview} compact={false} me={me.id} nameOf={nameOf} replyTo={preview.replyTo?byId.get(preview.replyTo):undefined} integrationLink={integrationLinks[preview.integration?.id ?? ""]} onReply={()=>{setReplyTo(preview);setPreviewPin(null);}}/>}</DialogContent></Dialog>
       <div className="messages" ref={scroller}>
         <div className="message-log">
           <div className="channel-start">
@@ -551,7 +554,7 @@ function DmConversation({ dmId }: { dmId: string }) {
                     <span>{formatDay(m.createdAt)}</span>
                   </div>
                 )}
-                <DmRow message={m} compact={compact} me={me.id} nameOf={nameOf} replyTo={m.replyTo ? byId.get(m.replyTo) : undefined} onReply={() => setReplyTo(m)} />
+                <DmRow message={m} compact={compact} me={me.id} nameOf={nameOf} replyTo={m.replyTo ? byId.get(m.replyTo) : undefined} integrationLink={integrationLinks[m.integration?.id ?? ""]} onReply={() => setReplyTo(m)} />
               </div>
             );
           })}

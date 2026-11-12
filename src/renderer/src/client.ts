@@ -36,6 +36,8 @@ interface Live {
 const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
+let voiceAttempt = 0;
+let voiceRecoveryAt = 0;
 /** Voice channel to return to when the connection to its server comes back. */
 let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
@@ -775,11 +777,13 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
+  const attempt = voiceAttempt;
   const gateway = gatewayFor(accountId);
   if (!gateway) return;
   // A server routed through VPNGo: WebRTC may only use the VPN for this call (no UDP outside it).
   const voiceUrl = getState().accounts.find((a) => a.id === accountId)?.url ?? null;
   await vpngoVoice(voiceUrl);
+  if (attempt !== voiceAttempt) return;
   const selfId = getState().instances[accountId]?.user?.id ?? "";
   // The instance says where media flows; both sessions behave the same for the UI.
   const Session = getState().instances[accountId]?.instance?.voiceBackend === "cloudflare" ? CloudflareVoiceSession : VoiceSession;
@@ -790,11 +794,15 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         s.voice.screen = session.isSharing("screen");
       }
     }),
-    () =>
-      toast(
-        translate("common.ac0a92bac0cd"),
-        12000,
-      ),
+    () => {
+      if (voice?.session !== session) return;
+      const retry = Date.now() - voiceRecoveryAt > 10_000;
+      leaveVoice();
+      if (!retry) return void toast(translate("common.ac0a92bac0cd"), 12000);
+      voiceRecoveryAt = Date.now();
+      toast(translate("voice.mediaRecovering"));
+      void joinVoice(accountId, serverId, channelId);
+    },
     accountId,
   );
   voice = { accountId, serverId, session };
@@ -813,12 +821,14 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
     playCallFeedback("join");
     if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
-    if (voice?.session === session) leaveVoice();
+    if (voice?.session !== session) return;
+    leaveVoice();
     toast(translate("common.5ece26b7ec6d",{p0:(err as Error)?.message||(err as Error)?.name||String(err)}));
   }
 }
 
 export function leaveVoice(notifyServer = true): void {
+  voiceAttempt++;
   // Leaving on purpose (or switching) cancels a pending return to the call.
   if (notifyServer) rejoinVoice = null;
   const connected = getState().voice?.status === "connected";
@@ -896,6 +906,7 @@ export async function toggleCamera(): Promise<void> {
     if (session.isSharing("camera")) await session.stopVideo("camera");
     else await session.startVideo("camera", (await savedDevice("camera")) ?? "default");
   } catch (err) {
+    if (voice?.session !== session) return;
     toast(translate("common.c88e21593233",{p0:((err as Error).message)}));
   }
 }
@@ -937,6 +948,7 @@ export async function startScreenShare(sourceId: string | null): Promise<boolean
     updateVoiceSettings();
     return true;
   } catch (err) {
+    if (voice?.session !== session) return false;
     // Cancelling the system picker leaves the previous capture in place.
     if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
     return false;
@@ -956,6 +968,7 @@ export async function updateScreenShareQuality(settings: Pick<Settings, "screenH
     updateVoiceSettings();
     return true;
   } catch (err) {
+    if (voice?.session !== session) return false;
     toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
     return false;
   } finally {

@@ -8,12 +8,13 @@ import { toast } from "../../store.ts";
 import { IntegrationIcon } from "./Setup.tsx";
 import { answerDmIntegration, removeDmIntegration, requestDmIntegration } from "./dm.ts";
 import { loadCatalog, useIntegrations } from "./state.ts";
+import { useDmLinks } from "./dm-links.ts";
 
 /** "Adicionar integração" of a DM: the integrations this account connected, and the ones already in the conversation. */
 export function DmIntegrationsDialog({ conversationId, me, otherName, onClose }: { conversationId: string; me: string; otherName: string; onClose: () => void }) {
   const catalog = useIntegrations((s) => s.catalog);
   const connected = useIntegrations((s) => s.account.connected);
-  const links = useIntegrations((s) => s.account.dms[conversationId]);
+  const links = useDmLinks(conversationId);
   const [busy, setBusy] = useState<string | null>(null);
   useEffect(() => { void loadCatalog(); }, []);
   const rows = catalog.filter((i) => isCallable(i, "dm") && (connected[i.id] || links?.[i.id]));
@@ -48,7 +49,10 @@ export function DmIntegrationsDialog({ conversationId, me, otherName, onClose }:
                       <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void run(integration.id, () => answerDmIntegration(conversationId, integration.id, integration.name, false))}>{translate("integrations.decline")}</Button>
                     </div>
                   ) : link ? (
-                    <Button variant="secondary" size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => removeDmIntegration(conversationId, integration.id, integration.name))}>{translate("integrations.remove")}</Button>
+                    <div className="integration-event-actions">
+                      {link.status === "pending" && mine && <Button size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => requestDmIntegration(conversationId, integration))}>{translate("integrations.resend")}</Button>}
+                      <Button variant="secondary" size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => removeDmIntegration(conversationId, integration.id, integration.name))}>{translate("integrations.remove")}</Button>
+                    </div>
                   ) : (
                     <Button size="sm" loading={busy === integration.id} disabled={!!busy} onClick={() => void run(integration.id, () => requestDmIntegration(conversationId, integration))}>{translate("integrations.add")}</Button>
                   )}
@@ -63,4 +67,27 @@ export function DmIntegrationsDialog({ conversationId, me, otherName, onClose }:
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Keep incoming consent visible even when the original request scrolled out of view. */
+export function DmIntegrationRequests({ conversationId, me, otherName, ready }: { conversationId: string; me: string; otherName: string; ready: boolean }) {
+  const links = useDmLinks(conversationId);
+  const [busy, setBusy] = useState<string | null>(null);
+  const pending = Object.entries(links).filter(([, link]) => link.status === "pending" && link.owner !== me);
+  if (!pending.length) return null;
+  const answer = async (id: string, name: string, accept: boolean) => {
+    setBusy(id);
+    try { await answerDmIntegration(conversationId, id, name, accept); }
+    catch (error) { toast((error as Error).message); }
+    finally { setBusy(null); }
+  };
+  return <div className="integration-requests" role="region" aria-label={translate("integrations.dmTitle")}>
+    {pending.map(([id, link]) => <div className="integration-event" key={id}>
+      <span>{translate("integrations.requestText", { p0: otherName, p1: link.name ?? id })}</span>
+      <span className="integration-event-actions">
+        <Button size="sm" loading={busy === id} disabled={!ready || !!busy} onClick={() => void answer(id, link.name ?? id, true)}>{translate("integrations.accept")}</Button>
+        <Button size="sm" variant="secondary" disabled={!ready || !!busy} onClick={() => void answer(id, link.name ?? id, false)}>{translate("integrations.decline")}</Button>
+      </span>
+    </div>)}
+  </div>;
 }

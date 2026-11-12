@@ -2425,5 +2425,8 @@
   "news.vpngo.title": "VPNGo and SteamProfiler",
   "news.vpngo.body": "With VPNGo, each server can connect through a VPN profile, and that server's voice goes only through the VPN. SteamProfiler shows your Steam profile card on your Annoy profile, if you turn it on.",
   "news.outdated.title": "Update required",
-  "news.outdated.body": "When a server needs a newer Annoy, the app shows \"Update Annoy\" instead of trying to reconnect."
+  "news.outdated.body": "When a server needs a newer Annoy, the app shows \"Update Annoy\" instead of trying to reconnect.",
+  "image.originalFailed": "无法打开原始图片。",
+  "voice.mediaRecovering": "正在重新连接通话的音频和视频…",
+  "integrations.resend": "重新发送邀请"
 }

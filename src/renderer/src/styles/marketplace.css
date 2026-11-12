@@ -73,6 +73,7 @@
 .integration-event { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; color: var(--text-muted); font-size: 0.85714rem; }
 .integration-event > .icon { color: var(--accent); }
 .integration-event-actions { display: flex; gap: 8px; }
+.integration-requests { flex: none; border-bottom: 1px solid var(--border); background: var(--bg-elev); max-height: 25vh; overflow-y: auto; }
 .profile-panel h3 { display: flex; align-items: center; gap: 8px; }
 .profile-panel-image { display: block; max-width: 100%; height: auto; border-radius: 8px; }
 .server-integrations .installed-bot { padding: 14px 0; }
