@@ -490,3 +490,23 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .song-room.lite .song-art { box-shadow: none; }
 .song-room.lite .song-invite-vinyl { display: none; }
 .song-room.lite .song-invite-art { margin-right: 0; }
+
+/* Karaoke: inside the sung line only the words already sung are lit, the current one filling
+   as it is sung. Each word is its own box, so a line wrapping onto two rows reads in order. */
+.lyric-line.active { color: color-mix(in srgb, var(--text) 40%, transparent); background: none; -webkit-background-clip: border-box; background-clip: border-box; }
+/* Every word of the sung line has one look, a fill from 0% to 100% (--p, set as it is sung):
+   no switching between styles, nothing animated, so nothing can blink on the way. The soft edge
+   sits just past the fill, so 0% is all dim and 100% all lit. */
+.lyric-line.active .lyric-word { color: transparent; background: linear-gradient(90deg, var(--text) calc(var(--p, 0%) * 1.14 - 14%), color-mix(in srgb, var(--text) 40%, transparent) calc(var(--p, 0%) * 1.14)); -webkit-background-clip: text; background-clip: text; }
+
+/* Lyrics timing: how they're lined up, and a nudge either way. Quiet until hovered. */
+.song-lyrics-foot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+.song-lyrics-foot > * { pointer-events: auto; }
+.song-lyrics-credit { position: static; }
+.song-sync { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; background: var(--soft); border: 1px solid var(--glass-line); color: var(--text-muted); font-size: 0.72rem; font-weight: 650; opacity: .55; transition: opacity .2s ease; }
+.song-lyrics:hover .song-sync, .song-sync:focus-within, .song-sync.adjusted { opacity: 1; }
+.song-sync button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.song-sync button:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.song-sync-label { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.song-sync.adjusted .song-sync-label { color: var(--text-soft); }
+.song-room.lite .song-sync { display: none; }

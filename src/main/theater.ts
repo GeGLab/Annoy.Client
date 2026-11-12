@@ -238,10 +238,12 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
   ipcMain.on("theater:levels", (event, payload: unknown) => {
     const slot = slotOfSender(event.sender);
     if (!slot || !isMusic(slot) || !payload || typeof payload !== "object") return;
-    const { position, levels } = payload as Record<string, unknown>;
+    const { position, levels, vr, vl } = payload as Record<string, unknown>;
     if (typeof position !== "number" || !Number.isFinite(position) || !Array.isArray(levels) || levels.length > 64) return;
     if (!levels.every((level) => typeof level === "number" && level >= 0 && level <= 255)) return;
-    window?.webContents.send("theater:levels", slot, { position, levels });
+    // How much singing there is, for lining the lyrics up (absent for mono media).
+    const voice = typeof vr === "number" && typeof vl === "number" && Number.isFinite(vr) && Number.isFinite(vl) && Math.abs(vr) <= 60 && vl >= -200 && vl <= 40 ? { vr, vl } : {};
+    window?.webContents.send("theater:levels", slot, { position, levels, ...voice });
   });
   for (const channel of ["theater:status", "theater:user", "theater:ended"]) {
     ipcMain.on(channel, (event, payload: unknown) => {
