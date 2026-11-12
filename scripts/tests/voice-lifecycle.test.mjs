@@ -98,7 +98,7 @@ function setup(backend) {
   if (backend === "builtin") {
     session.device = { rtpCapabilities: {} };
     session.recv = { id: "receive", close() {}, consume: async params => {
-      const consumer = { ...params, track: track(), closed: false, close() { this.closed = true; } };
+      const consumer = { ...params, track: track(), closed: false, paused: false, pause() { this.paused = true; }, resume() { this.paused = false; }, close() { this.closed = true; } };
       consumers.push(consumer); return consumer;
     } };
   } else session.pc = pc;
@@ -106,7 +106,7 @@ function setup(backend) {
 }
 
 for (const backend of ["builtin", "cloudflare"]) {
-  test(`${backend}: watch/stop/watch repeatedly replaces the receiver and preserves microphone playback`, async () => {
+  test(`${backend}: watch/stop/watch keeps a live screen and preserves microphone playback`, async () => {
     const { session, pc, requests } = setup(backend);
     session.handleEvent(announced("mic", "mic"));
     session.handleEvent(announced("screen"));
@@ -115,12 +115,17 @@ for (const backend of ["builtin", "cloudflare"]) {
     const microphone = h.audio[0];
     assert.ok(microphone.srcObject);
     assert.equal(h.tiles.size, 0);
-    let previous;
+    let previous, previousTrack;
     for (let i = 0; i < 3; i++) {
       session.watch("friend"); await flush();
       const current = h.tiles.get("screen").stream;
       assert.notEqual(current, previous, "watch again receives a new live track");
       assert.equal(current.getTracks()[0].readyState, "live");
+      if (previousTrack) {
+        if (backend === "builtin") assert.equal(current.getTracks()[0], previousTrack, "resume reuses the existing receiver track");
+        else assert.notEqual(current.getTracks()[0], previousTrack, "Cloudflare receives a new negotiated track");
+      }
+      previousTrack = current.getTracks()[0];
       previous = current;
       const receiver = pc.transceivers.find(t => !t.stopped && t !== pc.transceivers[0]);
       session.unwatch("friend"); await flush();
@@ -199,9 +204,26 @@ test("builtin: stopping and watching before an old resume reply arrives still re
   session.unwatch("friend"); session.watch("friend"); await flush();
   wait.resolve(); await flush();
   assert.equal(h.tiles.size, 1);
-  assert.equal(consumers.length, 2);
-  assert.equal(consumers[0].closed, true);
-  assert.equal(consumers[1].closed, false);
+  assert.equal(consumers.length, 1);
+  assert.equal(consumers[0].closed, false);
+  assert.equal(consumers[0].paused, false);
+  session.close(false);
+});
+
+test("builtin: older servers without pauseConsumer close and recreate only the screen receiver", async () => {
+  const { session, intercept, consumers, requests } = setup("builtin");
+  intercept(async method => { if (method === "pauseConsumer") throw new Error("Unsupported method"); });
+  session.handleEvent(announced("mic", "mic"));
+  session.handleEvent(announced("screen")); session.watch("friend"); await flush();
+  const microphone = consumers.find(consumer => consumer.kind === "audio");
+  const screen = consumers.find(consumer => consumer.kind === "video");
+  session.unwatch("friend"); await flush();
+  assert.equal(screen.closed, true);
+  assert.equal(microphone.closed, false);
+  assert.ok(requests.some(request => request.method === "closeConsumer" && request.data.consumerId === screen.id));
+  session.watch("friend"); await flush();
+  assert.equal(h.tiles.size, 1);
+  assert.equal(consumers.filter(consumer => consumer.kind === "video").length, 2);
   session.close(false);
 });
 

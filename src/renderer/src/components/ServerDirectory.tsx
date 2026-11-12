@@ -180,7 +180,7 @@ export function ServerDirectory() {
             servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
               <span className="live-directory-card-art"><Scenery/></span>
               <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
-              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</small></span><Icon name="right" size={17} />
+              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{translate("servers.on", { p0: account.instanceName })}</small><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}{server.ownerId === instance?.user?.id && <> · {translate("servers.owner")}</>}</small></span><Icon name="right" size={17} />
             </button>)}</div>
             {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
               : <p className="server-directory-no-results">{translate("common.e0365f8a1ebe")}</p>}

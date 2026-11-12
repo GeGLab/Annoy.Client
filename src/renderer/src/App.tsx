@@ -8,6 +8,7 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import { SongDock } from "./features/channels/PlaybackRooms.tsx";
 import { LazyMotion, MotionConfig } from "framer-motion";
 import { applyTheme } from "./lib/theme.ts";
+import { useUnreadBadge } from "./lib/unread-badge.ts";
 import { TooltipProvider } from "./components/ui/tooltip.tsx";
 import { ChatSkeleton } from "./components/ui/skeleton.tsx";
 import { TitleBar } from "./components/TitleBar.tsx";
@@ -150,6 +151,9 @@ export function App() {
   useUpdateState();
   // The window and tray icon live in the main process; keep them on the chosen icon.
   useEffect(() => { void window.annoy?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
+  // Windows throttles covered apps; during a call that crackles everyone's voice.
+  useEffect(() => { window.annoy?.voiceActive?.(inVoice); }, [inVoice]);
+  useUnreadBadge();
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor, themePreset });

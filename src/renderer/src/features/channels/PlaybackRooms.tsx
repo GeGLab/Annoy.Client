@@ -1,7 +1,7 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { has, Permission, playbackPosition, type Channel, type Message, type PlaybackItem, type ServerState } from "@annoy/protocol";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent } from "react";
 import { apiFor, joinVoice, leaveVoice, openChannel } from "../../client.ts";
 import { displayNameOf } from "../../perms.ts";
 import { toast, useStore } from "../../store.ts";
@@ -124,7 +124,7 @@ function PlaybackFeedback({ playback }: { playback: Playback }) {
   return <div className="playback-feedback error" role="alert"><span>{rich("common.3e66b8012f4a",{p0:(playback.error)})}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? translate("common.5da1f0aee3ad") : translate("common.b9e10688be01")}</button></div>;
 }
 
-function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean }) {
+function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean }) {
   const { state, send } = playback;
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -170,6 +170,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
       {canAdd && (
         <form className="queue-add" onSubmit={add}>
           <input
+            id={song ? songRequestId(channel.id) : undefined}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder={audioOnly ? translate("common.f92e8e941b1d") : translate("common.006f5c9b0031")}
@@ -204,15 +205,17 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly }: { 
           const removable = moderator || item.addedBy === me;
           return (
             <li key={item.id} className={`queue-item${current ? " current" : ""}`}>
-              <span className="queue-index">{current ? <Icon name={state.paused ? "pause" : "play"} size={14} /> : index + 1}</span>
+              <span className="queue-index">{current ? <Icon name={state.paused ? "pause" : "play"} size={14} /> : song ? String(index + 1).padStart(2, "0") : index + 1}</span>
+              {song && <span className="queue-thumb" style={{ "--art-hue": hueOf(item.title) } as CSSProperties} aria-hidden="true">{item.title.trim().charAt(0).toUpperCase() || "♪"}</span>}
               <span className="queue-meta">
                 <strong className="truncate" title={item.url}>
                   {item.title}
                 </strong>
                 <small className="muted truncate">
-                  <Icon name={KIND_ICON[item.kind]} size={12} /> {KIND_LABEL[item.kind]} · {names.get(item.addedBy) ?? translate("common.11bf7e98a3f1")}
+                  <Icon name={KIND_ICON[item.kind]} size={12} /> {KIND_LABEL[item.kind]} · {song ? translate("song.requestedBy", { p0: names.get(item.addedBy) ?? translate("common.11bf7e98a3f1") }) : names.get(item.addedBy) ?? translate("common.11bf7e98a3f1")}
                 </small>
               </span>
+              {song && <QueueDuration id={item.id} />}
               <span className="row-actions">
                 {!current && canAdd && (
                   <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id })}>
@@ -384,6 +387,88 @@ function setVideoSlot(el: HTMLElement | null): void {
   notify();
 }
 
+/** Track lengths, learned from the local player while listening (the room state has none). */
+const durations = new Map<string, number>();
+function rememberDuration(id: string, seconds: number): void {
+  if (!Number.isFinite(seconds) || seconds <= 0 || durations.get(id) === seconds) return;
+  durations.set(id, seconds);
+  notify();
+}
+const useDuration = (id: string | undefined) => useSyncExternalStore(subscribe, () => (id ? durations.get(id) ?? null : null));
+const songRequestId = (channelId: string) => `song-request-${channelId}`;
+/** A stable colour per track, for its generated cover. */
+function hueOf(text: string): number {
+  let h = 0;
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
+}
+
+function QueueDuration({ id }: { id: string }) {
+  const seconds = useDuration(id);
+  return seconds ? <span className="queue-duration">{clock(seconds)}</span> : null;
+}
+
+function SongNowPlaying({ playback, here, canControl, canSkip, names }: { playback: Playback; here: boolean; canControl: boolean; canSkip: boolean; names: Map<string, string> }) {
+  const { state, offset, send } = playback;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const item = currentItem(state);
+  const duration = useDuration(item?.id);
+  const position = state && item ? playbackPosition(state, offset) : 0;
+  const index = state && item ? state.queue.findIndex((entry) => entry.id === item.id) : -1;
+  const playing = !!item && !state?.paused;
+  const requester = item ? names.get(item.addedBy) ?? translate("common.11bf7e98a3f1") : "";
+  return (
+    <div className="song-hero">
+      {here && inView(item) ? (
+        <div className="song-video" ref={setVideoSlot} />
+      ) : (
+        <div className={`song-art${playing && here ? " spinning" : ""}`} style={{ "--art-hue": hueOf(item?.title ?? "") } as CSSProperties} aria-hidden="true">
+          <span className="song-disc"><span className="song-label" /></span>
+        </div>
+      )}
+      <div className="song-info">
+        <span className="song-eyebrow">
+          {item ? (
+            <>
+              {playing && <span className="song-bars" aria-hidden="true"><i /><i /><i /></span>}
+              {state?.paused ? translate("song.paused") : translate("song.nowPlaying")} · {translate("song.requestedBy", { p0: requester })}
+            </>
+          ) : translate("song.nothing")}
+        </span>
+        <h2 className="song-title">{item?.title ?? translate("common.29f1d2c89080")}</h2>
+        {item && <span className="song-subtitle">{KIND_LABEL[item.kind]}{!here ? ` · ${translate("common.d6dd41e50c28")}` : ""}</span>}
+        {item && (
+          <div className="song-progress">
+            <span>{clock(position)}</span>
+            <span className="song-track" role="progressbar" aria-label={translate("song.progress")} aria-valuemin={0} aria-valuemax={duration ? Math.round(duration) : undefined} aria-valuenow={Math.round(position)}>
+              <span style={{ width: duration ? `${Math.min(100, (position / duration) * 100)}%` : "0%" }} />
+            </span>
+            <span>{duration ? clock(duration) : "--:--"}</span>
+          </div>
+        )}
+        <div className="song-actions">
+          {item && state && (
+            <button className="round-btn song-play" disabled={!canControl} onClick={() => void send(state.paused ? { op: "play" } : { op: "pause", position })} title={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")}>
+              <Icon name={state.paused ? "play" : "pause"} size={20} />
+            </button>
+          )}
+          {canControl && <button className="btn song-request" onClick={() => document.getElementById(songRequestId(state?.channelId ?? ""))?.focus()}>{translate("song.request")}</button>}
+          {item && state && (
+            <button className="btn btn-ghost song-skip" disabled={!canSkip} onClick={() => void send({ op: "next" })}>
+              {translate("song.skipOf", { p0: index + 1, p1: state.queue.length })}
+            </button>
+          )}
+          {state && <button className={`chip${state.autoplay ? " on" : ""}`} disabled={!canControl} onClick={() => void send({ op: "autoplay", value: !state.autoplay })}>{translate("common.aaae0f8a9481")}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SongView({ accountId, state, channel, perms }: { accountId: string; state: ServerState; channel: Channel; perms: number }) {
   const playback = usePlayback(accountId, channel.id);
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
@@ -391,8 +476,8 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
   const current = useListening();
   const here = current?.accountId === accountId && current.channelId === channel.id;
   const item = currentItem(playback.state);
-  const [side, setSide] = useState<"queue" | "chat">("queue");
   const canSkip = has(perms, Permission.MANAGE_MESSAGES) || item?.addedBy === me;
+  const queued = playback.state?.queue.length ?? 0;
 
   return (
     <section className="chat song-room">
@@ -407,29 +492,15 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
         )}
       </header>
       <div className="song-body">
-        <div className="song-now">
+        <div className="song-main">
           <PlaybackFeedback playback={playback} />
-          {here && inView(item) ? (
-            <div className="song-video" ref={setVideoSlot} />
-          ) : (
-            <div className="song-cover">
-              <Icon name="music" size={56} />
-              <strong>{item?.title ?? translate("common.29f1d2c89080")}</strong>
-              {!here && item && <span className="muted">{translate("common.d6dd41e50c28")}</span>}
-            </div>
-          )}
-          <Controls playback={playback} canControl={has(perms, Permission.SEND_MESSAGES)} canSkip={canSkip} />
+          <SongNowPlaying playback={playback} here={here} canControl={has(perms, Permission.SEND_MESSAGES)} canSkip={canSkip} names={names} />
+          <h3 className="song-section-title">{translate("song.queue")} · {queued}</h3>
+          <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song />
         </div>
-        <aside className="theater-side">
-          <div className="segmented" role="tablist" aria-label={translate("common.ded83118d934")}>
-            <button role="tab" aria-selected={side === "queue"} className={side === "queue" ? "active" : ""} onClick={() => setSide("queue")}>{rich("common.8396d1b92ce2",{p0:(playback.state?.queue.length ? ` (${playback.state.queue.length})` : "")})}</button>
-            <button role="tab" aria-selected={side === "chat"} className={side === "chat" ? "active" : ""} onClick={() => setSide("chat")}>{translate("common.460b3a7da007")}</button>
-          </div>
-          {side === "queue" ? (
-            <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly />
-          ) : (
-            <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
-          )}
+        <aside className="theater-side song-side" aria-label={translate("song.chat")}>
+          <h3 className="song-section-title">{translate("song.chat")}</h3>
+          <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
         </aside>
       </div>
     </section>
@@ -453,7 +524,7 @@ function SongPlayer({ session }: { session: Listening }) {
       </button>
       <PlaybackFeedback playback={playback} />
       {item && <span className="muted">{clock(position)}</span>}
-      {item && !inView(item) && <video key={item.id} ref={setAudio} className="song-audio" src={apiFor(session.accountId).resolve(item.url)} autoPlay />}
+      {item && !inView(item) && <video key={item.id} ref={setAudio} className="song-audio" src={apiFor(session.accountId).resolve(item.url)} autoPlay onDurationChange={(e) => rememberDuration(item.id, e.currentTarget.duration)} />}
       <button className="icon-btn tiny" title={translate("common.512e5a1c3a9e")} onClick={() => listenTo(null)}>
         <Icon name="x" size={14} />
       </button>

@@ -50,6 +50,10 @@ export class VoiceSession {
   private consuming = new Map<string, symbol>();
   /** People whose screen share we chose to watch. */
   private watching = new Set<string>();
+  /** Screen shares we stopped watching: paused, not torn down, so watching again is instant
+   *  and never waits on a fresh negotiation (which could leave the picture black). */
+  private parked = new Map<string, RemoteMedia>();
+  private mediaStall: ReturnType<typeof setTimeout> | null = null;
   private mixer = new RemoteAudioMixer();
   private micGate: MicGate | null = null;
   private closed = false;
@@ -132,6 +136,7 @@ export class VoiceSession {
     this.watching.add(userId);
     for (const [producerId, entry] of this.available) {
       if (entry.userId !== userId || !isStreamSource(entry.source)) continue;
+      if (this.parked.has(producerId)) { this.unpark(producerId); continue; }
       void this.consume(producerId, entry.userId, entry.source).catch((err: unknown) => {
         if (!this.closed && this.available.has(producerId)) this.unwatch(userId);
         console.warn("consume failed", err);
@@ -148,21 +153,70 @@ export class VoiceSession {
     this.publishOffers();
   }
 
-  /** Stops receiving a screen share track but keeps it on offer. */
+  /** Stops receiving a screen share track but keeps it on offer (paused, ready to resume). */
   private release(producerId: string): void {
     const entry = this.consumers.get(producerId);
     if (!entry) return;
-    this.dropConsumer(producerId, false);
-    // Older servers lack "closeConsumer"; the local close still stops playback.
-    void this.gw.voice("closeConsumer", { consumerId: entry.consumer.id }).catch(() => undefined);
+    this.consumers.delete(producerId);
+    if (entry.audio) entry.audio.pause();
+    else dropTile(producerId);
+    entry.consumer.pause();
+    this.parked.set(producerId, entry);
+    this.publishOffers();
+    void this.gw.voice("pauseConsumer", { consumerId: entry.consumer.id }).catch(() => {
+      // Older servers lack "pauseConsumer": tear it down as before; watching again re-consumes.
+      if (this.parked.get(producerId) !== entry) return;
+      this.parked.delete(producerId);
+      this.closeRemote(entry);
+      void this.gw.voice("closeConsumer", { consumerId: entry.consumer.id }).catch(() => undefined);
+    });
+  }
+
+  /** Watching again: resume the paused consumer; the server asks the sender for a key frame. */
+  private unpark(producerId: string): void {
+    const entry = this.parked.get(producerId);
+    if (!entry || this.closed) return;
+    this.parked.delete(producerId);
+    this.consumers.set(producerId, entry);
+    entry.consumer.resume();
+    if (entry.audio) {
+      entry.audio.muted = this.settings.selfDeaf;
+      entry.amplified?.setVolume(playbackVolume(this.settings, volumeKindOf(entry.source), this.accountId, entry.userId));
+      void this.applySink(entry.audio);
+      void entry.audio.play().catch(() => undefined);
+    }
+    else putTile({ key: producerId, userId: entry.userId, source: entry.source === "screen" ? "screen" : "camera", stream: new MediaStream([entry.consumer.track]), local: false });
+    this.publishOffers();
+    void this.gw.voice("resumeConsumer", { consumerId: entry.consumer.id }).catch(() => {
+      // The paused consumer is gone on the server (e.g. after a reconnect): receive it afresh.
+      if (this.consumers.get(producerId) !== entry) return;
+      this.consumers.delete(producerId);
+      this.closeRemote(entry);
+      void this.consume(producerId, entry.userId, entry.source).catch((err: unknown) => console.warn("consume failed", err));
+    });
+  }
+
+  private closeRemote(entry: RemoteMedia): void {
+    entry.consumer.close();
+    if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
   }
 
 
 
 
   private wireConnect(transport: ms.Transport): void {
+    // A dead media path with a live gateway would leave the call silent (the other side may still
+    // hear us). "failed" ends it at once; "disconnected" gets a short grace to come back by itself.
     transport.on("connectionstatechange", (state) => {
-      if (state === "failed" && !this.closed) this.onMediaFailed();
+      if (this.closed) return;
+      if (state === "connected" || state === "connecting") {
+        if (this.mediaStall) { clearTimeout(this.mediaStall); this.mediaStall = null; }
+      } else if (state === "failed") {
+        if (this.mediaStall) { clearTimeout(this.mediaStall); this.mediaStall = null; }
+        this.onMediaFailed();
+      } else if (state === "disconnected" && !this.mediaStall) {
+        this.mediaStall = setTimeout(() => { this.mediaStall = null; if (!this.closed) this.onMediaFailed(); }, 6_000);
+      }
     });
     transport.on("connect", ({ dtlsParameters }, callback, errback) => {
       this.gw.voice("connectTransport", { transportId: transport.id, dtlsParameters }).then(() => callback(), errback);
@@ -368,6 +422,8 @@ export class VoiceSession {
 
   /** `ended` is false when only we stop receiving it (the share goes on). */
   private dropConsumer(producerId: string, ended = true): void {
+    const parked = this.parked.get(producerId);
+    if (parked && ended) { this.parked.delete(producerId); this.closeRemote(parked); }
     const entry = this.consumers.get(producerId);
     const pending = this.available.get(producerId);
     if (ended) {
@@ -398,10 +454,11 @@ export class VoiceSession {
   close(notifyServer = true): void {
     if (this.closed) return;
     this.closed = true;
+    if (this.mediaStall) { clearTimeout(this.mediaStall); this.mediaStall = null; }
     for (const track of this.capturedTracks) track.stop();
     this.capturedTracks.clear();
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
-    for (const id of [...this.consumers.keys()]) this.dropConsumer(id);
+    for (const id of [...this.consumers.keys(), ...this.parked.keys()]) this.dropConsumer(id);
     this.available.clear();
     this.watching.clear();
     this.mixer.close();

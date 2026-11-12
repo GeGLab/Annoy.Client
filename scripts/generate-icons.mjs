@@ -13,4 +13,9 @@ await Promise.all([
   writeFile(new URL("../src/renderer/public/favicon.svg", import.meta.url), svg),
   writeFile(new URL("../src/renderer/public/icon.png", import.meta.url), render(512)),
 ]);
+// The tray shows the bare glyph (no white tile), one PNG per Windows/Linux scale factor.
+const tray = await readFile(new URL("../src/renderer/src/assets/tray.svg", import.meta.url));
+const renderTray = width => Buffer.from(new Resvg(tray, { fitTo: { mode: "width", value: width } }).render().asPng());
+await Promise.all([[16, ""], [20, "@1.25x"], [24, "@1.5x"], [32, "@2x"], [48, "@3x"]].map(([size, suffix]) =>
+  writeFile(new URL(`../src/renderer/public/tray${suffix}.png`, import.meta.url), renderTray(size))));
 console.log("Annoy icons generated from src/renderer/src/assets/logo.svg");

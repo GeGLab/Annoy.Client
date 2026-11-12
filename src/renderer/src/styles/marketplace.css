@@ -93,3 +93,15 @@
 .dm-composer-wrap > .composer { margin: 0; }
 .integration-message .attachment-image { max-width: min(960px, 100%); }
 .integration-message .attachment-image img { max-height: 860px; }
+
+/* Server directory: the same cards as the integrations store. */
+.server-catalog { margin-top: 4px; }
+.server-listing { min-height: 196px; }
+.server-listing .bot-listing-heading { width: 100%; }
+.server-listing .bot-listing-heading > div { min-width: 0; }
+.server-listing h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.server-listing-icon { width: 56px; height: 56px; overflow: hidden; border-radius: 16px; font-weight: 700; font-size: 1.07143rem; }
+.server-listing-icon img { width: 100%; height: 100%; object-fit: cover; }
+.server-listing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.server-listing-tags > span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+.server-listing-tags .server-listing-ready { color: var(--ok); }

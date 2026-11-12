@@ -22,7 +22,7 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
     secureHttpUrl(url);
     const res = await request(url, { headers: token ? { authorization: `Bearer ${token}` } : {}, redirect: "error", signal: AbortSignal.timeout(10_000) });
     if (res.status === 401 || res.status === 403) throw new SessionRefused(translate("common.e6f8f72dc126"));
-    if (!res.ok) throw new Error(translate("common.e6f8f72dc126"));
+    if (!res.ok) throw new Error(`${translate("common.e6f8f72dc126")} (HTTP ${res.status} ${new URL(url).pathname})`);
     return await res.json() as Record<string, unknown>;
   }
   async function verifyGlobal(token: unknown): Promise<GlobalUser> {

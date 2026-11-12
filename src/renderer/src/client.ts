@@ -37,7 +37,6 @@ const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
 let voiceAttempt = 0;
-let voiceRecoveryAt = 0;
 /** Voice channel to return to when the connection to its server comes back. */
 let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
@@ -390,7 +389,7 @@ export function markServerRead(accountId: string, serverId: string): void {
     void apiFor(accountId).put<ChannelReadState[]>(`/servers/${encodeURIComponent(serverId)}/read-state`, {}).then((states) => patchInstance(accountId, (inst) => {
       for (const state of states) {
         const entry = inst.messages[state.channelId]; if (entry) entry.readState = state;
-        if (state.unread) inst.unread[state.channelId] = state.unread;
+        setUnread(inst, state.channelId, state.unread);
       }
     })).catch((error) => { if (!isCancellation(error)) toast((error as Error).message); });
     return;
@@ -646,8 +645,10 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   if(!direction&&getState().messageFocus?.accountId===accountId&&getState().messageFocus?.channelId===channelId)return;
   if(direction==="newer"&&!inst.instance?.historyWindow){returnToLatest(accountId,channelId);return;}
   const paging=direction===true||direction==="newer";
-  const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
-  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&(!anchor||current.items.some(message=>message.id===anchor.messageId))) return;
+  // Opening a channel or DM always lands on the newest messages (the "new messages" divider still
+  // marks where unread ones start); a cached window that stopped short of the end is reloaded.
+  const anchor:ReturnType<typeof readChatAnchor>=null;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!current.hasMoreAfter) return;
   const sequence=messageEventSequence;
   const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
   messageReads.get(key)?.abort(); messageReads.set(key,controller);
@@ -656,7 +657,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   patchInstance(accountId,i=>{i.messages[channelId]={...current,items:current?.items??[],hasMore:current?.hasMore??true,loading:true,error:null};});
   try {
     const read=!paging&&inst.instance?.historyWindow?await api.get<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,signal):current?.readState;
-    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:anchor?`around=${encodeURIComponent(anchor.messageId)}`:direction!=="latest"&&read?.messageId&&read.unread?.count?`after=${encodeURIComponent(read.messageId)}`:"";
+    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:"";
     let page:MessageWindow;
     try {page=await fetchMessageWindow(accountId,channelId,query,signal);}
     catch(error){if(!anchor||!(error instanceof RequestError)||error.status!==404) throw error;clearChatAnchor(accountId,channelId);query="";page=await fetchMessageWindow(accountId,channelId,"",signal);}
@@ -667,7 +668,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
       i.messages[channelId]={...entry,lastAccessed:Date.now(),items:merged.items,hasMore:(direction==="newer"?entry.hasMore:page.hasMoreBefore)||merged.evictedBefore,hasMoreAfter:(direction===true?entry.hasMoreAfter:page.hasMoreAfter)||merged.evictedAfter,loading:false,error:null,readState:read??null,
         unreadBoundary:paging?entry.unreadBoundary:read?.unread?.count?read.messageId:null,
         initialPosition:paging?entry.initialPosition:query.startsWith("after=")?page.items[0]?.id:null};
-      if(read?.unread) i.unread[channelId]=read.unread;
+      if(read) setUnread(i,channelId,read.unread);
       boundMessages(i,channelId,accountId);
     });
     // Chat requests pins when the channel opens; only refill them when this reload dropped the cache entry.
@@ -695,13 +696,19 @@ export async function jumpToMessage(accountId:string,channelId:string,messageId:
 
 export async function loadReadStates(accountId:string):Promise<void> {
   try { const states=await apiFor(accountId).get<Array<ChannelReadState & {unread:{count:number;mention:boolean}}>>("/users/@me/read-states");
-    patchInstance(accountId,inst=>{ for(const value of states){inst.unread[value.channelId]=value.unread; const entry=inst.messages[value.channelId]; if(entry) entry.readState={channelId:value.channelId,messageId:value.messageId,updatedAt:value.updatedAt};} });
+    patchInstance(accountId,inst=>{ for(const value of states){setUnread(inst,value.channelId,value.unread); const entry=inst.messages[value.channelId]; if(entry) entry.readState={channelId:value.channelId,messageId:value.messageId,updatedAt:value.updatedAt};} });
   } catch { /* Reconnect can retry without blocking READY. */ }
+}
+/** A read state with nothing new (count 0, no mention) clears the channel instead of marking it unread. */
+function setUnread(inst: { unread: Record<string, { count: number; mention: boolean }> }, channelId: string, unread: { count: number; mention: boolean } | null | undefined): void {
+  if (unread === undefined) return; // Older servers leave it out: keep what is known.
+  if (unread && (unread.count > 0 || unread.mention)) inst.unread[channelId] = unread;
+  else delete inst.unread[channelId];
 }
 export async function markChannelRead(accountId:string,channelId:string,messageId:string):Promise<void> {
   const inst=getState().instances[accountId]; if(inst?.status!=="ready" || !inst.instance?.historyWindow || !messageId || (inst.messages[channelId]?.readState?.messageId??"")>=messageId) return;
   try { const state=await apiFor(accountId).put<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,{messageId});
-    patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; if(state.unread) i.unread[channelId]=state.unread; });
+    patchInstance(accountId,i=>{ const entry=i.messages[channelId]; if(entry) entry.readState=state; setUnread(i,channelId,state.unread); });
   } catch { /* Read cursor sync retries when the channel becomes visible again. */ }
 }
 export async function loadPinnedMessages(accountId:string,channelId:string,more=false):Promise<void> {
@@ -771,6 +778,26 @@ export function sendTyping(accountId: string, channelId: string): void {
 
 // Voice --------------------------------------------------------------------
 
+/** Recent automatic call recoveries; a path that keeps failing stops retrying and says so. */
+const voiceRecoveries: number[] = [];
+/** The media path died while the gateway lives (network change, NAT, server media restart):
+ *  rebuild the call in the same channel instead of staying connected in silence. */
+function recoverVoice(session: AnyVoiceSession): void {
+  if (!voice || voice.session !== session) return;
+  const now = Date.now();
+  while (voiceRecoveries.length && now - voiceRecoveries[0]! > 60_000) voiceRecoveries.shift();
+  if (voiceRecoveries.length >= 3) {
+    leaveVoice();
+    return void toast(translate("common.ac0a92bac0cd"), 12000);
+  }
+  voiceRecoveries.push(now);
+  const { accountId, serverId } = voice;
+  const channelId = session.channelId;
+  toast(translate("voice.recovering"));
+  leaveVoice();
+  void joinVoice(accountId, serverId, channelId);
+}
+
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
   rejoinVoice = null;
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
@@ -794,15 +821,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         s.voice.screen = session.isSharing("screen");
       }
     }),
-    () => {
-      if (voice?.session !== session) return;
-      const retry = Date.now() - voiceRecoveryAt > 10_000;
-      leaveVoice();
-      if (!retry) return void toast(translate("common.ac0a92bac0cd"), 12000);
-      voiceRecoveryAt = Date.now();
-      toast(translate("voice.mediaRecovering"));
-      void joinVoice(accountId, serverId, channelId);
-    },
+    () => recoverVoice(session),
     accountId,
   );
   voice = { accountId, serverId, session };
@@ -1174,7 +1193,7 @@ function onEvent(accountId: string, event: GatewayEvent): void {
       return patchInstance(accountId,inst=>{
         if(event.d.userId!==inst.user?.id) return;
         const entry=inst.messages[event.d.state.channelId]; if(entry) entry.readState=event.d.state;
-        if(event.d.state.unread) inst.unread[event.d.state.channelId]=event.d.state.unread;
+        setUnread(inst,event.d.state.channelId,event.d.state.unread);
       });
     case "CHANNEL_PIN_UPDATE":
       return applyMessagePin(accountId,event.d.channelId,event.d.messageId,event.d.message);
