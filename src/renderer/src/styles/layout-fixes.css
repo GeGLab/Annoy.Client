@@ -72,3 +72,10 @@
 @media (prefers-reduced-motion: reduce) {
   .user-control-pair .device-menu-trigger { transition: none; }
 }
+
+/* Loading spinners are status, not decoration: they always turn, also with reduced motion
+   (the global reduced-motion rules would otherwise freeze "connecting" indicators). */
+.icon.lucide-loader-circle { animation: spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .icon.lucide-loader-circle { animation: spin 1.4s linear infinite !important; animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
+}

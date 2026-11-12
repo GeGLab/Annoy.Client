@@ -6,7 +6,7 @@ import { cloud, cloudFetch } from "./cloud.ts";
 import * as dm from "./dm-crypto.ts";
 import * as local from "./local-db.ts";
 import { cloudDevice, displayName, runtime, setSocial, social } from "./runtime.ts";
-import { readDmIntegrationMeta, type CloudDm, type CloudProfile, type DmAttachment, type DmIntegrationMeta, type DmMessage, type DmPayload, type DmPin } from "./types.ts";
+import { readDmIntegrationMeta, readGameInvite, type GameInvite, type CloudDm, type CloudProfile, type DmAttachment, type DmIntegrationMeta, type DmMessage, type DmPayload, type DmPin } from "./types.ts";
 
 /**
  * DMs (TODO item 1.2 and 3.4): encrypted here, delivered by chatannoy, kept on
@@ -89,7 +89,8 @@ async function decrypt(stored: local.StoredMessage): Promise<DmMessage> {
     if (!other) throw new Error("unknown conversation");
     const payload = await dm.openMessage<DmPayload>(await keyFor(other), { conversationId: stored.conversationId, senderId: stored.senderId, clientId: stored.clientId }, stored);
     const integration = readDmIntegrationMeta(payload.integration);
-    return { ...base, content: String(payload.content ?? "").slice(0, 4000), attachments: Array.isArray(payload.attachments) ? payload.attachments.slice(0, 10) : [], replyTo: payload.replyTo ?? null, ...(integration && { integration }) };
+    const invite = readGameInvite(payload.invite);
+    return { ...base, content: String(payload.content ?? "").slice(0, 4000), attachments: Array.isArray(payload.attachments) ? payload.attachments.slice(0, 10) : [], replyTo: payload.replyTo ?? null, ...(integration && { integration }), ...(invite && { invite }) };
   } catch {
     return { ...base, content: "", attachments: [], replyTo: null, state: "undecryptable" };
   }
@@ -228,19 +229,20 @@ export function setDmMessageHook(hook: typeof messageHook): void {
   messageHook = hook;
 }
 
-export async function sendDm(conversationId: string, content: string, files: File[] = [], replyTo: string | null = null, options: { clientId?: string; integration?: DmIntegrationMeta } = {}): Promise<void> {
+export async function sendDm(conversationId: string, content: string, files: File[] = [], replyTo: string | null = null, options: { clientId?: string; integration?: DmIntegrationMeta; invite?: GameInvite } = {}): Promise<void> {
   const me = runtime.me;
   const other = recipientOf(conversationId);
   if (!me || !other) return;
   const clientId = options.clientId ?? newClientId();
   const integration = options.integration;
+  const invite = options.invite;
   const temp = `~${Date.now().toString(36)}${clientId.slice(0, 6)}`;
-  const optimistic: DmMessage = { id: temp, clientId, conversationId, senderId: me, content, attachments: [], replyTo, createdAt: new Date().toISOString(), editedAt: null, state: "sending", ...(integration && { integration }) };
+  const optimistic: DmMessage = { id: temp, clientId, conversationId, senderId: me, content, attachments: [], replyTo, createdAt: new Date().toISOString(), editedAt: null, state: "sending", ...(integration && { integration }), ...(invite && { invite }) };
   upsertMessage(optimistic);
   try {
     const key = await keyFor(other);
     const attachments = await Promise.all(files.map(uploadFile));
-    const payload: DmPayload = { v: 1, content, ...(attachments.length && { attachments }), ...(replyTo && { replyTo }), ...(integration && { integration }) };
+    const payload: DmPayload = { v: 1, content, ...(attachments.length && { attachments }), ...(replyTo && { replyTo }), ...(integration && { integration }), ...(invite && { invite }) };
     const sealed = await dm.sealMessage(key, { conversationId, senderId: me, clientId }, payload);
     const envelope = await cloud<Envelope>("chat", `/v1/dms/${conversationId}/messages`, { body: { device: cloudDevice(), clientId, ...sealed, blobs: attachments.map((a) => a.blobId) } });
     const stored: local.StoredMessage = { id: envelope.messageId, conversationId, senderId: me, clientId, nonce: sealed.nonce, ciphertext: sealed.ciphertext, createdAt: envelope.createdAt, editedAt: null };
@@ -263,7 +265,7 @@ export async function editDm(message: DmMessage, content: string): Promise<void>
   const me = runtime.me;
   const other = recipientOf(message.conversationId);
   if (!me || !other || message.senderId !== me) return;
-  const payload: DmPayload = { v: 1, content, ...(message.attachments.length && { attachments: message.attachments }), ...(message.replyTo && { replyTo: message.replyTo }), ...(message.integration && { integration: message.integration }) };
+  const payload: DmPayload = { v: 1, content, ...(message.attachments.length && { attachments: message.attachments }), ...(message.replyTo && { replyTo: message.replyTo }), ...(message.integration && { integration: message.integration }), ...(message.invite && { invite: message.invite }) };
   const sealed = await dm.sealMessage(await keyFor(other), { conversationId: message.conversationId, senderId: me, clientId: message.clientId }, payload);
   const envelope = await cloud<Envelope>("chat", `/v1/dms/${message.conversationId}/messages/${message.id}`, { method: "PATCH", body: { device: cloudDevice(), clientId: message.clientId, ...sealed } });
   const stored = await local.getMessage(me, message.id);
@@ -287,7 +289,7 @@ export function retryDm(message: DmMessage): void {
     const t = s.threads[message.conversationId];
     if (t) t.items = t.items.filter((m) => m.id !== message.id);
   });
-  void sendDm(message.conversationId, message.content, [], message.replyTo, message.integration ? { clientId: message.clientId, integration: message.integration } : {});
+  void sendDm(message.conversationId, message.content, [], message.replyTo, message.integration || message.invite ? { clientId: message.clientId, ...(message.integration && { integration: message.integration }), ...(message.invite && { invite: message.invite }) } : {});
 }
 
 // --- Files --------------------------------------------------------------------------

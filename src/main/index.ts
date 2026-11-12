@@ -14,7 +14,7 @@ import { SecretStore } from "./secrets.ts";
 import { appendFileSync, existsSync,mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { parseOverlayMenuPick, parseOverlayMenuSpec, type OverlayMenuPick } from "../shared/overlay-menu.ts";
-import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, powerSaveBlocker, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, nativeImage, powerMonitor, powerSaveBlocker, safeStorage, session, shell, Tray, Menu, WebContentsView, type Session } from "electron";
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { windowStateController } from "./window-state.ts";
@@ -175,6 +175,8 @@ function openExternal(raw: string): void {
   try {
     const url = new URL(raw);
     if (["https:", "http:", "mailto:", "ts3server:"].includes(url.protocol)) void shell.openExternal(url.toString());
+    // Game invites: only "launch this Steam game", never other steam:// commands.
+    else if (url.protocol === "steam:" && /^steam:\/\/rungameid\/\d{1,10}$/.test(raw)) void shell.openExternal(raw);
   } catch {
     // Ignore malformed URLs.
   }
@@ -655,6 +657,22 @@ ipcMain.on("voice:active", (event, active: unknown) => {
   if (!authorized(event)) return;
   if (active === true && callBlocker === null) callBlocker = powerSaveBlocker.start("prevent-app-suspension");
   else if (active !== true) releaseCallBlocker();
+});
+// Unread direct messages and mentions stay visible on the taskbar and in the tray until read.
+const pngDataUrl = (value: unknown) => typeof value === "string" && value.length < 200_000 && value.startsWith("data:image/png;base64,") ? value : null;
+ipcMain.on("unread:badge", (event, rawCount: unknown, rawOverlay: unknown, rawTray: unknown) => {
+  if (!fromRenderer(event)) return;
+  const count = typeof rawCount === "number" && Number.isFinite(rawCount) ? Math.max(0, Math.min(9999, Math.floor(rawCount))) : 0;
+  const overlay = count > 0 ? pngDataUrl(rawOverlay) : null, trayDot = count > 0 ? pngDataUrl(rawTray) : null;
+  if (process.platform === "win32" && win && !win.isDestroyed()) {
+    win.setOverlayIcon(overlay ? nativeImage.createFromDataURL(overlay) : null, count > 0 ? translate("desktop.unreadBadge", { p0: count }) : "");
+  } else app.setBadgeCount(count);
+  if (tray && !tray.isDestroyed()) {
+    const dotted = nativeImage.createEmpty();
+    if (trayDot) dotted.addRepresentation({ scaleFactor: 2, dataURL: trayDot });
+    tray.setImage(trayDot && !dotted.isEmpty() ? dotted : nativeImage.createFromPath(appIcon.trayPath()));
+    tray.setToolTip(count > 0 ? `Annoy (${count})` : "Annoy");
+  }
 });
 ipcMain.on("window:flash", event => {
   if (!authorized(event)) return;

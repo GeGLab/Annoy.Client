@@ -130,3 +130,43 @@
 .code-link > svg, .code-link > h2 { justify-self: center; }
 .code-link .field { display: flex; flex-direction: column; gap: 4px; font-size: 0.92857rem; }
 .code-link input { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; color: var(--text); }
+
+/* Music room: now-playing hero, queue below, room chat on the side. */
+.song-main { flex: 1; min-width: 0; overflow-y: auto; padding: 28px 32px 32px; display: flex; flex-direction: column; }
+.song-main > .playback-feedback { margin-bottom: 12px; }
+.song-hero { display: flex; align-items: center; gap: 32px; }
+.song-hero > .song-video { flex: none; width: min(46%, 420px); aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; }
+.song-art { --art: hsl(var(--art-hue, 250) 70% 55%); flex: none; display: grid; place-items: center; width: clamp(160px, 22vw, 220px); aspect-ratio: 1; border-radius: 18px; background: color-mix(in srgb, var(--art) 22%, var(--bg-deep)); box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--art) 70%, transparent); }
+.song-disc { display: grid; place-items: center; width: 74%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, transparent 54%, color-mix(in srgb, var(--art) 35%, #000) 55%, transparent 56%), var(--art); box-shadow: 0 0 0 6px color-mix(in srgb, var(--art) 30%, transparent); }
+.song-label { width: 16%; aspect-ratio: 1; border-radius: 50%; background: var(--bg-deep); }
+.song-art.spinning .song-disc { animation: spin 6s linear infinite; }
+.song-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.song-eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-strong); font-size: 0.71429rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.song-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.song-bars i { width: 3px; height: 100%; border-radius: 1px; background: currentColor; animation: song-bars 900ms ease-in-out infinite alternate; }
+.song-bars i:nth-child(2) { animation-delay: -300ms; }
+.song-bars i:nth-child(3) { animation-delay: -600ms; }
+@keyframes song-bars { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+.song-bars i { transform-origin: bottom; }
+.song-title { margin: 2px 0 0; font-size: clamp(1.8rem, 3.4vw, 2.8rem); font-weight: 750; letter-spacing: -.03em; line-height: 1.08; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.song-subtitle { color: var(--text-muted); font-size: 0.92857rem; }
+.song-progress { display: flex; align-items: center; gap: 10px; margin-top: 14px; max-width: 520px; color: var(--text-muted); font-size: 0.78571rem; font-variant-numeric: tabular-nums; }
+.song-track { position: relative; flex: 1; height: 4px; border-radius: 999px; background: var(--bg-active); overflow: hidden; }
+.song-track > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); transition: width 1s linear; }
+.song-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.song-actions .song-play { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.song-actions .btn { border-radius: 999px; }
+.song-section-title { margin: 32px 0 8px; color: var(--text-muted); font-size: 0.71429rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.song-main .playback-queue { flex: none; }
+.song-main .queue-add { padding: 0 0 12px; border-bottom: 0; }
+.song-main .queue-list { padding: 0; overflow: visible; }
+.song-main .queue-item { gap: 14px; padding: 10px 8px; border-radius: 0; border-bottom: 1px solid var(--border); }
+.song-main .queue-item:hover { border-radius: 8px; }
+.song-main .queue-index { width: 26px; text-align: left; }
+.queue-thumb { --art: hsl(var(--art-hue, 250) 55% 45%); display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 6px; background: var(--art); color: #fff; font-weight: 700; font-size: 0.85714rem; }
+.song-main .queue-meta strong { font-size: 0.92857rem; }
+.song-main .queue-meta small { font-size: 0.78571rem; }
+.queue-duration { flex: none; color: var(--text-muted); font-size: 0.85714rem; font-variant-numeric: tabular-nums; }
+.song-side { padding-top: 0; }
+.song-side > .song-section-title { margin: 16px 16px 4px; }
+@media (max-width: 1100px) { .song-hero { flex-direction: column; align-items: flex-start; } }

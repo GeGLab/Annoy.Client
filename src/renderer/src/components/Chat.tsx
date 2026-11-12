@@ -40,7 +40,7 @@ import { UserProfile } from "./UserProfile.tsx";
 import { ReplyPreview } from "./ReplyPreview.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation, RequestError } from "../../../shared/requests.ts";
-import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
+import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -806,15 +806,13 @@ export function Chat(props: ChatProps) {
   useLayoutEffect(()=>{
     const el=scroller.current;if(!el||focus||!entry||entry.loading||entry.error||!items.length)return;
     const visit=JSON.stringify([draftKey(accountId,channelId),navigation]);if(restoredVisit.current===visit)return;
+    if(entry.hasMoreAfter)return; // the newest messages are still loading
     restoredVisit.current=visit;
-    const saved=readChatAnchor(accountId,channelId);
-    const target=saved?.messageId??entry.initialPosition;
-    const index=target?items.findIndex(message=>message.id===target):-1;
-    if(index>=0){
-      pinned.current=false;positionMessage(target!,saved?.offset??0);return;
-    }
-    if(saved)clearChatAnchor(accountId,channelId);
-    pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
+    clearChatAnchor(accountId,channelId);
+    const bottom=()=>{if(!pinned.current)return;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;};
+    pinned.current=true;bottom();
+    // Virtualized rows are measured after the first paint; settle at the end once they are.
+    requestAnimationFrame(()=>requestAnimationFrame(bottom));
   },[accountId,channelId,navigation,items,entry?.loading,entry?.error,focus]);
 
   // Images can grow after the message list mounts. Follow that growth only

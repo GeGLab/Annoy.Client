@@ -174,10 +174,17 @@ export function ServerDirectory() {
             {page?.cached ? translate("common.a5d5aede1a0c") : ""}
           </p>
           {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
-            servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
-              <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
-              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</small></span><Icon name="right" size={17} />
-            </button>)}</div>
+            servers.length ? <><div className="bot-catalog server-catalog">{servers.map((server) => <article className="bot-listing server-listing" key={server.id}>
+              <div className="bot-listing-heading">
+                <span className="bot-avatar server-listing-icon" aria-hidden="true">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
+                <div><h3>{server.name}</h3><span className="muted small">{translate("servers.on", { p0: account.instanceName })}</span></div>
+              </div>
+              <span className="bot-permission-count server-listing-tags">
+                <span className={ready ? "server-listing-ready" : undefined}>{ready ? <Icon name="check" size={13} /> : <Icon name="clock" size={13} />}{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</span>
+                {server.ownerId === instance?.user?.id && <span><Icon name="crown" size={13} />{translate("servers.owner")}</span>}
+              </span>
+              <Button variant="secondary" onClick={() => void openServer(account.id, server.id)}>{translate("servers.open")}</Button>
+            </article>)}</div>
             {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
               : <p className="server-directory-no-results">{translate("common.e0365f8a1ebe")}</p>}
         </section>;

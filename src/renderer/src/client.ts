@@ -644,8 +644,10 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   if(!direction&&getState().messageFocus?.accountId===accountId&&getState().messageFocus?.channelId===channelId)return;
   if(direction==="newer"&&!inst.instance?.historyWindow){returnToLatest(accountId,channelId);return;}
   const paging=direction===true||direction==="newer";
-  const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
-  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&(!anchor||current.items.some(message=>message.id===anchor.messageId))) return;
+  // Opening a channel or DM always lands on the newest messages (the "new messages" divider still
+  // marks where unread ones start); a cached window that stopped short of the end is reloaded.
+  const anchor:ReturnType<typeof readChatAnchor>=null;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!current.hasMoreAfter) return;
   const sequence=messageEventSequence;
   const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
   messageReads.get(key)?.abort(); messageReads.set(key,controller);
@@ -654,7 +656,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   patchInstance(accountId,i=>{i.messages[channelId]={...current,items:current?.items??[],hasMore:current?.hasMore??true,loading:true,error:null};});
   try {
     const read=!paging&&inst.instance?.historyWindow?await api.get<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,signal):current?.readState;
-    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:anchor?`around=${encodeURIComponent(anchor.messageId)}`:direction!=="latest"&&read?.messageId&&read.unread?.count?`after=${encodeURIComponent(read.messageId)}`:"";
+    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:"";
     let page:MessageWindow;
     try {page=await fetchMessageWindow(accountId,channelId,query,signal);}
     catch(error){if(!anchor||!(error instanceof RequestError)||error.status!==404) throw error;clearChatAnchor(accountId,channelId);query="";page=await fetchMessageWindow(accountId,channelId,"",signal);}
@@ -775,6 +777,23 @@ export function sendTyping(accountId: string, channelId: string): void {
 
 // Voice --------------------------------------------------------------------
 
+/** Recent automatic call recoveries; a path that keeps failing stops retrying and says so. */
+const voiceRecoveries: number[] = [];
+/** The media path died while the gateway lives (network change, NAT, server media restart):
+ *  rebuild the call in the same channel instead of staying connected in silence. */
+function recoverVoice(session: AnyVoiceSession): void {
+  if (!voice || voice.session !== session) return;
+  const now = Date.now();
+  while (voiceRecoveries.length && now - voiceRecoveries[0]! > 60_000) voiceRecoveries.shift();
+  if (voiceRecoveries.length >= 3) return void toast(translate("common.ac0a92bac0cd"), 12000);
+  voiceRecoveries.push(now);
+  const { accountId, serverId } = voice;
+  const channelId = session.channelId;
+  toast(translate("voice.recovering"));
+  leaveVoice();
+  void joinVoice(accountId, serverId, channelId);
+}
+
 export async function joinVoice(accountId: string, serverId: string, channelId: string): Promise<void> {
   rejoinVoice = null;
   if (getState().instances[accountId]?.status !== "ready") return void toast(translate("common.33b1ea205913"));
@@ -796,11 +815,7 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
         s.voice.screen = session.isSharing("screen");
       }
     }),
-    () =>
-      toast(
-        translate("common.ac0a92bac0cd"),
-        12000,
-      ),
+    () => recoverVoice(session),
     accountId,
   );
   voice = { accountId, serverId, session };
