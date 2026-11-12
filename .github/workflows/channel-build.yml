@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   version:
-    if: vars.ANNOY_CHANNELS == 'on'
+    if: vars.ANNOY_CHANNELS == 'on' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
@@ -41,7 +41,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ inputs.ref || 'main' }}
+      - name: Require source already merged into main
+        run: git merge-base --is-ancestor HEAD origin/main
       - id: v
         shell: bash
         env:

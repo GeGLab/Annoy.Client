@@ -8,3 +8,5 @@
 - Changes to the interface must include the intended layout and navigation, connected to real application data. A palette-only change does not deliver the requested redesign.
 - Keep published version tags intact. Use the next version for corrections.
 - User requirement: finish delivery PRs autonomously. Resolve conflicts, require green CI for the final revision, merge the PR and close superseded PRs without asking for another confirmation. Leave a PR unmerged only when explicitly requested or when an actual external blocker prevents completion; explain that blocker.
+
+- Releases must be automatic and only AFTER the delivery PR is merged into the default main/master branch and its merged source passes CI. Never publish an open PR or reuse a published release branch for new work.
