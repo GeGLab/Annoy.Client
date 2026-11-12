@@ -22,7 +22,7 @@ export function SearchButton({ placement = "titlebar" }: { placement?: "titlebar
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [accountId, view, modal, placement]);
-  return accountId && view.kind !== "service" && (placement === "members" ? view.kind === "server" : view.kind !== "server") ? (
+  return accountId && view.kind !== "service" && (placement === "members" ? view.kind === "server" : true) ? (
     <button className="titlebar-search" onClick={open} aria-label={translate("common.fd3cfa0ab6b4")}>
       <Search size={14} />
       <span>{view.kind === "server" ? translate("common.f995fa5ca4fd") : translate("common.a85a80ba87f5")}</span>

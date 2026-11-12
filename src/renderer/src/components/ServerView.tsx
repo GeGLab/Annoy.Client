@@ -1,3 +1,4 @@
+import { CommunityCover, CommunitySummary, CommunityWelcome, CommunityPulse } from "../features/redesign/LiveExperience.tsx";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import {FullProfileButton} from "./FullProfile.tsx";
@@ -242,9 +243,8 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
     <ResizablePanel panel="channels" otherVisible={state.channels.some((c) => c.id === activeId && c.type === "text")}>
       <DropdownMenu open={menu} onOpenChange={setMenu}>
         <DropdownMenuTrigger asChild>
-          <button className="channels-header server-menu-trigger" aria-label={translate("common.78ef0e3d7cfb",{p0:(state.server.name)})}>
-            <span className="truncate">{state.server.name}</span>
-            <Icon name="chevron" size={16} />
+          <button className="channels-header server-menu-trigger live-community-cover" aria-label={translate("common.78ef0e3d7cfb",{p0:(state.server.name)})}>
+            <CommunityCover state={state}/>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="server-menu" align="start">
@@ -284,18 +284,17 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <CommunitySummary accountId={accountId} state={state}/>
       <ul className="channel-scroll">
-        {/* Loja de bots temporariamente oculta.
         <li>
           <button
             className="channel server-bot-link"
             onClick={() => navigate({ kind: "marketplace", accountId, serverId: state.server.id })}
           >
             <Icon name="bot" size={17} />
-            <span className="channel-name">Bots do servidor</span>
+            <span className="channel-name">{translate("redesign.communityApps")}</span>
           </button>
         </li>
-        */}
         {loose.map((c) => (
           <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} />
         ))}
@@ -547,6 +546,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
     );
   return (
     <ResizablePanel panel="members" otherVisible>
+      <CommunityPulse accountId={accountId} state={state} me={me}/>
       <div className="member-search-slot"><SearchButton placement="members" /></div>
       <div className="member-directory-search">
         <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.61fd3b555f75")} aria-label={translate("common.fb0fd14d5bbb")} />
@@ -653,6 +653,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           title={channel.name}
           icon="hash"
           topic={channel.topic}
+          introduction={<CommunityWelcome accountId={accountId} state={state}/>}
           canSend={has(perms, Permission.SEND_MESSAGES)}
           canAttach={has(perms, Permission.ATTACH_FILES)}
           canModerate={has(perms, Permission.MANAGE_MESSAGES)}

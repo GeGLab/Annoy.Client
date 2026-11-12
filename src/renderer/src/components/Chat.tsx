@@ -99,6 +99,7 @@ interface ChatProps {
   channelOf?: NameOf;
   mentionables: Mentionable[];
   headerExtra?: ReactNode;
+  introduction?: ReactNode;
 }
 
 function Attachments({ accountId, message }: { accountId: string; message: Message }) {
@@ -932,6 +933,7 @@ export function Chat(props: ChatProps) {
         {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
         {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>{translate("chat.d4d0696420fd")}</button>}
       </div>}
+      {props.introduction}
       <ConnectionNotice accountId={accountId} />
       <RetentionNotice accountId={accountId} channelId={channelId} />
       <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>

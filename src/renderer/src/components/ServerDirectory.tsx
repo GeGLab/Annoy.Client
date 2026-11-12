@@ -1,3 +1,5 @@
+import { DirectoryWelcome } from "../features/redesign/LiveExperience.tsx";
+import { Scenery } from "../features/redesign/Scenery.tsx";
 import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
@@ -124,7 +126,8 @@ export function ServerDirectory() {
         <p>{translate("common.0e457eca5933")}</p></div>
       <Button variant="secondary" onClick={() => navigate({ kind: "home", accountId: accounts[0]?.id ?? null, dmId: null })}>{rich("common.81f329048e3d",{p0:(<Icon name="home" size={16} />)})}</Button>
     </header>
-    <div className="server-directory-tools">
+    <DirectoryWelcome/>
+      <div className="server-directory-tools">
       <label className="server-directory-search"><Icon name="search" size={17} /><span className="sr-only">{translate("common.b408dd0fad7b")}</span>
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.f9b06fce2da3")} />
       </label>
@@ -175,6 +178,7 @@ export function ServerDirectory() {
           </p>
           {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
             servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
+              <span className="live-directory-card-art"><Scenery/></span>
               <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
               <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</small></span><Icon name="right" size={17} />
             </button>)}</div>

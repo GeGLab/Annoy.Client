@@ -1,3 +1,5 @@
+import { FriendsDashboard, PersonalHeading } from "../features/redesign/LiveExperience.tsx";
+import { Scenery } from "../features/redesign/Scenery.tsx";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { Input } from "./ui/input.tsx";
@@ -91,7 +93,12 @@ function Friends({ accountId }: { accountId: string }) {
       <header className="chat-header">
         <Icon name="users" size={20} />
         <h1>{translate("common.bead8677698a")}</h1>
-        <div className="tabs inline">
+
+      </header>
+      <ConnectionNotice accountId={accountId} />
+      <div className="friends">
+        <FriendsDashboard accountId={accountId} onAddFriend={() => setTab("add")}/>
+        <div className="tabs inline live-friends-filters">
           {(["online", "all", "pending"] as const).map((t) => (
             <button key={t} className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
               {t === "online" ? translate("common.0d21bd52022c") : t === "all" ? translate("common.bd02b9a7d71d") : translate("common.7c091a838d93")}
@@ -102,9 +109,6 @@ function Friends({ accountId }: { accountId: string }) {
           ))}
           <button className={tab === "add" ? "tab tab-add active" : "tab tab-add"} onClick={() => setTab("add")}>{translate("common.fcaaf1906cc6")}</button>
         </div>
-      </header>
-      <ConnectionNotice accountId={accountId} />
-      <div className="friends">
         {tab === "add" ? (
           <form className="add-friend" onSubmit={add}>
             <h3>{translate("common.fcaaf1906cc6")}</h3>
@@ -149,6 +153,7 @@ export function WelcomeMain({ onAddFriend }: { onAddFriend?: () => void } = {}) 
           <Icon name="home" size={18} />
           <span>{translate("common.325dfc37c9ba")}</span>
         </header>
+        <Scenery className="live-first-run-art"/>
         <div className="welcome-content">
           <Brand size={72} />
           <h1>{translate("common.34bf61529596")}<br />
@@ -219,6 +224,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
   return (
     <div className="server-view">
       <ResizablePanel panel="channels" reservedWidth={dm && other && settings.dmProfileOpen ? 320 : 0}>
+        <PersonalHeading/>
         <header className="channels-header static">
           {accounts.length > 1 ? (
             <Select

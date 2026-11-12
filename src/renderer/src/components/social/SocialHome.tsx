@@ -1,3 +1,4 @@
+import { FriendsDashboard, PersonalHeading } from "../../features/redesign/LiveExperience.tsx";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
@@ -162,7 +163,12 @@ function Friends({ initialTab = "online" }: { initialTab?: Tab }) {
       <header className="chat-header">
         <Icon name="users" size={20} />
         <h1>{translate("social.friends")}</h1>
-        <div className="tabs inline">
+
+      </header>
+      {status !== "ready" && <div className="connection-notice" role="status">{status === "connecting" ? translate("social.connecting") : translate("social.cloudOffline")}</div>}
+      <div className="friends">
+        <FriendsDashboard onAddFriend={() => setTab("add")}/>
+        <div className="tabs inline live-friends-filters">
           {(["online", "all", "pending"] as const).map((t) => (
             <button key={t} className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
               {t === "online" ? translate("social.online") : t === "all" ? translate("social.all") : translate("social.pending")}
@@ -173,9 +179,6 @@ function Friends({ initialTab = "online" }: { initialTab?: Tab }) {
             {translate("social.addFriend")}
           </button>
         </div>
-      </header>
-      {status !== "ready" && <div className="connection-notice" role="status">{status === "connecting" ? translate("social.connecting") : translate("social.cloudOffline")}</div>}
-      <div className="friends">
         {tab === "add" ? (
           <form className="add-friend" onSubmit={submit}>
             <h3>{translate("social.addFriend")}</h3>
@@ -645,6 +648,7 @@ export function SocialHome({ dmId }: { dmId: string | null }) {
   return (
     <div className="server-view">
       <ResizablePanel panel="channels">
+        <PersonalHeading/>
         <header className="channels-header static">
           <span className="truncate">{translate("social.homeTitle")}</span>
           <Icon name="message" size={18} />

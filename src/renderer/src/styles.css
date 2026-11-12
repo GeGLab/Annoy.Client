@@ -14,6 +14,7 @@
 @import "./styles/channels.css" layer(components);
 @import "./styles/cloud-social.css" layer(components);
 @import "./styles/accessibility.css" layer(components);
+@import "./styles/redesign.css";
 @source "./";
 @custom-variant dark (&:where(.dark, .dark *));
 

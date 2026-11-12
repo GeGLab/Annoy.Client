@@ -4,7 +4,7 @@ const icons = { eyeOff: EyeOff, globe: Globe, pin: Pin, pinOff: PinOff, smile: S
 export type IconName = keyof typeof icons;
 
 // Named imports let Vite discard the rest of Lucide's catalog.
-export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+export function Icon({ name, size = 18, className = "" }: { name: IconName; size?: number; className?: string }) {
   const Component = icons[name];
-  return <Component className="icon" size={size} strokeWidth={1.75} aria-hidden />;
+  return <Component className={`icon ${className}`} size={size} strokeWidth={1.75} aria-hidden />;
 }

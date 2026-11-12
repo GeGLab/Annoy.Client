@@ -285,6 +285,58 @@ async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
   await expect(page.locator(".chat-header h1")).toHaveText("geral");
 }
 
+test("live redesign opens real community invites, activity conversations and discovered servers", async () => {
+  const { page, close } = await launch();
+  const invites: unknown[] = [];
+  try {
+    await seed(page);
+    await page.route("https://experience.test/api/servers/server/invites", route => {
+      invites.push(route.request().postDataJSON());
+      return route.fulfill({ json: { code: "real-invite", serverId: "server" } });
+    });
+    await expect(page.locator(".live-community-identity")).toContainText("Comunidade de teste");
+    await expect(page.locator(".live-community-summary")).toContainText("1 online");
+    await expect(page.locator(".live-room-card")).toContainText("Sala de conversa");
+    await expect(page.locator(".live-room-card")).toContainText("Puxa uma cadeira");
+    await page.locator(".live-conversation-welcome").getByRole("button", { name: "Traga sua galera" }).click();
+    await page.getByRole("button", { name: "Gerar convite", exact: true }).click();
+    await expect(page.locator(".invite-code")).toHaveText("real-invite");
+    expect(invites).toEqual([{ expiresInHours: 168, maxUses: null }]);
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: join(capture, "redesign-live-community.png") });
+    await page.getByRole("button", { name: "Ocultar boas-vindas" }).click();
+    await expect(page.locator(".live-conversation-welcome")).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Conversar em #geral" })).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        const friend = { id: "friend", username: "friend", displayName: "Amiga conectada", avatarUrl: null };
+        inst.relationships = [{ user: friend, status: "friend" }];
+        inst.presences.friend = "online";
+        inst.activities.friend = [{ kind: "game", provider: "steam", name: "Jogo em andamento" }];
+        inst.dms = [{ id: "real-dm", recipients: [friend] }];
+        inst.messages["real-dm"] = { items: [], loading: false, hasMore: false };
+      });
+      navigate({ kind: "home", accountId: "test", dmId: null });
+    });
+    await expect(page.locator(".live-friends-greeting")).toContainText("Pessoa de teste");
+    await expect(page.locator(".live-activity-game")).toContainText("Jogo em andamento");
+    await expect(page.locator(".live-online-pill")).toHaveText("1 online");
+    await page.screenshot({ path: join(capture, "redesign-live-friends.png") });
+    await page.locator(".live-activity-game").click();
+    await expect(page.locator(".chat-header h1")).toHaveText("Amiga conectada");
+    await page.route("https://experience.test/api/servers?**", route => route.fulfill({ json: { servers: [{ id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null }], total: 1, nextCursor: null } }));
+    await page.locator(".directory-tab:not(.store-tab)").click();
+    await expect(page.locator(".live-directory-welcome")).toBeVisible();
+    await expect(page.locator(".server-directory-card")).toHaveCount(1);
+    await page.screenshot({ path: join(capture, "redesign-live-directory.png") });
+    await page.locator(".server-directory-card").click();
+    await expect(page.locator(".chat-header h1")).toHaveText("geral");
+  } finally { await close(); }
+});
+
 function silence() {
   const result = Buffer.alloc(96044);
   result.write("RIFF", 0);
@@ -1778,7 +1830,7 @@ test("both voice backends send screen audio separately and explain incompatible 
 });
 
 
-test("server search sits above group activities and server editing saves image drafts", async () => {
+test("global search keeps server context and server editing saves image drafts", async () => {
   const {page,close}=await launch(); const writes:string[]=[];
   try {
     await seed(page);
@@ -1786,8 +1838,16 @@ test("server search sits above group activities and server editing saves image d
       const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"https://experience.test/image.png",startedAt:Date.now()-200000}];});
     });
-    await expect(page.locator(".titlebar .titlebar-search")).toHaveCount(0);
-    await expect(page.locator(".member-search-slot").getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toHaveCount(1);
+    const searches: string[] = [];
+    await page.route("https://experience.test/api/search/messages?**", route => { searches.push(route.request().url()); return route.fulfill({ json: { items: [], nextCursor: null } }); });
+    await page.locator(".titlebar .titlebar-search").click();
+    await page.getByRole("textbox", { name: "Buscar mensagens", exact: true }).fill("conversa");
+    await page.getByRole("textbox", { name: "Buscar mensagens", exact: true }).press("Enter");
+    await expect.poll(() => searches.length).toBe(1);
+    expect(new URL(searches[0]!).searchParams.get("serverId")).toBe("server");
+    expect(new URL(searches[0]!).searchParams.get("q")).toBe("conversa");
+    await page.keyboard.press("Escape");
     await expect(page.locator(".friend-activities")).toContainText("Jogo do grupo");
     await expect(page.locator(".friend-activities")).toContainText("Atividades do grupo");
     await page.screenshot({path:join(capture,"group-search-dark.png")});
