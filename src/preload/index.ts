@@ -10,12 +10,15 @@ import type { OverlayMenuPick, OverlayMenuSpec } from "../shared/overlay-menu.ts
 import type { IntegrationRequest, IntegrationResponse } from "../main/integrations/http.ts";
 import type { VpngoApplied, VpngoRoutes, VpngoStatus } from "../main/integrations/vpngo.ts";
 
-export type TheaterSlot = "theater" | "music";
+export type TheaterSlot = "theater" | "music" | "musicB";
+export type DjPreset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser";
 export interface TheaterEvents {
   status: { position: number; duration: number | null; paused: boolean; ended: boolean };
   user: { action: "play" | "pause" | "seek"; position: number };
   ended: { position: number };
   title: string;
+  /** Song rooms: the music's spectrum (0–255 per band) for the visualizer. */
+  levels: { position: number; levels: number[] };
 }
 
 const bridge = {
@@ -125,12 +128,15 @@ const bridge = {
   },
   /** Theater and song rooms: YouTube and websites in a native view, ads blocked. */
   theater: {
-    open: (slot: TheaterSlot, url: string, kind: string) => ipcRenderer.send("theater:open", slot, url, kind),
+    /** `start` begins mid-media (joining a room mid-song); `hold` loads paused and silent for a DJ transition. */
+    open: (slot: TheaterSlot, url: string, kind: string, options?: { start?: number; hold?: boolean }) => ipcRenderer.send("theater:open", slot, url, kind, options ?? {}),
     close: (slot: TheaterSlot) => ipcRenderer.send("theater:close", slot),
     /** Window coordinates; an empty rect hides the view. */
     setBounds: (slot: TheaterSlot, rect: { x: number; y: number; width: number; height: number }) => ipcRenderer.send("theater:bounds", slot, rect),
-    control: (slot: TheaterSlot, command: { action: "play" | "pause" | "seek"; position?: number }) => ipcRenderer.send("theater:control", slot, command),
+    control: (slot: TheaterSlot, command: { action: "play" | "pause" | "seek"; position?: number } | { action: "volume"; volume: number } | { action: "levels"; on: boolean } | { action: "fx"; preset: DjPreset; role: "in" | "out"; seconds: number }) => ipcRenderer.send("theater:control", slot, command),
     openExternal: (slot: TheaterSlot) => ipcRenderer.send("theater:open-external", slot),
+    /** Cover, album and lyrics of a song room's track, looked up by the main process. */
+    songInfo: (url: string, title: string, duration: number | null) => ipcRenderer.invoke("song:info", url, title, duration) as Promise<import("../shared/song-info.ts").SongInfo | null>,
     on<K extends keyof TheaterEvents>(name: K, listener: (slot: TheaterSlot, payload: TheaterEvents[K]) => void): () => void {
       const handler = (_e: IpcRendererEvent, slot: TheaterSlot, payload: TheaterEvents[K]) => listener(slot, payload);
       ipcRenderer.on(`theater:${name}`, handler);

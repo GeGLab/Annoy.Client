@@ -86,3 +86,7 @@
 @media (prefers-reduced-motion: reduce) {
   .icon.lucide-loader-circle { animation: spin 1.4s linear infinite !important; animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
 }
+
+/* Server tabs: every unread message counts in red, not only mentions, so news is obvious at a glance. */
+.tab-badge { color: #fff; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+.tab-item .tab-badge { animation: unread-message 180ms var(--ease); }

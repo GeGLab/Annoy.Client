@@ -197,6 +197,8 @@ export interface AppState {
   chatNavigation: number;
   messageFocus: { accountId: string; channelId: string; messageId: string } | null;
   desktopActivity: import("../../shared/activity.ts").DesktopActivitySnapshot | null;
+  /** What this user is listening to in a song room, shared like any other activity. */
+  songActivity: import("@annoy/protocol").UserActivity | null;
   /** The signed-in Annoy account, if any (keys stay in global.ts, never in the store). */
   global: GlobalAccount | null;
   /** Friends, DMs and status of the Annoy account, from the Annoy cloud (social/). Never persisted. */
@@ -359,6 +361,7 @@ let state: AppState = {
   chatNavigation: 0,
   messageFocus: null,
   desktopActivity: null,
+  songActivity: null,
   global: null,
   social: emptySocial(),
 };

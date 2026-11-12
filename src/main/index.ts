@@ -18,10 +18,11 @@ import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, nativeImage, p
 import { sitesFor, type Service } from "../shared/services.ts";
 import { startUpdater } from "./updater.ts";
 import { windowStateController } from "./window-state.ts";
-import { allowDevOriginForCloud } from "./dev-cors.ts";
+import { allowDevOriginForRemotes } from "./dev-cors.ts";
 import { registerActivity } from "./activity/index.ts";
 import { createAppAccess, SessionRefused } from "./app-access.ts";
 import { registerTheater, closeAllTheater } from "./theater.ts";
+import { registerSongInfo } from "./song-info.ts";
 import { startScreenAudio, stopScreenAudio, stopScreenAudioNow } from "./screen-audio-linux.ts";
 
 const mediaWindowIds = new Set<number>();
@@ -104,6 +105,7 @@ async function authenticatedMainFetch(input:Parameters<typeof fetch>[0],init?:Re
 const fromRenderer = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
   trustedRenderer(event,win);
 const authorized = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => fromRenderer(event) && appAccess.getState().allowed;
+registerSongInfo(ipcMain, authorized);
 const stopDownloads=registerPrivateDownload(()=>win,authorized,authenticatedMainFetch);
 app.on("before-quit",stopDownloads);
 registerIntegrationHttp(ipcMain,authorized);
@@ -398,9 +400,9 @@ function showNativeMenu(params: Electron.ContextMenuParams): void {
 
 function createWindow(): void {
   configureSession(session.defaultSession, true);
-  // `npm run dev` only: the Vite origin isn't on the production cloud's CORS allowlist.
+  // `npm run dev` only: the Vite origin isn't on the CORS allowlist of the production cloud or instances.
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL)
-    allowDevOriginForCloud(session.defaultSession, new URL(process.env.ELECTRON_RENDERER_URL).origin, [authUrl, ...Object.values(cloudUrls)]);
+    allowDevOriginForRemotes(session.defaultSession, new URL(process.env.ELECTRON_RENDERER_URL).origin);
   const windowState = windowStateController({ width: 940, height: 560 });
   const { initial } = windowState;
   win = new BrowserWindow({
