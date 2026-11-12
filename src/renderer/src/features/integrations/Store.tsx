@@ -1,5 +1,7 @@
 import { isCallable, type StoreIntegration } from "@annoy/protocol";
 import { useEffect, useMemo, useState } from "react";
+import { useStore } from "../../store.ts";
+import Marketplace from "../bots/Marketplace.tsx";
 import { localizationPreferences, t as translate } from "../../../../shared/localization/index.ts";
 import { Icon } from "../../components/ui.tsx";
 import { Button } from "../../components/ui/button.tsx";
@@ -73,6 +75,13 @@ function Integrations({ query }: { query: string }) {
 }
 
 export default function Store() {
+  const view = useStore(s => s.view);
+  return view.kind === "marketplace" && view.accountId && view.serverId
+    ? <Marketplace accountId={view.accountId} serverId={view.serverId} />
+    : <GlobalStore />;
+}
+
+function GlobalStore() {
   const [tab, setTab] = useState<Tab>("integrations");
   const [query, setQuery] = useState("");
   return (

@@ -51,10 +51,10 @@ function createTray(): void {
   // "close to tray" only decides what the window's close button does.
   if (!trayCapable) {
     tray?.destroy();tray=null;
-    if(win&&!win.isVisible())restoreWindow();
+    if(win&&!win.isVisible()&&!win.isMinimized())restoreWindow();
     return;
   }
-  if(!tray){try{tray = new Tray(appIcon.trayPath());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
+  if(!tray){try{tray = new Tray(appIcon.trayPath());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;if(win&&!win.isVisible()&&!win.isMinimized())restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
@@ -412,7 +412,7 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 560,
     show:false,
-    backgroundColor: "#171621",
+    backgroundColor: "#0e151f",
     title: translate("desktop.7cd80ae96251"),
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 14, y: 12 } } : { frame: false }),
@@ -430,7 +430,7 @@ function createWindow(): void {
   });
   win.webContents.setWindowOpenHandler(({ url, frameName }) => {
     // Media windows are filled by the original renderer; navigation and Node stay disabled.
-    if (url === "about:blank" && frameName.startsWith("annoy-stream:")) {
+    if (url === "about:blank" && (frameName.startsWith("annoy-stream:") || frameName.startsWith("annoy-image:"))) {
       return {
         action: "allow",
         overrideBrowserWindowOptions: {

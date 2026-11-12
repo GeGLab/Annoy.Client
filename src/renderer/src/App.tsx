@@ -221,7 +221,7 @@ export function App() {
 
   return (
     <MotionConfig reducedMotion="user"><LazyMotion features={motionFeatures} strict><TooltipProvider delayDuration={300}>
-    <div className={`app bar-${barPosition}`}>
+    <div className={`app live-redesign bar-${barPosition}`}>
       <TitleBar />
       {!access ? <AuthGate /> : <>
       <WorkspaceActivity />

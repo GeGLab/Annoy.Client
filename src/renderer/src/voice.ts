@@ -45,15 +45,14 @@ export class VoiceSession {
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
   private consumers = new Map<string, RemoteMedia>();
-  /** Screen shares (picture and sound) announced but not received: watching is opt-in. */
-  private pendingStreams = new Map<string, { userId: string; source: MediaSource }>();
+  /** Announcements survive setup and playback, until the producer actually ends. */
+  private available = new Map<string, { userId: string; source: MediaSource }>();
+  private consuming = new Map<string, symbol>();
   /** People whose screen share we chose to watch. */
   private watching = new Set<string>();
   /** Screen shares we stopped watching: paused, not torn down, so watching again is instant
    *  and never waits on a fresh negotiation (which could leave the picture black). */
   private parked = new Map<string, RemoteMedia>();
-  /** Producers being set up: the NEW_PRODUCER event and the joining snapshot can race. */
-  private consuming = new Set<string>();
   private mediaStall: ReturnType<typeof setTimeout> | null = null;
   private mixer = new RemoteAudioMixer();
   private micGate: MicGate | null = null;
@@ -80,6 +79,7 @@ export class VoiceSession {
       selfMute: this.settings.selfMute,
       selfDeaf: this.settings.selfDeaf,
     });
+    if (this.closed) return;
     this.canSpeak = joined.canSpeak;
     this.canStream = joined.canStream;
     this.serverScreenAudio = joined.screenAudio === true;
@@ -107,7 +107,9 @@ export class VoiceSession {
     }
     if (this.canSpeak) await this.startMic();
 
+    if (this.closed) return;
     const { producers } = await this.gw.voice<{ producers: { producerId: string; userId: string; source: MediaSource }[] }>("getProducers");
+    if (this.closed) return;
     await Promise.all(producers.map((p) => this.offer(p.producerId, p.userId, p.source)));
   }
 
@@ -115,8 +117,9 @@ export class VoiceSession {
 
   /** Receives a new track now, unless it is a screen share we did not choose to watch. */
   private offer(producerId: string, userId: string, source: MediaSource): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    if (!this.available.has(producerId)) this.available.set(producerId, { userId, source });
     if (isStreamSource(source) && !this.watching.has(userId)) {
-      this.pendingStreams.set(producerId, { userId, source });
       this.publishOffers();
       return Promise.resolve();
     }
@@ -125,17 +128,19 @@ export class VoiceSession {
 
   private publishOffers(): void {
     if (this.closed) return;
-    setStreamOffers(streamOffers([...this.pendingStreams.values(), ...this.consumers.values()], this.watching));
+    setStreamOffers(streamOffers(this.available.values(), this.watching));
   }
 
   watch(userId: string): void {
     if (this.closed) return;
     this.watching.add(userId);
-    for (const [producerId, entry] of [...this.pendingStreams]) {
-      if (entry.userId !== userId) continue;
-      this.pendingStreams.delete(producerId);
+    for (const [producerId, entry] of this.available) {
+      if (entry.userId !== userId || !isStreamSource(entry.source)) continue;
       if (this.parked.has(producerId)) { this.unpark(producerId); continue; }
-      void this.consume(producerId, entry.userId, entry.source).catch((err: unknown) => console.warn("consume failed", err));
+      void this.consume(producerId, entry.userId, entry.source).catch((err: unknown) => {
+        if (!this.closed && this.available.has(producerId)) this.unwatch(userId);
+        console.warn("consume failed", err);
+      });
     }
     this.publishOffers();
   }
@@ -157,7 +162,6 @@ export class VoiceSession {
     else dropTile(producerId);
     entry.consumer.pause();
     this.parked.set(producerId, entry);
-    this.pendingStreams.set(producerId, { userId: entry.userId, source: entry.source });
     this.publishOffers();
     void this.gw.voice("pauseConsumer", { consumerId: entry.consumer.id }).catch(() => {
       // Older servers lack "pauseConsumer": tear it down as before; watching again re-consumes.
@@ -175,7 +179,12 @@ export class VoiceSession {
     this.parked.delete(producerId);
     this.consumers.set(producerId, entry);
     entry.consumer.resume();
-    if (entry.audio) void entry.audio.play().catch(() => undefined);
+    if (entry.audio) {
+      entry.audio.muted = this.settings.selfDeaf;
+      entry.amplified?.setVolume(playbackVolume(this.settings, volumeKindOf(entry.source), this.accountId, entry.userId));
+      void this.applySink(entry.audio);
+      void entry.audio.play().catch(() => undefined);
+    }
     else putTile({ key: producerId, userId: entry.userId, source: entry.source === "screen" ? "screen" : "camera", stream: new MediaStream([entry.consumer.track]), local: false });
     this.publishOffers();
     void this.gw.voice("resumeConsumer", { consumerId: entry.consumer.id }).catch(() => {
@@ -362,40 +371,53 @@ export class VoiceSession {
 
   private async consume(producerId: string, userId: string, source: MediaSource): Promise<void> {
     if (!this.device || !this.recv || this.closed || this.consumers.has(producerId) || this.consuming.has(producerId)) return;
-    this.consuming.add(producerId);
-    try { await this.receive(producerId, userId, source); } finally { this.consuming.delete(producerId); }
-  }
-
-  private async receive(producerId: string, userId: string, source: MediaSource): Promise<void> {
-    if (!this.device || !this.recv) return;
-    const params = await this.gw.voice<{
-      id: string;
-      producerId: string;
-      kind: ms.MediaKind;
-      rtpParameters: ms.RtpParameters;
-    }>("consume", { producerId, transportId: this.recv.id, rtpCapabilities: this.device.rtpCapabilities });
-    const consumer = await this.recv.consume(params);
-    if (this.closed) { consumer.close(); return; }
-    let audio: HTMLAudioElement | null = null;
-    let amplified: AmplifiedAudio | null = null;
-    if (consumer.kind === "audio") {
-      audio = new Audio();
-      audio.autoplay = true;
-      amplified = this.mixer.connect(new MediaStream([consumer.track]), playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId), audio);
-      audio.muted = this.settings.selfDeaf;
-      await this.applySink(audio);
-      if (this.closed) { audio.pause(); audio.srcObject = null; amplified.close(); consumer.close(); return; }
-      audio.muted = this.settings.selfDeaf;
-      amplified.setVolume(playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId));
-    } else {
-      putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([consumer.track]), local: false });
+    const announcement = this.available.get(producerId);
+    if (!announcement) return;
+    const recv = this.recv;
+    const operation = Symbol();
+    this.consuming.set(producerId, operation);
+    try {
+      const params = await this.gw.voice<{
+        id: string;
+        producerId: string;
+        kind: ms.MediaKind;
+        rtpParameters: ms.RtpParameters;
+      }>("consume", { producerId, transportId: recv.id, rtpCapabilities: this.device.rtpCapabilities });
+      if (this.closed || this.available.get(producerId) !== announcement) {
+        if (!this.closed) void this.gw.voice("closeConsumer", { consumerId: params.id }).catch(() => undefined);
+        return;
+      }
+      const consumer = await recv.consume(params);
+      if (this.closed) { consumer.close(); return; }
+      if (this.available.get(producerId) !== announcement) {
+        consumer.close();
+        void this.gw.voice("closeConsumer", { consumerId: consumer.id }).catch(() => undefined);
+        return;
+      }
+      let audio: HTMLAudioElement | null = null;
+      let amplified: AmplifiedAudio | null = null;
+      if (consumer.kind === "audio") {
+        audio = new Audio();
+        audio.autoplay = true;
+        amplified = this.mixer.connect(new MediaStream([consumer.track]), playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId), audio);
+        audio.muted = this.settings.selfDeaf;
+        await this.applySink(audio);
+        if (this.closed || this.available.get(producerId) !== announcement) { audio.pause(); audio.srcObject = null; amplified.close(); consumer.close(); return; }
+        audio.muted = this.settings.selfDeaf;
+        amplified.setVolume(playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId));
+      } else {
+        putTile({ key: producerId, userId, source: source === "screen" ? "screen" : "camera", stream: new MediaStream([consumer.track]), local: false });
+      }
+      this.consumers.set(producerId, { consumer, source, userId, audio, amplified });
+      this.consuming.delete(producerId);
+      this.publishOffers();
+      // The user stopped watching while this was being set up.
+      if (isStreamSource(source) && !this.watching.has(userId)) return this.release(producerId);
+      await this.gw.voice("resumeConsumer", { consumerId: consumer.id });
+      if (audio && !this.closed && this.consumers.get(producerId)?.consumer === consumer) void audio.play().catch(() => undefined);
+    } finally {
+      if (this.consuming.get(producerId) === operation) this.consuming.delete(producerId);
     }
-    this.consumers.set(producerId, { consumer, source, userId, audio, amplified });
-    this.publishOffers();
-    // The user stopped watching while this was being set up.
-    if (isStreamSource(source) && !this.watching.has(userId)) return this.release(producerId);
-    await this.gw.voice("resumeConsumer", { consumerId: consumer.id });
-    if (audio) void audio.play().catch(() => undefined);
   }
 
   /** `ended` is false when only we stop receiving it (the share goes on). */
@@ -403,9 +425,9 @@ export class VoiceSession {
     const parked = this.parked.get(producerId);
     if (parked && ended) { this.parked.delete(producerId); this.closeRemote(parked); }
     const entry = this.consumers.get(producerId);
-    const pending = this.pendingStreams.get(producerId);
+    const pending = this.available.get(producerId);
     if (ended) {
-      this.pendingStreams.delete(producerId);
+      this.available.delete(producerId);
       // The next share by the same person is opt-in again.
       const source = entry?.source ?? pending?.source;
       if (source === "screen") this.watching.delete((entry ?? pending)!.userId);
@@ -420,6 +442,7 @@ export class VoiceSession {
   }
 
   handleEvent(event: GatewayEvent): void {
+    if (this.closed) return;
     if (event.t === "VOICE_NEW_PRODUCER" && event.d.channelId === this.channelId) {
       void this.offer(event.d.producerId, event.d.userId, event.d.source).catch((err: unknown) => console.warn("consume failed", err));
     } else if (event.t === "VOICE_PRODUCER_CLOSED") {
@@ -436,6 +459,8 @@ export class VoiceSession {
     this.capturedTracks.clear();
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.consumers.keys(), ...this.parked.keys()]) this.dropConsumer(id);
+    this.available.clear();
+    this.watching.clear();
     this.mixer.close();
     for (const { producer, track } of this.video.values()) {
       producer.close();

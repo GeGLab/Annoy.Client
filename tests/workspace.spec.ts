@@ -314,16 +314,17 @@ test("latest messages, personal colors, saved panels, voice and scoped reconnect
     await expect.poll(distance).toBeLessThan(3);
 
     const channels = page.getByRole("separator", { name: "Largura do painel de canais" });
+    const initialWidths = await page.evaluate(async () => { const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); const { channelsWidth, membersWidth } = getState().settings; return { channelsWidth, membersWidth }; });
     await channels.focus();
     await page.keyboard.press("ArrowRight");
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).channelsWidth)).toBe(260);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).channelsWidth)).toBe(initialWidths.channelsWidth + 8);
     const members = page.getByRole("separator", { name: "Largura do painel de membros" });
     const handle = (await members.boundingBox())!;
     await page.mouse.move(handle.x + 3, handle.y + 90);
     await page.mouse.down();
     await page.mouse.move(handle.x - 37, handle.y + 90);
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).membersWidth)).toBeGreaterThan(220);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("annoy.settings")!).membersWidth)).toBe(initialWidths.membersWidth + 40);
     await expect(page.getByRole("button", { name: "Fechar painel de canais" })).toHaveCount(0);
     await page.getByRole("button", { name: "Alternar painel de membros" }).click();
     await expect(page.locator(".members")).toHaveCount(0);

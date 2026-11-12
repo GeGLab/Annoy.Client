@@ -5,10 +5,11 @@ import { apiFor } from "../../client.ts";
 import { channelPerms } from "../../perms.ts";
 import { useStore } from "../../store.ts";
 import { loadCatalog, useIntegrations } from "./state.ts";
+import { useDmLinks } from "./dm-links.ts";
 
 export function useDmCommandChoices(conversationId: string, enabled: boolean): CommandChoice[] {
   const catalog = useIntegrations((s) => s.catalog);
-  const links = useIntegrations((s) => s.account.dms[conversationId]);
+  const links = useDmLinks(conversationId);
   useEffect(() => { if (enabled) void loadCatalog(); }, [enabled]);
   return integrationCommands(catalog.filter((integration) => links?.[integration.id]?.status === "active"), "dm");
 }
