@@ -7,7 +7,9 @@ import { ElectronBlocker } from "@ghostery/adblocker-electron";
 // blocked. A preload in every frame finds the page's video so the room can keep it in
 // sync: the renderer sends play/pause/seek and hears back what the viewer did.
 
-type Slot = "theater" | "music";
+/** "music" and "musicB" are the song room's two decks: DJ mode mixes from one into the other. */
+type Slot = "theater" | "music" | "musicB";
+const isMusic = (slot: Slot) => slot !== "theater";
 const PARTITION = "persist:theater";
 /** YouTube refuses embeds that come with no referrer. */
 const REFERRER = "https://annoy.geg.dev.br/";
@@ -15,6 +17,15 @@ const REFERRER = "https://annoy.geg.dev.br/";
 interface Entry {
   view: WebContentsView;
   url: string;
+  /** What the app asked to play (its own link and kind), so asking again never reloads it. */
+  source: string;
+}
+
+interface OpenOptions {
+  /** Seconds in: joining a room mid-song starts there instead of from the top. */
+  start?: number;
+  /** Load paused and silent, ready for a DJ transition to start it. */
+  hold?: boolean;
 }
 
 const views = new Map<Slot, Entry>();
@@ -52,8 +63,8 @@ function theaterSession(): Session {
   return s;
 }
 
-/** youtube.com/watch?v=, youtu.be/, /shorts/ and /embed/ links become the bare player. */
-export function youtubeEmbed(raw: string): string | null {
+/** The video id of youtube.com/watch?v=, youtu.be/, /shorts/, /live/ and /embed/ links. */
+export function youtubeId(raw: string): string | null {
   try {
     const url = new URL(raw);
     const host = url.hostname.replace(/^(www|m|music)\./, "");
@@ -62,25 +73,54 @@ export function youtubeEmbed(raw: string): string | null {
     else if (host === "youtube.com" || host === "youtube-nocookie.com") {
       id = url.searchParams.get("v") ?? /^\/(embed|shorts|live)\/([\w-]+)/.exec(url.pathname)?.[2] ?? null;
     }
-    if (!id || !/^[\w-]{6,20}$/.test(id)) return null;
-    const start = Number.parseInt(url.searchParams.get("t") ?? "", 10);
-    return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0${start > 0 ? `&start=${start}` : ""}`;
+    return id && /^[\w-]{6,20}$/.test(id) ? id : null;
   } catch {
     return null;
   }
 }
 
-async function open(slot: Slot, raw: string, kind: string): Promise<void> {
+/**
+ * YouTube links become the bare player. Song rooms drive it entirely from the app, so their
+ * player comes without controls, keyboard, annotations or fullscreen.
+ */
+export function youtubeEmbed(raw: string, bare = false, options: OpenOptions = {}): string | null {
+  const id = youtubeId(raw);
+  if (!id) return null;
+  const linked = Number.parseInt(new URL(raw).searchParams.get("t") ?? "", 10);
+  const start = options.start !== undefined ? Math.floor(options.start) : linked;
+  const chrome = bare ? "&controls=0&disablekb=1&fs=0&iv_load_policy=3&cc_load_policy=0" : "";
+  // annoy_hold is read by the theater preload only; YouTube ignores parameters it doesn't know.
+  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0${chrome}${start > 0 ? `&start=${start}` : ""}${options.hold ? "&annoy_hold=1" : ""}`;
+}
+
+/**
+ * What YouTube still draws over a player without controls (title, channel avatar, logo, pause
+ * overlays, end cards), hidden; and no pointer, so hovering or clicking the song room's video
+ * never brings any of it back. The room's own buttons are the only controls.
+ */
+const BARE_PLAYER_CSS = `
+.ytp-chrome-top, .ytp-chrome-bottom, .ytp-gradient-top, .ytp-gradient-bottom, .ytp-watermark,
+.ytp-youtube-button, .ytp-pause-overlay, .ytp-large-play-button, .ytp-cued-thumbnail-overlay-image + .ytp-large-play-button,
+.ytp-ce-element, .ytp-cards-teaser, .ytp-cards-button, .ytp-paid-content-overlay, .ytp-impression-link,
+.ytp-show-cards-title, .ytp-title, .ytp-chrome-controls, .ytp-contextmenu, .ytp-tooltip, .branding-img, .iv-branding,
+.ytp-embed-overlays, .ytp-overflow-button, .ytp-share-button, .ytp-watch-later-button { display: none !important; }
+html, body, #player, .html5-video-player { pointer-events: none !important; cursor: default !important; }
+`;
+
+async function open(slot: Slot, raw: string, kind: string, options: OpenOptions = {}): Promise<void> {
   if (!window || !canOpen()) return;
   let url: URL;
   try {
-    url = new URL(kind === "youtube" ? (youtubeEmbed(raw) ?? raw) : raw);
+    url = new URL(kind === "youtube" ? (youtubeEmbed(raw, isMusic(slot), options) ?? raw) : raw);
   } catch {
     return;
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return;
+  const source = `${kind}
+${raw}`;
   const existing = views.get(slot);
-  if (existing?.url === url.toString()) return;
+  // Same media already there (maybe opened held, or at another start): keep it playing.
+  if (existing?.source === source) return;
   wanted.set(slot, url.toString());
   const s = theaterSession();
   await loadBlocker(s);
@@ -101,16 +141,21 @@ async function open(slot: Slot, raw: string, kind: string): Promise<void> {
       },
     });
     view.setBackgroundColor("#000000");
+    // Song rooms usually play with the view hidden (the room shows the cover): give the page a
+    // real viewport anyway, or it lays out at 0×0 and players treat it as having no screen.
+    view.setBounds({ x: 0, y: 0, width: 640, height: 360 });
     const wc = view.webContents;
     // Pop-ups are the classic ad trick on streaming sites: never open windows.
     wc.setWindowOpenHandler(() => ({ action: "deny" }));
     wc.on("page-title-updated", (_e, title) => window?.webContents.send("theater:title", slot, title));
+    if (isMusic(slot)) wc.on("dom-ready", () => { if (/^https:\/\/www\.youtube(-nocookie)?\.com\/embed\//.test(wc.getURL())) void wc.insertCSS(BARE_PLAYER_CSS).catch(() => {}); });
     window.contentView.addChildView(view);
-    entry = { view, url: "" };
+    entry = { view, url: "", source: "" };
     views.set(slot, entry);
     place(slot);
   }
   entry.url = url.toString();
+  entry.source = source;
   void entry.view.webContents.loadURL(entry.url, { httpReferrer: REFERRER }).catch(() => {});
 }
 
@@ -132,11 +177,12 @@ function close(slot: Slot): void {
   views.delete(slot);
 }
 
-const slotOf = (raw: unknown): Slot | null => (raw === "theater" || raw === "music" ? raw : null);
+const slotOf = (raw: unknown): Slot | null => (raw === "theater" || raw === "music" || raw === "musicB" ? raw : null);
 
 export function closeAllTheater(): void {
   close("theater");
   close("music");
+  close("musicB");
 }
 let canOpen = () => false;
 let registered = false;
@@ -149,9 +195,12 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
   registered = true;
   const fromApp = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => event.sender === window?.webContents && event.senderFrame === window?.webContents.mainFrame;
 
-  ipcMain.on("theater:open", (event, slot: unknown, url: unknown, kind: unknown) => {
+  ipcMain.on("theater:open", (event, slot: unknown, url: unknown, kind: unknown, options: unknown) => {
     const s = slotOf(slot);
-    if (canOpen() && fromApp(event) && s && typeof url === "string" && typeof kind === "string") void open(s, url, kind);
+    if (!canOpen() || !fromApp(event) || !s || typeof url !== "string" || typeof kind !== "string") return;
+    const raw = options && typeof options === "object" ? options as Record<string, unknown> : {};
+    const start = typeof raw.start === "number" && Number.isFinite(raw.start) && raw.start > 0 && raw.start < 86400 ? raw.start : undefined;
+    void open(s, url, kind, { start, hold: raw.hold === true });
   });
   ipcMain.on("theater:close", (event, slot: unknown) => {
     const s = slotOf(slot);
@@ -184,6 +233,16 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
 
   // From the pages: forwarded to the app with the slot they came from.
   const slotOfSender = (sender: Electron.WebContents) => [...views].find(([, e]) => e.view.webContents === sender)?.[0];
+
+  // The song room's visualizer: a small spectrum about 20 times a second, music slot only.
+  ipcMain.on("theater:levels", (event, payload: unknown) => {
+    const slot = slotOfSender(event.sender);
+    if (!slot || !isMusic(slot) || !payload || typeof payload !== "object") return;
+    const { position, levels } = payload as Record<string, unknown>;
+    if (typeof position !== "number" || !Number.isFinite(position) || !Array.isArray(levels) || levels.length > 64) return;
+    if (!levels.every((level) => typeof level === "number" && level >= 0 && level <= 255)) return;
+    window?.webContents.send("theater:levels", slot, { position, levels });
+  });
   for (const channel of ["theater:status", "theater:user", "theater:ended"]) {
     ipcMain.on(channel, (event, payload: unknown) => {
       const slot = slotOfSender(event.sender);
@@ -191,7 +250,8 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
         const value=payload as Record<string,unknown>;
         if (typeof value.position!=="number" || !Number.isFinite(value.position) || value.position<0 || value.position>8640000) return;
         if (channel==="theater:user" && !["play","pause","seek"].includes(String(value.action))) return;
-        window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{})});
+        const duration=typeof value.duration==="number" && Number.isFinite(value.duration) && value.duration>0 && value.duration<=8640000 ? value.duration : null;
+        window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{}),...(channel==="theater:status"?{duration}:{})});
       }
     });
   }
