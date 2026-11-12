@@ -18,7 +18,7 @@ export interface TheaterEvents {
   ended: { position: number };
   title: string;
   /** Song rooms: the music's spectrum (0–255 per band) for the visualizer. */
-  levels: { position: number; levels: number[] };
+  levels: { position: number; levels: number[]; /** Centre over sides in the singing band (dB) and the centre's loudness (dB), when stereo. */ vr?: number; vl?: number };
 }
 
 const bridge = {
