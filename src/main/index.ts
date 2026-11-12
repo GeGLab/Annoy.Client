@@ -50,10 +50,10 @@ function createTray(): void {
   // "close to tray" only decides what the window's close button does.
   if (!trayCapable) {
     tray?.destroy();tray=null;
-    if(win&&!win.isVisible())restoreWindow();
+    if(win&&!win.isVisible()&&!win.isMinimized())restoreWindow();
     return;
   }
-  if(!tray){try{tray = new Tray(appIcon.trayPath());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;restoreWindow();return;}}
+  if(!tray){try{tray = new Tray(appIcon.trayPath());tray.on("double-click", restoreWindow);tray.on("click",restoreWindow);}catch{trayCapable=false;if(win&&!win.isVisible()&&!win.isMinimized())restoreWindow();return;}}
   tray.setToolTip("Annoy");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: translate("desktop.94a2df2e44ec"), click: restoreWindow },
