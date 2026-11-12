@@ -53,12 +53,13 @@ const hooks = registerHooks({
     return stubs.has(url) ? { format: "module", source: stubs.get(url), shortCircuit: true } : next(url, context);
   },
 });
-const { initDmIntegrations } = await import("../../src/renderer/src/features/integrations/dm.ts");
+const { initDmIntegrations, dmLinks } = await import("../../src/renderer/src/features/integrations/dm.ts");
 initDmIntegrations();
 after(() => { hooks.deregister(); delete globalThis.__annoyIntegrationTests; });
 beforeEach(() => {
   h.state = { account: { connected: { steamprofiler: { settings: {}, key: null } }, dms: { dm: { steamprofiler: { owner: "alice", status: "pending" } } } } };
   h.notices.length = h.calls.length = h.replies.length = 0;
+  h.social.threads.dm.items = [];
 });
 const message = {
   id: "message-1", conversationId: "dm", senderId: "alice",
@@ -100,4 +101,17 @@ test("historical commands never run or display a notice", async () => {
   await settle();
   assert.deepEqual(h.notices, []);
   assert.equal(h.calls.length, 0);
+});
+
+test("an invitation loaded from encrypted history remains answerable when the separate account cache is missing", async () => {
+  h.state.account.dms = {};
+  const invitation = { ...message, id: "001", integration: { op: "request", id: steam.id, name: steam.name } };
+  h.social.threads.dm.items = [invitation];
+  assert.equal(dmLinks("dm").steamprofiler.status, "pending");
+  const accepted = { ...message, id: "002", senderId: "bob", integration: { op: "accept", id: steam.id, name: steam.name } };
+  h.social.threads.dm.items.push(accepted);
+  h.hook(accepted, true, false);
+  await settle();
+  assert.equal(h.state.account.dms.dm.steamprofiler.status, "active");
+  assert.equal(h.calls.length, 0, "consent controls never execute an integration");
 });

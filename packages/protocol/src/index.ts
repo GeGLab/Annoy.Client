@@ -627,7 +627,7 @@ export type VoiceMethod =
   | "produce"
   | "consume"
   | "resumeConsumer"
-  /** Holds one track without closing it (mediasoup), so resuming it is instant. */
+  /** Pauses one received track while keeping it available for resumeConsumer. */
   | "pauseConsumer"
   | "getProducers"
   | "closeProducer"

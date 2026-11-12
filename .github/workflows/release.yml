@@ -18,9 +18,24 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require successful CI for the release commit on both platforms
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/require-release-ci.mjs HEAD
   build:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:

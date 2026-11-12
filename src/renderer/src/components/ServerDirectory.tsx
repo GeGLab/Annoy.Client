@@ -1,3 +1,5 @@
+import { DirectoryWelcome } from "../features/redesign/LiveExperience.tsx";
+import { Scenery } from "../features/redesign/Scenery.tsx";
 import {rich} from "../lib/localization.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
@@ -124,7 +126,8 @@ export function ServerDirectory() {
         <p>{translate("common.0e457eca5933")}</p></div>
       <Button variant="secondary" onClick={() => navigate({ kind: "home", accountId: accounts[0]?.id ?? null, dmId: null })}>{rich("common.81f329048e3d",{p0:(<Icon name="home" size={16} />)})}</Button>
     </header>
-    <div className="server-directory-tools">
+    <DirectoryWelcome/>
+      <div className="server-directory-tools">
       <label className="server-directory-search"><Icon name="search" size={17} /><span className="sr-only">{translate("common.b408dd0fad7b")}</span>
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.f9b06fce2da3")} />
       </label>
@@ -174,17 +177,11 @@ export function ServerDirectory() {
             {page?.cached ? translate("common.a5d5aede1a0c") : ""}
           </p>
           {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
-            servers.length ? <><div className="bot-catalog server-catalog">{servers.map((server) => <article className="bot-listing server-listing" key={server.id}>
-              <div className="bot-listing-heading">
-                <span className="bot-avatar server-listing-icon" aria-hidden="true">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
-                <div><h3>{server.name}</h3><span className="muted small">{translate("servers.on", { p0: account.instanceName })}</span></div>
-              </div>
-              <span className="bot-permission-count server-listing-tags">
-                <span className={ready ? "server-listing-ready" : undefined}>{ready ? <Icon name="check" size={13} /> : <Icon name="clock" size={13} />}{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}</span>
-                {server.ownerId === instance?.user?.id && <span><Icon name="crown" size={13} />{translate("servers.owner")}</span>}
-              </span>
-              <Button variant="secondary" onClick={() => void openServer(account.id, server.id)}>{translate("servers.open")}</Button>
-            </article>)}</div>
+            servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
+              <span className="live-directory-card-art"><Scenery/></span>
+              <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
+              <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{translate("servers.on", { p0: account.instanceName })}</small><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}{server.ownerId === instance?.user?.id && <> · {translate("servers.owner")}</>}</small></span><Icon name="right" size={17} />
+            </button>)}</div>
             {page?.cursor && <Button className="server-directory-more" variant="secondary" disabled={page.loading} onClick={() => void loadMore(account.id)}>{page.loading ? translate("common.6cc1bbba0f84") : translate("common.3298a7dab87a",{p0:(Math.max(0, page.total - servers.length))})}</Button>}</>
               : <p className="server-directory-no-results">{translate("common.e0365f8a1ebe")}</p>}
         </section>;

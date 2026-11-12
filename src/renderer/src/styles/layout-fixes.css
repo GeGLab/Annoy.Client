@@ -23,10 +23,17 @@
 .voice-user-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .voice-user-status { min-width: 0; overflow: hidden; }
 @container (max-width: 250px) {
-  .voice-user .stream-quality { display: none; }
-}
-@container (max-width: 190px) {
-  .voice-user .voice-activity { display: none; }
+  .voice-user,
+  .voice-user:has(.voice-mod):hover,
+  .voice-user:has(.voice-mod):focus-within,
+  .voice-user:has(.voice-mod[data-state="open"]) {
+    grid-template-columns: 28px minmax(0, 1fr) 20px;
+    row-gap: 3px;
+  }
+  .voice-user > .avatar { grid-column: 1; grid-row: 1 / span 2; }
+  .voice-user .profile-trigger { grid-column: 2; grid-row: 1; }
+  .voice-user-status { grid-column: 2; grid-row: 2; justify-content: flex-start; flex-wrap: wrap; overflow: visible; }
+  .voice-user .voice-mod { grid-column: 3; grid-row: 1 / span 2; }
 }
 
 /* Voice panel: channel and server read on up to two lines instead of being cut mid-word. */

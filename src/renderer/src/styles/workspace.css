@@ -103,7 +103,7 @@
 .server-directory-groups { display: grid; align-content: start; gap: 18px; max-width: 1000px; width: 100%; margin: 0 auto; }
 .server-directory-group { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-channels); }
 .server-directory-group > header { display: flex; align-items: center; gap: 12px; }
-.server-directory-instance-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; color: var(--accent); background: var(--accent-soft); font-size: 0.92857rem; font-weight: 700; }
+.server-directory-instance-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; color: var(--accent-strong); background: var(--accent-soft); font-size: 0.92857rem; font-weight: 700; }
 .server-directory-instance-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
 .server-directory-instance-copy h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; font-size: 1.07143rem; }
 .server-directory-status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.78571rem; }
@@ -115,14 +115,14 @@
 .server-directory-card { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 11px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); background: var(--bg-main); text-align: left; cursor: pointer; }
 .server-directory-card:hover, .server-directory-card:focus-visible { border-color: var(--accent-line); background: var(--bg-hover); outline: none; }
 .server-directory-header h1:focus { outline: 2px solid var(--accent-line); outline-offset: 5px; }
-.server-directory-avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: none; overflow: hidden; border-radius: 12px; color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.server-directory-avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: none; overflow: hidden; border-radius: 12px; color: var(--accent-strong); background: var(--accent-soft); font-weight: 700; }
 .server-directory-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .server-directory-card-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
 .server-directory-card-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92857rem; }
 .server-directory-card-copy small, .server-directory-no-results { color: var(--text-muted); font-size: 0.78571rem; }
 .server-directory-no-results { margin: 8px 0 0; }
 .server-directory-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; min-height: 240px; color: var(--text-muted); text-align: center; }
-.server-directory-empty > .icon { margin-bottom: 8px; color: var(--accent); }
+.server-directory-empty > .icon { margin-bottom: 8px; color: var(--accent-strong); }
 .server-directory-empty h2 { margin: 4px 0; color: var(--text); font-size: 1.21429rem; }
 .server-directory-empty p { max-width: 400px; font-size: 0.92857rem; }
 .server-directory-skeleton { display: grid; gap: 8px; }
@@ -130,7 +130,7 @@
 @keyframes server-skeleton { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .server-directory-skeleton span { animation: none; } }
 .server-directory:has(.server-directory-empty) { gap: 10px; }
-.server-directory .eyebrow { color: var(--accent); font-size: 0.78571rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.server-directory .eyebrow { color: var(--accent-strong); font-size: 0.78571rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 @media (max-width: 640px) { .server-directory { padding: 20px 14px; } .server-directory-header { align-items: flex-start; flex-direction: column; } .server-directory-tools { align-items: stretch; flex-direction: column; } .server-directory-search { max-width: none; } .server-directory-account { justify-content: space-between; } }
 @keyframes reconnect-wave { 0% { transform: scale(.65); opacity: 0; } 20% { opacity: .8; } 100% { transform: scale(1.05); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .reconnect-symbol > .reconnect-wave, .voice-status-bar.connecting .voice-connection-icon { animation: none; } }

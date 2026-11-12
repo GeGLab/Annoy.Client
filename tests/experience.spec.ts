@@ -3,7 +3,7 @@ import {uiReactionFixture, uiSendFixture} from "./fixtures/ui-reactions.ts";
 import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect,  type Page, type WebSocketRoute } from "@playwright/test";
 import { createRequire } from "node:module";
-import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, basename, resolve, join } from "node:path";
 
@@ -71,6 +71,9 @@ test("slash preview lists installed commands, fills without sending and respects
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {
+    // The native Windows runner can start at a smaller logical size due to DPI.
+    // Use a defined desktop viewport for the large-card geometry assertion.
+    await page.setViewportSize({ width: 1320, height: 840 });
     await seed(page);
     const { Resvg } = await import("@resvg/resvg-js");
     const image = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1390"><rect width="1600" height="1390" fill="#121b2e"/><text x="100" y="180" fill="white" font-size="68">Player comparison</text></svg>').render().asPng();
@@ -284,6 +287,58 @@ async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
   });
   await expect(page.locator(".chat-header h1")).toHaveText("geral");
 }
+
+test("live redesign opens real community invites, activity conversations and discovered servers", async () => {
+  const { page, close } = await launch();
+  const invites: unknown[] = [];
+  try {
+    await seed(page);
+    await page.route("https://experience.test/api/servers/server/invites", route => {
+      invites.push(route.request().postDataJSON());
+      return route.fulfill({ json: { code: "real-invite", serverId: "server" } });
+    });
+    await expect(page.locator(".live-community-identity")).toContainText("Comunidade de teste");
+    await expect(page.locator(".live-community-summary")).toContainText("1 online");
+    await expect(page.locator(".live-room-card")).toContainText("Sala de conversa");
+    await expect(page.locator(".live-room-card")).toContainText("Puxa uma cadeira");
+    await page.locator(".live-conversation-welcome").getByRole("button", { name: "Traga sua galera" }).click();
+    await page.getByRole("button", { name: "Gerar convite", exact: true }).click();
+    await expect(page.locator(".invite-code")).toHaveText("real-invite");
+    expect(invites).toEqual([{ expiresInHours: 168, maxUses: null }]);
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: join(capture, "redesign-live-community.png") });
+    await page.getByRole("button", { name: "Ocultar boas-vindas" }).click();
+    await expect(page.locator(".live-conversation-welcome")).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Conversar em #geral" })).toBeVisible();
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        const friend = { id: "friend", username: "friend", displayName: "Amiga conectada", avatarUrl: null };
+        inst.relationships = [{ user: friend, status: "friend" }];
+        inst.presences.friend = "online";
+        inst.activities.friend = [{ kind: "game", provider: "steam", name: "Jogo em andamento" }];
+        inst.dms = [{ id: "real-dm", recipients: [friend] }];
+        inst.messages["real-dm"] = { items: [], loading: false, hasMore: false };
+      });
+      navigate({ kind: "home", accountId: "test", dmId: null });
+    });
+    await expect(page.locator(".live-friends-greeting")).toContainText("Pessoa de teste");
+    await expect(page.locator(".live-activity-game")).toContainText("Jogo em andamento");
+    await expect(page.locator(".live-online-pill")).toHaveText("1 online");
+    await page.screenshot({ path: join(capture, "redesign-live-friends.png") });
+    await page.locator(".live-activity-game").click();
+    await expect(page.locator(".chat-header h1")).toHaveText("Amiga conectada");
+    await page.route("https://experience.test/api/servers?**", route => route.fulfill({ json: { servers: [{ id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null }], total: 1, nextCursor: null } }));
+    await page.locator(".directory-tab:not(.store-tab)").click();
+    await expect(page.locator(".live-directory-welcome")).toBeVisible();
+    await expect(page.locator(".server-directory-card")).toHaveCount(1);
+    await page.screenshot({ path: join(capture, "redesign-live-directory.png") });
+    await page.locator(".server-directory-card").click();
+    await expect(page.locator(".chat-header h1")).toHaveText("geral");
+  } finally { await close(); }
+});
 
 function silence() {
   const result = Buffer.alloc(96044);
@@ -1778,7 +1833,7 @@ test("both voice backends send screen audio separately and explain incompatible 
 });
 
 
-test("server search sits above group activities and server editing saves image drafts", async () => {
+test("global search keeps server context and server editing saves image drafts", async () => {
   const {page,close}=await launch(); const writes:string[]=[];
   try {
     await seed(page);
@@ -1786,8 +1841,16 @@ test("server search sits above group activities and server editing saves image d
       const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"https://experience.test/image.png",startedAt:Date.now()-200000}];});
     });
-    await expect(page.locator(".titlebar .titlebar-search")).toHaveCount(0);
-    await expect(page.locator(".member-search-slot").getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toHaveCount(1);
+    const searches: string[] = [];
+    await page.route("https://experience.test/api/search/messages?**", route => { searches.push(route.request().url()); return route.fulfill({ json: { items: [], nextCursor: null } }); });
+    await page.locator(".titlebar .titlebar-search").click();
+    await page.getByRole("textbox", { name: "Buscar mensagens", exact: true }).fill("conversa");
+    await page.getByRole("textbox", { name: "Buscar mensagens", exact: true }).press("Enter");
+    await expect.poll(() => searches.length).toBe(1);
+    expect(new URL(searches[0]!).searchParams.get("serverId")).toBe("server");
+    expect(new URL(searches[0]!).searchParams.get("q")).toBe("conversa");
+    await page.keyboard.press("Escape");
     await expect(page.locator(".friend-activities")).toContainText("Jogo do grupo");
     await expect(page.locator(".friend-activities")).toContainText("Atividades do grupo");
     await page.screenshot({path:join(capture,"group-search-dark.png")});
@@ -2066,9 +2129,13 @@ test("Annoy stickers are sent as their cdnannoy link and drawn at their admannoy
     await expect(page.locator('[data-message-id="message"] .message-content')).toHaveCount(0);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
-    await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
+    await expect(add).toHaveCSS("border-top-style", "dashed");
     expect(await add.evaluate((element) => !!element.closest(".tabs-strip"))).toBe(true);
-    await expect(add.locator(".rail-label")).toBeVisible();
+    await add.focus();
+    await expect(page.getByRole("tooltip")).toHaveText("Adicionar servidor ou serviço");
+    await add.press("Enter");
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Serviços e sites", exact: true })).toBeVisible();
   } finally { await close(); }
 });
 
@@ -2231,7 +2298,7 @@ test("curated themes preview, follow system mode, reset overrides and persist on
             return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722;
           };
           const ratio = (a: string, b: string) => { const x = lum(style.getPropertyValue(a).trim()), y = lum(style.getPropertyValue(b).trim()); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
-          return [ratio("--text", "--bg-main"), ratio("--accent", "--bg-main"), ratio("--on-accent", "--accent")];
+          return [ratio("--text", "--bg-main"), ratio("--accent-strong", "--bg-main"), ratio("--on-accent", "--accent")];
         });
         for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5);
       }
@@ -2437,7 +2504,12 @@ test("camera keeps the full frame and call window shares controls and returns me
     await expect.poll(() => popup.evaluate(() => document.fullscreenElement === null)).toBe(true);
     const bounds = await remoteCamera.boundingBox(), controls = await popup.locator(".stage-controls").boundingBox();
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(controls!.y + 1);
-    await popup.screenshot({ path: join(capture, "call-window-camera.png") });
+    // Capture through Electron after leaving native fullscreen; CDP capture of
+    // the detached surface can wait indefinitely for the old fullscreen frame.
+    const popupWindow = await app.browserWindow(popup);
+    const picture = await popupWindow.evaluate(async window => (await window.capturePage()).toPNG().toString("base64"));
+    expect(Buffer.from(picture, "base64").length).toBeGreaterThan(0);
+    await writeFile(join(capture, "call-window-camera.png"), Buffer.from(picture, "base64"));
     await popup.getByRole("button", { name: "Voltar para a janela principal", exact: true }).click();
     await expect(camera).toBeVisible();
     const nextWindow = app.waitForEvent("window");

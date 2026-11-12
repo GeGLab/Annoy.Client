@@ -1,6 +1,6 @@
 {
   "name": "annoy-client",
-  "version": "0.12.0-alpha.3",
+  "version": "0.12.0-alpha.5",
   "private": true,
   "description": "Desktop client for Annoy servers, with the official Discord one click away",
   "license": "MIT",
@@ -26,7 +26,9 @@
     "test:connectivity": "node --experimental-strip-types --test scripts/tests/connectivity.test.mjs",
     "test:chat-state": "node --experimental-strip-types --test scripts/tests/chat-state.test.mjs",
     "test:requests": "node --experimental-strip-types --test scripts/tests/requests.test.mjs",
-    "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs scripts/tests/voice-item4.test.mjs",
+    "test:voice": "node --experimental-strip-types --test scripts/tests/user-volume.test.mjs scripts/tests/voice-item4.test.mjs && node --experimental-strip-types scripts/tests/voice-lifecycle.test.mjs",
+    "test:images": "node --experimental-strip-types --test scripts/tests/original-image.test.mjs",
+    "test:dm-integrations": "node --experimental-strip-types scripts/tests/dm-consent.test.mjs && node --experimental-strip-types scripts/tests/dm-integrations.test.mjs && node --experimental-strip-types scripts/tests/dm-integration-ui.test.mjs",
     "test:desktop": "npm run build && playwright test",
     "brand:icons": "node scripts/generate-icons.mjs",
     "electron:install": "node scripts/ensure-electron.mjs",

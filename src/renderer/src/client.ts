@@ -36,6 +36,7 @@ interface Live {
 const live = new Map<string, Live>();
 type AnyVoiceSession = VoiceSession | CloudflareVoiceSession;
 let voice: { accountId: string; serverId: string; session: AnyVoiceSession } | null = null;
+let voiceAttempt = 0;
 /** Voice channel to return to when the connection to its server comes back. */
 let rejoinVoice: { accountId: string; serverId: string; channelId: string } | null = null;
 const refreshTimers = new Map<string, { accountId: string; timer: ReturnType<typeof setTimeout> }>();
@@ -644,10 +645,8 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   if(!direction&&getState().messageFocus?.accountId===accountId&&getState().messageFocus?.channelId===channelId)return;
   if(direction==="newer"&&!inst.instance?.historyWindow){returnToLatest(accountId,channelId);return;}
   const paging=direction===true||direction==="newer";
-  // Opening a channel or DM always lands on the newest messages (the "new messages" divider still
-  // marks where unread ones start); a cached window that stopped short of the end is reloaded.
-  const anchor:ReturnType<typeof readChatAnchor>=null;
-  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!current.hasMoreAfter) return;
+  const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&(!anchor||current.items.some(message=>message.id===anchor.messageId))) return;
   const sequence=messageEventSequence;
   const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
   messageReads.get(key)?.abort(); messageReads.set(key,controller);
@@ -656,7 +655,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   patchInstance(accountId,i=>{i.messages[channelId]={...current,items:current?.items??[],hasMore:current?.hasMore??true,loading:true,error:null};});
   try {
     const read=!paging&&inst.instance?.historyWindow?await api.get<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,signal):current?.readState;
-    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:"";
+    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:anchor?`around=${encodeURIComponent(anchor.messageId)}`:direction!=="latest"&&read?.messageId&&read.unread?.count?`after=${encodeURIComponent(read.messageId)}`:"";
     let page:MessageWindow;
     try {page=await fetchMessageWindow(accountId,channelId,query,signal);}
     catch(error){if(!anchor||!(error instanceof RequestError)||error.status!==404) throw error;clearChatAnchor(accountId,channelId);query="";page=await fetchMessageWindow(accountId,channelId,"",signal);}
@@ -785,7 +784,10 @@ function recoverVoice(session: AnyVoiceSession): void {
   if (!voice || voice.session !== session) return;
   const now = Date.now();
   while (voiceRecoveries.length && now - voiceRecoveries[0]! > 60_000) voiceRecoveries.shift();
-  if (voiceRecoveries.length >= 3) return void toast(translate("common.ac0a92bac0cd"), 12000);
+  if (voiceRecoveries.length >= 3) {
+    leaveVoice();
+    return void toast(translate("common.ac0a92bac0cd"), 12000);
+  }
   voiceRecoveries.push(now);
   const { accountId, serverId } = voice;
   const channelId = session.channelId;
@@ -800,11 +802,13 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
   if (getState().directCall) callAction("end");
   if (voice?.accountId === accountId && voice.session.channelId === channelId) return;
   leaveVoice();
+  const attempt = voiceAttempt;
   const gateway = gatewayFor(accountId);
   if (!gateway) return;
   // A server routed through VPNGo: WebRTC may only use the VPN for this call (no UDP outside it).
   const voiceUrl = getState().accounts.find((a) => a.id === accountId)?.url ?? null;
   await vpngoVoice(voiceUrl);
+  if (attempt !== voiceAttempt) return;
   const selfId = getState().instances[accountId]?.user?.id ?? "";
   // The instance says where media flows; both sessions behave the same for the UI.
   const Session = getState().instances[accountId]?.instance?.voiceBackend === "cloudflare" ? CloudflareVoiceSession : VoiceSession;
@@ -834,12 +838,14 @@ export async function joinVoice(accountId: string, serverId: string, channelId: 
     playCallFeedback("join");
     if (!session.canSpeak) toast(translate("common.066d151a07f6"));
   } catch (err) {
-    if (voice?.session === session) leaveVoice();
+    if (voice?.session !== session) return;
+    leaveVoice();
     toast(translate("common.5ece26b7ec6d",{p0:(err as Error)?.message||(err as Error)?.name||String(err)}));
   }
 }
 
 export function leaveVoice(notifyServer = true): void {
+  voiceAttempt++;
   // Leaving on purpose (or switching) cancels a pending return to the call.
   if (notifyServer) rejoinVoice = null;
   const connected = getState().voice?.status === "connected";
@@ -917,6 +923,7 @@ export async function toggleCamera(): Promise<void> {
     if (session.isSharing("camera")) await session.stopVideo("camera");
     else await session.startVideo("camera", (await savedDevice("camera")) ?? "default");
   } catch (err) {
+    if (voice?.session !== session) return;
     toast(translate("common.c88e21593233",{p0:((err as Error).message)}));
   }
 }
@@ -958,6 +965,7 @@ export async function startScreenShare(sourceId: string | null): Promise<boolean
     updateVoiceSettings();
     return true;
   } catch (err) {
+    if (voice?.session !== session) return false;
     // Cancelling the system picker leaves the previous capture in place.
     if ((err as DOMException).name !== "NotAllowedError") toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
     return false;
@@ -977,6 +985,7 @@ export async function updateScreenShareQuality(settings: Pick<Settings, "screenH
     updateVoiceSettings();
     return true;
   } catch (err) {
+    if (voice?.session !== session) return false;
     toast(translate("common.054bcefb8dcd",{p0:((err as Error).message)}));
     return false;
   } finally {

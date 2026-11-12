@@ -7,7 +7,7 @@
 .ui-select-content { max-height: min(320px, var(--radix-select-content-available-height)); overflow: hidden; }
 .ui-select-viewport { padding: 5px; }
 .ui-select-item { position: relative; display: flex; align-items: center; gap: 10px; padding: 9px 31px 9px 10px; border-radius: 6px; font-size: 0.85714rem; line-height: 1.5; outline: none; cursor: pointer; overflow-wrap: anywhere; }
-.ui-select-item > span:last-child:not(:first-child) { position: absolute; right: 9px; display: flex; color: var(--accent); }
+.ui-select-item > span:last-child:not(:first-child) { position: absolute; right: 9px; display: flex; color: var(--accent-strong); }
 .ui-select-item[data-highlighted], .ui-dropdown-item[data-highlighted] { background: var(--bg-active); color: var(--text); }
 .ui-select-item[data-state="checked"] { color: var(--accent-strong); }
 .ui-select-item[data-disabled] { opacity: .45; pointer-events: none; }

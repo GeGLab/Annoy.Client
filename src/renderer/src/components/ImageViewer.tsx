@@ -6,6 +6,8 @@ import { formatSize } from "../format.tsx";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
 import { Button } from "./ui/button.tsx";
 import { Icon } from "./ui.tsx";
+import { openOriginalImage } from "../lib/original-image.ts";
+import { toast } from "../store.ts";
 
 export interface ViewerImage { id: string; url: string; filename: string; size: number }
 
@@ -69,7 +71,11 @@ export default function ImageViewer({ images, initialIndex, onClose }: { images:
     <footer className="viewer-footer"><span className="viewer-count" aria-live="polite">{rich("common.aed1f8f95cfc",{p0:(index + 1),p1:(images.length)})}</span><div className="viewer-tools">
       {images.length > 1 && <><Button variant="ghost" size="icon" disabled={index === 0} onClick={() => move(-1)} aria-label={translate("common.3f4837fc17cc")}><Icon name="left" /></Button><Button variant="ghost" size="icon" disabled={index === images.length - 1} onClick={() => move(1)} aria-label={translate("common.36f99970853d")}><Icon name="right" /></Button><span className="viewer-tool-divider" /></>}
       <Button variant="ghost" size="icon" disabled={zoom <= 1 || loading || failed} onClick={() => setZoom(z => Math.max(1, z - .5))} aria-label={translate("common.1ef7f35020ad")}><Icon name="zoomOut" /></Button><Button variant="ghost" className="viewer-zoom" disabled={loading || failed} onClick={() => setZoom(1)} aria-label={translate("common.c3a949106aa5")}>{Math.round(zoom * 100)}%</Button><Button variant="ghost" size="icon" disabled={zoom >= 4 || loading || failed} onClick={() => setZoom(z => Math.min(4, z + .5))} aria-label={translate("common.d24683d859c9")}><Icon name="zoomIn" /></Button>
-    </div><a className="viewer-original" href={current.url} target="_blank" rel="noreferrer">{rich("common.4ddcf8bb20b2",{p0:(<Icon name="external" size={14} />)})}</a></footer>
+    </div><a className="viewer-original" href={current.url} target="_blank" rel="noreferrer" onClick={event => {
+      if (!/^(blob|data):/.test(current.url)) return;
+      event.preventDefault();
+      void openOriginalImage(current.url, current.filename).catch(() => toast(translate("image.originalFailed")));
+    }}>{rich("common.4ddcf8bb20b2",{p0:(<Icon name="external" size={14} />)})}</a></footer>
   </DialogContent></Dialog>;
 }
 
