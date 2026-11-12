@@ -3,7 +3,7 @@ import {uiReactionFixture, uiSendFixture} from "./fixtures/ui-reactions.ts";
 import { globalAuthFixture } from "./fixtures/global-auth.ts";
 import { test, expect,  type Page, type WebSocketRoute } from "@playwright/test";
 import { createRequire } from "node:module";
-import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, basename, resolve, join } from "node:path";
 
@@ -71,6 +71,9 @@ test("slash preview lists installed commands, fills without sending and respects
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {
+    // The native Windows runner can start at a smaller logical size due to DPI.
+    // Use a defined desktop viewport for the large-card geometry assertion.
+    await page.setViewportSize({ width: 1320, height: 840 });
     await seed(page);
     const { Resvg } = await import("@resvg/resvg-js");
     const image = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1390"><rect width="1600" height="1390" fill="#121b2e"/><text x="100" y="180" fill="white" font-size="68">Player comparison</text></svg>').render().asPng();
@@ -2126,9 +2129,13 @@ test("Annoy stickers are sent as their cdnannoy link and drawn at their admannoy
     await expect(page.locator('[data-message-id="message"] .message-content')).toHaveCount(0);
     await expect(page.locator(".pending-file")).toHaveCount(0);
     const add = page.getByRole("button", { name: "Nova aba", exact: true });
-    await expect(add.locator(".tab-tile")).toHaveCSS("border-top-style", "dashed");
+    await expect(add).toHaveCSS("border-top-style", "dashed");
     expect(await add.evaluate((element) => !!element.closest(".tabs-strip"))).toBe(true);
-    await expect(add.locator(".rail-label")).toBeVisible();
+    await add.focus();
+    await expect(page.getByRole("tooltip")).toHaveText("Adicionar servidor ou serviço");
+    await add.press("Enter");
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Serviços e sites", exact: true })).toBeVisible();
   } finally { await close(); }
 });
 
@@ -2497,7 +2504,12 @@ test("camera keeps the full frame and call window shares controls and returns me
     await expect.poll(() => popup.evaluate(() => document.fullscreenElement === null)).toBe(true);
     const bounds = await remoteCamera.boundingBox(), controls = await popup.locator(".stage-controls").boundingBox();
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(controls!.y + 1);
-    await popup.screenshot({ path: join(capture, "call-window-camera.png") });
+    // Capture through Electron after leaving native fullscreen; CDP capture of
+    // the detached surface can wait indefinitely for the old fullscreen frame.
+    const popupWindow = await app.browserWindow(popup);
+    const picture = await popupWindow.evaluate(async window => (await window.capturePage()).toPNG().toString("base64"));
+    expect(Buffer.from(picture, "base64").length).toBeGreaterThan(0);
+    await writeFile(join(capture, "call-window-camera.png"), Buffer.from(picture, "base64"));
     await popup.getByRole("button", { name: "Voltar para a janela principal", exact: true }).click();
     await expect(camera).toBeVisible();
     const nextWindow = app.waitForEvent("window");

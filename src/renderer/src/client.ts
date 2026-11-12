@@ -645,10 +645,8 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   if(!direction&&getState().messageFocus?.accountId===accountId&&getState().messageFocus?.channelId===channelId)return;
   if(direction==="newer"&&!inst.instance?.historyWindow){returnToLatest(accountId,channelId);return;}
   const paging=direction===true||direction==="newer";
-  // Opening a channel or DM always lands on the newest messages (the "new messages" divider still
-  // marks where unread ones start); a cached window that stopped short of the end is reloaded.
-  const anchor:ReturnType<typeof readChatAnchor>=null;
-  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&!current.hasMoreAfter) return;
+  const anchor=!paging&&direction!=="latest"?readChatAnchor(accountId,channelId):null;
+  if(current?.loading || direction===true&&!current?.hasMore || direction==="newer"&&!current?.hasMoreAfter || !direction&&current&&!current.error&&(!anchor||current.items.some(message=>message.id===anchor.messageId))) return;
   const sequence=messageEventSequence;
   const api=apiFor(accountId),generation=api.generation,key=messageKey(accountId,channelId),controller=new AbortController();
   messageReads.get(key)?.abort(); messageReads.set(key,controller);
@@ -657,7 +655,7 @@ export async function loadMessages(accountId:string,channelId:string,direction:b
   patchInstance(accountId,i=>{i.messages[channelId]={...current,items:current?.items??[],hasMore:current?.hasMore??true,loading:true,error:null};});
   try {
     const read=!paging&&inst.instance?.historyWindow?await api.get<ChannelReadState>(`/channels/${encodeURIComponent(channelId)}/read-state`,signal):current?.readState;
-    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:"";
+    let query=direction===true?`before=${encodeURIComponent(current?.items[0]?.id??"")}`:direction==="newer"?`after=${encodeURIComponent(current?.items.at(-1)?.id??"")}`:anchor?`around=${encodeURIComponent(anchor.messageId)}`:direction!=="latest"&&read?.messageId&&read.unread?.count?`after=${encodeURIComponent(read.messageId)}`:"";
     let page:MessageWindow;
     try {page=await fetchMessageWindow(accountId,channelId,query,signal);}
     catch(error){if(!anchor||!(error instanceof RequestError)||error.status!==404) throw error;clearChatAnchor(accountId,channelId);query="";page=await fetchMessageWindow(accountId,channelId,"",signal);}

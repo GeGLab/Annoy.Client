@@ -46,6 +46,7 @@
 .live-redesign .channel { min-height: 34px; padding: 7px 9px; margin: 2px 0; border-radius: 6px; font-size: 13px; gap: 10px; color: var(--text-muted); }
 .live-redesign .channel.active { background: var(--accent-soft); color: var(--text); }
 .live-redesign .channel.active > .icon { color: var(--accent-strong); }
+.live-redesign .channel.voice.has-gear { column-gap: 0; }
 .live-redesign .channel.unread { color: var(--text); }
 .live-redesign .category-header { padding: 16px 3px 5px; }
 .live-redesign .category-toggle { font-size: 9px; font-weight: 650; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
