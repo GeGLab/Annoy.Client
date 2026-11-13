@@ -1,5 +1,5 @@
 import {t as translate} from "../../../../shared/localization/index.ts";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { setState, useStore } from "../../store.ts";
 import { Icon } from "../ui.tsx";
 
@@ -23,26 +23,92 @@ function setPreview(value: typeof dragPreview) {
   for (const listener of previewListeners) listener();
 }
 
+/**
+ * Below these window widths a panel stops taking room from the conversation and floats over
+ * it instead: the member list first (tablets, small or zoomed windows), then the channel list
+ * too (phones), which becomes a drawer pulled from the left edge.
+ */
+export const COMPACT_BELOW = { members: 900, channels: 640 } as const;
+
+/** The window width, shared by every panel. */
+let viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
+const viewportListeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    if (window.innerWidth === viewportWidth) return;
+    viewportWidth = window.innerWidth;
+    for (const listener of viewportListeners) listener();
+  });
+}
+const subscribeViewport = (listener: () => void) => {
+  viewportListeners.add(listener);
+  return () => {
+    viewportListeners.delete(listener);
+  };
+};
+export const useViewportWidth = () => useSyncExternalStore(subscribeViewport, () => viewportWidth);
+const isCompact = (panel: Panel, width = viewportWidth) => width < COMPACT_BELOW[panel];
+
+// A floating panel is open for the moment only: it never changes the saved desktop layout.
+let floating: Record<Panel, boolean> = { channels: false, members: false };
+const floatingListeners = new Set<() => void>();
+const subscribeFloating = (listener: () => void) => {
+  floatingListeners.add(listener);
+  return () => {
+    floatingListeners.delete(listener);
+  };
+};
+const getFloating = () => floating;
+function setFloating(panel: Panel, open: boolean) {
+  if (floating[panel] === open) return;
+  floating = { ...floating, [panel]: open };
+  for (const listener of floatingListeners) listener();
+}
+
 export function togglePanel(panel: "members") {
+  if (isCompact(panel)) {
+    setFloating(panel, !floating[panel]);
+    return;
+  }
   setState((s) => {
     s.settings.membersOpen = !s.settings.membersOpen;
   });
 }
 
+/** Whether the member list shows right now: the saved preference, or the floating panel on small windows. */
+export function useMembersShown(): boolean {
+  const width = useViewportWidth();
+  const saved = useStore((s) => s.settings.membersOpen);
+  const open = useSyncExternalStore(subscribeFloating, getFloating);
+  return isCompact("members", width) ? open.members : saved;
+}
+
 /** Local drag preview; persist once on release rather than writing storage per pixel. */
 export function ResizablePanel({ panel, children, otherVisible = false, reservedWidth = 0 }: { panel: Panel; children: ReactNode; otherVisible?: boolean; reservedWidth?: number }) {
   const settings = useStore((s) => s.settings);
+  const view = useStore((s) => s.view);
   const saved = panel === "channels" ? settings.channelsWidth : settings.membersWidth;
-  const open = panel === "channels" ? true : settings.membersOpen;
+  const viewport = useViewportWidth();
+  const compact = isCompact(panel, viewport);
+  const floatingOpen = useSyncExternalStore(subscribeFloating, getFloating)[panel];
+  const open = compact ? floatingOpen : panel === "channels" ? true : settings.membersOpen;
   const preview = useSyncExternalStore(subscribePreview, getPreview);
-  const [viewport, setViewport] = useState(window.innerWidth);
   const drag = useRef<{ pointer: number; start: number; width: number; value: number } | null>(null);
   const limit = limits[panel];
+  // A floating panel closes once you pick where to go (a server opened without a channel shows
+  // its channel list right away), and when the window grows out of it.
+  useEffect(() => setFloating(panel, panel === "channels" && view.kind === "server" && !view.channelId), [panel, view]);
   useEffect(() => {
-    const resize = () => setViewport(window.innerWidth);
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
+    if (!compact) setFloating(panel, false);
+  }, [panel, compact]);
+  useEffect(() => {
+    if (!compact || !floatingOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFloating(panel, false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel, compact, floatingOpen]);
   useEffect(
     () => () => {
       if (drag.current) {
@@ -53,13 +119,16 @@ export function ResizablePanel({ panel, children, otherVisible = false, reserved
     [],
   );
   const requested = clamp(preview?.panel === panel ? preview.width : saved, limit.min, limit.max);
-  const otherOpen = otherVisible && (panel === "channels" ? settings.membersOpen : true);
+  // Only a panel that takes room beside the conversation counts against its width.
+  const otherOpen = otherVisible && (panel === "channels" ? settings.membersOpen && !isCompact("members", viewport) : !isCompact("channels", viewport));
   const otherWidth =
     panel === "channels"
       ? clamp(preview?.panel === "members" ? preview.width : settings.membersWidth, 180, 340)
       : clamp(preview?.panel === "channels" ? preview.width : settings.channelsWidth, 220, 380);
   const otherMinimum = panel === "channels" ? 180 : 220;
-  const budget = Math.max(limit.min, viewport - 76 - 360 - reservedWidth);
+  // A side panel that floats (the DM profile on small windows) takes no room from the list either.
+  const reserved = isCompact("members", viewport) ? 0 : reservedWidth;
+  const budget = Math.max(limit.min, viewport - 76 - 360 - reserved);
   const desiredTotal = requested + (otherOpen ? otherWidth : 0);
   const remaining = Math.max(0, budget - limit.min - (otherOpen ? otherMinimum : 0));
   const extras = requested - limit.min + (otherOpen ? otherWidth - otherMinimum : 0);
@@ -78,6 +147,28 @@ export function ResizablePanel({ panel, children, otherVisible = false, reserved
     }
   };
   const label = panel === "channels" ? "canais" : translate("common.6e1304653447");
+  if (compact) {
+    if (!open) {
+      // The channel list waits behind a pull tab on the left edge; the member list behind its header button.
+      return panel === "channels" ? (
+        <button type="button" className="panel-drawer-handle" onClick={() => setFloating(panel, true)} aria-label={translate("layout.showChannels")} title={translate("layout.showChannels")}>
+          <Icon name="panelLeft" size={16} />
+        </button>
+      ) : null;
+    }
+    const floatingWidth = Math.max(200, Math.min(clamp(saved, limit.min, limit.max), viewport - 64));
+    return (
+      <>
+        <div className={`panel-scrim panel-scrim-${panel}`} aria-hidden="true" onClick={() => setFloating(panel, false)} />
+        <aside className={`${panel} resizable-panel floating`} style={{ width: floatingWidth }} aria-label={translate("common.f9b39aab493b",{p0:(label)})}>
+          <div className="panel-content">{children}</div>
+          <button type="button" className="panel-floating-close" onClick={() => setFloating(panel, false)} aria-label={translate("layout.closePanel")} title={translate("layout.closePanel")}>
+            <Icon name="x" size={15} />
+          </button>
+        </aside>
+      </>
+    );
+  }
   if (!open)
     return null;
   return (

@@ -2574,5 +2574,7 @@
   "redesign.directoryEyebrow": "THERE IS A PLACE FOR YOU HERE",
   "redesign.directoryTitle": "Find your people.",
   "redesign.directoryBody": "A shared game. A conversation that flows. Your favorite places, right here.",
-  "redesign.communityApps": "Community apps"
+  "redesign.communityApps": "Community apps",
+  "layout.showChannels": "Show channels",
+  "layout.closePanel": "Close panel"
 }

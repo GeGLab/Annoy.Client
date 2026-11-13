@@ -1,0 +1,272 @@
+/*
+ * Responsive layout. Every window-size rule of the app shell and its main screens lives here,
+ * imported last (unlayered) so one breakpoint never fights another from an older file.
+ *
+ *   Phone          ≤ 599px     narrow windows, phones
+ *   Tablet         600–899px   tablets in portrait, small windows at 125–150 % scaling or large text
+ *   Small          900–1199px  small notebooks, tablets in landscape
+ *   Medium         1200–1599px notebooks: the reference layout
+ *   Large          1600–2199px desktop monitors
+ *   Ultrawide / 4K ≥ 2200px    QHD, ultrawide and 4K at low scaling
+ *   Short          height ≤ 640px
+ *
+ * The side panels follow the same scale in ResizablePanel.tsx: below 900px the member list
+ * floats over the conversation instead of squeezing it, below 640px the channel list becomes
+ * a drawer pulled from the left edge. (940px, the default window, keeps every panel in place.)
+ */
+
+/* Shell: floating panels -------------------------------------------------------------- */
+.server-view { position: relative; }
+.dm-conversation { position: relative; }
+.panel-drawer-handle {
+  position: absolute; left: 0; top: 50%; z-index: 20;
+  display: grid; place-items: center; width: 22px; height: 64px;
+  transform: translateY(-50%);
+  border: 1px solid var(--border-strong); border-left: 0; border-radius: 0 12px 12px 0;
+  background: var(--bg-elev); color: var(--text-muted);
+  box-shadow: 0 8px 24px #0005;
+  transition: width 160ms var(--ease), color 160ms var(--ease);
+}
+.panel-drawer-handle:hover, .panel-drawer-handle:focus-visible { width: 28px; color: var(--text); }
+.panel-scrim { position: absolute; inset: 0; z-index: 40; background: #05070bb0; animation: reveal 160ms var(--ease); }
+.resizable-panel.floating {
+  position: absolute; top: 0; bottom: 0; z-index: 41;
+  max-width: calc(100% - 56px);
+  box-shadow: 0 0 48px #000a;
+}
+.resizable-panel.floating.channels { left: 0; border-radius: 0; animation: panel-from-left 200ms var(--ease); }
+.resizable-panel.floating.members { right: 0; animation: panel-from-right 200ms var(--ease); }
+.resizable-panel.floating > .panel-content { height: 100%; }
+/* The close button sits on the dimmed side, so it never covers the panel's own header. */
+.panel-floating-close {
+  position: absolute; top: 12px; z-index: 1;
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border: 1px solid var(--border-strong); border-radius: 50%;
+  background: var(--bg-elev); color: var(--text);
+  box-shadow: 0 8px 20px #0006;
+}
+.resizable-panel.floating.channels > .panel-floating-close { left: calc(100% + 10px); }
+.resizable-panel.floating.members > .panel-floating-close { right: calc(100% + 10px); }
+@keyframes panel-from-left { from { transform: translateX(-24px); opacity: .4; } }
+@keyframes panel-from-right { from { transform: translateX(24px); opacity: .4; } }
+
+/* Title bar ----------------------------------------------------------------------------- */
+@media (max-width: 1199px) {
+  .live-redesign .titlebar { gap: 14px; }
+  .live-redesign .titlebar .brand { width: auto; }
+  .live-redesign .titlebar-search { width: 220px; }
+  .titlebar-search kbd { display: none; }
+}
+@media (max-width: 899px) {
+  .live-redesign .titlebar-search { width: 180px; }
+}
+@media (max-width: 699px) {
+  /* Search keeps its button, the label goes; the window title gives way first. */
+  .live-redesign .titlebar-context { display: none; }
+  .live-redesign .titlebar-search { width: 32px; padding: 0; justify-content: center; }
+  .live-redesign .titlebar-search > span { display: none; }
+}
+@media (max-width: 479px) {
+  .live-redesign .titlebar { padding-left: 12px; gap: 8px; }
+  .live-redesign .titlebar .brand-wordmark { display: none; }
+  .titlebar .window-help { display: none; }
+}
+
+/* Community rail ------------------------------------------------------------------------ */
+@media (max-width: 599px) {
+  .live-redesign.bar-side .clean-rail { width: 62px; padding: 12px 7px; gap: 10px; }
+  .live-redesign.bar-side .clean-rail .rail-brand,
+  .live-redesign.bar-side .clean-rail .tab-item,
+  .live-redesign.bar-side .clean-rail .tab-tile,
+  .live-redesign.bar-side .clean-rail .tabbar-add { width: 42px; height: 42px; min-height: 42px; }
+  .live-redesign.bar-side .clean-rail .tabbar-add .tab-tile { width: 38px; height: 38px; min-height: 38px; }
+  .live-redesign.bar-side .clean-rail .tabs-strip,
+  .live-redesign.bar-side .clean-rail .tab-group { gap: 10px; }
+  .live-redesign.bar-side .clean-rail .tab-item.active::before { left: -10px; }
+}
+.app.bar-top .tabs-strip { scrollbar-width: none; }
+@media (max-width: 599px) {
+  .app.bar-top .topbar { height: 48px; padding-inline: 8px; }
+  .app.bar-top .tab-item .rail-label { display: none; }
+  .app.bar-top .tab-item { padding-inline: 4px; }
+}
+
+/* Conversation -------------------------------------------------------------------------- */
+@media (max-width: 899px) {
+  /* The DM profile floats over the conversation instead of taking a third of it. */
+  .dm-conversation > .dm-profile {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 41;
+    width: min(320px, calc(100% - 48px));
+    box-shadow: 0 0 48px #000a;
+    animation: panel-from-right 200ms var(--ease);
+  }
+}
+@media (max-width: 639px) {
+  /* Room for the channel drawer's pull tab on the left edge. */
+  .server-view > .chat .chat-header, .server-view .dm-conversation .chat-header { padding-left: 30px; }
+}
+@media (max-width: 599px) {
+  .live-redesign .chat-header { height: 52px; min-height: 52px; padding-inline: 12px; gap: 8px; }
+  .live-redesign .dm-conversation .chat-header { padding-inline: 12px; }
+  .live-redesign .message-log { padding-inline: 8px; }
+  .live-redesign .composer-wrap { padding-inline: 8px; }
+  .message { padding-inline: 10px; }
+  .chat-header .tabs.inline { overflow-x: auto; scrollbar-width: none; }
+  .live-conversation-welcome { margin: 12px 10px 0; height: auto; min-height: 0; }
+  .live-welcome-copy { padding: 14px; }
+}
+@media (min-width: 2200px) {
+  /* Very wide conversations: lines stay readable instead of running across the whole screen. */
+  .message-content { max-width: 1280px; }
+}
+
+/* Settings ------------------------------------------------------------------------------ */
+/* The grid sizes the sidebar; nothing else sets its width (it used to fight the one-column layout). */
+.user-settings-modal .settings-sidebar { width: auto; }
+.user-settings-modal .settings-layout { grid-template-columns: 228px minmax(0, 1fr); min-height: 0; }
+@media (min-width: 1600px) {
+  .user-settings-modal { width: min(1120px, calc(100vw - 96px)); height: min(860px, calc(100dvh - var(--topbar-height) - 72px)); }
+  .user-settings-modal .settings-layout { grid-template-columns: 248px minmax(0, 1fr); }
+}
+@media (min-width: 2200px) {
+  .user-settings-modal { width: min(1320px, calc(100vw - 160px)); height: min(980px, calc(100dvh - var(--topbar-height) - 96px)); }
+  .user-settings-modal .settings-layout { grid-template-columns: 272px minmax(0, 1fr); }
+  .settings-content .settings-section { max-width: 860px; }
+}
+@media (max-width: 1099px) {
+  .user-settings-modal { width: calc(100vw - 32px); height: min(800px, calc(100dvh - var(--topbar-height) - 32px)); }
+  .user-settings-modal .settings-layout { grid-template-columns: 200px minmax(0, 1fr); }
+  .user-settings-modal .settings-sidebar { padding: 18px 12px; }
+  .user-settings-modal .settings-content { padding: 24px; }
+}
+@media (max-width: 859px) {
+  /* One column: search and a row of sections that scrolls sideways, then the page. */
+  .user-settings-modal { width: calc(100vw - 24px); height: calc(100dvh - var(--topbar-height) - 24px); max-height: none; }
+  .user-settings-modal > .modal-header { min-height: 0; padding: 14px 18px; }
+  .user-settings-modal .modal-header h2 { font-size: 20px; }
+  .user-settings-modal .settings-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .user-settings-modal .settings-sidebar { flex: none; max-height: none; overflow: visible; padding: 10px 14px 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .user-settings-modal .settings-identity { display: none; }
+  .user-settings-modal .settings-sidebar input { margin-bottom: 8px; }
+  .user-settings-modal .settings-sidebar nav {
+    flex-direction: row; flex-wrap: nowrap; gap: 4px;
+    margin-inline: -14px; padding: 0 14px 10px;
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin;
+  }
+  .user-settings-modal .settings-sidebar nav button { flex: none; width: auto; white-space: nowrap; padding: 8px 12px; scroll-snap-align: start; }
+  .user-settings-modal .settings-content { flex: 1; min-height: 0; padding: 18px 18px 28px; }
+  .user-settings-modal.has-savebar .settings-content { padding-bottom: 120px; }
+  .settings-savebar { left: 12px; right: 12px; bottom: 12px; }
+}
+@media (max-width: 599px) {
+  /* Phones: settings take the whole window under the title bar. */
+  .user-settings-modal { width: 100vw; height: calc(100dvh - var(--topbar-height)); top: calc(50% + var(--topbar-height) / 2); border-radius: 0; }
+  .user-settings-modal > .modal-header { padding: 10px 12px; }
+  .user-settings-modal .modal-header h2 { font-size: 18px; }
+  .user-settings-modal .settings-sidebar { padding: 8px 12px 0; }
+  .user-settings-modal .settings-sidebar nav { margin-inline: -12px; padding-inline: 12px; }
+  .user-settings-modal .settings-content { padding: 14px 12px 24px; }
+  .settings-content .settings-section h3 { font-size: 1.125rem; }
+  .settings-savebar { flex-wrap: wrap; }
+  .settings-savebar > span { flex-basis: 100%; }
+  .theme-preset-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Other dialogs */
+@media (max-width: 599px) {
+  .modal { width: calc(100vw - 16px); max-height: calc(100dvh - var(--topbar-height) - 16px); }
+  .modal-header { padding: 14px 14px 8px; }
+  .modal-body { padding: 8px 14px 14px; }
+  .form-actions > .btn { flex: 1 1 auto; }
+}
+
+/* Home and friends ---------------------------------------------------------------------- */
+@media (max-width: 599px) {
+  .live-redesign .friends { padding: 16px 12px; }
+  .live-friends-greeting { flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .live-friends-greeting h2 { font-size: 26px; }
+  .live-friends-greeting h2 > span { font-size: 30px; }
+  .live-activity-cards { grid-template-columns: minmax(0, 1fr); }
+  .live-activity-card:last-child { display: flex; }
+  .live-redesign .friends > .live-friends-filters { gap: 14px; overflow-x: auto; scrollbar-width: none; }
+}
+@media (min-width: 2200px) {
+  .live-friends-dashboard, .live-redesign .friends > .live-friends-filters { max-width: 1400px; }
+}
+
+/* Directory, search, store and services ------------------------------------------------- */
+.bot-catalog { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+@media (max-width: 599px) {
+  .search-filters { grid-template-columns: minmax(0, 1fr); }
+  .integration-route { grid-template-columns: minmax(0, 1fr); }
+  .live-directory-welcome { min-height: 0; padding: 20px; }
+  .live-directory-welcome h2 { font-size: 26px; }
+}
+
+/* Theater ------------------------------------------------------------------------------- */
+@media (min-width: 1600px) {
+  .theater-side { flex-basis: clamp(300px, 24%, 440px); }
+}
+@media (max-width: 899px) {
+  /* The player on top, queue and chat under it; the room scrolls as one. */
+  .theater-room .theater-body { flex-direction: column; overflow-y: auto; }
+  .theater-room .theater-stage { flex: none; height: clamp(240px, 56vw, 62dvh); }
+  .theater-room .theater-side { flex: none; height: max(360px, 50dvh); border-left: 0; border-top: 1px solid var(--border); }
+}
+@media (max-width: 599px) {
+  .theater-room > .chat-header { height: auto; min-height: 52px; flex-wrap: wrap; row-gap: 8px; padding-block: 8px; }
+  .playback-controls { padding: 8px 10px; gap: 8px; }
+}
+
+/* Music room ---------------------------------------------------------------------------- */
+/* Narrow rooms: player and lyrics first, then chat and queue; the room scrolls as one instead
+   of squeezing the player into what the side panel leaves. */
+@container song-room (max-width: 900px) {
+  .song-room .song-body { overflow-y: auto; overscroll-behavior: contain; }
+  .song-room .song-main { flex: none; height: max(460px, calc(100cqh - 220px)); }
+  .song-room .song-side { flex: none; height: max(340px, 55cqh); }
+}
+@container song-room (max-width: 600px) {
+  .song-room .song-body { padding: 0 8px 8px; gap: 8px; }
+  .song-room .song-header { gap: 8px; padding-inline: 12px; }
+  .song-header-icon { display: none; }
+  .song-header-end .song-glass-btn { gap: 0; padding: 8px; font-size: 0; }
+  .song-invite { padding: 8px 16px 32px; }
+  .song-invite-title { font-size: clamp(2rem, 11cqi, 2.8rem); }
+  .song-invite-join { height: 52px; padding: 0 24px 0 20px; font-size: 1rem; }
+}
+@container song-room (max-width: 420px) {
+  .song-listeners > span:last-child { display: none; }
+  .song-listeners { padding-right: 8px; }
+}
+@container (max-width: 420px) {
+  .song-panel { grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; }
+  .song-layout { padding-inline: 12px; }
+}
+@media (min-width: 1600px) {
+  .song-layout { grid-template-columns: minmax(270px, 380px) minmax(0, 1fr); }
+  .song-room .song-side { flex-basis: clamp(320px, 24%, 420px); }
+}
+@media (min-width: 2200px) {
+  .song-layout { width: 100%; max-width: 1800px; margin-inline: auto; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); }
+}
+@media (max-height: 640px) {
+  .song-invite { padding-block: 8px 24px; }
+  .song-invite-art { width: clamp(160px, 26cqi, 260px); }
+  .song-layout { padding-block: 10px 12px; }
+}
+
+/* Mini player: fewer extras as it narrows, the essentials (cover, title, play) always fit. */
+@media (max-width: 639px) {
+  .song-dock .song-volume.compact .song-slider { display: none; }
+}
+@media (max-width: 459px) {
+  .song-dock-grip { display: none; }
+  .song-dock-controls > .song-dock-btn:first-child { display: none; }
+}
+
+/* Calls ------------------------------------------------------------------------------- */
+@media (max-width: 599px) {
+  .direct-call-panel { right: 8px; bottom: 8px; width: calc(100vw - 16px); }
+  .stage-tiles.fit { gap: 6px; }
+}
