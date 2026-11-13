@@ -2574,5 +2574,7 @@
   "redesign.directoryEyebrow": "あなたの居場所がここに",
   "redesign.directoryTitle": "仲間を見つけよう。",
   "redesign.directoryBody": "共通のゲーム、弾む会話。お気に入りの場所をここに。",
-  "redesign.communityApps": "コミュニティのアプリ"
+  "redesign.communityApps": "コミュニティのアプリ",
+  "layout.showChannels": "チャンネルを表示",
+  "layout.closePanel": "パネルを閉じる"
 }

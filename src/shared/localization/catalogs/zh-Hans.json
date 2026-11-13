@@ -2574,5 +2574,7 @@
   "redesign.directoryEyebrow": "这里有你的位置",
   "redesign.directoryTitle": "找到你的伙伴。",
   "redesign.directoryBody": "共同的游戏，聊不完的话题。你喜爱的地方，就在这里。",
-  "redesign.communityApps": "社区应用"
+  "redesign.communityApps": "社区应用",
+  "layout.showChannels": "显示频道",
+  "layout.closePanel": "关闭面板"
 }

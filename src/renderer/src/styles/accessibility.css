@@ -20,26 +20,12 @@ button, input, textarea, select { font: inherit; }
 .ui-select-content, .ui-dropdown-content, .calendar-popover { max-width: calc(100vw - 24px); max-height: min(80dvh, var(--radix-select-content-available-height, 80dvh)); overflow: auto; }
 .calendar-popover { max-height: min(80dvh, var(--radix-popover-content-available-height, 80dvh)); }
 @media (max-width: 70rem) {
- .user-settings-modal { width: calc(100vw - 24px); height: calc(100dvh - 48px); }
- .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
- .settings-sidebar { padding: .6rem; max-height: 25dvh; border-right: 0; border-bottom: 1px solid var(--border); }
- .settings-sidebar .settings-identity { display: none; }
- .settings-sidebar input { margin-bottom: .4rem; }
- .settings-sidebar nav { flex-direction: row; flex-wrap: wrap; }
- .settings-sidebar nav button { width: auto; flex: 1 1 9rem; padding: .5rem; }
- .settings-content { padding: 1rem; }
- .has-savebar .settings-content { padding-bottom: 10rem; }
  .switch-setting, .preference-card { gap: .75rem; }
  .update-banner { height: auto !important; min-height: 40px; flex-wrap: wrap; }
 }
 @media (max-width: 36rem) {
- .user-settings-modal { height: calc(100dvh - var(--topbar-height) - 24px); max-height: calc(100dvh - var(--topbar-height) - 24px); }
- .settings-sidebar { max-height: 22dvh; }
- .settings-content { padding: .65rem; }
- .settings-content .settings-section h3 { font-size: 1.125rem; }
  .modal-header { padding: .65rem; }
  .modal-body { padding: .75rem; }
- .settings-sidebar nav button { flex-basis: 7rem; }
  .form-actions > .btn { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {

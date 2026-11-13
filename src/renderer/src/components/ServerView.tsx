@@ -36,7 +36,7 @@ import { isCancellation } from "../../../shared/requests.ts";
 import { UserPanel } from "./TopBar.tsx";
 import { VoiceUserContextMenu, VoiceUserMenuButton } from "./VoiceUserMenu.tsx";
 import { ChatSkeleton } from "./ui/skeleton.tsx";
-import { ResizablePanel, togglePanel } from "./layout/ResizablePanel.tsx";
+import { ResizablePanel, togglePanel, useMembersShown } from "./layout/ResizablePanel.tsx";
 import { addFriend } from "../social/index.ts";
 
 // Channel list -------------------------------------------------------------
@@ -622,7 +622,7 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
 export function ServerView({ accountId, serverId, channelId }: { accountId: string; serverId: string; channelId: string | null }) {
   const state = useStore((s) => s.instances[accountId]?.serverStates[serverId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
-  const showMembers = useStore((s) => s.settings.membersOpen);
+  const showMembers = useMembersShown();
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   if (!state || !me) return <ServerUnavailable accountId={accountId} serverId={serverId} />;
 

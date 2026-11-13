@@ -16,6 +16,8 @@
 @import "./styles/accessibility.css" layer(components);
 @import "./styles/layout-fixes.css" layer(components);
 @import "./styles/redesign.css";
+/* Window-size rules for the whole app: last, so no older breakpoint overrides them. */
+@import "./styles/responsive.css";
 @source "./";
 @custom-variant dark (&:where(.dark, .dark *));
 

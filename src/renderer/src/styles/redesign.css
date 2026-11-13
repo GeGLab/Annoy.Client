@@ -244,7 +244,7 @@
 .user-settings-modal > .modal-header { padding: 24px 29px; min-height: 80px; }
 .user-settings-modal .modal-header h2 { font-size: 24px; letter-spacing: -.8px; font-weight: 650; }
 .user-settings-modal .settings-layout { min-height: 490px; }
-.user-settings-modal .settings-sidebar { width: 215px; background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
+.user-settings-modal .settings-sidebar { background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
 .user-settings-modal .settings-identity { padding: 4px 7px 20px; gap: 11px; }
 .user-settings-modal .settings-identity .avatar { border-radius: 14px; }
 .user-settings-modal .settings-sidebar input { min-height: 33px; font-size: 10px; margin-bottom: 16px; border-radius: 7px; }
@@ -318,8 +318,6 @@
   .live-directory-welcome { min-height: 210px; padding: 27px; }
   .live-directory-welcome h2 { font-size: 32px; }
   .live-directory-welcome > .live-directory-stamp { right: 25px; opacity: .15; }
-  .user-settings-modal .settings-sidebar { width: 190px; }
-  .user-settings-modal .settings-content { padding: 25px; }
 }
 @media (max-height: 700px) {
   .live-conversation-welcome { min-height: 113px; height: 113px; margin-top: 14px; }

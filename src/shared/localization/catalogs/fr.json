@@ -2574,5 +2574,7 @@
   "redesign.directoryEyebrow": "IL Y A UNE PLACE POUR TOI ICI",
   "redesign.directoryTitle": "Trouve les tiens.",
   "redesign.directoryBody": "Un jeu en commun. Une discussion qui dure. Tes endroits préférés, juste ici.",
-  "redesign.communityApps": "Applications de la communauté"
+  "redesign.communityApps": "Applications de la communauté",
+  "layout.showChannels": "Afficher les salons",
+  "layout.closePanel": "Fermer le panneau"
 }
