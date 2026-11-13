@@ -1,14 +1,16 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
 import { DJ_STYLES, has, Permission, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackItem, type ServerState } from "@annoy/protocol";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import { flushSync } from "react-dom";
 import { apiFor, joinVoice, leaveVoice, openChannel } from "../../client.ts";
 import { channelPerms, displayNameOf } from "../../perms.ts";
 import { setState, toast, useStore } from "../../store.ts";
 import { Chat } from "../../components/Chat.tsx";
 import { VoiceStage } from "../../components/VoiceStage.tsx";
-import { Icon, type IconName } from "../../components/ui.tsx";
+import { Avatar, Icon, type IconName } from "../../components/ui.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../../components/ui/dropdown-menu.tsx";
 import { currentItem, elementDriver, useSync, usePlayback, viewDriver, type Driver, type Playback, type UserEvents } from "./playback.ts";
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
@@ -27,9 +29,11 @@ function clock(seconds: number): string {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
-/** Keeps a native view on top of `el`, hidden while a modal covers the page. */
+/** Keeps a native view on top of `el`, hidden while a modal, menu or popover covers the page. */
 function useViewBounds(slot: Slot, el: HTMLElement | null, active: boolean): void {
-  const modalOpen = useStore((s) => s.modal !== null);
+  const modal = useStore((s) => s.modal !== null);
+  const overlay = useOverlayOpen();
+  const modalOpen = modal || overlay;
   useLayoutEffect(() => {
     const bridge = window.annoy?.theater;
     if (!bridge) return;
@@ -141,15 +145,18 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
   const canAttach = canAdd && has(perms, Permission.ATTACH_FILES);
   const moderator = has(perms, Permission.MANAGE_MESSAGES);
 
-  const add = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!url.trim() || pending.current) return;
-    const submitted = url.trim();
+  const submit = async (link: string): Promise<boolean> => {
+    if (!link.trim() || pending.current) return false;
     pending.current = true;
     setBusy(true);
     try {
-      if (await send({ op: "add", url: submitted })) setUrl((current) => current.trim() === submitted ? "" : current);
+      return await send({ op: "add", url: link.trim() });
     } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
+  };
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    const submitted = url.trim();
+    if (await submit(submitted)) setUrl((current) => current.trim() === submitted ? "" : current);
   };
 
   // An upload is a message in the room's chat; its file then joins the queue.
@@ -173,10 +180,10 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
 
   return (
     <div className="playback-queue">
-      {canAdd && (
+      {canAdd && song && <SongRequest id={songRequestId(channel.id)} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />}
+      {canAdd && !song && (
         <form className="queue-add" onSubmit={add}>
           <input
-            id={song ? songRequestId(channel.id) : undefined}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder={audioOnly ? translate("common.f92e8e941b1d") : translate("common.006f5c9b0031")}
@@ -1266,7 +1273,367 @@ function withTransition(change: () => void): void {
   doc.startViewTransition(() => flushSync(change));
 }
 
-function UpNext({ playback, onOpen }: { playback: Playback; onOpen: () => void }) {
+// Room options --------------------------------------------------------------------
+
+/** Menus and popovers open over the room: the native video view would draw on top of them. */
+let overlays = 0;
+const useOverlayOpen = () => useSyncExternalStore(subscribe, () => overlays > 0);
+function useOverlay(open: boolean): void {
+  useEffect(() => {
+    if (!open) return;
+    overlays++;
+    notify();
+    return () => { overlays--; notify(); };
+  }, [open]);
+}
+
+/** A room option flips the moment it's clicked; the room's answer settles it, an error puts it back. */
+function useOptimistic<T>(value: T): [T, (next: T, commit: () => Promise<boolean>) => void] {
+  const [pending, setPending] = useState<{ value: T } | null>(null);
+  const latest = useRef(0);
+  const change = (next: T, commit: () => Promise<boolean>) => {
+    const mine = ++latest.current;
+    setPending({ value: next });
+    void commit().finally(() => { if (latest.current === mine) setPending(null); });
+  };
+  return [pending ? pending.value : value, change];
+}
+
+/** A switch for the whole room: white while on, with what it's set to underneath. */
+function ModeTile({ icon, label, on, status, disabled, title, onToggle, children }: {
+  icon: IconName; label: string; on: boolean; status: string; disabled: boolean; title: string; onToggle: () => void; children?: ReactNode;
+}) {
+  return (
+    <div className={`song-mode${on ? " on" : ""}${disabled ? " disabled" : ""}`}>
+      <button type="button" className="song-mode-main" role="switch" aria-checked={on} disabled={disabled} title={title} onClick={onToggle}>
+        <span className="song-mode-icon"><Icon name={icon} size={16} /></span>
+        <span className="song-mode-copy">
+          <strong className="truncate">{label}</strong>
+          <small className="truncate">{status}</small>
+        </span>
+      </button>
+      {children}
+    </div>
+  );
+}
+
+function MenuSwitch({ icon, label, hint, on, disabled = false, onToggle }: { icon: IconName; label: string; hint?: string; on: boolean; disabled?: boolean; onToggle: () => void }) {
+  return (
+    <DropdownMenuItem className="song-menu-switch" role="menuitemcheckbox" aria-checked={on} disabled={disabled} title={hint} onSelect={(e) => { e.preventDefault(); onToggle(); }}>
+      <Icon name={icon} size={15} />
+      <span className="song-menu-switch-label">{label}</span>
+      <span className={`song-menu-check${on ? " on" : ""}`} aria-hidden="true"><i /></span>
+    </DropdownMenuItem>
+  );
+}
+
+/**
+ * The room's modes in one place: DJ and ducking as switches anyone in the room can flip (they
+ * apply to everyone), the rest behind one button. A line underneath says what's happening now.
+ */
+function RoomOptions({ playback, here, lite, canControl, canVideo, video, onVideo }: {
+  playback: Playback; here: boolean; lite: boolean; canControl: boolean; canVideo: boolean; video: boolean; onVideo: (next: boolean) => void;
+}) {
+  const state = playback.state!;
+  const { send } = playback;
+  const ducked = useDucked();
+  const mixing = useMixing();
+  const inCall = useStore((s) => s.voice?.status === "connected");
+  const [dj, setDj] = useOptimistic(state.dj === true);
+  const [style, setStyle] = useOptimistic<DjStyle>(state.djStyle ?? "auto");
+  const [ducking, setDucking] = useOptimistic(state.ducking === true);
+  const [autoplay, setAutoplay] = useOptimistic(state.autoplay);
+  const [menu, setMenu] = useState<"styles" | "more" | null>(null);
+  useOverlay(menu !== null);
+
+  let live: { icon: IconName; text: string; active?: boolean } | null = null;
+  if (mixing) live = { icon: "disc", text: translate("song.mixing", { p0: djLabel(mixing) }), active: true };
+  else if (here && ducking && ducked) live = { icon: "mic", text: translate("song.ducked"), active: true };
+  else if (here && ducking && !inCall) live = { icon: "info", text: translate("song.duckNoCall") };
+  else if (dj) live = { icon: "disc", text: translate("song.djStatus", { p0: djLabel(style) }) };
+  else if (ducking) live = { icon: "mic", text: translate("song.duckStatus") };
+
+  const more = (
+    <DropdownMenu open={menu === "more"} onOpenChange={(open) => setMenu(open ? "more" : null)}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="song-modes-more" title={translate("song.more")} aria-label={translate("song.more")}><Icon name="sliders" size={15} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="song-menu">
+        <DropdownMenuLabel>{translate("song.forEveryone")}</DropdownMenuLabel>
+        {/* A DJ always moves on to the next track: autoplay stays on while DJ mode is. */}
+        <MenuSwitch icon="repeat" label={translate("common.aaae0f8a9481")} on={autoplay || dj} disabled={!canControl || dj} onToggle={() => setAutoplay(!autoplay, () => send({ op: "autoplay", value: !autoplay }))} />
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>{translate("song.justYou")}</DropdownMenuLabel>
+        <MenuSwitch icon="feather" label={translate("song.lite")} hint={translate("song.liteHint")} on={lite} onToggle={() => withTransition(() => setSongLite(!lite))} />
+        {canVideo && <MenuSwitch icon="film" label={translate("song.showVideo")} on={video} onToggle={() => onVideo(!video)} />}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <div className="song-modes" role="group" aria-label={translate("song.roomOptions")}>
+      <div className="song-modes-head">
+        {live
+          ? <p className={`song-modes-live${live.active ? " active" : ""}`} role="status"><Icon name={live.icon} size={13} /> <span className="truncate">{live.text}</span></p>
+          : <span className="song-modes-title">{translate("song.roomOptions")}</span>}
+        {more}
+      </div>
+      {(state.dj !== undefined || state.ducking !== undefined) && (
+        <div className="song-modes-row">
+          {state.dj !== undefined && (
+            <ModeTile
+              icon="disc" label={translate("song.dj")} on={dj} disabled={!canControl} title={translate("song.djHint")}
+              status={dj ? `${translate("song.on")} · ${djLabel(style)}` : translate("song.off")}
+              onToggle={() => setDj(!dj, () => send({ op: "dj", value: !dj }))}
+            >
+              {dj && (
+                <DropdownMenu open={menu === "styles"} onOpenChange={(open) => setMenu(open ? "styles" : null)}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="song-mode-more" disabled={!canControl} title={translate("song.djStyle")} aria-label={translate("song.djStyle")}>
+                      <Icon name="chevron" size={15} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="song-menu">
+                    <DropdownMenuLabel>{translate("song.djTransition")}</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={style} onValueChange={(value) => { const next = value as DjStyle; setStyle(next, () => send({ op: "dj", value: true, style: next })); }}>
+                      {DJ_STYLES.map((option) => <DropdownMenuRadioItem key={option} value={option}>{djLabel(option)}</DropdownMenuRadioItem>)}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </ModeTile>
+          )}
+          {state.ducking !== undefined && (
+            <ModeTile
+              icon="mic" label={translate("song.ducking")} on={ducking} disabled={!canControl} title={translate("song.duckingHint")}
+              status={ducking ? translate("song.on") : translate("song.off")}
+              onToggle={() => setDucking(!ducking, () => send({ op: "ducking", value: !ducking }))}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Listeners -------------------------------------------------------------------------
+
+type Member = ServerState["members"][number];
+
+/** Who is listening along: their faces, and the full list on click. */
+function Listeners({ state, ids, me }: { state: ServerState; ids: readonly string[]; me: string }) {
+  const [open, setOpen] = useState(false);
+  useOverlay(open);
+  const people = useMemo(() => {
+    const byId = new Map(state.members.map((m) => [m.user.id, m]));
+    const found = ids.map((id) => byId.get(id)).filter((m): m is Member => !!m);
+    // You first: the list reads "you and who else".
+    return [...found.filter((m) => m.user.id === me), ...found.filter((m) => m.user.id !== me)];
+  }, [ids, state.members, me]);
+  const label = people.length ? translate("song.listenersCount", { p0: people.length }) : translate("song.listenersEmpty");
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button type="button" className={`song-listeners${people.length ? "" : " empty"}`} title={translate("song.listenersTitle")}>
+          {people.length > 0 && (
+            <span className="song-listeners-faces" aria-hidden="true">
+              {people.slice(0, 4).map((m) => <Avatar key={m.user.id} user={m.user} size={22} />)}
+            </span>
+          )}
+          {people.length > 0 && <span className="song-live-dot" aria-hidden="true" />}
+          <span>{label}</span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="song-listeners-pop" side="bottom" align="end" sideOffset={8} collisionPadding={12}>
+          <strong className="song-listeners-title">{translate("song.listenersTitle")} <span>{people.length}</span></strong>
+          {people.length ? (
+            <ul>
+              {people.map((m) => (
+                <li key={m.user.id}>
+                  <Avatar user={m.user} size={30} />
+                  <span className="truncate">{displayNameOf(m)}</span>
+                  {m.user.id === me && <small>{translate("song.you")}</small>}
+                  <span className="song-bars" aria-hidden="true"><i /><i /><i /></span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>{translate("song.listenersEmpty")}</p>
+          )}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+// Requests ---------------------------------------------------------------------------
+
+const YOUTUBE_HOST = /^(www\.|m\.|music\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
+const DIRECT_MEDIA = /\.(mp4|webm|mkv|mov|m4v|ogv|mp3|ogg|oga|opus|m4a|aac|flac|wav)$/i;
+
+interface LinkPreview { url: string; kind: PlaybackItem["kind"]; name: string; detail: string; thumb: string | null }
+
+/** What a pasted link will be once queued (the server decides the same way); null while it isn't a link. */
+function previewLink(raw: string): LinkPreview | null {
+  const text = raw.trim();
+  if (!text || /\s/.test(text)) return null;
+  let url: URL;
+  try {
+    // "youtu.be/…" pasted without its scheme is still a link.
+    url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    return null;
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || !/\.[a-z]{2,}$/i.test(url.hostname)) return null;
+  const host = url.hostname.replace(/^www\./, "");
+  const href = url.toString();
+  if (YOUTUBE_HOST.test(url.hostname)) {
+    const thumb = youtubeThumb({ kind: "youtube", url: href } as PlaybackItem);
+    const id = thumb ? /\/vi\/([\w-]+)\//.exec(thumb)?.[1] : null;
+    return { url: href, kind: "youtube", name: id ? `youtu.be/${id}` : host, detail: host, thumb };
+  }
+  const file = (() => { try { return decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() ?? ""); } catch { return ""; } })();
+  if (DIRECT_MEDIA.test(url.pathname)) return { url: href, kind: "direct", name: file || host, detail: host, thumb: null };
+  return { url: href, kind: "site", name: host, detail: `${host}${url.pathname === "/" ? "" : url.pathname}`, thumb: null };
+}
+
+/** YouTube's own title for a pasted video, best effort (the room names it on its own anyway). */
+const linkTitles = new Map<string, string | null>();
+function useLinkTitle(preview: LinkPreview | null): string | null {
+  const url = preview?.kind === "youtube" && preview.thumb ? preview.url : null;
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    if (!url || linkTitles.has(url)) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const giveUp = setTimeout(() => controller.abort(), 4000);
+      void fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`, { signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer" })
+        .then((res) => (res.ok ? res.json() as Promise<{ title?: unknown }> : null))
+        .then((body) => { linkTitles.set(url, typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : null); refresh((n) => n + 1); })
+        .catch(() => { if (!controller.signal.aborted) linkTitles.set(url, null); })
+        .finally(() => clearTimeout(giveUp));
+    }, 220);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [url]);
+  return url ? linkTitles.get(url) ?? null : null;
+}
+
+/**
+ * Asking for a song: paste a link and see what it is (the video's thumbnail and title) before
+ * it goes in; Enter adds it. Files can be picked or dropped on the box.
+ */
+function SongRequest({ id, busy, canAttach, onAdd, onFiles }: { id: string; busy: boolean; canAttach: boolean; onAdd: (url: string) => Promise<boolean>; onFiles: (files: File[]) => void }) {
+  const [text, setText] = useState("");
+  const [added, setAdded] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  const preview = useMemo(() => previewLink(text), [text]);
+  const title = useLinkTitle(preview);
+  const invalid = text.trim().length > 3 && !preview;
+  useEffect(() => {
+    if (!added) return;
+    const timer = setTimeout(() => setAdded(0), 2600);
+    return () => clearTimeout(timer);
+  }, [added]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!preview || busy) return;
+    const sent = text;
+    if (await onAdd(preview.url)) {
+      setText((current) => (current === sent ? "" : current));
+      setAdded((n) => n + 1);
+    }
+  };
+  const hasFiles = (e: ReactDragEvent) => [...e.dataTransfer.types].includes("Files");
+
+  return (
+    <form
+      className={`song-request${preview ? " ready" : ""}${dragging ? " dragging" : ""}${invalid ? " invalid" : ""}`}
+      onSubmit={submit}
+      onDragOver={canAttach ? (e) => { if (!hasFiles(e)) return; e.preventDefault(); setDragging(true); } : undefined}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={canAttach ? (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDragging(false);
+        const list = [...e.dataTransfer.files].filter((f) => /^(audio|video)\//.test(f.type));
+        if (list.length) onFiles(list);
+      } : undefined}
+    >
+      <label className="song-request-field" htmlFor={id}>
+        <span className={`song-request-badge${preview ? ` kind-${preview.kind}` : ""}`} aria-hidden="true">
+          <Icon name={preview ? KIND_ICON[preview.kind] : "link"} size={15} />
+        </span>
+        <input
+          id={id}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={translate("song.requestPlaceholder")}
+          aria-label={translate("song.requestTitle")}
+          aria-invalid={invalid || undefined}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {text && (
+          <button type="button" className="song-request-clear" title={translate("song.requestClear")} aria-label={translate("song.requestClear")} onClick={() => setText("")}>
+            <Icon name="x" size={14} />
+          </button>
+        )}
+      </label>
+
+      {preview ? (
+        <div className="song-request-preview">
+          <span className={`song-request-thumb kind-${preview.kind}`}>
+            {preview.thumb ? <img src={preview.thumb} alt="" draggable={false} referrerPolicy="no-referrer" /> : <Icon name={KIND_ICON[preview.kind]} size={18} />}
+          </span>
+          <span className="song-request-copy">
+            <strong className="truncate" title={title ?? preview.name}>{title ?? preview.name}</strong>
+            <small className="truncate">{KIND_LABEL[preview.kind]} · {preview.detail}</small>
+          </span>
+          <button type="submit" className="song-request-add" disabled={busy} title={translate("song.requestEnter")}>
+            <Icon name={busy ? "loader" : "plus"} size={15} className={busy ? "song-spin" : ""} />
+            {busy ? translate("song.requestAdding") : translate("song.requestAdd")}
+          </button>
+        </div>
+      ) : dragging ? (
+        <p className="song-request-note drop"><Icon name="upload" size={14} /> {translate("song.requestDrop")}</p>
+      ) : invalid ? (
+        <p className="song-request-note error" role="alert">{translate("song.requestInvalid")}</p>
+      ) : added ? (
+        <p key={added} className="song-request-note done" role="status"><Icon name="check" size={14} /> {translate("song.requestAdded")}</p>
+      ) : (
+        <div className="song-request-foot">
+          <span>{translate("song.requestHint")}</span>
+          {canAttach && (
+            <button type="button" className="song-request-file" disabled={busy} title={translate("common.d273bd0711f9")} onClick={() => file.current?.click()}>
+              <Icon name="upload" size={13} /> {translate("song.requestFile")}
+            </button>
+          )}
+        </div>
+      )}
+      {canAttach && (
+        <input
+          ref={file}
+          type="file"
+          accept="audio/*,video/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const list = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (list.length) onFiles(list);
+          }}
+        />
+      )}
+    </form>
+  );
+}
+
+// Player panel ----------------------------------------------------------------------
+
+function UpNext({ playback, canRequest, onOpen, onRequest }: { playback: Playback; canRequest: boolean; onOpen: () => void; onRequest: () => void }) {
   const state = playback.state;
   const item = currentItem(state);
   useSyncExternalStore(subscribe, () => songInfos.size);
@@ -1275,22 +1642,35 @@ function UpNext({ playback, onOpen }: { playback: Playback; onOpen: () => void }
   const next = state.queue[index + 1];
   const info = next ? songInfos.get(next.id) : undefined;
   return (
-    <button type="button" className="song-upnext" onClick={onOpen}>
-      <span className="song-upnext-label">{translate("song.upNextTitle")} <span>· {translate("song.positionOf", { p0: index + 1, p1: state.queue.length })}</span></span>
+    <div className="song-upnext">
+      <div className="song-upnext-head">
+        <span className="song-upnext-label">{translate("song.upNextTitle")} <span>· {translate("song.positionOf", { p0: index + 1, p1: state.queue.length })}</span></span>
+        {canRequest && <button type="button" className="song-upnext-request" onClick={onRequest}><Icon name="plus" size={13} /> {translate("song.request")}</button>}
+      </div>
       {next ? (
-        <span className="song-upnext-track">
+        <button type="button" className="song-upnext-track" onClick={onOpen}>
           <QueueThumb item={next} />
           <span className="song-upnext-copy">
             <strong className="truncate">{info?.track ?? next.title}</strong>
             <small className="truncate">{info?.artist ?? KIND_LABEL[next.kind]}{state.dj ? ` · ${djLabel(presetFor(state.djStyle, next.id))}` : ""}</small>
           </span>
           <Icon name="right" size={16} />
-        </span>
+        </button>
       ) : (
-        <span className="song-upnext-empty"><Icon name="plus" size={14} /> {translate("song.queueEmptyHint")}</span>
+        <button type="button" className="song-upnext-empty" onClick={canRequest ? onRequest : onOpen}><Icon name="song" size={14} /> {translate("song.queueEmptyHint")}</button>
       )}
-    </button>
+    </div>
   );
+}
+
+/** Back: to the start of the song, or to the previous one when it has only just begun. */
+function goBack(playback: Playback, at: number): void {
+  const { state, send } = playback;
+  const item = currentItem(state);
+  if (!state || !item) return;
+  const previous = state.queue[state.queue.findIndex((entry) => entry.id === item.id) - 1];
+  if (at > 3 || !previous) void send({ op: "seek", position: 0 });
+  else void send({ op: "play", itemId: previous.id });
 }
 
 function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loading, duration, position, video, onVideo, onRequest, onSeek, onQueue }: {
@@ -1300,8 +1680,6 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
 }) {
   const { state, send } = playback;
   const item = currentItem(state);
-  const ducked = useDucked();
-  const mixing = useMixing();
   useTick(1000, !!item);
   const playing = !!item && !state?.paused;
   const requester = item ? names.get(item.addedBy) ?? translate("common.11bf7e98a3f1") : "";
@@ -1324,26 +1702,18 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
   }
 
   const album = info?.album ? (info.year ? `${info.album} · ${info.year}` : info.album) : null;
+  const playLabel = state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f");
   return (
     <div className="song-panel">
       <div className={`song-stage${showVideo ? " video" : ""}`}>
         {showVideo ? <div className="song-video" ref={setVideoSlot} /> : <SongCover info={info} item={item} spinning={playing && here && !lite} loading={loading} />}
         {buffering && !showVideo && <span className="song-stage-buffer" role="status"><span className="song-loader-eq small" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <i key={i} />)}</span>{translate("song.tuning")}</span>}
-        {canVideo && (
-          <button type="button" className="song-stage-toggle" onClick={() => onVideo(!video)}>
-            <Icon name={showVideo ? "image" : "film"} size={14} /> {showVideo ? translate("song.showCover") : translate("song.showVideo")}
-          </button>
-        )}
       </div>
 
       <div className="song-meta">
         <h2 className="song-title" title={item.title}>{info?.track ?? item.title}</h2>
         {loading && !info ? <span className="song-skeleton-line" aria-hidden="true" /> : <span className="song-subtitle truncate">{info?.artist ?? KIND_LABEL[item.kind]}</span>}
-        <span className="song-album truncate">
-          {mixing ? <span className="song-mixing"><Icon name="disc" size={12} /> {translate("song.mixing", { p0: djLabel(mixing) })}</span>
-            : buffering ? translate("song.tuning")
-            : [album, translate("song.requestedBy", { p0: requester })].filter(Boolean).join(" · ")}
-        </span>
+        <span className="song-album truncate">{[album, translate("song.requestedBy", { p0: requester })].filter(Boolean).join(" · ")}</span>
       </div>
 
       <div className="song-progress">
@@ -1359,54 +1729,28 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
       </div>
 
       <div className="song-transport">
-        <button className={`song-toggle${state.autoplay ? " on" : ""}`} aria-pressed={state.autoplay} disabled={!canControl} title={translate("common.aaae0f8a9481")} aria-label={translate("common.aaae0f8a9481")} onClick={() => void send({ op: "autoplay", value: !state.autoplay })}>
-          <Icon name="repeat" size={17} />
+        <button className="song-skip" disabled={!canControl} onClick={() => goBack(playback, at)} title={translate("song.previous")} aria-label={translate("song.previous")}>
+          <Icon name="skipBack" size={20} />
         </button>
-        <button className={`song-play${buffering ? " buffering" : ""}`} disabled={!canControl} onClick={() => void send(state.paused ? { op: "play" } : { op: "pause", position: at })} title={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")} aria-label={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")}>
+        <button className={`song-play${buffering ? " buffering" : ""}`} disabled={!canControl} onClick={() => void send(state.paused ? { op: "play" } : { op: "pause", position: at })} title={playLabel} aria-label={playLabel}>
           <Icon name={state.paused ? "play" : "pause"} size={26} />
         </button>
         <button className="song-skip" disabled={!canSkip} onClick={() => void send({ op: "next" })} title={translate("common.4a1772b0c06a")} aria-label={translate("common.4a1772b0c06a")}>
           <Icon name="skip" size={20} />
         </button>
-        {state.dj !== undefined ? (
-          <button className={`song-toggle${state.dj ? " on" : ""}`} aria-pressed={state.dj} disabled={!canControl} title={translate("song.djHint")} aria-label={translate("song.dj")} onClick={() => void send({ op: "dj", value: !state.dj })}>
-            <Icon name="disc" size={17} />
-          </button>
-        ) : <span />}
       </div>
-
-      {state.dj && (
-        <div className="song-dj" role="radiogroup" aria-label={translate("song.djStyle")}>
-          {DJ_STYLES.map((style) => (
-            <button key={style} role="radio" aria-checked={(state.djStyle ?? "auto") === style} className={`song-dj-style${(state.djStyle ?? "auto") === style ? " on" : ""}`} disabled={!canControl} onClick={() => void send({ op: "dj", value: true, style })}>
-              {djLabel(style)}
-            </button>
-          ))}
-        </div>
-      )}
 
       {here && <VolumeControl />}
 
-      <UpNext playback={playback} onOpen={onQueue} />
+      <RoomOptions playback={playback} here={here} lite={lite} canControl={canControl} canVideo={canVideo} video={video} onVideo={onVideo} />
 
-      <div className="song-options">
-        {canControl && <button className="song-pill primary" onClick={onRequest}><Icon name="plus" size={13} /> {translate("song.request")}</button>}
-        {state.ducking !== undefined && (
-          <button className={`song-pill${state.ducking ? " on" : ""}`} aria-pressed={state.ducking} disabled={!canControl} title={translate("song.duckingHint")} onClick={() => void send({ op: "ducking", value: !state.ducking })}>
-            <Icon name="mic" size={13} /> {translate("song.ducking")}
-          </button>
-        )}
-        <button className={`song-pill${lite ? " on" : ""}`} aria-pressed={lite} title={translate("song.liteHint")} onClick={() => withTransition(() => setSongLite(!lite))}>
-          <Icon name="feather" size={13} /> {translate("song.lite")}
-        </button>
-      </div>
-      {here && ducked && <span className="song-ducked" role="status"><Icon name="mic" size={13} /> {translate("song.ducked")}</span>}
+      <UpNext playback={playback} canRequest={canControl} onOpen={onQueue} onRequest={onRequest} />
     </div>
   );
 }
 
 /** What someone who hasn't joined sees: what's on, big and inviting, and one button to come in. */
-function SongInvite({ playback, info, loading, names, channel, canControl, onJoin }: { playback: Playback; info: SongInfo | null; loading: boolean; names: Map<string, string>; channel: Channel; canControl: boolean; onJoin: () => void }) {
+function SongInvite({ playback, info, loading, names, channel, canControl, state: server, me, onJoin }: { playback: Playback; info: SongInfo | null; loading: boolean; names: Map<string, string>; channel: Channel; canControl: boolean; state: ServerState; me: string; onJoin: () => void }) {
   const state = playback.state!;
   const item = currentItem(state)!;
   const index = state.queue.findIndex((entry) => entry.id === item.id);
@@ -1431,6 +1775,7 @@ function SongInvite({ playback, info, loading, names, channel, canControl, onJoi
           <Icon name={state.paused && canControl ? "play" : "headphones"} size={20} /> {translate(state.paused && canControl ? "song.playAndJoin" : "song.listenHere")}
         </button>
         {state.paused && !canControl && <p className="song-invite-meta">{translate("song.roomPaused")}</p>}
+        {state.listeners && state.listeners.length > 0 && <Listeners state={server} ids={state.listeners} me={me} />}
         <p className="song-invite-meta">
           {translate("song.requestedBy", { p0: requester })} · {translate("song.positionOf", { p0: index + 1, p1: state.queue.length })}
           {next && <> · {translate("song.upNext")} <strong>{songInfos.get(next.id)?.track ?? next.title}</strong></>}
@@ -1451,6 +1796,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
   const canControl = has(perms, Permission.SEND_MESSAGES);
   const canSkip = has(perms, Permission.MANAGE_MESSAGES) || item?.addedBy === me;
   const queued = playback.state?.queue.length ?? 0;
+  const listeners = playback.state?.listeners;
   const known = useDuration(item?.id);
   const { info, loading } = useSongInfo(item, known);
   const duration = known ?? info?.duration ?? null;
@@ -1494,17 +1840,19 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
         <span className="song-header-icon"><Icon name="song" size={17} /></span>
         <h1 className="truncate">{channel.name}</h1>
         <span className="chat-topic">{channel.topic || translate("common.58547828fc8e")}</span>
-        {here && <span className="song-header-pill"><span className="song-live-dot" aria-hidden="true" /> {translate("song.listening")}</span>}
-        {here ? (
-          <button className="song-glass-btn" onClick={leave}>{rich("common.3f4403be164d",{p0:(<Icon name="volumeOff" size={15} />)})}</button>
-        ) : !item && !firstLoad && (
-          <button className="song-glass-btn" onClick={join}>{rich("common.89b5c2ca7704",{p0:(<Icon name="headphones" size={15} />)})}</button>
-        )}
+        <span className="song-header-end">
+          {listeners ? <Listeners state={state} ids={listeners} me={me} /> : here && <span className="song-header-pill"><span className="song-live-dot" aria-hidden="true" /> {translate("song.listening")}</span>}
+          {here ? (
+            <button className="song-glass-btn" onClick={leave}>{rich("common.3f4403be164d",{p0:(<Icon name="volumeOff" size={15} />)})}</button>
+          ) : !item && !firstLoad && (
+            <button className="song-glass-btn" onClick={join}>{rich("common.89b5c2ca7704",{p0:(<Icon name="headphones" size={15} />)})}</button>
+          )}
+        </span>
       </header>
       {firstLoad ? (
         <SongLoader />
       ) : inviting ? (
-        <SongInvite playback={playback} info={info} loading={loading} names={names} channel={channel} canControl={canControl} onJoin={join} />
+        <SongInvite playback={playback} info={info} loading={loading} names={names} channel={channel} canControl={canControl} state={state} me={me} onJoin={join} />
       ) : (
         <div className="song-body">
           <div className={`song-main${item ? "" : " idle"}`}>
@@ -1598,7 +1946,15 @@ function SongPlayer({ session }: { session: Listening }) {
 
   // Two decks, so DJ mode can play the next track while the current one plays out. The deck an
   // item was loaded on keeps it: a track mixed in is never loaded twice.
-  const decks = useRef({ current: "music" as Deck, assigned: new Map<string, Deck>(), preload: null as { deck: Deck; itemId: string } | null });
+  const decks = useRef({
+    current: "music" as Deck,
+    assigned: new Map<string, Deck>(),
+    preload: null as { deck: Deck; itemId: string } | null,
+    /** The track this device last mixed in: each transition starts once, whoever reported the end. */
+    mixedInto: null as string | null,
+    /** The deck playing out a transition, known before React renders it (the deck closer reads it). */
+    tail: null as { deck: Deck; seconds: number; itemId: string } | null,
+  });
   const deck = (itemId && decks.current.assigned.get(itemId)) || decks.current.current;
   decks.current.current = deck;
   const deckRef = useRef(deck);
@@ -1657,6 +2013,38 @@ function SongPlayer({ session }: { session: Listening }) {
   const next = index >= 0 ? state!.queue[index + 1] : undefined;
   const preset = next ? presetFor(state?.djStyle, next.id) : null;
   const dj = state?.dj === true && !!state.autoplay;
+
+  /** Starts the transition from `from` (playing `fromId`) into the deck holding `toId`. Once per track. */
+  const startMix = (from: Deck, fromId: string, to: Deck, toId: string, mix: DjPreset): boolean => {
+    const bridge = window.annoy?.theater;
+    if (!bridge || decks.current.mixedInto === toId) return false;
+    const seconds = DJ_SECONDS[mix];
+    const playingOut = { deck: from, seconds, itemId: fromId };
+    decks.current.mixedInto = toId;
+    decks.current.tail = playingOut;
+    setMixing(mix);
+    setTail(playingOut);
+    bridge.control(to, { action: "volume", volume: volumeRef.current });
+    bridge.control(to, { action: "fx", preset: mix, role: "in", seconds });
+    bridge.control(to, { action: "play", position: 0 });
+    bridge.control(from, { action: "fx", preset: mix, role: "out", seconds });
+    return true;
+  };
+
+  // Every listener mixes at the same room time, but only the first end report moves the room.
+  // A listener whose own mix point hadn't come yet (a few ms late, or a skip near the end) sees
+  // the room move to the track already waiting on its other deck: it mixes it in right then,
+  // instead of cutting the old deck off and starting the new one cold.
+  const previous = useRef<{ id: string; deck: Deck } | null>(null);
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = itemId ? { id: itemId, deck } : null;
+    const waiting = decks.current.preload;
+    if (!dj || !before || !itemId || before.id === itemId || waiting?.itemId !== itemId || waiting.deck === before.deck) return;
+    startMix(before.deck, before.id, waiting.deck, itemId, presetFor(state?.djStyle, itemId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the room changes track
+  }, [itemId]);
+
   useEffect(() => {
     const bridge = window.annoy?.theater;
     if (!bridge || !dj || !item || !next || !preset || !view || !inView(next) || !duration || state?.paused || tail) return;
@@ -1673,13 +2061,7 @@ function SongPlayer({ session }: { session: Listening }) {
       }, Math.max(0, remaining - seconds - 20) * 1000),
       setTimeout(() => {
         if (decks.current.preload?.itemId !== next.id) return;
-        setMixing(preset);
-        setTail({ deck, seconds, itemId: item.id });
-        bridge.control(target, { action: "volume", volume: volumeRef.current });
-        bridge.control(target, { action: "fx", preset, role: "in", seconds });
-        bridge.control(target, { action: "play", position: 0 });
-        bridge.control(deck, { action: "fx", preset, role: "out", seconds });
-        void latest.current.send({ op: "ended", itemId: item.id });
+        if (startMix(deck, item.id, target, next.id, preset)) void latest.current.send({ op: "ended", itemId: item.id });
       }, (remaining - seconds) * 1000),
     ];
     return () => timers.forEach(clearTimeout);
@@ -1694,6 +2076,7 @@ function SongPlayer({ session }: { session: Listening }) {
       if (latest.current.state?.currentId === tail.itemId) void latest.current.send({ op: "ended", itemId: tail.itemId });
       else window.annoy?.theater.close(tail.deck);
       decks.current.preload = null;
+      decks.current.tail = null;
       setTail(null);
       setMixing(null);
     }, (tail.seconds + 0.8) * 1000);
@@ -1706,11 +2089,11 @@ function SongPlayer({ session }: { session: Listening }) {
     if (!bridge) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (const d of DECKS) {
-      const inUse = (view && d === deck) || tail?.deck === d || decks.current.preload?.deck === d;
+      const inUse = (view && d === deck) || tail?.deck === d || decks.current.tail?.deck === d || decks.current.preload?.deck === d;
       if (inUse) continue;
       bridge.control(d, { action: "fx", preset: "smooth", role: "out", seconds: 1 });
       timers.push(setTimeout(() => {
-        const stillFree = !((inView(currentItem(latest.current.state)) && d === deckRef.current) || decks.current.preload?.deck === d);
+        const stillFree = !((inView(currentItem(latest.current.state)) && d === deckRef.current) || decks.current.preload?.deck === d || decks.current.tail?.deck === d);
         if (stillFree) bridge.close(d);
       }, 1200));
     }
@@ -1728,6 +2111,18 @@ function SongPlayer({ session }: { session: Listening }) {
     setState((s) => { s.songActivity = { kind: "generic", provider: "system-media", name: track.slice(0, 120), artist: artist.slice(0, 120), startedAt }; });
   }, [track, artist, paused, itemId]);
   useEffect(() => () => setState((s) => { s.songActivity = null; }), []);
+
+  // Being in the room's audience: said on joining, every 30 s while listening, and on leaving
+  // (the server forgets a listener that goes quiet). Older servers don't know who listens.
+  const audience = state?.listeners !== undefined;
+  useEffect(() => {
+    if (!audience) return;
+    const api = apiFor(session.accountId);
+    const say = (value: boolean) => void api.post(`/channels/${session.channelId}/playback/listen`, { value }).catch(() => {});
+    say(true);
+    const beat = setInterval(() => say(true), 30_000);
+    return () => { clearInterval(beat); say(false); };
+  }, [audience, session.accountId, session.channelId]);
 
   const inRoom = useStore((s) => s.view.kind === "server" && s.view.accountId === session.accountId && s.view.channelId === session.channelId);
   const me = useStore((s) => s.instances[session.accountId]?.user?.id ?? "");
@@ -1768,6 +2163,9 @@ function SongPlayer({ session }: { session: Listening }) {
         {duck && <span className="song-dock-duck" title={translate("song.ducked")}><Icon name="mic" size={13} /></span>}
         {item && state && (
           <span className="song-dock-controls">
+            <button type="button" className="song-dock-btn" disabled={!canControl} onClick={() => goBack(playback, position)} aria-label={translate("song.previous")} title={translate("song.previous")}>
+              <Icon name="skipBack" size={15} />
+            </button>
             <button type="button" className="song-dock-btn primary" disabled={!canControl} onClick={() => void playback.send(state.paused ? { op: "play" } : { op: "pause", position })} aria-label={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")} title={state.paused ? translate("common.ca0709c34209") : translate("common.c1301275ce3f")}>
               <Icon name={state.paused ? "play" : "pause"} size={16} />
             </button>
