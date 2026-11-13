@@ -287,11 +287,12 @@ test("playback failures preserve the submitted URL and ignore stale responses af
   await page.getByRole("button", { name: "Pedir uma música", exact: true }).click();
   const input = page.getByRole("textbox", { name: "Link para adicionar à fila" });
   await input.fill("https://example.test/song.mp3");
-  await page.locator(".queue-add button[type=submit], .queue-add .btn").first().click();
+  // The request box recognises the link, then offers to add it.
+  await page.getByRole("button", { name: "Adicionar à fila", exact: true }).click();
   await expect(page.locator(".toast")).toContainText("Fila indisponível");
   await expect(input).toHaveValue("https://example.test/song.mp3");
   fail = false;
-  await page.locator(".queue-add .btn").first().click();
+  await page.getByRole("button", { name: "Adicionar à fila", exact: true }).click();
   await expect.poll(() => writes).toBe(2);
   await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "chat"));
   late.resolve();
