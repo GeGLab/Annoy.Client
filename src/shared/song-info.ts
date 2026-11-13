@@ -26,4 +26,8 @@ export interface SongInfo {
   lyricsDuration: number | null;
   /** Length of the media that plays (the YouTube video), when known. */
   mediaDuration: number | null;
+  /** The catalog's genre ("Rock", "Rap/Hip Hop", "Dance"…): the DJ mixes and the room glows by it. */
+  genre?: string | null;
+  /** Beats per minute, when the catalog knows it: DJ transitions last whole bars and echo on the beat. */
+  bpm?: number | null;
 }

@@ -2,7 +2,7 @@ import {t as translate} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { useStore } from "../store.ts";
 import { Brand } from "./Brand.tsx";
-import { SearchButton } from "../features/search/SearchButton.tsx";
+import { useSearchShortcut } from "../features/search/SearchButton.tsx";
 import { Icon } from "./ui.tsx";
 
 export function TitleBar() {
@@ -10,6 +10,7 @@ export function TitleBar() {
   const server = useStore((s) => (view.kind === "server" ? s.instances[view.accountId]?.serverStates[view.serverId] : undefined));
   const service = useStore((s) => (view.kind === "service" ? s.services.find((sv) => sv.id === view.serviceId) : undefined));
   const [maximized, setMaximized] = useState(false);
+  useSearchShortcut();
   useEffect(() => {
     void window.annoy?.window.isMaximized().then(setMaximized);
     return window.annoy?.window.onMaximized(setMaximized);
@@ -27,7 +28,6 @@ export function TitleBar() {
     <header className={`titlebar${window.annoy?.platform === "darwin" ? " titlebar-mac" : ""}`}>
       <Brand size={24} wordmark />
       <span className="titlebar-context truncate">{title}</span>
-      <SearchButton />
       <div className="window-controls">
         <a
           className="window-control window-help"

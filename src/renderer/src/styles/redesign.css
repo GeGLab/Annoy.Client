@@ -21,9 +21,10 @@
 }
 .live-redesign .titlebar .brand { width: 270px; gap: 8px; }
 .live-redesign .titlebar .brand-wordmark { font-size: 20px; letter-spacing: -1px; }
-.live-redesign .titlebar-context { position: static; flex: 1; text-align: left; transform: none; font-size: 11px; color: var(--text-muted); }
+.live-redesign .titlebar { position: relative; }
+.live-redesign .titlebar-context { position: absolute; left: 50%; width: auto; max-width: 40%; padding: 0; text-align: center; transform: translateX(-50%); font-size: 11px; color: var(--text-muted); }
 .live-redesign .titlebar-search { position: static; width: 290px; max-width: 33vw; height: 28px; margin-left: auto; border-radius: 6px; background: var(--bg-channels); font-size: 10px; }
-.live-redesign .window-controls { margin-left: 0; }
+.live-redesign .window-controls, .live-redesign .titlebar .window-controls { margin-left: auto; }
 .live-redesign.bar-side .clean-rail { width: 76px; padding: 17px 10px 14px; gap: 13px; border-right: 0; background: var(--bg-rail); }
 .live-redesign.bar-side .clean-rail .rail-brand { width: 47px; height: 47px; min-height: 47px; margin: 0 auto; }
 .live-redesign.bar-side .clean-rail .rail-brand img { width: 36px; height: 36px; border-radius: 12px; }
@@ -113,6 +114,9 @@
 .live-redesign .channel-start h2 { font-size: 23px; letter-spacing: -.7px; }
 .live-redesign .chat:has(.live-conversation-welcome) .channel-start { display: none; }
 .live-redesign .message { padding: 8px 7px; margin-inline: -7px; border-radius: 6px; }
+/* A group reads as one block: the follow-up lines sit right under the first one. */
+.live-redesign .message:not(.compact) { padding-bottom: 2px; }
+.live-redesign .message.compact { padding-block: 2px; }
 .live-redesign .message .avatar { border-radius: 13px; }
 .live-redesign .message-author { font-size: 13px; font-weight: 650; }
 .live-redesign .message-content { font-size: 14px; line-height: 1.7; }

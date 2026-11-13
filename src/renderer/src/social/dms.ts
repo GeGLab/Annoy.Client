@@ -6,7 +6,7 @@ import { cloud, cloudFetch } from "./cloud.ts";
 import * as dm from "./dm-crypto.ts";
 import * as local from "./local-db.ts";
 import { cloudDevice, displayName, runtime, setSocial, social } from "./runtime.ts";
-import { readDmIntegrationMeta, readGameInvite, type GameInvite, type CloudDm, type CloudProfile, type DmAttachment, type DmIntegrationMeta, type DmMessage, type DmPayload, type DmPin } from "./types.ts";
+import { readDmIntegrationMeta, readDmReaction, readGameInvite, type DmReaction, type GameInvite, type CloudDm, type CloudProfile, type DmAttachment, type DmIntegrationMeta, type DmMessage, type DmPayload, type DmPin } from "./types.ts";
 
 /**
  * DMs (TODO item 1.2 and 3.4): encrypted here, delivered by chatannoy, kept on
@@ -90,7 +90,8 @@ async function decrypt(stored: local.StoredMessage): Promise<DmMessage> {
     const payload = await dm.openMessage<DmPayload>(await keyFor(other), { conversationId: stored.conversationId, senderId: stored.senderId, clientId: stored.clientId }, stored);
     const integration = readDmIntegrationMeta(payload.integration);
     const invite = readGameInvite(payload.invite);
-    return { ...base, content: String(payload.content ?? "").slice(0, 4000), attachments: Array.isArray(payload.attachments) ? payload.attachments.slice(0, 10) : [], replyTo: payload.replyTo ?? null, ...(integration && { integration }), ...(invite && { invite }) };
+    const reaction = readDmReaction(payload.reaction);
+    return { ...base, content: String(payload.content ?? "").slice(0, 4000), attachments: Array.isArray(payload.attachments) ? payload.attachments.slice(0, 10) : [], replyTo: payload.replyTo ?? null, ...(integration && { integration }), ...(invite && { invite }), ...(reaction && { reaction }) };
   } catch {
     return { ...base, content: "", attachments: [], replyTo: null, state: "undecryptable" };
   }
@@ -138,41 +139,57 @@ export async function setStore(conversationId: string, store: boolean): Promise<
   });
 }
 
+const PAGE = 50;
+const olderLoads = new Set<string>();
+
 /** The local history; with "store" on, older messages come from chatannoy as well. */
 export async function loadThread(conversationId: string, older = false): Promise<void> {
   const me = runtime.me;
   if (!me) return;
   const thread = social().threads[conversationId];
   if (thread?.loaded && !older) return;
+  if (older && (olderLoads.has(conversationId) || !thread?.loaded || !(thread.hasMoreLocal || thread.hasMoreRemote))) return;
   const before = older ? thread?.items.find((m) => !m.state)?.id : undefined;
+  if (older && !before) return;
   if (!thread) setSocial((s) => void (s.threads[conversationId] = { items: [], loaded: false, hasMoreRemote: false }));
-  if(!older)void loadDmPins(conversationId);
-  const conversation = social().dms.find((d) => d.id === conversationId);
-  if (conversation && (conversation.store.mine || conversation.store.theirs)) {
-    try {
-      const remote = await cloud<{ id: string; senderId: string; clientId: string; nonce: string; ciphertext: string; createdAt: string; editedAt: string | null }[]>(
-        "chat",
-        `/v1/dms/${conversationId}/messages?limit=50${before ? `&before=${before}` : ""}`,
-      );
-      await local.putMessages(me, remote.map((r) => ({ id: r.id, conversationId, senderId: r.senderId, clientId: r.clientId, nonce: r.nonce, ciphertext: r.ciphertext, createdAt: r.createdAt, editedAt: r.editedAt })));
-      setSocial((s) => {
-        const t = s.threads[conversationId];
-        if (t) t.hasMoreRemote = remote.length === 50;
-      });
-    } catch {
-      /* the local copy still shows */
+  if (older) {
+    olderLoads.add(conversationId);
+    setSocial((s) => { const t = s.threads[conversationId]; if (t) t.loadingOlder = true; });
+  } else void loadDmPins(conversationId);
+  try {
+    const conversation = social().dms.find((d) => d.id === conversationId);
+    let remoteMore: boolean | null = null;
+    if (conversation && (conversation.store.mine || conversation.store.theirs)) {
+      try {
+        const remote = await cloud<{ id: string; senderId: string; clientId: string; nonce: string; ciphertext: string; createdAt: string; editedAt: string | null }[]>(
+          "chat",
+          `/v1/dms/${conversationId}/messages?limit=${PAGE}${before ? `&before=${before}` : ""}`,
+        );
+        await local.putMessages(me, remote.map((r) => ({ id: r.id, conversationId, senderId: r.senderId, clientId: r.clientId, nonce: r.nonce, ciphertext: r.ciphertext, createdAt: r.createdAt, editedAt: r.editedAt })));
+        remoteMore = remote.length === PAGE;
+      } catch {
+        /* the local copy still shows */
+      }
+    }
+    const stored = await local.recentMessages(me, conversationId, PAGE, before);
+    const messages = await Promise.all(stored.map(decrypt));
+    if (runtime.me !== me) return;
+    setSocial((s) => {
+      const t = (s.threads[conversationId] ??= { items: [], loaded: false, hasMoreRemote: false });
+      const known = new Set(t.items.map((m) => m.id));
+      for (const m of messages) if (!known.has(m.id)) t.items.push(m);
+      t.items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      if (remoteMore !== null) t.hasMoreRemote = remoteMore;
+      // A full local page may have more behind it; a short one is the start of this device's copy.
+      t.hasMoreLocal = stored.length === PAGE;
+      t.loaded = true;
+    });
+  } finally {
+    if (older) {
+      olderLoads.delete(conversationId);
+      setSocial((s) => { const t = s.threads[conversationId]; if (t) t.loadingOlder = false; });
     }
   }
-  const stored = await local.recentMessages(me, conversationId, 50, before);
-  const messages = await Promise.all(stored.map(decrypt));
-  if (runtime.me !== me) return;
-  setSocial((s) => {
-    const t = (s.threads[conversationId] ??= { items: [], loaded: false, hasMoreRemote: false });
-    const known = new Set(t.items.map((m) => m.id));
-    for (const m of messages) if (!known.has(m.id)) t.items.push(m);
-    t.items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    t.loaded = true;
-  });
 }
 
 /** Pin snapshots stay sealed in IndexedDB and on chatannoy, including with history off. */
@@ -229,26 +246,28 @@ export function setDmMessageHook(hook: typeof messageHook): void {
   messageHook = hook;
 }
 
-export async function sendDm(conversationId: string, content: string, files: File[] = [], replyTo: string | null = null, options: { clientId?: string; integration?: DmIntegrationMeta; invite?: GameInvite } = {}): Promise<void> {
+export async function sendDm(conversationId: string, content: string, files: File[] = [], replyTo: string | null = null, options: { clientId?: string; integration?: DmIntegrationMeta; invite?: GameInvite; reaction?: DmReaction } = {}): Promise<void> {
   const me = runtime.me;
   const other = recipientOf(conversationId);
   if (!me || !other) return;
   const clientId = options.clientId ?? newClientId();
   const integration = options.integration;
   const invite = options.invite;
+  const reaction = options.reaction;
   const temp = `~${Date.now().toString(36)}${clientId.slice(0, 6)}`;
-  const optimistic: DmMessage = { id: temp, clientId, conversationId, senderId: me, content, attachments: [], replyTo, createdAt: new Date().toISOString(), editedAt: null, state: "sending", ...(integration && { integration }), ...(invite && { invite }) };
+  const optimistic: DmMessage = { id: temp, clientId, conversationId, senderId: me, content, attachments: [], replyTo, createdAt: new Date().toISOString(), editedAt: null, state: "sending", ...(integration && { integration }), ...(invite && { invite }), ...(reaction && { reaction }) };
   upsertMessage(optimistic);
   try {
     const key = await keyFor(other);
     const attachments = await Promise.all(files.map(uploadFile));
-    const payload: DmPayload = { v: 1, content, ...(attachments.length && { attachments }), ...(replyTo && { replyTo }), ...(integration && { integration }), ...(invite && { invite }) };
+    const payload: DmPayload = { v: 1, content, ...(attachments.length && { attachments }), ...(replyTo && { replyTo }), ...(integration && { integration }), ...(invite && { invite }), ...(reaction && { reaction }) };
     const sealed = await dm.sealMessage(key, { conversationId, senderId: me, clientId }, payload);
     const envelope = await cloud<Envelope>("chat", `/v1/dms/${conversationId}/messages`, { body: { device: cloudDevice(), clientId, ...sealed, blobs: attachments.map((a) => a.blobId) } });
     const stored: local.StoredMessage = { id: envelope.messageId, conversationId, senderId: me, clientId, nonce: sealed.nonce, ciphertext: sealed.ciphertext, createdAt: envelope.createdAt, editedAt: null };
     await local.putMessages(me, [stored]);
     const sent: DmMessage = { ...optimistic, id: envelope.messageId, attachments, createdAt: envelope.createdAt, state: undefined };
     upsertMessage(sent, temp);
+    if (reaction) return;
     setSocial((s) => {
       const d = s.dms.find((x) => x.id === conversationId);
       if (d) d.lastMessageId = envelope.messageId;
@@ -256,9 +275,40 @@ export async function sendDm(conversationId: string, content: string, files: Fil
     });
     messageHook?.(sent, true, true);
   } catch (error) {
-    upsertMessage({ ...optimistic, state: "failed" }, temp);
+    // A reaction that did not go out is simply undone; a message stays with "retry".
+    if (reaction) setSocial((s) => {
+      const t = s.threads[conversationId];
+      if (t) t.items = t.items.filter((m) => m.id !== temp);
+    });
+    else upsertMessage({ ...optimistic, state: "failed" }, temp);
     toast((error as Error).message);
   }
+}
+
+/** Adds or takes back the own reaction `emoji` on a delivered message. */
+export async function reactDm(message: DmMessage, emoji: string, reacted: boolean): Promise<void> {
+  if (message.state || message.reaction || message.id.startsWith("~")) return;
+  // Older apps show the content: the emoji itself reads well there; a removal stays blank.
+  await sendDm(message.conversationId, reacted ? "" : emoji, [], null, { reaction: { to: message.id, emoji, add: !reacted } });
+}
+
+/** Every message's reactions, folded in order from the reaction messages of the thread. */
+export function foldDmReactions(items: readonly DmMessage[]): Map<string, { emoji: string; userIds: string[] }[]> {
+  const byTarget = new Map<string, Map<string, Set<string>>>();
+  for (const m of items) {
+    const r = m.reaction;
+    if (!r || m.state === "failed" || m.state === "undecryptable") continue;
+    let emojis = byTarget.get(r.to);
+    if (!emojis) byTarget.set(r.to, (emojis = new Map()));
+    let users = emojis.get(r.emoji);
+    if (!users) emojis.set(r.emoji, (users = new Set()));
+    if (r.add) users.add(m.senderId);
+    else users.delete(m.senderId);
+    if (!users.size) emojis.delete(r.emoji);
+  }
+  const folded = new Map<string, { emoji: string; userIds: string[] }[]>();
+  for (const [target, emojis] of byTarget) if (emojis.size) folded.set(target, [...emojis].map(([emoji, users]) => ({ emoji, userIds: [...users] })));
+  return folded;
 }
 
 export async function editDm(message: DmMessage, content: string): Promise<void> {
@@ -349,6 +399,8 @@ export async function receiveEnvelope(envelope: Envelope, live: boolean): Promis
       }),
     );
     if (social().threads[envelope.conversationId]?.loaded) upsertMessage(message);
+    // A reaction neither reorders conversations, nor counts as unread, nor notifies.
+    if (message.reaction) return ack(envelope.id);
     setSocial((s) => {
       const d = s.dms.find((x) => x.id === envelope.conversationId);
       if (d && (!d.lastMessageId || d.lastMessageId < envelope.messageId)) d.lastMessageId = envelope.messageId;

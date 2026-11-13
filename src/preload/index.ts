@@ -11,9 +11,10 @@ import type { IntegrationRequest, IntegrationResponse } from "../main/integratio
 import type { VpngoApplied, VpngoRoutes, VpngoStatus } from "../main/integrations/vpngo.ts";
 
 export type TheaterSlot = "theater" | "music" | "musicB";
-export type DjPreset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser";
+export type DjPreset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser" | "cut" | "wash";
 export interface TheaterEvents {
-  status: { position: number; duration: number | null; paused: boolean; ended: boolean };
+  /** `ended`: the media finished; `loud`: loudness of its last second in dBFS (song rooms in DJ mode). */
+  status: { position: number; duration: number | null; paused: boolean; ended?: boolean; loud?: number };
   user: { action: "play" | "pause" | "seek"; position: number };
   ended: { position: number };
   title: string;
@@ -133,7 +134,7 @@ const bridge = {
     close: (slot: TheaterSlot) => ipcRenderer.send("theater:close", slot),
     /** Window coordinates; an empty rect hides the view. */
     setBounds: (slot: TheaterSlot, rect: { x: number; y: number; width: number; height: number }) => ipcRenderer.send("theater:bounds", slot, rect),
-    control: (slot: TheaterSlot, command: { action: "play" | "pause" | "seek"; position?: number } | { action: "volume"; volume: number } | { action: "levels"; on: boolean } | { action: "fx"; preset: DjPreset; role: "in" | "out"; seconds: number }) => ipcRenderer.send("theater:control", slot, command),
+    control: (slot: TheaterSlot, command: { action: "play" | "pause" | "seek"; position?: number } | { action: "volume"; volume: number } | { action: "levels"; on: boolean } | { action: "meter"; on: boolean } | { action: "fx"; preset: DjPreset; role: "in" | "out"; seconds: number; beat?: number }) => ipcRenderer.send("theater:control", slot, command),
     openExternal: (slot: TheaterSlot) => ipcRenderer.send("theater:open-external", slot),
     /** Cover, album and lyrics of a song room's track, looked up by the main process. */
     songInfo: (url: string, title: string, duration: number | null) => ipcRenderer.invoke("song:info", url, title, duration) as Promise<import("../shared/song-info.ts").SongInfo | null>,

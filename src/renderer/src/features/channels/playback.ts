@@ -88,6 +88,10 @@ export interface Driver {
   /** Seconds, or null before the media is ready. */
   position(): number | null;
   paused(): boolean | null;
+  /** The media played to its end (a finished player also reads as paused). */
+  ended(): boolean;
+  /** The media's own length, when it knows it. */
+  duration(): number | null;
   apply(command: { action: "play" | "pause" | "seek"; position: number }): void;
 }
 
@@ -98,6 +102,12 @@ export interface UserEvents {
 
 /** Drifting more than this is corrected with a seek; less is left alone to avoid stutter. */
 const TOLERANCE_S = 2.5;
+/**
+ * A finished track is never played again while the room is this close to its end: this device
+ * may have run a little ahead of the room's clock, and play() would start it over from the top.
+ */
+const END_GRACE_S = TOLERANCE_S + 2.5;
+const finishedAt = (position: number, length: number | null) => length !== null && position >= length - END_GRACE_S;
 
 /** Keeps `driver` on the room's playback and turns the viewer's own actions into room actions. */
 export function useSync(driver: Driver | null, playback: Playback, enabled = true): UserEvents {
@@ -107,6 +117,7 @@ export function useSync(driver: Driver | null, playback: Playback, enabled = tru
 
   useEffect(() => {
     if (!driver || !enabled) return;
+    let reported: { itemId: string; at: number } | null = null;
     const tick = () => {
       const { state: s, offset: o } = ref.current;
       if (!s?.currentId) return;
@@ -114,6 +125,20 @@ export function useSync(driver: Driver | null, playback: Playback, enabled = tru
       const position = driver.position();
       const paused = driver.paused();
       if (position === null || paused === null) return;
+      // A track the room's clock says is over is never played or moved again: play() on a
+      // finished track starts it over from the top. Where it still plays it plays out; once it
+      // stopped (ended, or a player that paused or rewound itself at its end), the room hears
+      // it ended, again every few seconds until it moves on.
+      const length = driver.duration();
+      const over = length !== null && target >= length - 0.5;
+      if (over || (driver.ended() && finishedAt(target, length ?? position))) {
+        const stopped = paused || driver.ended();
+        if (!s.paused && stopped && (reported?.itemId !== s.currentId || Date.now() - reported.at > 4000)) {
+          void send({ op: "ended", itemId: s.currentId });
+          reported = { itemId: s.currentId, at: Date.now() };
+        }
+        return;
+      }
       if (s.paused) {
         if (!paused || Math.abs(position - target) > 1) driver.apply({ action: "pause", position: target });
       } else if (paused || Math.abs(position - target) > TOLERANCE_S) {
@@ -157,7 +182,11 @@ export function elementDriver(el: HTMLMediaElement, events: () => UserEvents): {
   const driver: Driver = {
     position: () => (el.readyState >= 1 ? el.currentTime : null),
     paused: () => (el.readyState >= 1 ? el.paused : null),
+    ended: () => el.ended,
+    duration: () => (Number.isFinite(el.duration) && el.duration > 0 ? el.duration : null),
     apply({ action, position }) {
+      // Never restart a finished element at the room's end-of-track position.
+      if (el.ended && action === "play" && Number.isFinite(el.duration) && finishedAt(position, el.duration)) return;
       quietUntil = Date.now() + 800;
       if (Math.abs(el.currentTime - position) > 0.5) el.currentTime = position;
       if (action === "play" && el.paused) void el.play().catch(() => {});
@@ -172,24 +201,31 @@ type Slot = "theater" | "music" | "musicB";
 /** Drives the YouTube or website view of a slot through the main process. */
 export function viewDriver(slot: Slot, events: () => UserEvents): { driver: Driver; dispose: () => void } {
   const bridge = window.annoy?.theater;
-  let status: { position: number; paused: boolean; at: number } | null = null;
+  let status: { position: number; paused: boolean; at: number; ended: boolean; duration: number | null } | null = null;
   const offs = [
     bridge?.on("status", (from, s) => {
-      if (from === slot) status = { position: s.position, paused: s.paused, at: Date.now() };
+      if (from === slot) status = { position: s.position, paused: s.paused, at: Date.now(), ended: s.ended === true, duration: s.duration };
     }),
     bridge?.on("user", (from, e) => {
       if (from !== slot) return;
-      status = { position: e.position, paused: e.action === "pause", at: Date.now() };
+      status = { position: e.position, paused: e.action === "pause", at: Date.now(), ended: false, duration: status?.duration ?? null };
       events().onUser(e.action, e.position);
     }),
-    bridge?.on("ended", (from) => from === slot && events().onEnded()),
+    bridge?.on("ended", (from, e) => {
+      if (from !== slot) return;
+      status = { position: e.position, paused: true, at: Date.now(), ended: true, duration: status?.duration ?? null };
+      events().onEnded();
+    }),
   ];
   const driver: Driver = {
     position: () => (status ? status.position + (status.paused ? 0 : (Date.now() - status.at) / 1000) : null),
     paused: () => status?.paused ?? null,
+    ended: () => status?.ended ?? false,
+    duration: () => status?.duration ?? null,
     apply(command) {
+      if (status?.ended && command.action === "play" && finishedAt(command.position, status.duration ?? status.position)) return;
       bridge?.control(slot, command);
-      if (status) status = { position: command.position, paused: command.action === "pause", at: Date.now() };
+      if (status) status = { position: command.position, paused: command.action === "pause", at: Date.now(), ended: false, duration: status.duration };
     },
   };
   return { driver, dispose: () => offs.forEach((off) => off?.()) };

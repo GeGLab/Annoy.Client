@@ -216,7 +216,7 @@ function syncedLines(picked: LrcRecord, all: readonly LrcRecord[]): LyricLine[] 
 // Releases -------------------------------------------------------------------------------
 
 /** A release in a music catalog: names as the catalog spells them, and the album cover. */
-interface Release { artist: string; track: string; album: string | null; year: number | null; cover: string | null; duration: number | null }
+interface Release { artist: string; track: string; album: string | null; year: number | null; cover: string | null; duration: number | null; genre: string | null; bpm: number | null }
 
 function best<T>(items: readonly T[], names: (item: T) => { artist: string; track: string; duration: number | null }, artist: string | null, track: string, duration: number | null): T | null {
   const ranked = items
@@ -232,16 +232,29 @@ function best<T>(items: readonly T[], names: (item: T) => { artist: string; trac
   return ranked[0] && ranked[0].points >= 3 ? ranked[0].item : null;
 }
 
-interface DeezerTrack { title: string; duration?: number; artist?: { name: string }; album?: { id: number; title: string; cover_xl?: string; cover_big?: string } }
+interface DeezerTrack { id?: number; title: string; duration?: number; artist?: { name: string }; album?: { id: number; title: string; cover_xl?: string; cover_big?: string } }
+
+/** A believable tempo: catalogs report 0 when they don't know, and some double or halve it. */
+function tempo(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null;
+  let bpm = raw;
+  while (bpm > 200) bpm /= 2;
+  while (bpm < 60) bpm *= 2;
+  return Math.round(bpm * 10) / 10;
+}
 
 async function fromDeezer(artist: string | null, track: string, duration: number | null): Promise<Release | null> {
   const q = [artist, track].filter(Boolean).join(" ").slice(0, 200);
   const found = await getJson<{ data?: DeezerTrack[] }>(`https://api.deezer.com/search?${new URLSearchParams({ q, limit: "15" })}`);
   const song = best(found?.data ?? [], (t) => ({ artist: t.artist?.name ?? "", track: t.title, duration: t.duration ?? null }), artist, track, duration);
   if (!song) return null;
-  // The search leaves the release date out; the album has it.
-  const album = song.album ? await getJson<{ release_date?: string }>(`https://api.deezer.com/album/${encodeURIComponent(String(song.album.id))}`).catch(() => null) : null;
+  // The search leaves the release date and genre out (the album has them) and the tempo (the track has it).
+  const [album, detail] = await Promise.all([
+    song.album ? getJson<{ release_date?: string; genres?: { data?: { name?: string }[] } }>(`https://api.deezer.com/album/${encodeURIComponent(String(song.album.id))}`).catch(() => null) : null,
+    song.id ? getJson<{ bpm?: number }>(`https://api.deezer.com/track/${encodeURIComponent(String(song.id))}`).catch(() => null) : null,
+  ]);
   const year = Number.parseInt(album?.release_date?.slice(0, 4) ?? "", 10);
+  const genre = album?.genres?.data?.map((g) => g.name).find((name): name is string => typeof name === "string" && !!name.trim()) ?? null;
   const cover = song.album?.cover_xl ?? song.album?.cover_big ?? null;
   return {
     artist: song.artist?.name ?? artist ?? "",
@@ -250,10 +263,12 @@ async function fromDeezer(artist: string | null, track: string, duration: number
     year: Number.isFinite(year) && year > 1000 ? year : null,
     cover: cover?.startsWith("https://") ? cover : null,
     duration: song.duration ?? null,
+    genre: genre?.slice(0, 60) ?? null,
+    bpm: tempo(detail?.bpm),
   };
 }
 
-interface ItunesSong { artistName: string; trackName: string; collectionName?: string; releaseDate?: string; artworkUrl100?: string; trackTimeMillis?: number }
+interface ItunesSong { artistName: string; trackName: string; collectionName?: string; releaseDate?: string; artworkUrl100?: string; trackTimeMillis?: number; primaryGenreName?: string }
 
 async function fromItunes(artist: string | null, track: string, duration: number | null): Promise<Release | null> {
   const term = [artist, track].filter(Boolean).join(" ").slice(0, 200);
@@ -268,6 +283,8 @@ async function fromItunes(artist: string | null, track: string, duration: number
     year: Number.isFinite(year) ? year : null,
     cover: song.artworkUrl100?.startsWith("https://") ? song.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x600bb.") : null,
     duration: song.trackTimeMillis ? song.trackTimeMillis / 1000 : null,
+    genre: song.primaryGenreName?.trim().slice(0, 60) || null,
+    bpm: null,
   };
 }
 
@@ -275,8 +292,10 @@ async function fromItunes(artist: string | null, track: string, duration: number
 async function releaseFor(artist: string | null, track: string): Promise<Release | null> {
   // No length here: a music video's length would pull towards some other cut of the song.
   const deezer = await fromDeezer(artist, track, null).catch(() => null);
-  if (deezer?.cover) return deezer;
-  return (await fromItunes(artist, track, null).catch(() => null)) ?? deezer;
+  if (deezer?.cover && deezer.genre) return deezer;
+  const itunes = await fromItunes(artist, track, null).catch(() => null);
+  if (deezer?.cover) return { ...deezer, genre: itunes?.genre ?? null };
+  return itunes ? { ...itunes, bpm: deezer?.bpm ?? null, genre: itunes.genre ?? deezer?.genre ?? null } : deezer;
 }
 
 function youtubeCover(url: string): string | null {
@@ -306,6 +325,8 @@ async function lookup(url: string, title: string, playerLength: number | null): 
     duration: media ?? lyrics?.duration ?? release?.duration ?? null,
     lyricsDuration: picked?.timedFor ?? null,
     mediaDuration: media,
+    genre: release?.genre ?? null,
+    bpm: release?.bpm ?? null,
   };
 }
 

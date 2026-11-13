@@ -26,6 +26,7 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
+  type WheelEvent,
 } from "react";
 import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
@@ -38,9 +39,10 @@ import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
 import { ReplyPreview } from "./ReplyPreview.tsx";
+import { TypingIndicator } from "./TypingIndicator.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation, RequestError } from "../../../shared/requests.ts";
-import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
+import { readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -75,6 +77,8 @@ const MediaViewer = lazy(() => import("./MediaViewer.tsx"));
 const isImage = (type: string) => /^image\/(png|jpe?g|gif|webp|avif)$/i.test(type);
 
 const GROUP_WINDOW_MS = 7 * 60_000;
+/** A row of the history and its distance from the top of the viewport (null: centred). */
+type ChatScrollAnchor = { id: string; offset: number | null };
 const EMPTY: Message[] = [];
 
 export interface Mentionable {
@@ -396,7 +400,7 @@ function TypingLine({ accountId, channelId, me, nameOf }: { accountId: string; c
       : names.length <= 3
         ? translate("chat.33fb983afa97",{p0:(names.join(", "))})
         : translate("chat.dfa9ad021e4b");
-  return <div className="typing">{text}</div>;
+  return <div className="typing" aria-live="polite"><TypingIndicator text={text} /></div>;
 }
 
 function Composer({
@@ -714,24 +718,29 @@ export function Chat(props: ChatProps) {
   const pinsButton=useRef<HTMLButtonElement>(null);
   const pinsSupported=useStore(s=>s.instances[accountId]?.instance?.messagePins===true);
   const readingIntent=useRef(false);
-  const pendingAnchor=useRef<{id:string;offset:number}|null>(null);
-  const restoringAnchor=useRef<{id:string;offset:number|null}|null>(null);
-  const readingAnchor=useRef<{id:string;offset:number}|null>(null);
-  const focusVisit=useRef<string|null>(null);
-  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, scrollMargin:virtualWindow.current?.offsetTop??0, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
-  const pinned = useRef(true);
-  const prevHeight = useRef<number | null>(null);
-  const restoredVisit = useRef<string | null>(null);
+  // Space between the top of the scroll content and the virtual window (welcome, errors).
+  const [scrollMargin,setScrollMargin]=useState(0);
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scroller.current, estimateSize: () => 88, overscan: 12, scrollMargin, getItemKey: index => items[index]?.id ?? index, measureElement: element => element.getBoundingClientRect().height });
+  // The view below owns every scroll correction; the virtualizer must not move scrollTop on its own.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+  /**
+   * One scroll model for the whole history: either pinned to the newest message,
+   * or anchored to the first visible row at a fixed distance from the top. After
+   * every commit (new pages above or below, images growing, rows measured) the
+   * anchor goes back to the same place before the browser paints, so loading
+   * history never makes the conversation jump.
+   */
+  const view = useRef<{ pinned: boolean; anchor: ChatScrollAnchor | null; top: number; visit: string | null; ready: boolean }>({ pinned: true, anchor: null, top: 0, visit: null, ready: false });
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const chatRequests = useRequestOwner(JSON.stringify([accountId, channelId]));
-  const firstId = items[0]?.id;
   const navigation = useStore((s) => s.chatNavigation);
   const focus = useStore((s) =>
     s.messageFocus?.accountId === accountId && s.messageFocus.channelId === channelId ? s.messageFocus : null,
   );
   const messageLog = useRef<HTMLDivElement>(null);
-  const lastTop = useRef(0);
   const changeDraft = (patch: Partial<Omit<ChatDraft, "updatedAt">>) => {
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
@@ -742,19 +751,66 @@ export function Chat(props: ChatProps) {
   const replyTo = localReply ?? (replyResolution?.id === draft.replyToId && replyResolution.status === "valid" ? replyResolution.message : null);
   const replyValid = !draft.replyToId || !!localReply || (replyResolution?.id === draft.replyToId && replyResolution.status === "valid");
   const replyStatus = draft.replyToId && replyResolution?.id === draft.replyToId ? replyResolution.status : draft.replyToId ? "checking" : null;
-  const positionMessage=(id:string,offset:number|null)=>{
-    const target={id,offset};restoringAnchor.current=target;
-    const index=items.findIndex(message=>message.id===id);if(index<0){restoringAnchor.current=null;return;}
-    virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
-    let attempts=0;
-    const settle=()=>{
-      const el=scroller.current;if(!el?.isConnected||restoringAnchor.current!==target)return;
-      const row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
-      if(row){const desired=offset??Math.max(0,(el.clientHeight-row.getBoundingClientRect().height)/2);el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-desired;lastTop.current=el.scrollTop;readingAnchor.current={id,offset:desired};}
-      else virtualizer.scrollToIndex(index,{align:offset===null?"center":"start"});
-      if(++attempts<8)requestAnimationFrame(settle);else restoringAnchor.current=null;
-    };
-    requestAnimationFrame(settle);
+  const setTop = (el: HTMLElement, value: number) => {
+    el.scrollTop = value;
+    view.current.top = el.scrollTop;
+  };
+  /** The reader moved: remember the first visible row, decide whether they follow the newest message. */
+  const readerMoved = (el: HTMLElement) => {
+    const state = view.current;
+    state.top = el.scrollTop;
+    const fromEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
+    state.pinned = fromEnd < 80 && !entryRef.current?.hasMoreAfter;
+    const top = el.getBoundingClientRect().top;
+    const first = [...el.querySelectorAll<HTMLElement>(".virtual-message[data-row-id]")].find((row) => row.getBoundingClientRect().bottom > top + 1);
+    if (first?.dataset.rowId) {
+      state.anchor = { id: first.dataset.rowId, offset: first.getBoundingClientRect().top - top };
+      if (state.pinned) clearChatAnchor(accountId, channelId);
+      else writeChatAnchor(accountId, channelId, { messageId: state.anchor.id, offset: state.anchor.offset! });
+    }
+  };
+  /** Loads the next page when the reader is close to an edge of what is loaded. */
+  const pageNearEdges = (el: HTMLElement, towards: "both" | "older" | "newer" = "both") => {
+    const current = entryRef.current;
+    if (!current || current.loading || current.error || !view.current.ready) return;
+    const edge = Math.max(400, el.clientHeight);
+    if (towards !== "newer" && current.hasMore && el.scrollTop < edge) void loadMessages(accountId, channelId, true);
+    else if (towards !== "older" && current.hasMoreAfter && el.scrollHeight - el.scrollTop - el.clientHeight < edge) void loadMessages(accountId, channelId, "newer");
+  };
+  /**
+   * Runs after every commit, scroll and resize. Content that changed above the
+   * reader is compensated through the anchor; scrolling the reader did since the
+   * last call ("drift", e.g. wheel momentum while a page arrives) is kept on top.
+   */
+  const settle = () => {
+    const el = scroller.current, state = view.current;
+    if (!el || !state.ready) return;
+    const drift = el.scrollTop - state.top;
+    const moved = Math.abs(drift) > 1;
+    if (state.pinned && drift > -1) {
+      if (el.scrollHeight - el.clientHeight - el.scrollTop > 0.5) setTop(el, el.scrollHeight);
+      else state.top = el.scrollTop;
+      return;
+    }
+    const anchor = state.pinned ? null : state.anchor;
+    const row = anchor && el.querySelector<HTMLElement>(`.virtual-message[data-row-id="${CSS.escape(anchor.id)}"]`);
+    if (anchor && row) {
+      const offset = anchor.offset ?? Math.max(0, (el.clientHeight - row.offsetHeight) / 2);
+      if (anchor.offset === null && !moved) anchor.offset = offset;
+      const target = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - offset + (moved ? drift : 0);
+      if (Math.abs(target - el.scrollTop) > 0.5) setTop(el, target);
+      else state.top = el.scrollTop;
+    } else if (anchor && !moved) {
+      const index = items.findIndex((message) => message.id === anchor.id);
+      const start = index >= 0 ? virtualizer.measurementsCache[index]?.start : undefined;
+      // Not drawn yet: go to its estimated place; the next commit draws it and corrects the rest.
+      if (start !== undefined) { setTop(el, start - (anchor.offset ?? el.clientHeight / 3)); return; }
+    }
+    // The reader scrolled, or the anchored message left the window (deleted, evicted): start from what is on screen.
+    if (moved || !row) {
+      readerMoved(el);
+      if (moved) pageNearEdges(el);
+    }
   };
 
   useEffect(() => {
@@ -791,97 +847,66 @@ export function Chat(props: ChatProps) {
   }, [accountId, channelId, draft.replyToId, entry, connected, items, replyValidationAttempt, chatRequests]);
 
   useEffect(() => () => flushChatState(), []);
+  // A new visit ("return to latest", jump to a message) positions the history again.
   useLayoutEffect(()=>{
-    restoredVisit.current=null; focusVisit.current=null; readingIntent.current=false;restoringAnchor.current=null;readingAnchor.current=null;
-    pinned.current=!focus; prevHeight.current=null;
-  },[accountId,channelId,navigation]);
+    readingIntent.current=false;
+    view.current={pinned:!focus,anchor:null,top:scroller.current?.scrollTop??0,visit:null,ready:false};
+  },[navigation]);
 
+  // Opening position: a searched/pinned message centred, the saved reading place, the first unread, or the newest message.
   useLayoutEffect(()=>{
-    if(!focus||entry?.loading||!items.length)return;
-    const visit=JSON.stringify([navigation,focus.messageId]);if(focusVisit.current===visit)return;
-    const index=items.findIndex(message=>message.id===focus.messageId);if(index<0)return;
-    focusVisit.current=visit;pinned.current=false;
-    positionMessage(focus.messageId,null);
-  },[focus,items,entry?.loading,navigation]);
-
-  useLayoutEffect(()=>{
-    const el=scroller.current;if(!el||focus||!entry||entry.loading||entry.error||!items.length)return;
-    const visit=JSON.stringify([draftKey(accountId,channelId),navigation]);if(restoredVisit.current===visit)return;
-    restoredVisit.current=visit;
-    const saved=readChatAnchor(accountId,channelId);
-    const target=saved?.messageId??entry.initialPosition;
-    const index=target?items.findIndex(message=>message.id===target):-1;
-    if(index>=0){
-      pinned.current=false;positionMessage(target!,saved?.offset??0);return;
+    const el=scroller.current,state=view.current;
+    if(!el||!entry||entry.loading||entry.error||!items.length)return;
+    const visit=JSON.stringify([navigation,focus?.messageId??null]);
+    if(state.visit===visit)return;
+    if(focus){
+      if(!items.some(message=>message.id===focus.messageId))return;
+      state.pinned=false;state.anchor={id:focus.messageId,offset:null};
+    }else{
+      const saved=readChatAnchor(accountId,channelId);
+      const target=saved?.messageId??entry.initialPosition;
+      if(target&&items.some(message=>message.id===target)){state.pinned=false;state.anchor={id:target,offset:saved?.offset??0};}
+      else{if(saved)clearChatAnchor(accountId,channelId);state.pinned=true;state.anchor=null;}
     }
-    if(saved)clearChatAnchor(accountId,channelId);
-    pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
-  },[accountId,channelId,navigation,items,entry?.loading,entry?.error,focus]);
+    state.visit=visit;state.ready=true;state.top=el.scrollTop;
+    settle();
+  },[navigation,focus,items,entry?.loading,entry?.error]);
 
-  // Images can grow after the message list mounts. Follow that growth only
-  // while the reader remains at the latest message, never while reading back.
+  // After every commit: measure the space above the virtual window, then put the reader back in place.
+  useLayoutEffect(()=>{
+    const el=scroller.current,windowEl=virtualWindow.current;
+    if(el&&windowEl){
+      const margin=Math.round(windowEl.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop);
+      if(margin!==scrollMargin)setScrollMargin(margin);
+    }
+    settle();
+  });
+
+  // The viewport itself changes size (window, composer, reply bar): keep the same reading place.
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
   useEffect(() => {
-    if (!messageLog.current) return;
-    const observer = new ResizeObserver(() => {
-      const el = scroller.current;
-      // A DOM scroll can precede React's scroll event. Respect the actual
-      // position before a resize callback can pin the reader back to the end.
-      if(el&&el.scrollTop<lastTop.current-1)pinned.current=false;
-      if (el && pinned.current && prevHeight.current === null) {
-        el.scrollTop = el.scrollHeight;
-        lastTop.current = el.scrollTop;
-      } else if(el&&!restoringAnchor.current&&readingAnchor.current){
-        const anchor=readingAnchor.current,row=el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`);
-        if(row){el.scrollTop+=row.getBoundingClientRect().top-el.getBoundingClientRect().top-anchor.offset;lastTop.current=el.scrollTop;}
-      }
-    });
-    observer.observe(messageLog.current);
-    if (scroller.current) observer.observe(scroller.current);
+    const el = scroller.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => settleRef.current());
+    observer.observe(el);
+    if (messageLog.current) observer.observe(messageLog.current);
     return () => observer.disconnect();
-  }, [accountId, channelId]);
+  }, []);
 
   useEffect(() => {
     void loadMessages(accountId, channelId);
     void loadPinnedMessages(accountId, channelId);
   }, [accountId, channelId]);
 
-  // Keep the view pinned to the bottom for new messages, and steady when older ones load above.
-  useLayoutEffect(() => {
+  // A page that arrived while the reader still sits at its edge leads straight to the next one.
+  useEffect(() => {
     const el = scroller.current;
-    if (!el) return;
-    if(el.scrollTop<lastTop.current-1)pinned.current=false;
-    const anchor=pendingAnchor.current;
-    if(anchor){
-      pendingAnchor.current=null;prevHeight.current=null;
-      const index=items.findIndex(message=>message.id===anchor.id);
-      if(index>=0)positionMessage(anchor.id,anchor.offset);
-    } else if(pinned.current) el.scrollTop=el.scrollHeight;
-    lastTop.current=el.scrollTop;
-  }, [items, firstId]);
+    if (el && entry && !entry.loading && readingIntent.current) pageNearEdges(el);
+  }, [entry?.loading, items.length]);
 
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
-    const el = scroller.current;
-    if (!el) return;
-    if(restoringAnchor.current){lastTop.current=el.scrollTop;return;}
-    if (el.scrollTop < lastTop.current - 1) pinned.current = false;
-    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 80 && !entry?.hasMoreAfter) pinned.current = true;
-    lastTop.current = el.scrollTop;
-    const viewportTop = el.getBoundingClientRect().top;
-    const firstVisible = [...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])]
-      .find((row) => row.getBoundingClientRect().bottom > viewportTop);
-    if (firstVisible?.dataset.messageId) {
-      readingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
-      writeChatAnchor(accountId, channelId, { messageId: firstVisible.dataset.messageId, offset: firstVisible.getBoundingClientRect().top - viewportTop });
-    }
-    if (readingIntent.current && el.scrollTop < 200 && entry?.hasMore && !entry.loading && !entry.error) {
-      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
-      prevHeight.current = el.scrollHeight;
-      void loadMessages(accountId, channelId, true);
-    }
-    if (readingIntent.current && el.scrollHeight - el.scrollTop - el.clientHeight < 160 && entry?.hasMoreAfter && !entry.loading && !entry.error) {
-      if(firstVisible?.dataset.messageId)pendingAnchor.current={id:firstVisible.dataset.messageId,offset:firstVisible.getBoundingClientRect().top-viewportTop};
-      void loadMessages(accountId,channelId,"newer");
-    }
+    settle();
     if(event.nativeEvent.isTrusted)markVisibleRead();
   };
 
@@ -891,7 +916,13 @@ export function Chat(props: ChatProps) {
     const rows=[...(messageLog.current?.querySelectorAll<HTMLElement>("[data-message-id]")??[])].filter(row=>{const rect=row.getBoundingClientRect();return rect.bottom>viewport.top&&rect.top<viewport.bottom;});
     const id=rows.at(-1)?.dataset.messageId;if(id)void markChannelRead(accountId,channelId,id);
   };
-  const startReading=()=>{restoringAnchor.current=null;readingIntent.current=true;requestAnimationFrame(markVisibleRead);};
+  const startReading=()=>{readingIntent.current=true;requestAnimationFrame(markVisibleRead);};
+  // At the very top (or bottom) the wheel no longer scrolls, so it asks for the next page itself.
+  const onWheel=(event:WheelEvent<HTMLDivElement>)=>{
+    startReading();
+    const el=scroller.current;if(!el)return;
+    if(event.deltaY<0)pageNearEdges(el,"older");else if(event.deltaY>0)pageNearEdges(el,"newer");
+  };
   useEffect(()=>{
     const frame=requestAnimationFrame(markVisibleRead);
     window.addEventListener("focus",markVisibleRead);
@@ -936,7 +967,7 @@ export function Chat(props: ChatProps) {
       {props.introduction}
       <ConnectionNotice accountId={accountId} />
       <RetentionNotice accountId={accountId} channelId={channelId} />
-      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>
+      <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={onWheel} onPointerDown={startReading} onKeyDown={startReading}>
         <div ref={messageLog} className="message-log">
           {entry && !entry.hasMore && (
             <div className="channel-start">
@@ -948,7 +979,7 @@ export function Chat(props: ChatProps) {
             (items.length === 0 ? (
               <ChatSkeleton />
             ) : (
-              <div className="loading small" role="status">{translate("chat.d5818e7a4245")}</div>
+              <div className="history-loading" role="status"><span>{translate("chat.d5818e7a4245")}</span></div>
             ))}
           {entry?.error && <div className="history-error" role="alert">
             <p>{entry.error}</p>
@@ -968,7 +999,7 @@ export function Chat(props: ChatProps) {
               !m.integration && !prev.integration &&
               Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
-              <div key={m.id} data-index={i} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start-virtualizer.options.scrollMargin}px)` }}>
+              <div key={m.id} data-index={i} data-row-id={m.id} ref={virtualizer.measureElement} className="virtual-message" style={{ transform: `translateY(${virtualRow.start-virtualizer.options.scrollMargin}px)` }}>
                 {entry?.unreadBoundary && m.id > entry.unreadBoundary && (i===0 || items[i-1]!.id <= entry.unreadBoundary) && <div className="unread-divider" role="separator"><span>{translate("chat.6f263e8e0348")}</span></div>}
                 {newDay && (
                   <div className="day-divider" role="separator">

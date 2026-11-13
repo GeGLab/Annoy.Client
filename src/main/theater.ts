@@ -19,6 +19,12 @@ interface Entry {
   url: string;
   /** What the app asked to play (its own link and kind), so asking again never reloads it. */
   source: string;
+  /**
+   * The page being replaced keeps running until the next one commits. Until then nothing goes
+   * to it or comes from it: its last word ("paused at 3:36, ended") would be taken for the new
+   * track's, and the room's "play at 0:01" meant for the new track would start the old one over.
+   */
+  stale: boolean;
 }
 
 interface OpenOptions {
@@ -121,6 +127,8 @@ ${raw}`;
   const existing = views.get(slot);
   // Same media already there (maybe opened held, or at another start): keep it playing.
   if (existing?.source === source) return;
+  // The page there is on its way out from now on (see Entry.stale).
+  if (existing) existing.stale = true;
   wanted.set(slot, url.toString());
   const s = theaterSession();
   await loadBlocker(s);
@@ -149,13 +157,20 @@ ${raw}`;
     wc.setWindowOpenHandler(() => ({ action: "deny" }));
     wc.on("page-title-updated", (_e, title) => window?.webContents.send("theater:title", slot, title));
     if (isMusic(slot)) wc.on("dom-ready", () => { if (/^https:\/\/www\.youtube(-nocookie)?\.com\/embed\//.test(wc.getURL())) void wc.insertCSS(BARE_PLAYER_CSS).catch(() => {}); });
+    const made: Entry = { view, url: "", source: "", stale: false };
+    // The new page took over (or the load failed for good): it speaks for the slot from here on.
+    wc.on("did-navigate", () => { made.stale = false; });
+    wc.on("did-fail-load", (_e, code, _description, _url, mainFrame) => { if (mainFrame && code !== -3) made.stale = false; });
     window.contentView.addChildView(view);
-    entry = { view, url: "", source: "" };
+    entry = made;
     views.set(slot, entry);
     place(slot);
   }
+  // Only a new link fragment keeps the same page (no commit follows); anything else replaces it.
+  const keepsPage = url.hash !== "" && entry.view.webContents.getURL().split("#")[0] === url.toString().split("#")[0];
   entry.url = url.toString();
   entry.source = source;
+  entry.stale = !keepsPage;
   void entry.view.webContents.loadURL(entry.url, { httpReferrer: REFERRER }).catch(() => {});
 }
 
@@ -217,7 +232,7 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
   });
   ipcMain.on("theater:control", (event, slot: unknown, command: unknown) => {
     const entry = views.get(slotOf(slot) as Slot);
-    if (!fromApp(event) || !entry || !command || typeof command !== "object") return;
+    if (!fromApp(event) || !entry || entry.stale || !command || typeof command !== "object") return;
     for (const frame of entry.view.webContents.mainFrame.framesInSubtree) {
       try {
         frame.send("theater:control", command);
@@ -231,8 +246,8 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
     if (fromApp(event) && entry) void shell.openExternal(entry.view.webContents.getURL());
   });
 
-  // From the pages: forwarded to the app with the slot they came from.
-  const slotOfSender = (sender: Electron.WebContents) => [...views].find(([, e]) => e.view.webContents === sender)?.[0];
+  // From the pages: forwarded to the app with the slot they came from. A page on its way out has nothing to say.
+  const slotOfSender = (sender: Electron.WebContents) => [...views].find(([, e]) => e.view.webContents === sender && !e.stale)?.[0];
 
   // The song room's visualizer: a small spectrum about 20 times a second, music slot only.
   ipcMain.on("theater:levels", (event, payload: unknown) => {
@@ -253,7 +268,9 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
         if (typeof value.position!=="number" || !Number.isFinite(value.position) || value.position<0 || value.position>8640000) return;
         if (channel==="theater:user" && !["play","pause","seek"].includes(String(value.action))) return;
         const duration=typeof value.duration==="number" && Number.isFinite(value.duration) && value.duration>0 && value.duration<=8640000 ? value.duration : null;
-        window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{}),...(channel==="theater:status"?{duration}:{})});
+        // Song rooms' DJ: whether the media finished, and how loud its last second was (dBFS).
+        const extra=channel!=="theater:status"?{}:{duration,...(typeof value.ended==="boolean"?{ended:value.ended}:{}),...(typeof value.loud==="number" && Number.isFinite(value.loud) && value.loud>=-200 && value.loud<=20 && isMusic(slot)?{loud:value.loud}:{})};
+        window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{}),...extra});
       }
     });
   }
