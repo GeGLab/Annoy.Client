@@ -1571,7 +1571,7 @@ function SongRequest({ id, busy, canAttach, onAdd, onFiles }: { id: string; busy
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={translate("song.requestPlaceholder")}
-          aria-label={translate("song.requestTitle")}
+          aria-label={translate("common.ab491e3fdf77")}
           aria-invalid={invalid || undefined}
           autoComplete="off"
           spellCheck={false}
