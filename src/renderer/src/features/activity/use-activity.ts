@@ -1,9 +1,9 @@
 import {t as translate} from "../../../../shared/localization/index.ts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UserActivity } from "@annoy/protocol";
 import { withSteamFallback } from "../../../../shared/steam-activity.ts";
 import { apiFor, gatewayFor } from "../../client.ts";
-import { getState, setState, useStore } from "../../store.ts";
+import { EMPTY_ACTIVITIES, getState, setState, useStore } from "../../store.ts";
 import { publishPresence } from "../../social/index.ts";
 import { cloudSteam } from "../../social/details.ts";
 
@@ -16,6 +16,17 @@ const ANNOY_STEAM = "annoy";
  */
 const lastSent = new Map<string, { payload: string; at: number }>();
 const REFRESH_MS = 20_000;
+
+/**
+ * What this device shows as its own activity, where the user sees themselves: what the computer
+ * detects, plus the song room they listen to (which everyone else already sees).
+ */
+export function useOwnActivities(): readonly UserActivity[] {
+  const sharing = useStore((s) => s.settings.shareActivity);
+  const desktop = useStore((s) => s.desktopActivity?.activities ?? EMPTY_ACTIVITIES);
+  const song = useStore((s) => s.songActivity);
+  return useMemo(() => (!sharing ? EMPTY_ACTIVITIES : song ? [...desktop, song] : desktop), [sharing, desktop, song]);
+}
 
 /** OS adapter -> sanitized preload -> authenticated gateways. No OS fields in profile entities. */
 export function useDesktopActivity() {

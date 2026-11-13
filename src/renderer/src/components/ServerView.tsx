@@ -15,6 +15,7 @@ import { Code2 } from "lucide-react";
 import { GameIcon } from "../features/activity/GameIcon.tsx";
 import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
+import { useOwnActivities } from "../features/activity/use-activity.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
@@ -57,7 +58,7 @@ function VoiceUsers({
   canModerate: boolean;
 }) {
   const instance = useStore((s) => s.instances[accountId]);
-  const localActivity = useStore((s) => s.desktopActivity);
+  const ownActivities = useOwnActivities();
   const shareActivity = useStore((s) => s.settings.shareActivity);
   const me = instance?.user?.id;
   return (
@@ -70,7 +71,7 @@ function VoiceUsers({
           isSelf,
           sharing: shareActivity,
           isFriend: canViewActivity(instance, v.userId),
-          local: localActivity?.activities,
+          local: ownActivities,
           reported: instance?.activities[v.userId],
         });
         const menuProps = { accountId, serverId: state.server.id, member, voice: v, canModerate };
@@ -380,7 +381,9 @@ function MemberCard({
   const rel = relationships?.find((r) => r.user.id === member.user.id);
   const annoySocial = !!inst?.instance?.annoySocial;
   const cloudRel = useStore((s) => (member.user.annoyId ? s.social.relationships.find((r) => r.user.id === member.user.annoyId) : undefined));
-  const activities = useStore((s) => isSelf ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const own = useOwnActivities();
+  const reportedActivities = useStore((s) => s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const activities = isSelf ? own : reportedActivities;
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
   return (

@@ -18,6 +18,7 @@ import { Select } from "./ui/select.tsx";
 import { presenceLabel, type ManualPresence } from "../../../shared/presence.ts";
 import { cloudUser, ownCloudUser } from "../social/profile.ts";
 import { displayName } from "../social/runtime.ts";
+import { useOwnActivities } from "../features/activity/use-activity.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -73,7 +74,8 @@ export function UserPanel() {
   const groupActivitySupported = useStore((s) => annoyMode || !!accountId && !!s.instances[accountId]?.instance?.groupActivity);
   const snapshot = useStore((s) => s.desktopActivity);
   const reported = useStore((s) => (annoyMode ? cloudPresence?.activities : accountId && serverUser ? s.instances[accountId]?.activities[serverUser.id] : undefined) ?? EMPTY_ACTIVITIES);
-  const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: snapshot?.activities, reported });
+  const own = useOwnActivities();
+  const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: own, reported });
 
   const openSettings = () =>
     setState((s) => {

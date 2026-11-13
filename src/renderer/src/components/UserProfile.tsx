@@ -7,6 +7,7 @@ import type { User } from "@annoy/protocol";
 import { useRef, useState, type ReactNode } from "react";
 import { apiFor, openDm } from "../client.ts";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";
+import { useOwnActivities } from "../features/activity/use-activity.ts";
 import { startDirectCall } from "../features/direct-calls.ts";
 import { ActivityStack } from "../features/activity/ActivityCard.tsx";
 import { promptText } from "./ui/action-dialog.tsx";
@@ -41,7 +42,10 @@ export function UserProfile({ user: supplied, accountId, children }: { user: Use
   });
   const instance = useStore((s) => s.instances[accountId]);
   const { rel, editNickname } = useFriend(accountId, user);
-  const activities = useStore((s) => s.instances[accountId]?.user?.id === user.id ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities[user.id] ?? EMPTY_ACTIVITIES);
+  const own = useOwnActivities();
+  const isSelf = useStore((s) => s.instances[accountId]?.user?.id === user.id);
+  const reportedActivities = useStore((s) => s.instances[accountId]?.activities[user.id] ?? EMPTY_ACTIVITIES);
+  const activities = isSelf ? own : reportedActivities;
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   return <Popover.Root open={open} onOpenChange={setOpen}><Popover.Trigger ref={trigger} className="profile-trigger" aria-label={translate("common.bb51fa235d84",{p0:(rel?.nickname || user.displayName)})}>{children}</Popover.Trigger><Popover.Portal container={trigger.current?.ownerDocument.body}><Popover.Content className="member-card member-profile" side="right" align="start" sideOffset={10} collisionPadding={12} role="dialog" aria-label={translate("common.bb51fa235d84",{p0:(user.displayName)})}>
     <div className="member-card-head"><Avatar user={user} size={56} /><div><strong>{rel?.nickname || user.displayName}</strong><div className="muted">@{user.username}</div></div></div>
