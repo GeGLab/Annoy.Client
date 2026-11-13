@@ -7,6 +7,7 @@ import type { DmIntegrationMeta, DmMessage } from "../../social/types.ts";
 import { toast } from "../../store.ts";
 import { iconOf, integrationById, integrations, loadCatalog, updateAccount, type DmLink } from "./state.ts";
 import { integrationHttp } from "./transport.ts";
+import { resolveDmLinks } from "./dm-consent.ts";
 
 /**
  * Store integrations in DMs. Whoever connected an integration adds it to a
@@ -27,7 +28,7 @@ const nameOf = (userId: string): string => {
 /** The name a person shows to the other side: never the nickname the reader gave them. */
 const ownName = (userId: string): string => displayName(userId === social().me?.id ? social().me : social().profiles[userId]) || translate("social.unknownUser");
 
-export const dmLinks = (conversationId: string): Record<string, DmLink> => integrations().account.dms[conversationId] ?? {};
+export const dmLinks = (conversationId: string): Record<string, DmLink> => resolveDmLinks(integrations().account.dms[conversationId], social().threads[conversationId]?.items ?? []);
 
 /** The sentence of a request/accept/decline/remove line. Also the text older apps show for it. */
 export function controlText(meta: DmIntegrationMeta, senderId: string): string {
@@ -54,21 +55,12 @@ export function removeDmIntegration(conversationId: string, id: string, name: st
 }
 
 /** A request/accept/decline/remove message moves the link of that integration in that conversation. */
-function applyControl(message: DmMessage, meta: Exclude<DmIntegrationMeta, { op: "reply" }>): void {
+function applyControl(message: DmMessage): void {
   const me = runtime.me;
   if (!me) return;
-  const { conversationId, senderId } = message;
+  const { conversationId } = message;
   void updateAccount((account) => {
-    const links = (account.dms[conversationId] ??= {});
-    const link = links[meta.id];
-    if (meta.op === "request") {
-      // An active link stays with whoever added it; a new request never takes it over.
-      if (!link || link.status === "pending") links[meta.id] = { owner: senderId, status: "pending" };
-    } else if (meta.op === "accept") {
-      if (link?.status === "pending" && link.owner !== senderId) link.status = "active";
-    } else if (meta.op === "decline") {
-      if (link?.status === "pending" && link.owner !== senderId) delete links[meta.id];
-    } else delete links[meta.id];
+    account.dms[conversationId] = resolveDmLinks(account.dms[conversationId], [...(social().threads[conversationId]?.items ?? []), message]);
   }).catch(() => undefined);
 }
 
@@ -169,7 +161,7 @@ async function answer(message: DmMessage, local: boolean): Promise<void> {
 
 function onMessage(message: DmMessage, live: boolean, local: boolean): void {
   const meta = message.integration;
-  if (meta && meta.op !== "reply") return applyControl(message, meta);
+  if (meta && meta.op !== "reply") return applyControl(message);
   // An answer of an integration never calls another; old messages (read while this app was closed) call nothing.
   if (meta || !live || !message.content) return;
   // A message this account sent from another install is answered by that install.

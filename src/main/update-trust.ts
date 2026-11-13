@@ -1,6 +1,7 @@
 import type {UpdateChannel} from '../shared/update-channels.ts';
 /** Public Ed25519 SPKI keys bundled with the client, reviewed before release.
- * The private key never leaves the release machine (offline signing with scripts/sign-update.mjs).
+ * The private key stays in the local signer or the main-line Actions signing secret.
+ * It is never included in the client, PR jobs, artifacts or repository contents.
  * Never load trust keys from the update server, renderer or downloaded manifest.
  */
 export const UPDATE_TRUST:Readonly<Record<string,string>>=Object.freeze({

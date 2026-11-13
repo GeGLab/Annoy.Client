@@ -15,12 +15,12 @@
 .bot-listing-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .bot-listing h3, .installed-bot h3 { font-size: 1.07143rem; font-weight: 650; overflow-wrap: anywhere; }
 .bot-listing-heading .small { display: block; margin-top: 4px; font-size: 0.78571rem; overflow-wrap: anywhere; }
-.bot-avatar { display: grid; place-items: center; width: 46px; height: 46px; flex: none; color: var(--accent); background: var(--accent-soft); border-radius: 13px; }
+.bot-avatar { display: grid; place-items: center; width: 46px; height: 46px; flex: none; color: var(--accent-strong); background: var(--accent-soft); border-radius: 13px; }
 .bot-listing > p { color: var(--text-soft); font-size: 0.92857rem; line-height: 1.7; overflow-wrap: anywhere; margin: 20px 0; }
 .bot-permission-count { color: var(--text-muted); font-size: 0.78571rem; margin: auto 0 14px; }
 .bot-listing > .ui-button { width: 100%; }
 .bot-platform-empty { flex: 1; min-height: 350px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 18px; }
-.bot-platform-empty > .icon { color: var(--accent); margin-bottom: 6px; }
+.bot-platform-empty > .icon { color: var(--accent-strong); margin-bottom: 6px; }
 .bot-platform-empty h2 { font-size: 1.78571rem; font-weight: 650; letter-spacing: -.025em; }
 .bot-platform-empty p { margin: 0; max-width: 530px; line-height: 1.75; font-size: 0.92857rem; }
 .bot-platform-empty .ui-button { margin-top: 8px; }
@@ -41,7 +41,7 @@
 .bot-confirmation p { margin: 16px 0; font-size: 0.92857rem; line-height: 1.7; }
 .bot-permissions { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 20px 0 26px; padding: 0; }
 .bot-permissions li { display: flex; gap: 10px; align-items: center; font-size: 0.85714rem; color: var(--text-soft); }
-.bot-permissions .icon { color: var(--accent); }
+.bot-permissions .icon { color: var(--accent-strong); }
 .bot-error { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 0.85714rem; padding: 12px 0; }
 .bot-error > button { color: var(--link); text-decoration: underline; }
 .server-bot-link { width: 100%; margin-bottom: 14px; text-align: left; }
@@ -50,7 +50,7 @@
 /* Store integrations */
 .integration-icon { overflow: hidden; }
 .integration-icon img { width: 100%; height: 100%; object-fit: cover; }
-.integration-verified { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--accent); font-size: 0.78571rem; font-weight: 600; vertical-align: middle; }
+.integration-verified { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--accent-strong); font-size: 0.78571rem; font-weight: 600; vertical-align: middle; }
 .integration-scopes { display: flex; flex-wrap: wrap; gap: 6px; }
 .integration-scopes > span { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
 .integration-connected { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); }
@@ -68,11 +68,12 @@
 .integration-route { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 220px); gap: 8px 12px; align-items: center; }
 .integration-route > .error { grid-column: 1 / -1; margin: 0; }
 .integration-route-name { display: flex; flex-direction: column; min-width: 0; }
-.integration-tag { font-size: 0.71429rem; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--bg); }
+.integration-tag { font-size: 0.71429rem; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--on-accent); }
 .message-head .integration-icon { border-radius: 6px; }
 .integration-event { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px; color: var(--text-muted); font-size: 0.85714rem; }
-.integration-event > .icon { color: var(--accent); }
+.integration-event > .icon { color: var(--accent-strong); }
 .integration-event-actions { display: flex; gap: 8px; }
+.integration-requests { flex: none; border-bottom: 1px solid var(--border); background: var(--bg-elev); max-height: 25vh; overflow-y: auto; }
 .profile-panel h3 { display: flex; align-items: center; gap: 8px; }
 .profile-panel-image { display: block; max-width: 100%; height: auto; border-radius: 8px; }
 .server-integrations .installed-bot { padding: 14px 0; }
@@ -81,7 +82,7 @@
 .command-suggestions-title { display: flex; align-items: center; gap: 8px; padding: 9px 10px; color: var(--text-muted); font-size: .78571rem; }
 .command-suggestions-title > span { margin-left: auto; }
 .command-suggestions button { display: flex; align-items: center; gap: 12px; padding: 10px; min-width: 0; }
-.command-symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid var(--border); border-radius: 9px; font-size: 1.5rem; color: var(--accent); }
+.command-symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid var(--border); border-radius: 9px; font-size: 1.5rem; color: var(--accent-strong); }
 .command-suggestion-content { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .command-suggestion-content > strong { font-size: .92857rem; }
 .command-usage { font-size: .78571rem; color: var(--text-muted); overflow-wrap: anywhere; }

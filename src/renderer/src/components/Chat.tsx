@@ -40,7 +40,7 @@ import { UserProfile } from "./UserProfile.tsx";
 import { ReplyPreview } from "./ReplyPreview.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation, RequestError } from "../../../shared/requests.ts";
-import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
+import { draftKey, readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
 
 function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
   const [url, setUrl] = useState<string>();
@@ -99,6 +99,7 @@ interface ChatProps {
   channelOf?: NameOf;
   mentionables: Mentionable[];
   headerExtra?: ReactNode;
+  introduction?: ReactNode;
 }
 
 function Attachments({ accountId, message }: { accountId: string; message: Message }) {
@@ -806,13 +807,15 @@ export function Chat(props: ChatProps) {
   useLayoutEffect(()=>{
     const el=scroller.current;if(!el||focus||!entry||entry.loading||entry.error||!items.length)return;
     const visit=JSON.stringify([draftKey(accountId,channelId),navigation]);if(restoredVisit.current===visit)return;
-    if(entry.hasMoreAfter)return; // the newest messages are still loading
     restoredVisit.current=visit;
-    clearChatAnchor(accountId,channelId);
-    const bottom=()=>{if(!pinned.current)return;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;};
-    pinned.current=true;bottom();
-    // Virtualized rows are measured after the first paint; settle at the end once they are.
-    requestAnimationFrame(()=>requestAnimationFrame(bottom));
+    const saved=readChatAnchor(accountId,channelId);
+    const target=saved?.messageId??entry.initialPosition;
+    const index=target?items.findIndex(message=>message.id===target):-1;
+    if(index>=0){
+      pinned.current=false;positionMessage(target!,saved?.offset??0);return;
+    }
+    if(saved)clearChatAnchor(accountId,channelId);
+    pinned.current=true;virtualizer.scrollToIndex(items.length-1,{align:"end"});el.scrollTop=el.scrollHeight;lastTop.current=el.scrollTop;
   },[accountId,channelId,navigation,items,entry?.loading,entry?.error,focus]);
 
   // Images can grow after the message list mounts. Follow that growth only
@@ -930,6 +933,7 @@ export function Chat(props: ChatProps) {
         {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
         {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>{translate("chat.d4d0696420fd")}</button>}
       </div>}
+      {props.introduction}
       <ConnectionNotice accountId={accountId} />
       <RetentionNotice accountId={accountId} channelId={channelId} />
       <div className="messages" ref={scroller} onScroll={onScroll} tabIndex={0} onWheel={startReading} onPointerDown={startReading} onKeyDown={startReading}>

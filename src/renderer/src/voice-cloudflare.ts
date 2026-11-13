@@ -37,12 +37,13 @@ export class CloudflareVoiceSession {
   /** The server accepts "screen_audio"; older ones would take it for a second mic. */
   private serverScreenAudio = false;
   private remote = new Map<string, Remote>();
-  /** Screen shares (picture and sound) announced but not received: watching is opt-in. */
-  private pendingStreams = new Map<string, { userId: string; source: MediaSource }>();
+  /** Keep announcements throughout setup and playback so late replies can be invalidated. */
+  private available = new Map<string, { userId: string; source: MediaSource }>();
   /** People whose screen share we chose to watch. */
   private watching = new Set<string>();
   private mixer = new RemoteAudioMixer();
   private closed = false;
+  private failed = false;
   private capturedTracks = new Set<MediaStreamTrack>();
   canSpeak = false;
   canStream = false;
@@ -58,7 +59,22 @@ export class CloudflareVoiceSession {
   ) {}
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
+    const execute = async () => {
+      if (this.closed || this.failed) throw new Error(translate("common.99e2847d16e5"));
+      try {
+        return await task();
+      } catch (error) {
+        // ERROR_CONTENT poisons Chromium's connection: later createOffer calls
+        // fail too, even when signalingState still says stable. Rejoin instead
+        // of keeping green speaking indicators on an unusable media connection.
+        if (!this.closed && (this.pc?.signalingState !== "stable" || /ERROR_CONTENT|Missing media close answer/.test(String(error)))) {
+          this.failed = true;
+          this.onMediaFailed();
+        }
+        throw error;
+      }
+    };
+    const run = this.queue.then(execute, execute);
     this.queue = run.catch(() => undefined);
     return run;
   }
@@ -95,35 +111,38 @@ export class CloudflareVoiceSession {
         if (previous) this.capturedTracks.delete(previous);
       });
       const track = await this.mic.start();
+      if (this.closed) { track.stop(); return; }
       sender = (await this.publish(track, "audio", "mic", undefined, OPUS_VOICE)).transceiver.sender;
     }
+    if (this.closed) return;
     const { producers } = await this.gw.voice<{ producers: { producerId: string; userId: string; source: MediaSource }[] }>("getProducers");
-    for (const p of producers) await this.offer(p.producerId, p.userId, p.source, false);
+    if (this.closed) return;
+    for (const p of producers) await this.offer(p.producerId, p.userId, p.source);
   }
 
   // Watching screen shares ------------------------------------------------
 
   /** Receives a new track now, unless it is a screen share we did not choose to watch. */
-  private offer(producerId: string, userId: string, source: MediaSource, fresh: boolean): Promise<void> {
+  private offer(producerId: string, userId: string, source: MediaSource): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    if (!this.available.has(producerId)) this.available.set(producerId, { userId, source });
     if (isStreamSource(source) && !this.watching.has(userId)) {
-      this.pendingStreams.set(producerId, { userId, source });
       this.publishOffers();
       return Promise.resolve();
     }
-    return fresh ? this.subscribeSoon(producerId, userId, source) : this.subscribe(producerId, userId, source);
+    return this.subscribeSoon(producerId, userId, source);
   }
 
   private publishOffers(): void {
     if (this.closed) return;
-    setStreamOffers(streamOffers([...this.pendingStreams.values(), ...this.remote.values()], this.watching));
+    setStreamOffers(streamOffers(this.available.values(), this.watching));
   }
 
   watch(userId: string): void {
     if (this.closed) return;
     this.watching.add(userId);
-    for (const [producerId, entry] of [...this.pendingStreams]) {
-      if (entry.userId !== userId) continue;
-      this.pendingStreams.delete(producerId);
+    for (const [producerId, entry] of this.available) {
+      if (entry.userId !== userId || !isStreamSource(entry.source)) continue;
       void this.subscribeSoon(producerId, entry.userId, entry.source);
     }
     this.publishOffers();
@@ -142,20 +161,23 @@ export class CloudflareVoiceSession {
     const entry = this.remote.get(producerId);
     if (!entry || !this.pc) return;
     this.dropRemote(producerId, false);
-    this.pendingStreams.set(producerId, { userId: entry.userId, source: entry.source });
     const pc = this.pc;
     void this.serial(async () => {
       if (this.closed) return;
       const transceiver = pc.getTransceivers().find((t) => t.mid === entry.mid);
       if (!transceiver || transceiver.currentDirection === "stopped") return;
-      transceiver.direction = "inactive";
+      // A negotiated close must reject this section. Leaving it inactive lets
+      // later subscriptions reuse a receiver whose SFU track was already closed.
+      transceiver.stop();
       await pc.setLocalDescription(await pc.createOffer());
       try {
         const res = await this.gw.voice<{ sdp?: string }>("unsubscribe", { producerId, sdp: pc.localDescription!.sdp });
-        if (res.sdp) await this.setRemote(pc, "answer", res.sdp);
+        if (this.closed) return;
+        if (!res.sdp) throw new Error("Missing media close answer");
+        await this.setRemote(pc, "answer", res.sdp);
       } catch (err) {
         // Older servers lack "unsubscribe": undo the offer; the local close still stops playback.
-        if (pc.signalingState === "have-local-offer") await pc.setLocalDescription({ type: "rollback" });
+        if (!this.closed && pc.signalingState === "have-local-offer") await pc.setLocalDescription({ type: "rollback" });
         throw err;
       }
     }).catch((err: unknown) => console.warn("unsubscribe failed", err));
@@ -189,10 +211,13 @@ export class CloudflareVoiceSession {
   }
 
   private subscribe(producerId: string, userId: string, source: MediaSource) {
+    const announcement = this.available.get(producerId);
     return this.serial(async () => {
-      if (this.closed || this.remote.has(producerId) || !this.pc) return;
+      if (this.closed || !announcement || this.available.get(producerId) !== announcement || this.remote.has(producerId) || !this.pc) return;
+      if (isStreamSource(source) && !this.watching.has(userId)) return;
       const pc = this.pc;
       const res = await this.gw.voice<{ mid: string; kind: "audio" | "video"; sdp?: string; renegotiate: boolean }>("subscribe", { producerId });
+      if (this.closed) return;
       if (res.renegotiate && res.sdp) {
         await this.setRemote(pc, "offer", res.sdp);
         await pc.setLocalDescription(await pc.createAnswer());
@@ -201,6 +226,7 @@ export class CloudflareVoiceSession {
       if (this.closed) return;
       const transceiver = pc.getTransceivers().find((t) => t.mid === res.mid);
       if (!transceiver) throw new Error(translate("common.f0cc45c67996"));
+      if (this.available.get(producerId) !== announcement) { transceiver.stop(); return; }
       const track = transceiver.receiver.track;
       let audio: HTMLAudioElement | null = null;
       let amplified: AmplifiedAudio | null = null;
@@ -210,7 +236,7 @@ export class CloudflareVoiceSession {
         amplified = this.mixer.connect(new MediaStream([track]), playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId), audio);
         audio.muted = this.settings.selfDeaf;
         await this.applySink(audio);
-        if (this.closed) { audio.pause(); audio.srcObject = null; amplified.close(); return; }
+        if (this.closed || this.available.get(producerId) !== announcement) { audio.pause(); audio.srcObject = null; amplified.close(); return; }
         audio.muted = this.settings.selfDeaf;
         amplified.setVolume(playbackVolume(this.settings, volumeKindOf(source), this.accountId, userId));
         void audio.play().catch(() => undefined);
@@ -230,15 +256,22 @@ export class CloudflareVoiceSession {
    * not found on remote peer"), so a fresh one is retried for a few seconds.
    */
   private async subscribeSoon(producerId: string, userId: string, source: MediaSource): Promise<void> {
+    const announcement = this.available.get(producerId);
     for (const wait of [0, 500, 1000, 2000, 4000, 8000]) {
       if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
-      if (this.closed || this.remote.has(producerId)) return;
+      if (this.closed || !announcement || this.available.get(producerId) !== announcement || this.remote.has(producerId)) return;
+      if (isStreamSource(source) && !this.watching.has(userId)) return;
       try {
         return await this.subscribe(producerId, userId, source);
       } catch (err) {
-        if (!/not found/i.test((err as Error).message)) return void console.warn("subscribe failed", err);
+        // The server deliberately redacts Cloudflare's detailed track errors.
+        if (!/not found|não encontrad|Serviço de mídia recusou a faixa/i.test((err as Error).message)) {
+          if (!this.closed && isStreamSource(source) && this.available.get(producerId) === announcement) this.unwatch(userId);
+          return void console.warn("subscribe failed", err);
+        }
       }
     }
+    if (!this.closed && isStreamSource(source) && this.available.get(producerId) === announcement) this.unwatch(userId);
     console.warn("subscribe gave up", producerId);
   }
 
@@ -246,14 +279,17 @@ export class CloudflareVoiceSession {
   /** `ended` is false when only we stop receiving it (the share goes on). */
   private dropRemote(producerId: string, ended = true): void {
     const entry = this.remote.get(producerId);
-    const pending = this.pendingStreams.get(producerId);
+    const pending = this.available.get(producerId);
     if (ended) {
-      this.pendingStreams.delete(producerId);
+      this.available.delete(producerId);
       // The next share by the same person is opt-in again.
       const source = entry?.source ?? pending?.source;
       if (source === "screen") this.watching.delete((entry ?? pending)!.userId);
     }
     if (entry) {
+      // The server force-closes ended publications without SDP. Retire their
+      // receivers locally before a new microphone or screen is negotiated.
+      if (ended) this.pc?.getTransceivers().find((t) => t.mid === entry.mid)?.stop();
       this.remote.delete(producerId);
       if (entry.audio) { entry.audio.pause(); entry.audio.srcObject = null; entry.amplified?.close(); }
       else dropTile(producerId);
@@ -262,8 +298,9 @@ export class CloudflareVoiceSession {
   }
 
   handleEvent(event: GatewayEvent): void {
+    if (this.closed) return;
     if (event.t === "VOICE_NEW_PRODUCER" && event.d.channelId === this.channelId) {
-      void this.offer(event.d.producerId, event.d.userId, event.d.source, true);
+      void this.offer(event.d.producerId, event.d.userId, event.d.source);
     } else if (event.t === "VOICE_PRODUCER_CLOSED") {
       this.dropRemote(event.d.producerId);
     }
@@ -367,10 +404,18 @@ export class CloudflareVoiceSession {
   private unpublish(entry: { trackName: string; transceiver: RTCRtpTransceiver }): Promise<void> {
     const pc = this.pc!;
     return this.serial(async () => {
-      entry.transceiver.direction = "inactive";
+      if (this.closed) return;
+      entry.transceiver.stop();
       await pc.setLocalDescription(await pc.createOffer());
-      const res = await this.gw.voice<{ sdp?: string }>("closeProducer", { producerId: entry.trackName, sdp: pc.localDescription!.sdp });
-      if (res.sdp) await this.setRemote(pc, "answer", res.sdp);
+      try {
+        const res = await this.gw.voice<{ sdp?: string }>("closeProducer", { producerId: entry.trackName, sdp: pc.localDescription!.sdp });
+        if (this.closed) return;
+        if (!res.sdp) throw new Error("Missing media close answer");
+        await this.setRemote(pc, "answer", res.sdp);
+      } catch (err) {
+        if (!this.closed && pc.signalingState === "have-local-offer") await pc.setLocalDescription({ type: "rollback" });
+        throw err;
+      }
     }).catch((err: unknown) => console.warn("close track failed", err));
   }
 
@@ -405,6 +450,8 @@ export class CloudflareVoiceSession {
     this.capturedTracks.clear();
     if (notifyServer) void this.gw.voice("leave").catch(() => undefined);
     for (const id of [...this.remote.keys()]) this.dropRemote(id);
+    this.available.clear();
+    this.watching.clear();
     this.mixer.close();
     for (const { track } of this.video.values()) track.stop();
     this.video.clear();

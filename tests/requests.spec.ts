@@ -284,6 +284,7 @@ test("playback failures preserve the submitted URL and ignore stale responses af
     await route.fulfill({ json: playback }).catch(() => undefined);
   });
   await special(page, "music", "song");
+  await page.getByRole("button", { name: "Pedir uma música", exact: true }).click();
   const input = page.getByRole("textbox", { name: "Link para adicionar à fila" });
   await input.fill("https://example.test/song.mp3");
   await page.locator(".queue-add button[type=submit], .queue-add .btn").first().click();

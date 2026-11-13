@@ -1,5 +1,6 @@
 import { globalAuthFixture } from "./fixtures/global-auth.ts";
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { electron } from "./fixtures/electron-launch.ts";
 import { createRequire } from "node:module";
 import { mkdtemp, writeFile, readFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";

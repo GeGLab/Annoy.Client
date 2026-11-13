@@ -1,105 +1,98 @@
-# Builds the installers when a GitHub release is published and attaches them,
-# together with the latest*.yml files the in-app updater reads.
-#
-# Versions carry their channel (docs/releases/CHANNELS.md): v0.10.0-alpha.1 and
-# v0.10.0-beta.1 are the main line and must be ordinary releases, because
-# installs up to 0.9.x look only at GitHub's "latest" release. Nightly and
-# unstable builds come from channel-build.yml and must be pre-releases.
 name: release
-
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing release tag to (re)build, e.g. v0.1.0
-        required: true
-
 permissions:
-  contents: write
-
+  contents: read
+  actions: read
+  pull-requests: read
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: --win --x64
-            files: dist/Annoy-Setup-x64.exe dist/Annoy-Setup-x64.exe.blockmap dist/latest.yml
-          - os: ubuntu-latest
-            target: --linux
-            files: dist/Annoy-x86_64.AppImage dist/latest-linux.yml
-    runs-on: ${{ matrix.os }}
-    env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
     steps:
-      # Releases are built from a draft (workflow_dispatch), signed locally and
-      # then published. Publishing must not rebuild: new installers would no
-      # longer match the signed manifests.
-      - name: Skip when the release already has installers
-        id: built
-        if: github.event_name == 'release'
-        shell: bash
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require a merged main commit and choose an unused version
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'latest.yml'; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Already built and signed; nothing to do."
-          fi
+        run: node scripts/prepare-main-release.mjs
+  desktop:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/desktop-validation.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.version }}
+  security:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/security.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.version }}
+    secrets:
+      ANNOY_GLOBAL_READ_TOKEN: ${{ secrets.ANNOY_GLOBAL_READ_TOKEN }}
+  publish:
+    environment: annoy-main-release
+    needs: [prepare, desktop, security]
+    if: needs.prepare.outputs.publish == 'true' && needs.desktop.result == 'success' && needs.security.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
       - uses: actions/checkout@v4
-        if: steps.built.outputs.skip != 'true'
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        if: steps.built.outputs.skip != 'true'
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-        if: steps.built.outputs.skip != 'true'
-      - name: Check the tag matches package.json
-        if: steps.built.outputs.skip != 'true'
-        shell: bash
-        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
-      - name: Check the channel and the pre-release flag
-        if: steps.built.outputs.skip != 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-${{ needs.prepare.outputs.version }}-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create the main-line update feeds
         run: |
-          channel="$(printf '%s' "${TAG#v}" | sed -nE 's/^[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z]+).*/\1/p' | tr A-Z a-z)"
-          prerelease="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
-          case "$channel" in
-            ""|alpha|beta) want=false; file=alpha ;;
-            nightly|unstable) want=true; file="$channel" ;;
-            *) echo "Unknown channel '$channel' in $TAG" >&2; exit 1 ;;
-          esac
-          if [ "$prerelease" != "$want" ]; then
-            echo "$TAG must have pre-release=$want on GitHub (see docs/releases/CHANNELS.md)" >&2; exit 1
-          fi
-          echo "CHANNEL_FILE=$file" >> "$GITHUB_ENV"
-      - run: npm run typecheck
-        if: steps.built.outputs.skip != 'true'
-      - run: npx electron-vite build
-        if: steps.built.outputs.skip != 'true'
-      - run: npx electron-builder ${{ matrix.target }} --publish never
-        if: steps.built.outputs.skip != 'true'
-      - name: Copy the update info for the channel
-        if: steps.built.outputs.skip != 'true'
+          cp release-assets/latest.yml release-assets/alpha.yml
+          cp release-assets/latest-linux.yml release-assets/alpha-linux.yml
+      - name: Sign the exact validated installers
+        env:
+          ANNOY_RELEASE_SIGNING_KEY: ${{ secrets.ANNOY_RELEASE_SIGNING_KEY }}
         shell: bash
         run: |
-          # The updater asks for <channel>.yml first (alpha.yml on the main line)
-          # and falls back to latest.yml; upload both.
-          extra=""
-          for f in dist/latest*.yml; do
-            copy="dist/${CHANNEL_FILE}${f#dist/latest}"; cp "$f" "$copy"; extra="$extra $copy"
-          done
-          echo "CHANNEL_FILES=$extra" >> "$GITHUB_ENV"
-      - name: Upload to the release
-        if: steps.built.outputs.skip != 'true'
-        shell: bash
+          set -euo pipefail
+          test -n "$ANNOY_RELEASE_SIGNING_KEY" || { echo "::error::Missing environment signing key"; exit 1; }
+          umask 077
+          annoy_key_file="$RUNNER_TEMP/annoy-release-signing.pem"
+          trap 'rm -f "$annoy_key_file"' EXIT
+          printf '%s' "$ANNOY_RELEASE_SIGNING_KEY" > "$annoy_key_file"
+          node --experimental-strip-types scripts/sign-update.mjs release-assets/Annoy-Setup-x64.exe "$RELEASE_VERSION" win32 x64 annoy-release-2026 "$annoy_key_file" release-assets
+          node --experimental-strip-types scripts/sign-update.mjs release-assets/Annoy-x86_64.AppImage "$RELEASE_VERSION" linux x64 annoy-release-2026 "$annoy_key_file" release-assets
+          node --experimental-strip-types scripts/verify-release-assets.mjs release-assets "$RELEASE_VERSION"
+      - name: Verify uploaded assets and publish only from merged main
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" ${{ matrix.files }} $CHANNEL_FILES --clobber
+        run: node --experimental-strip-types scripts/publish-main-release.mjs release-assets "$RELEASE_VERSION"
+      - name: Publication summary
+        run: |
+          echo "Published v$RELEASE_VERSION from merged main commit $GITHUB_SHA after Windows/Linux validation and signature verification." >> "$GITHUB_STEP_SUMMARY"

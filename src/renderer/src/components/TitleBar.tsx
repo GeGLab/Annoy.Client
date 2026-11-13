@@ -25,7 +25,7 @@ export function TitleBar() {
           : [server?.server.name, channel?.name].filter(Boolean).join(" / ") || "Annoy";
   return (
     <header className={`titlebar${window.annoy?.platform === "darwin" ? " titlebar-mac" : ""}`}>
-      <Brand size={18} wordmark />
+      <Brand size={24} wordmark />
       <span className="titlebar-context truncate">{title}</span>
       <SearchButton />
       <div className="window-controls">

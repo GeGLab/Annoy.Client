@@ -1,6 +1,6 @@
 /** Curated palettes share the same semantic tokens in light and dark mode. */
 export const THEME_PRESETS = [
-  { id: "classic", dark: "#171621", light: "#fcfbf9", accent: "#ffb020", lightAccent: "#8b5400" },
+  { id: "classic", dark: "#0e151f", light: "#f7f9fb", accent: "#1c3655", lightAccent: "#244768" },
   { id: "midnight", dark: "#101522", light: "#f3f5fc", accent: "#a6b4ff", lightAccent: "#4c50ae" },
   { id: "ocean", dark: "#0d202b", light: "#f0f8fc", accent: "#67d5f5", lightAccent: "#006b88" },
   { id: "aurora", dark: "#12231f", light: "#f1f8f3", accent: "#7cdeb0", lightAccent: "#236d4c" },

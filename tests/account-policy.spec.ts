@@ -144,7 +144,9 @@ test("global logout closes an active browser and blocks reopening it immediately
       const { addService } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
       addService({ id: "browser", kind: "web", name: "Browser", url: "https://browser.test" });
     });
-    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(1);
+    // Count the external service, independently of Annoy's internal overlay view.
+    const activeBrowserCount = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => "webContents" in view && (view as any).webContents.getURL().startsWith("https://browser.test")).length);
+    await expect.poll(activeBrowserCount).toBe(1);
     await page.getByRole("button", { name: "Mensagens diretas", exact: true }).click();
     // The Annoy account signs out from the settings of the Annoy account.
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
@@ -158,7 +160,7 @@ test("global logout closes an active browser and blocks reopening it immediately
       window.annoy!.services.show({ id: "browser", kind: "web", name: "Browser", url: "https://browser.test" });
       await window.annoy!.auth.get();
     });
-    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.contentView.children.length)).toBe(0);
+    expect(await activeBrowserCount()).toBe(0);
     await page.reload();
     await expect(page.getByRole("heading", { name: "Entre no Annoy" })).toBeVisible();
     expect(await page.evaluate(() => window.annoy!.auth.get())).toEqual({ allowed: false, global: false, localAccounts: [] });

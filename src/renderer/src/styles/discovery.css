@@ -91,7 +91,7 @@
 }
 .entity-popover [cmdk-item] > svg:last-child {
   margin-left: auto;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .entity-popover [cmdk-empty] {
   padding: 24px 12px;
@@ -418,7 +418,7 @@
 }
 .search-result > svg {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .search-empty {
   display: grid;
@@ -454,7 +454,7 @@
 }
 .activity-card > svg {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .activity-card > div {
   display: flex;
@@ -493,7 +493,7 @@
 .activity-card.compact span {
   font-size: 0.71429rem;
 }
-.activity-card .activity-artwork { display: flex; align-items: center; justify-content: center; flex: none; width: 64px; height: 64px; overflow: hidden; border-radius: 4px; background: var(--bg-input); color: var(--accent); }
+.activity-card .activity-artwork { display: flex; align-items: center; justify-content: center; flex: none; width: 64px; height: 64px; overflow: hidden; border-radius: 4px; background: var(--bg-input); color: var(--accent-strong); }
 .activity-card .activity-artwork > img { width: 100%; height: 100%; object-fit: contain; }
 .activity-game .activity-artwork { width: 80px; height: 48px; }
 .activity-card.compact .activity-artwork { width: 36px; height: 36px; }
