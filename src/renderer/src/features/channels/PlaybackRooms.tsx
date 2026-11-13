@@ -1,6 +1,8 @@
 import {rich} from "../../lib/localization.ts";
-import {t as translate,onLocalizationChange} from "../../../../shared/localization/index.ts";
-import { DJ_STYLES, has, Permission, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackItem, type ServerState } from "@annoy/protocol";
+import {t as translate,counted,onLocalizationChange} from "../../../../shared/localization/index.ts";
+import { DJ_STYLES, has, Permission, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackItem, type PlaybackState, type ServerState } from "@annoy/protocol";
+import { familyHue, genreFamily, planMix, type MixPlan, type MixPreset } from "./dj.ts";
+import { useRoomPulse } from "./room-pulse.ts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { flushSync } from "react-dom";
@@ -145,6 +147,22 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
   const canAttach = canAdd && has(perms, Permission.ATTACH_FILES);
   const moderator = has(perms, Permission.MANAGE_MESSAGES);
 
+  // Moderators reorder by dragging a row (or its grip, with the arrow keys). The new order shows
+  // at once and holds until the room's own answer replaces it.
+  const [drag, setDrag] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ id: string; side: "before" | "after" } | null>(null);
+  const [moved, setMoved] = useState<{ base: PlaybackItem[]; order: PlaybackItem[] } | null>(null);
+  const queue = state ? (moved?.base === state.queue ? moved.order : state.queue) : [];
+  const move = (itemId: string, index: number) => {
+    const from = queue.findIndex((entry) => entry.id === itemId);
+    if (!state || from < 0 || from === index) return;
+    const order = [...queue];
+    const [item] = order.splice(from, 1);
+    order.splice(index, 0, item!);
+    setMoved({ base: state.queue, order });
+    void send({ op: "move", itemId, index }).then((saved) => { if (!saved) setMoved(null); });
+  };
+
   const submit = async (link: string): Promise<boolean> => {
     if (!link.trim() || pending.current) return false;
     pending.current = true;
@@ -211,17 +229,56 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
           )}
         </form>
       )}
-      <ol className="queue-list">
-        {state?.queue.length === 0 && <li className="muted queue-empty">{translate("common.74e940674eb5")}</li>}
-        {state?.queue.map((item, index) => {
+      <ol className={`queue-list${drag ? " sorting" : ""}`}>
+        {queue.length === 0 && <li className="muted queue-empty">{translate("common.74e940674eb5")}</li>}
+        {state && queue.map((item, index) => {
           const current = item.id === state.currentId;
           const removable = moderator || item.addedBy === me;
+          const target = drop?.id === item.id && drag !== item.id ? ` drop-${drop.side}` : "";
           return (
-            <li key={item.id} className={`queue-item${current ? " current" : ""}`}>
+            <li
+              key={item.id}
+              className={`queue-item${current ? " current" : ""}${moderator ? " movable" : ""}${drag === item.id ? " dragging" : ""}${target}`}
+              draggable={moderator}
+              onDragStart={moderator ? (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.title); setDrag(item.id); } : undefined}
+              onDragEnd={() => { setDrag(null); setDrop(null); }}
+              onDragOver={(e) => {
+                if (!drag) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                const box = e.currentTarget.getBoundingClientRect();
+                const side = e.clientY < box.top + box.height / 2 ? "before" : "after";
+                if (drop?.id !== item.id || drop.side !== side) setDrop({ id: item.id, side });
+              }}
+              onDrop={(e) => {
+                if (!drag) return;
+                e.preventDefault();
+                const from = queue.findIndex((entry) => entry.id === drag);
+                const at = drop?.side === "after" ? index + 1 : index;
+                setDrag(null);
+                setDrop(null);
+                if (from >= 0) move(drag, at > from ? at - 1 : at);
+              }}
+            >
+              {moderator && (
+                <button
+                  className="queue-grip"
+                  title={translate("song.queue.reorder")}
+                  aria-label={translate("song.queue.reorder")}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                    e.preventDefault();
+                    const to = index + (e.key === "ArrowUp" ? -1 : 1);
+                    if (to >= 0 && to < queue.length) move(item.id, to);
+                  }}
+                >
+                  <Icon name="grip" size={14} />
+                </button>
+              )}
               <span className="queue-index">{current ? (song && !state.paused ? <span className="song-bars" aria-hidden="true"><i /><i /><i /></span> : <Icon name={state.paused ? "pause" : "play"} size={14} />) : song ? String(index + 1).padStart(2, "0") : index + 1}</span>
               {song && <QueueThumb item={item} />}
               <span className="queue-meta">
-                <strong className="truncate" title={item.title}>
+                <strong className={song ? "queue-title" : "truncate"} title={item.title}>
                   {song ? songInfos.get(item.id)?.track ?? item.title : item.title}
                 </strong>
                 {song ? (
@@ -234,23 +291,21 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
                   </small>
                 )}
               </span>
-              {song && <QueueDuration id={item.id} />}
-              <span className="row-actions">
-                {!current && canAdd && (
-                  <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id })}>
-                    <Icon name="play" size={14} />
-                  </button>
-                )}
-                {moderator && index > 0 && (
-                  <button className="icon-btn tiny" title={translate("common.b3aad4488f3a")} onClick={() => void send({ op: "move", itemId: item.id, index: index - 1 })}>
-                    <Icon name="up" size={14} />
-                  </button>
-                )}
-                {removable && (
-                  <button className="icon-btn tiny" title={translate("common.59edc3f0849b")} onClick={() => void send({ op: "remove", itemId: item.id })}>
-                    <Icon name="x" size={14} />
-                  </button>
-                )}
+              {/* The length, and in its place on hover the row's buttons: the title keeps the room. */}
+              <span className="queue-end">
+                {song && <QueueDuration id={item.id} />}
+                <span className="row-actions">
+                  {!current && canAdd && (
+                    <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id })}>
+                      <Icon name="play" size={14} />
+                    </button>
+                  )}
+                  {removable && (
+                    <button className="icon-btn tiny" title={translate("common.59edc3f0849b")} onClick={() => void send({ op: "remove", itemId: item.id })}>
+                      <Icon name="x" size={14} />
+                    </button>
+                  )}
+                </span>
               </span>
             </li>
           );
@@ -388,7 +443,7 @@ let videoSlot: HTMLElement | null = null;
 /** The dock's player is lowered right now because people in the call are talking. */
 let duckedNow = false;
 /** The DJ transition playing right now, if any. */
-let mixingNow: DjPreset | null = null;
+let mixingNow: MixPreset | null = null;
 const subscribers = new Set<() => void>();
 const notify = () => subscribers.forEach((fn) => fn());
 const subscribe = (fn: () => void) => {
@@ -418,7 +473,7 @@ function setDucked(value: boolean): void {
   notify();
 }
 
-function setMixing(value: DjPreset | null): void {
+function setMixing(value: MixPreset | null): void {
   if (mixingNow === value) return;
   mixingNow = value;
   notify();
@@ -1221,27 +1276,36 @@ function VolumeControl({ compact = false }: { compact?: boolean }) {
 
 // DJ ---------------------------------------------------------------------------------
 
-type DjPreset = Exclude<DjStyle, "auto">;
-const DJ_PRESETS: readonly DjPreset[] = ["smooth", "filter", "echo", "brake", "bassswap", "riser"];
-/** How long each transition plays both tracks. */
-const DJ_SECONDS: Record<DjPreset, number> = { smooth: 8, filter: 8, echo: 6, brake: 2.5, bassswap: 10, riser: 7 };
-/** "auto" picks a transition per track from its id, so every listener hears the same one. */
-function presetFor(style: DjStyle | undefined, nextId: string): DjPreset {
-  return style && style !== "auto" ? style : DJ_PRESETS[hueOf(nextId) % DJ_PRESETS.length]!;
+/** What the DJ knows of a track: its title, and its genre and tempo once the catalogs answered. */
+function factsOf(item: PlaybackItem) {
+  const info = songInfos.get(item.id);
+  return { id: item.id, title: [item.title, info?.artist].filter(Boolean).join(" "), genre: info?.genre ?? null, bpm: info?.bpm ?? null };
 }
-const djLabel = (style: DjStyle) => translate(`song.dj.${style}`);
+/** How `from` hands over to `to` in DJ mode: by the room's style, or by the music's scene ("auto"). */
+function planFor(state: PlaybackState | null, from: PlaybackItem | null, to: PlaybackItem): MixPlan {
+  return planMix(state?.djStyle, from ? factsOf(from) : null, factsOf(to));
+}
+/** Without DJ mode a change by hand still never cuts: a short, plain crossfade. */
+const SOFT_SWITCH: MixPlan = { preset: "smooth", seconds: 1.5, beat: 0.5, family: null };
+/** Without DJ mode a track that plays to its end still blends into the next: its last seconds over the next one's first. */
+const NATURAL_SWITCH: MixPlan = { preset: "smooth", seconds: 6, beat: 0.5, family: null };
+/** The next track loads this long before its mix point, so an early mix (an outro) finds it ready. */
+const PRELOAD_AHEAD_S = 45;
+const djLabel = (style: DjStyle | MixPreset) => translate(`song.dj.${style}`);
 
 type Deck = "music" | "musicB";
 const DECKS: readonly Deck[] = ["music", "musicB"];
 const otherDeck = (deck: Deck): Deck => (deck === "music" ? "musicB" : "music");
 
 /** Plays the room's current item on `deck` and keeps it in sync. Decks are opened and closed by the player. */
-function useDeckDriver(deck: Deck, playback: Playback, media: HTMLMediaElement | null, syncing: boolean): void {
+function useDeckDriver(deck: Deck, playback: Playback, media: HTMLMediaElement | null, syncing: boolean, held: () => boolean): void {
   const item = currentItem(playback.state);
   const [driver, setDriver] = useState<Driver | null>(null);
   const events = useRef<UserEvents | null>(null);
   const latest = useRef(playback);
   latest.current = playback;
+  const heldRef = useRef(held);
+  heldRef.current = held;
   const view = inView(item);
   const url = item?.url;
   const kind = item?.kind;
@@ -1251,7 +1315,8 @@ function useDeckDriver(deck: Deck, playback: Playback, media: HTMLMediaElement |
       // Joining mid-song starts there, not from the top (the sync loop then trims the rest).
       const { state, offset } = latest.current;
       // A paused room opens held: no autoplayed second that the room then stops. Its play releases it.
-      window.annoy?.theater.open(deck, url, kind, { start: state ? playbackPosition(state, offset) : 0, hold: !!state?.paused });
+      // A track cued by hand also opens held: it starts with its transition once it has loaded.
+      window.annoy?.theater.open(deck, url, kind, { start: state ? playbackPosition(state, offset) : 0, hold: !!state?.paused || heldRef.current() });
       const made = viewDriver(deck, () => events.current!);
       setDriver(made.driver);
       return () => { made.dispose(); setDriver(null); };
@@ -1261,7 +1326,10 @@ function useDeckDriver(deck: Deck, playback: Playback, media: HTMLMediaElement |
     setDriver(made.driver);
     return () => { made.dispose(); setDriver(null); };
   }, [deck, view, url, kind, media]);
-  events.current = useSync(driver, playback, syncing);
+  const sync = useSync(driver, playback, syncing);
+  // A song room's YouTube or file player has no controls of its own: whatever it does by itself
+  // (pausing or rewinding at its end, buffering) is never the listener's doing and never moves the room.
+  events.current = kind === "site" ? sync : { onUser: () => {}, onEnded: sync.onEnded };
 }
 
 // Room -----------------------------------------------------------------------
@@ -1652,7 +1720,7 @@ function UpNext({ playback, canRequest, onOpen, onRequest }: { playback: Playbac
           <QueueThumb item={next} />
           <span className="song-upnext-copy">
             <strong className="truncate">{info?.track ?? next.title}</strong>
-            <small className="truncate">{info?.artist ?? KIND_LABEL[next.kind]}{state.dj ? ` · ${djLabel(presetFor(state.djStyle, next.id))}` : ""}</small>
+            <small className="truncate">{info?.artist ?? KIND_LABEL[next.kind]}{state.dj ? ` · ${djLabel(planFor(state, item, next).preset)}` : ""}</small>
           </span>
           <Icon name="right" size={16} />
         </button>
@@ -1782,6 +1850,74 @@ function SongInvite({ playback, info, loading, names, channel, canControl, state
         </p>
       </div>
     </div>
+  );
+}
+
+// Channel list -------------------------------------------------------------------------
+
+/** A quiet song room in the channel list: a record waiting on the platter. */
+function SongDisc() {
+  return (
+    <svg className="song-room-disc" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9.25" />
+      <path d="M12 5.75A6.25 6.25 0 0 1 18.25 12" opacity=".5" />
+      <path d="M12 18.25A6.25 6.25 0 0 1 5.75 12" opacity=".5" />
+      <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * A song room's row in the channel list. While people listen, it quietly comes alive for everyone
+ * looking at the list: the record takes the colour of the music's genre, a thin light runs along
+ * the bottom, and the track that plays and the faces of who is listening show.
+ */
+export function SongChannelRow({ accountId, state, channel, active, unread, muted, actions, onOpen }: {
+  accountId: string; state: ServerState; channel: Channel; active: boolean; unread: { count: number; mention: boolean } | undefined;
+  muted: boolean; actions: ReactNode; onOpen: () => void;
+}) {
+  const room = useRoomPulse(accountId, channel.id);
+  const item = currentItem(room);
+  const listeners = room?.listeners;
+  // Servers that predate listeners can only tell that the room plays.
+  const live = !!item && !room?.paused && (listeners ? listeners.length > 0 : true);
+  const { info } = useSongInfo(live ? item : null, null);
+  const track = item ? info?.track ?? item.title : null;
+  const family = item && live ? genreFamily(info?.genre, [item.title, info?.artist].filter(Boolean).join(" ")) : null;
+  const hue = familyHue(family) ?? hueOf(item?.title ?? channel.name);
+  const people = (listeners ?? []).map((id) => state.members.find((member) => member.user.id === id)?.user).filter((user): user is NonNullable<typeof user> => !!user);
+  const count = listeners?.length ?? 0;
+  const listening = count ? counted(count, "counts.listening.one", "counts.listening.other") : channel.name;
+  const label = live && track ? translate("song.channelLive", { p0: listening, p1: track }) : translate("song.channelIdle");
+  return (
+    <li>
+      <div
+        className={`channel song-channel${live ? " song-live" : ""}${active ? " active" : ""}${unread ? " unread" : ""}`}
+        style={live ? ({ "--vibe": hue } as CSSProperties) : undefined}
+        title={label}
+        onClick={onOpen}
+      >
+        <span className="song-room-icon" aria-hidden="true"><SongDisc /></span>
+        <span className="song-channel-text">
+          <span className="channel-name">{channel.name}</span>
+          {live && (track || people.length > 0) && (
+            // Under the name: who listens, faces overlapping, then what plays. The right side stays free for the row's buttons.
+            <span className="song-channel-sub">
+              {people.length > 0 && (
+                <span className="song-channel-people" aria-label={listening}>
+                  {people.slice(0, 4).map((user) => <Avatar key={user.id} user={user} size={16} />)}
+                  {count > 4 && <span className="song-channel-more">+{count - 4}</span>}
+                </span>
+              )}
+              {track && <span className="song-channel-track">{track}</span>}
+            </span>
+          )}
+        </span>
+        {muted && <Icon name="bellOff" size={14} />}
+        {unread?.mention && <span className="badge">{unread.count}</span>}
+        {actions}
+      </div>
+    </li>
   );
 }
 
@@ -1954,14 +2090,44 @@ function SongPlayer({ session }: { session: Listening }) {
     mixedInto: null as string | null,
     /** The deck playing out a transition, known before React renders it (the deck closer reads it). */
     tail: null as { deck: Deck; seconds: number; itemId: string } | null,
+    /**
+     * A track changed by hand (next, back, a pick from the queue): it loads held on the other
+     * deck while the old one keeps playing, then comes in with a transition instead of a cut.
+     */
+    cue: null as { from: Deck; fromId: string; to: Deck; toId: string } | null,
+    /** The item the player last showed, and its deck. */
+    last: null as { id: string; deck: Deck; view: boolean } | null,
   });
-  const deck = (itemId && decks.current.assigned.get(itemId)) || decks.current.current;
-  decks.current.current = deck;
+  const desk = decks.current;
+  if (itemId && desk.last?.id !== itemId) {
+    const before = desk.last;
+    const preloaded = desk.preload?.itemId === itemId;
+    const pending = desk.cue;
+    if (pending && !preloaded) {
+      // Changed again before the cued track came in: back to what still plays, or cue this one instead.
+      if (pending.fromId === itemId) { desk.cue = null; desk.assigned.set(itemId, pending.from); }
+      else { desk.cue = { ...pending, toId: itemId }; desk.assigned.set(itemId, pending.to); }
+    } else if (!preloaded && view && before?.view && state && !state.paused && sounding(before.id)) {
+      const to = otherDeck(before.deck);
+      desk.cue = { from: before.deck, fromId: before.id, to, toId: itemId };
+      desk.assigned.set(itemId, to);
+    }
+    // A track loaded ahead on the deck this one takes is gone from it.
+    const taken = desk.preload;
+    if (desk.cue && taken && taken.itemId !== itemId && taken.deck === desk.cue.to) {
+      desk.assigned.delete(taken.itemId);
+      desk.preload = null;
+    }
+    desk.last = { id: itemId, deck: desk.assigned.get(itemId) ?? desk.current, view };
+  }
+  const deck = (itemId && desk.assigned.get(itemId)) || desk.current;
+  desk.current = deck;
   const deckRef = useRef(deck);
   deckRef.current = deck;
   /** The deck playing out a transition, and for how long. */
   const [tail, setTail] = useState<{ deck: Deck; seconds: number; itemId: string } | null>(null);
-  useDeckDriver(deck, playback, view ? null : audio, tail?.deck !== deck);
+  const cueing = desk.cue?.to === deck && desk.cue.toId === itemId;
+  useDeckDriver(deck, playback, view ? null : audio, tail?.deck !== deck && !cueing, () => decks.current.cue?.to === deckRef.current);
   useViewBounds(deck, slot, view && !!slot?.isConnected);
 
   // The room can lower the music for everyone while people in their call talk.
@@ -1974,6 +2140,39 @@ function SongPlayer({ session }: { session: Listening }) {
   volumeRef.current = volume;
   useElementVolume(view ? null : audio, volume);
 
+  const known = useDuration(itemId);
+  const { info } = useSongInfo(item, known);
+  const duration = known ?? info?.duration ?? null;
+
+  // DJ mode: shortly before the end, load the next track on the other deck (held, silent);
+  // at the mix point start it with its transition, play this one out, and move the room on.
+  // Every listener does this at the same room time, so everyone hears the same mix.
+  const index = state && item ? state.queue.findIndex((entry) => entry.id === item.id) : -1;
+  const next = index >= 0 ? state!.queue[index + 1] : undefined;
+  // The next track's genre and tempo shape the transition: look them up ahead of time.
+  useSongInfo(next ?? null, null);
+  const dj = state?.dj === true && !!state.autoplay;
+  // Every change from one track into the next is mixed: the DJ's transition, or a plain crossfade.
+  const autoMix = !!state?.autoplay;
+  const plan = item && next ? (dj ? planFor(state, item, next) : NATURAL_SWITCH) : null;
+
+  // The music's loudness, second by second: when the track fades out or goes quiet near its end
+  // (an outro, a long silent tail), the DJ mixes right then instead of playing it out.
+  const [outro, setOutro] = useState<string | null>(null);
+  const loudness = useRef<{ itemId: string | null; samples: number[]; quiet: number }>({ itemId: null, samples: [], quiet: 0 });
+  const hearOutro = (id: string, position: number, loud: number, length: number | null) => {
+    const meter = loudness.current;
+    if (meter.itemId !== id) { meter.itemId = id; meter.samples = []; meter.quiet = 0; }
+    if (!length || length < 60) return;
+    // The body of the song sets what "loud" means for it.
+    if (position > length * 0.1 && position < length * 0.8) { meter.samples.push(loud); if (meter.samples.length > 600) meter.samples.shift(); }
+    if (meter.samples.length < 20 || position < length * 0.6 || length - position > 35) { meter.quiet = 0; return; }
+    const sorted = [...meter.samples].sort((a, b) => a - b);
+    const body = sorted[Math.floor(sorted.length * 0.6)]!;
+    meter.quiet = loud < body - 12 ? meter.quiet + 1 : 0;
+    if (meter.quiet >= 4) setOutro((current) => (current === id ? current : id));
+  };
+
   // Pages fade themselves; volume and spectrum are asked again on every status, so a newly
   // loaded track gets them too. Only the active deck speaks for the room.
   const wantLevels = useVisualizerShown() && !songLite;
@@ -1984,6 +2183,8 @@ function SongPlayer({ session }: { session: Listening }) {
       for (const d of DECKS) bridge.control(d, { action: "volume", volume });
       bridge.control(deck, { action: "levels", on: wantLevels });
       bridge.control(otherDeck(deck), { action: "levels", on: false });
+      bridge.control(deck, { action: "meter", on: dj });
+      bridge.control(otherDeck(deck), { action: "meter", on: false });
     };
     ask();
     const offStatus = bridge.on("status", (from, status) => {
@@ -1991,6 +2192,7 @@ function SongPlayer({ session }: { session: Listening }) {
       ask();
       tickLocal(itemId, status.position, status.paused);
       if (status.duration) rememberDuration(itemId, status.duration);
+      if (dj && typeof status.loud === "number" && !status.paused) hearOutro(itemId, status.position, status.loud, status.duration ?? durations.get(itemId) ?? null);
     });
     const offLevels = bridge.on("levels", (from, payload) => {
       if (from !== deckRef.current) return;
@@ -1999,35 +2201,27 @@ function SongPlayer({ session }: { session: Listening }) {
       const playing = currentItem(latest.current.state);
       if (playing?.id === itemId) feedVoice(playing, payload.position, payload.vr, payload.vl);
     });
-    return () => { offStatus(); offLevels(); spectrum = null; };
-  }, [view, itemId, volume, wantLevels, deck]);
+    // A track that played to its end is over here at once, not when the next status comes: the
+    // room moving on now is the next track, not a skip that would mix out of a finished one.
+    const offEnded = bridge.on("ended", (from, payload) => { if (from === deckRef.current) tickLocal(itemId, payload.position, true); });
+    return () => { offStatus(); offLevels(); offEnded(); spectrum = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hearOutro only reads refs
+  }, [view, itemId, volume, wantLevels, deck, dj]);
 
-  const known = useDuration(itemId);
-  const { info } = useSongInfo(item, known);
-  const duration = known ?? info?.duration ?? null;
-
-  // DJ mode: shortly before the end, load the next track on the other deck (held, silent);
-  // at the mix point start it with its transition, play this one out, and move the room on.
-  // Every listener does this at the same room time, so everyone hears the same mix.
-  const index = state && item ? state.queue.findIndex((entry) => entry.id === item.id) : -1;
-  const next = index >= 0 ? state!.queue[index + 1] : undefined;
-  const preset = next ? presetFor(state?.djStyle, next.id) : null;
-  const dj = state?.dj === true && !!state.autoplay;
-
-  /** Starts the transition from `from` (playing `fromId`) into the deck holding `toId`. Once per track. */
-  const startMix = (from: Deck, fromId: string, to: Deck, toId: string, mix: DjPreset): boolean => {
+  /** Starts the transition from `from` (playing `fromId`) into the deck holding `toId`, at `at` seconds into it. Once per track. */
+  const startMix = (from: Deck, fromId: string, to: Deck, toId: string, mix: MixPlan, at = 0): boolean => {
     const bridge = window.annoy?.theater;
     if (!bridge || decks.current.mixedInto === toId) return false;
-    const seconds = DJ_SECONDS[mix];
+    const seconds = mix.seconds;
     const playingOut = { deck: from, seconds, itemId: fromId };
     decks.current.mixedInto = toId;
     decks.current.tail = playingOut;
-    setMixing(mix);
+    setMixing(mix.preset);
     setTail(playingOut);
     bridge.control(to, { action: "volume", volume: volumeRef.current });
-    bridge.control(to, { action: "fx", preset: mix, role: "in", seconds });
-    bridge.control(to, { action: "play", position: 0 });
-    bridge.control(from, { action: "fx", preset: mix, role: "out", seconds });
+    bridge.control(to, { action: "fx", preset: mix.preset, role: "in", seconds, beat: mix.beat });
+    bridge.control(to, { action: "play", position: at });
+    bridge.control(from, { action: "fx", preset: mix.preset, role: "out", seconds, beat: mix.beat });
     return true;
   };
 
@@ -2040,33 +2234,71 @@ function SongPlayer({ session }: { session: Listening }) {
     const before = previous.current;
     previous.current = itemId ? { id: itemId, deck } : null;
     const waiting = decks.current.preload;
-    if (!dj || !before || !itemId || before.id === itemId || waiting?.itemId !== itemId || waiting.deck === before.deck) return;
-    startMix(before.deck, before.id, waiting.deck, itemId, presetFor(state?.djStyle, itemId));
+    if (!autoMix || !before || !itemId || before.id === itemId || waiting?.itemId !== itemId || waiting.deck === before.deck) return;
+    const s = latest.current.state;
+    const into = s?.queue.find((entry) => entry.id === itemId);
+    if (into) startMix(before.deck, before.id, waiting.deck, itemId, s?.dj ? planFor(s, s.queue.find((entry) => entry.id === before.id) ?? null, into) : NATURAL_SWITCH);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the room changes track
+  }, [itemId]);
+
+  // A track cued by hand comes in as soon as its deck has loaded it (or after a few seconds
+  // anyway): with the room's transition in DJ mode, a short crossfade otherwise.
+  useEffect(() => {
+    const bridge = window.annoy?.theater;
+    const cue = decks.current.cue;
+    if (!bridge || !cue || cue.toId !== itemId) return;
+    // A transition still playing out on the deck this track loads on is over: it took the deck.
+    if (decks.current.tail?.deck === cue.to) {
+      decks.current.tail = null;
+      setTail(null);
+      setMixing(null);
+    }
+    const opened = Date.now();
+    let done = false;
+    const go = () => {
+      if (done || decks.current.cue !== cue) return;
+      done = true;
+      decks.current.cue = null;
+      const s = latest.current.state;
+      const into = s?.queue.find((entry) => entry.id === cue.toId);
+      if (!s || !into || s.currentId !== cue.toId) return;
+      const mix = s.dj ? planFor(s, s.queue.find((entry) => entry.id === cue.fromId) ?? null, into) : SOFT_SWITCH;
+      decks.current.mixedInto = null;
+      startMix(cue.from, cue.fromId, cue.to, cue.toId, mix, s.paused ? s.position : playbackPosition(s, latest.current.offset));
+    };
+    // The deck still answering for the page it had before reports too: wait for the new one.
+    const off = bridge.on("status", (from, status) => { if (from === cue.to && status.duration && Date.now() - opened > 900) go(); });
+    const timer = setTimeout(go, 7000);
+    return () => { off(); clearTimeout(timer); };
   }, [itemId]);
 
   useEffect(() => {
     const bridge = window.annoy?.theater;
-    if (!bridge || !dj || !item || !next || !preset || !view || !inView(next) || !duration || state?.paused || tail) return;
-    const seconds = DJ_SECONDS[preset];
+    if (!bridge || !autoMix || !item || !next || !plan || !view || !inView(next) || !duration || state?.paused || tail || decks.current.cue) return;
+    const seconds = plan.seconds;
     const remaining = duration - positionOf(latest.current, item.id, true);
     // Joined (or skipped) too close to the end for this one: it simply ends.
     if (remaining < seconds + 1.5) return;
     const target = otherDeck(deck);
+    const preload = () => {
+      if (decks.current.preload?.itemId === next.id) return;
+      decks.current.assigned.set(next.id, target);
+      decks.current.preload = { deck: target, itemId: next.id };
+      bridge.open(target, next.url, next.kind, { hold: true });
+    };
+    const mixNow = () => {
+      if (decks.current.preload?.itemId !== next.id) return;
+      if (startMix(deck, item.id, target, next.id, plan)) void latest.current.send({ op: "ended", itemId: item.id });
+    };
+    // The track is fading out: skip its tail and mix now.
+    if (outro === item.id && decks.current.preload?.itemId === next.id) { mixNow(); return; }
     const timers = [
-      setTimeout(() => {
-        decks.current.assigned.set(next.id, target);
-        decks.current.preload = { deck: target, itemId: next.id };
-        bridge.open(target, next.url, next.kind, { hold: true });
-      }, Math.max(0, remaining - seconds - 20) * 1000),
-      setTimeout(() => {
-        if (decks.current.preload?.itemId !== next.id) return;
-        if (startMix(deck, item.id, target, next.id, preset)) void latest.current.send({ op: "ended", itemId: item.id });
-      }, (remaining - seconds) * 1000),
+      setTimeout(preload, Math.max(0, remaining - seconds - PRELOAD_AHEAD_S) * 1000),
+      setTimeout(mixNow, (remaining - seconds) * 1000),
     ];
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rescheduled on any room change (seek, queue, pause)
-  }, [dj, itemId, next?.id, preset, view, duration, deck, state?.paused, state?.updatedAt, tail]);
+  }, [autoMix, itemId, next?.id, plan?.preset, plan?.seconds, view, duration, deck, state?.paused, state?.updatedAt, tail, outro]);
 
   // The deck that played out a transition closes once it's done.
   useEffect(() => {
@@ -2088,12 +2320,13 @@ function SongPlayer({ session }: { session: Listening }) {
     const bridge = window.annoy?.theater;
     if (!bridge) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const busy = (d: Deck) => decks.current.preload?.deck === d || decks.current.tail?.deck === d || decks.current.cue?.from === d || decks.current.cue?.to === d;
     for (const d of DECKS) {
-      const inUse = (view && d === deck) || tail?.deck === d || decks.current.tail?.deck === d || decks.current.preload?.deck === d;
+      const inUse = (view && d === deck) || tail?.deck === d || busy(d);
       if (inUse) continue;
       bridge.control(d, { action: "fx", preset: "smooth", role: "out", seconds: 1 });
       timers.push(setTimeout(() => {
-        const stillFree = !((inView(currentItem(latest.current.state)) && d === deckRef.current) || decks.current.preload?.deck === d || decks.current.tail?.deck === d);
+        const stillFree = !((inView(currentItem(latest.current.state)) && d === deckRef.current) || busy(d));
         if (stillFree) bridge.close(d);
       }, 1200));
     }

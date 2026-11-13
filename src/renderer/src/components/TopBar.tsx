@@ -16,7 +16,9 @@ import { visibleUserActivities } from "../../../shared/activity.ts";
 import { ServerTabMenu } from "./ServerTabMenu.tsx";
 import { Select } from "./ui/select.tsx";
 import { presenceLabel, type ManualPresence } from "../../../shared/presence.ts";
-import { ownCloudUser } from "../social/profile.ts";
+import { cloudUser, ownCloudUser } from "../social/profile.ts";
+import { displayName } from "../social/runtime.ts";
+import { useOwnActivities } from "../features/activity/use-activity.ts";
 
 function unreadFor(inst: InstanceState | undefined, channelIds: readonly string[]): { count: number; mention: boolean } {
   let count = 0;
@@ -72,7 +74,8 @@ export function UserPanel() {
   const groupActivitySupported = useStore((s) => annoyMode || !!accountId && !!s.instances[accountId]?.instance?.groupActivity);
   const snapshot = useStore((s) => s.desktopActivity);
   const reported = useStore((s) => (annoyMode ? cloudPresence?.activities : accountId && serverUser ? s.instances[accountId]?.activities[serverUser.id] : undefined) ?? EMPTY_ACTIVITIES);
-  const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: snapshot?.activities, reported });
+  const own = useOwnActivities();
+  const activities = visibleUserActivities({ isSelf: true, sharing: settings.shareActivity, isFriend: false, local: own, reported });
 
   const openSettings = () =>
     setState((s) => {
@@ -168,12 +171,29 @@ export function TopBar() {
   const after = shown.filter((sv) => tabLayout(sv, settings).placement === "after");
   const directMessages = accounts.flatMap((account) => (instances[account.id]?.dms ?? []).filter((dm) => (instances[account.id]?.unread[dm.id]?.count ?? 0) > 0).map((dm) => ({ account, dm, unread: instances[account.id]?.unread[dm.id]?.count ?? 0 })));
 
-  let homeCount = 0;
-  for (const a of accounts) {
-    const inst = instances[a.id];
-    for (const dm of inst?.dms ?? []) homeCount += inst?.unread[dm.id]?.count ?? 0;
-    homeCount += inst?.relationships.filter((r) => r.status === "incoming").length ?? 0;
-  }
+  // Annoy account DMs: the sender's face stays on the rail with its count until read.
+  const social = useStore((s) => s.social);
+  const cloudDirectMessages = social.dms.filter((dm) => (social.unread[dm.id] ?? 0) > 0).map((dm) => ({ dm, unread: social.unread[dm.id] ?? 0 }));
+
+  // Unread messages count on the sender's face only; home counts friend requests waiting (like Discord).
+  let homeCount = social.relationships.filter((r) => r.status === "incoming").length;
+  for (const a of accounts) homeCount += instances[a.id]?.relationships.filter((r) => r.status === "incoming").length ?? 0;
+
+  const dmShortcuts = [
+    ...cloudDirectMessages.map(({ dm, unread }) => {
+      const profile = social.profiles[dm.recipientId];
+      const name = social.relationships.find((r) => r.user.id === dm.recipientId)?.nickname || displayName(profile) || translate("social.unknownUser");
+      const count = unread > 99 ? "99+" : String(unread);
+      return <Tooltip key={`cloud-${dm.id}`} content={translate("common.6e8c81a18a65",{p0:(name),p1:(count)})}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(name),p1:(count)})} onClick={() => navigate({ kind: "home", accountId: null, dmId: dm.id })}><Avatar user={cloudUser(profile, dm.recipientId)} size={40} /><span key={unread} className="tab-badge">{count}</span></button></Tooltip>;
+    }),
+    ...directMessages.map(({ account, dm, unread }) => {
+      const user = dm.recipients[0];
+      if (!user) return null;
+      const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
+      const count = unread > 99 ? "99+" : String(unread);
+      return <Tooltip key={`${account.id}-${dm.id}`} content={translate("common.6e8c81a18a65",{p0:(nickname),p1:(count)})}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(count)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={40} /><span key={unread} className="tab-badge">{count}</span></button></Tooltip>;
+    }),
+  ].filter(Boolean);
 
   return (
     <header className="topbar clean-rail">
@@ -183,16 +203,12 @@ export function TopBar() {
           {homeCount > 0 && <span className="tab-badge">{homeCount}</span>}
         </button>
       </Tooltip>
+      {/* Who wrote to me sits right under home, each face with its own count, until read. */}
+      {dmShortcuts.length > 0 && <div className="rail-dms" role="group">{dmShortcuts}</div>}
       <span className="rail-divider rail-home-divider" aria-hidden="true" />
       <nav className="tabs-strip" aria-label={translate("common.0beb691c8956")}>
         <Tooltip content={translate("common.1f43b76f4112")}><button className={`tab-item directory-tab${view.kind === "servers" ? " active" : ""}`} aria-label={translate("common.c1158df03518")} aria-current={view.kind === "servers" ? "page" : undefined} onClick={() => navigate({ kind: "servers" })}><span className="tab-tile"><Icon name="users" size={19} /></span><span className="rail-label">{translate("common.c1158df03518")}</span></button></Tooltip>
         <Tooltip content={translate("integrations.store")}><button className={`tab-item directory-tab store-tab${view.kind === "marketplace" ? " active" : ""}`} aria-label={translate("integrations.store")} aria-current={view.kind === "marketplace" ? "page" : undefined} onClick={() => navigate({ kind: "marketplace", accountId: null, serverId: null })}><span className="tab-tile"><Icon name="store" size={19} /></span><span className="rail-label">{translate("integrations.store")}</span></button></Tooltip>
-        {directMessages.map(({ account, dm, unread }) => {
-          const user = dm.recipients[0];
-          if (!user) return null;
-          const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
-          return <Tooltip key={`${account.id}-${dm.id}`} content={translate("common.6e8c81a18a65",{p0:(nickname),p1:(unread)})}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(unread)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={36} presence={instances[account.id]?.presences[user.id] ?? "offline"} /><span key={unread} className="tab-badge">{unread}</span></button></Tooltip>;
-        })}
         {before.map((service) => <ServiceTab key={service.id} service={service} />)}
         {before.length > 0 && accounts.some((account) => instances[account.id]?.servers.length) && <span className="rail-divider" aria-hidden="true" />}
         {accounts.map((account) => {

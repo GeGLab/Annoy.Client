@@ -15,6 +15,7 @@ import { Code2 } from "lucide-react";
 import { GameIcon } from "../features/activity/GameIcon.tsx";
 import { visibleUserActivities } from "../../../shared/activity.ts";
 import { EMPTY_ACTIVITIES } from "../store.ts";
+import { useOwnActivities } from "../features/activity/use-activity.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
@@ -26,7 +27,7 @@ import { Chat } from "./Chat.tsx";
 import { VoiceStage } from "./VoiceStage.tsx";
 import { FilesView } from "../features/channels/FilesView.tsx";
 import { CodeView } from "../features/channels/CodeView.tsx";
-import { SongView, TheaterView } from "../features/channels/PlaybackRooms.tsx";
+import { SongChannelRow, SongView, TheaterView } from "../features/channels/PlaybackRooms.tsx";
 import { act, Avatar, Icon, openModal, type IconName } from "./ui.tsx";
 import { Tooltip } from "./ui/tooltip.tsx";
 import { notificationKey, toggleMessageMute } from "../lib/notification-preferences.ts";
@@ -57,7 +58,7 @@ function VoiceUsers({
   canModerate: boolean;
 }) {
   const instance = useStore((s) => s.instances[accountId]);
-  const localActivity = useStore((s) => s.desktopActivity);
+  const ownActivities = useOwnActivities();
   const shareActivity = useStore((s) => s.settings.shareActivity);
   const me = instance?.user?.id;
   return (
@@ -70,7 +71,7 @@ function VoiceUsers({
           isSelf,
           sharing: shareActivity,
           isFriend: canViewActivity(instance, v.userId),
-          local: localActivity?.activities,
+          local: ownActivities,
           reported: instance?.activities[v.userId],
         });
         const menuProps = { accountId, serverId: state.server.id, member, voice: v, canModerate };
@@ -171,6 +172,20 @@ function ChannelRow({
     );
   }
 
+  const actions = (
+    <span className="channel-text-actions" onClick={(event) => event.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild><button className="icon-btn tiny" aria-label={translate("common.d914457a16f5",{p0:(channel.name)})}><Icon name="more" size={14} /></button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => toggleMessageMute("channel", accountId, channel.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.7188378d54aa") : translate("common.53963dd070f0")}</DropdownMenuItem></DropdownMenuContent>
+      </DropdownMenu>
+      {gear}
+    </span>
+  );
+  // Song rooms show what plays and who listens, live.
+  if (channel.type === "song") {
+    return <SongChannelRow accountId={accountId} state={state} channel={channel} active={activeId === channel.id} unread={unread} muted={muted} actions={actions} onOpen={() => openChannel(accountId, state.server.id, channel.id)} />;
+  }
+
   return (
     <li>
       <div
@@ -181,13 +196,7 @@ function ChannelRow({
         <span className="channel-name">{channel.name}</span>
         {muted && <Icon name="bellOff" size={14} />}
         {unread?.mention && <span className="badge">{unread.count}</span>}
-        <span className="channel-text-actions" onClick={(event) => event.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><button className="icon-btn tiny" aria-label={translate("common.d914457a16f5",{p0:(channel.name)})}><Icon name="more" size={14} /></button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => toggleMessageMute("channel", accountId, channel.id)}><Icon name={muted ? "bell" : "bellOff"} />{muted ? translate("common.7188378d54aa") : translate("common.53963dd070f0")}</DropdownMenuItem></DropdownMenuContent>
-          </DropdownMenu>
-          {gear}
-        </span>
+        {actions}
       </div>
     </li>
   );
@@ -372,7 +381,9 @@ function MemberCard({
   const rel = relationships?.find((r) => r.user.id === member.user.id);
   const annoySocial = !!inst?.instance?.annoySocial;
   const cloudRel = useStore((s) => (member.user.annoyId ? s.social.relationships.find((r) => r.user.id === member.user.annoyId) : undefined));
-  const activities = useStore((s) => isSelf ? s.settings.shareActivity ? s.desktopActivity?.activities ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES : s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const own = useOwnActivities();
+  const reportedActivities = useStore((s) => s.instances[accountId]?.activities?.[member.user.id] ?? EMPTY_ACTIVITIES);
+  const activities = isSelf ? own : reportedActivities;
   const assignable = state.roles.filter((r) => r.id !== sid && r.position < myRank);
 
   return (
@@ -547,7 +558,7 @@ function MemberList({ accountId, state, me }: { accountId: string; state: Server
   return (
     <ResizablePanel panel="members" otherVisible>
       <CommunityPulse accountId={accountId} state={state} me={me}/>
-      <div className="member-search-slot"><SearchButton placement="members" /></div>
+      <div className="member-search-slot"><SearchButton /></div>
       <div className="member-directory-search">
         <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("common.61fd3b555f75")} aria-label={translate("common.fb0fd14d5bbb")} />
       </div>

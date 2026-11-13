@@ -7,6 +7,33 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { DevelopmentIcon } from "./DevelopmentIcon.tsx";
 import { GameIcon } from "./GameIcon.tsx";
 
+/** Album covers found for music that came without one, by artist and track ("" when the catalogs had none). */
+const covers = new Map<string, string>();
+
+/**
+ * Music without a picture of its own (a song room, a player the system reports) gets its album
+ * cover from the same catalogs the song room uses, looked up once per track on this device.
+ * Activity payloads stay as they are: servers only take official artwork from Spotify or Steam.
+ */
+function useCover(artist: string | undefined, track: string, wanted: boolean): string | undefined {
+  const key = wanted && artist ? `${artist}\n${track}` : null;
+  const [, found] = useState(0);
+  useEffect(() => {
+    const lookup = window.annoy?.theater?.songInfo;
+    if (!key || !lookup || covers.has(key)) return;
+    let live = true;
+    void lookup("", `${artist} - ${track}`, null).then(
+      (info) => {
+        covers.set(key, info?.cover?.startsWith("https://") ? info.cover : "");
+        if (live) found((n) => n + 1);
+      },
+      () => {},
+    );
+    return () => { live = false; };
+  }, [key]);
+  return key ? covers.get(key) || undefined : undefined;
+}
+
 export function ActivityCard({ activity, compact = false }: { activity: UserActivity; compact?: boolean }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -22,8 +49,9 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   const video=activity.kind==="video",generic=activity.kind==="generic";
   // Media with an artist is music (a song room, or a player the system reports).
   const listening = generic && !!activity.artist;
+  const cover = useCover(activity.artist, activity.name, listening && !activity.artwork);
   const [failedArtwork, setFailedArtwork] = useState<string | null>(null);
-  const artwork = activity.artwork ?? (game && activity.provider === "steam" && /^\d{1,10}$/.test(activity.appId ?? "")
+  const artwork = activity.artwork ?? cover ?? (game && activity.provider === "steam" && /^\d{1,10}$/.test(activity.appId ?? "")
     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${activity.appId}/header.jpg` : undefined);
   const image = artwork && artwork !== failedArtwork;
   return (

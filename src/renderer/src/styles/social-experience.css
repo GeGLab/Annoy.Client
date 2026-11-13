@@ -329,3 +329,11 @@
   .steam-connection-body { padding: 0 16px 16px; }
   .steam-connection-actions { padding: 10px 16px; }
 }
+
+/* Unread DMs under home, Discord style: the sender's face with a red count pinned to its lower right corner. */
+.clean-rail .rail-dms { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: none; }
+.app.bar-top .clean-rail .rail-dms { flex-direction: row; gap: 8px; }
+.clean-rail .dm-shortcut { background: transparent; }
+.clean-rail .dm-shortcut .avatar-face { transition: border-radius .15s ease; }
+.clean-rail .dm-shortcut:hover .avatar-face { border-radius: 14px; }
+.clean-rail .dm-shortcut .tab-badge, .app.bar-top .clean-rail .dm-shortcut .tab-badge { top: auto; left: auto; right: -3px; bottom: -3px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; border: 3px solid var(--bg-rail); background: var(--danger); color: #fff; font-size: 11px; font-weight: 750; line-height: 1; }

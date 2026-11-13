@@ -5,9 +5,10 @@ import { ipcRenderer } from "electron";
 // Song rooms also ask it for their volume, a spectrum for the visualizer and, in DJ mode,
 // the transition effects that mix one deck into the other.
 
-type Preset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser";
+type Preset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser" | "cut" | "wash";
+const PRESETS: readonly Preset[] = ["smooth", "filter", "echo", "brake", "bassswap", "riser", "cut", "wash"];
 interface Command {
-  action: "play" | "pause" | "seek" | "volume" | "levels" | "fx";
+  action: "play" | "pause" | "seek" | "volume" | "levels" | "fx" | "meter";
   position?: number;
   /** 0 to 1, for "volume": how loud the room wants this device's player. */
   volume?: number;
@@ -17,6 +18,8 @@ interface Command {
   preset?: Preset;
   role?: "in" | "out";
   seconds?: number;
+  /** For "fx": one beat of the music in seconds, so echoes repeat on the beat. */
+  beat?: number;
 }
 
 let video: HTMLVideoElement | null = null;
@@ -158,7 +161,7 @@ function brake(el: HTMLVideoElement, seconds: number): void {
   fxTimers.push(timer);
 }
 
-function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
+function runFx(preset: Preset, role: "in" | "out", seconds: number, beat: number): void {
   clearFx();
   const el = video;
   if (!el) return;
@@ -169,6 +172,13 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
   // crossfade, except the brake, which only needs the element.
   if (!g) {
     if (preset === "brake" && out) { brake(el, Math.min(seconds, 2)); return; }
+    if (preset === "cut") {
+      // A cut is a cut: the outgoing drops on the beat, the incoming is simply there.
+      fxVolume = out ? 1 : 0;
+      fadeVolume();
+      fxTimers.push(setTimeout(() => { fxVolume = out ? 0 : 1; fadeVolume(); }, Math.min(seconds, beat * 2) * 1000));
+      return;
+    }
     const started = performance.now();
     fxVolume = out ? 1 : 0;
     fadeVolume();
@@ -183,6 +193,9 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
   }
   const t = g.context.currentTime, d = seconds;
   for (const param of params(g)) param.cancelScheduledValues(t);
+  // Repeats land on the music's own grid: a dotted eighth for echoes, an eighth for throws.
+  g.delay.delayTime.cancelScheduledValues(t);
+  g.delay.delayTime.setValueAtTime(Math.min(1.5, Math.max(0.12, beat * 0.75)), t);
   switch (preset) {
     case "smooth":
       g.fade.gain.setValueCurveAtTime(curve(out ? 1 : 0, out ? 0 : 1), t, d);
@@ -203,7 +216,6 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
     case "echo":
       // The outgoing track repeats itself away; the incoming one enters as the echoes thin out.
       if (out) {
-        g.delay.delayTime.setValueAtTime(0.375, t);
         g.feedback.gain.setValueAtTime(0.55, t);
         g.wet.gain.setValueAtTime(0, t);
         g.wet.gain.linearRampToValueAtTime(0.75, t + d * 0.2);
@@ -256,6 +268,47 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
         g.fade.gain.linearRampToValueAtTime(1, t + d * 0.9);
       }
       break;
+    case "cut":
+      // Hip-hop style: the outgoing line is thrown into an eighth-note echo and cut on the
+      // beat; the incoming track slams straight in under the echoes.
+      if (out) {
+        const throwAt = Math.min(d * 0.5, beat * 2);
+        g.delay.delayTime.setValueAtTime(Math.min(1, Math.max(0.1, beat * 0.5)), t);
+        g.feedback.gain.setValueAtTime(0.45, t);
+        g.wet.gain.setValueAtTime(0, t);
+        g.wet.gain.linearRampToValueAtTime(0.7, t + Math.min(0.08, throwAt));
+        g.dry.gain.setValueAtTime(1, t + throwAt);
+        g.dry.gain.linearRampToValueAtTime(0, t + throwAt + 0.03);
+        g.fade.gain.setValueAtTime(1, t + throwAt);
+        g.fade.gain.linearRampToValueAtTime(0, t + d);
+      } else {
+        const throwAt = Math.min(d * 0.5, beat * 2);
+        g.fade.gain.setValueAtTime(0, t);
+        g.fade.gain.setValueAtTime(0, t + throwAt);
+        g.fade.gain.linearRampToValueAtTime(1, t + throwAt + 0.03);
+      }
+      break;
+    case "wash":
+      // The outgoing track dissolves into a dark, long tail (a filtered feedback wash) while
+      // the incoming one rises out of it, opening from the top.
+      if (out) {
+        g.feedback.gain.setValueAtTime(0.2, t);
+        g.feedback.gain.linearRampToValueAtTime(0.68, t + d * 0.5);
+        g.wet.gain.setValueAtTime(0, t);
+        g.wet.gain.linearRampToValueAtTime(0.65, t + d * 0.4);
+        g.lowpass.frequency.setValueAtTime(22000, t);
+        g.lowpass.frequency.exponentialRampToValueAtTime(700, t + d * 0.7);
+        g.dry.gain.setValueAtTime(1, t + d * 0.25);
+        g.dry.gain.linearRampToValueAtTime(0, t + d * 0.6);
+        g.fade.gain.setValueAtTime(1, t + d * 0.45);
+        g.fade.gain.linearRampToValueAtTime(0, t + d);
+      } else {
+        g.high.frequency.setValueAtTime(900, t);
+        g.high.frequency.exponentialRampToValueAtTime(10, t + d * 0.9);
+        g.fade.gain.setValueAtTime(0, t);
+        g.fade.gain.setValueCurveAtTime(curve(0, 1), t + d * 0.2, d * 0.6);
+      }
+      break;
   }
   // The incoming deck goes back to a clean signal once it's in; the outgoing one gets closed.
   if (!out) fxTimers.push(setTimeout(() => { if (graph) neutral(graph); }, (d + 0.3) * 1000));
@@ -273,13 +326,26 @@ function runFx(preset: Preset, role: "in" | "out", seconds: number): void {
 const BANDS = 48;
 const VOICE_LOW = 140, VOICE_HIGH = 5000;
 let levelsWanted = false;
+/** DJ mode: how loud the music is, so the room hears an outro (fade-out, silence) coming. */
+let meterWanted = false;
+/** Mean energy of the last ~second of samples, newest last. */
+let energy: number[] = [];
 let tap: { el: HTMLVideoElement; context: AudioContext; timer: ReturnType<typeof setInterval> } | null = null;
 
 function untap(): void {
+  energy = [];
   if (!tap) return;
   clearInterval(tap.timer);
   void tap.context.close().catch(() => {});
   tap = null;
+}
+
+/** Loudness of the last second in dB (full scale), or undefined while there is nothing to tell. */
+function loudness(): number | undefined {
+  if (!meterWanted || energy.length < 10) return undefined;
+  const mean = energy.reduce((sum, value) => sum + value, 0) / energy.length;
+  const db = 10 * Math.log10(Math.max(mean, 1e-12));
+  return Math.round(Math.max(-120, Math.min(6, db)) * 10) / 10;
 }
 
 function bands(bins: Uint8Array, hzPerBin: number): number[] {
@@ -331,7 +397,7 @@ function voiceMeter(context: AudioContext, source: AudioNode, hzPerBin: number):
 }
 
 function retap(): void {
-  if (!levelsWanted || !video || holding) return untap();
+  if (!(levelsWanted || meterWanted) || !video || holding) return untap();
   if (tap?.el === video) return;
   untap();
   try {
@@ -351,9 +417,19 @@ function retap(): void {
     const bins = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
     const hzPerBin = context.sampleRate / analyser.fftSize;
     const voice = voiceMeter(context, source, hzPerBin);
+    const wave = new Float32Array(new ArrayBuffer(analyser.fftSize * 4));
     const el = video;
+    energy = [];
     const timer = setInterval(() => {
       if (el.paused || el.ended) return;
+      if (meterWanted) {
+        analyser.getFloatTimeDomainData(wave);
+        let sum = 0;
+        for (const sample of wave) sum += sample * sample;
+        energy.push(sum / wave.length);
+        if (energy.length > 30) energy.shift();
+      }
+      if (!levelsWanted) return;
       analyser.getByteFrequencyData(bins);
       ipcRenderer.send("theater:levels", { position: el.currentTime, levels: bands(bins, hzPerBin), ...voice() });
     }, 33);
@@ -385,8 +461,11 @@ function pick(): HTMLVideoElement | null {
   return best;
 }
 
+/** When the media last played to its end: what a player does right after (pause, rewind for its end screen) is its own doing. */
+let endedAt = 0;
+
 function user(action: "play" | "pause" | "seek"): void {
-  if (!video || Date.now() < quietUntil || holding) return;
+  if (!video || Date.now() < quietUntil || holding || video.ended || Date.now() - endedAt < 3000) return;
   ipcRenderer.send("theater:user", { action, position: video.currentTime });
 }
 
@@ -399,7 +478,7 @@ const onPause = () => {
   if (!video?.ended) user("pause");
 };
 const onSeeked = () => user("seek");
-const onEnded = () => { if (!holding) ipcRenderer.send("theater:ended", { position: video?.currentTime ?? 0 }); };
+const onEnded = () => { endedAt = Date.now(); if (!holding) ipcRenderer.send("theater:ended", { position: video?.currentTime ?? 0 }); };
 
 function attach(next: HTMLVideoElement | null): void {
   if (video) {
@@ -438,13 +517,15 @@ setInterval(() => {
     if (!video.paused) video.pause();
   } else {
     if (wanted !== null && !fade && !graph && Math.abs(video.volume - wanted * fxVolume) > 0.01) fadeVolume();
-    if (levelsWanted && tap?.el !== video) retap();
+    if ((levelsWanted || meterWanted) && tap?.el !== video) retap();
   }
+  const loud = holding ? undefined : loudness();
   ipcRenderer.send("theater:status", {
     position: video.currentTime,
     duration: Number.isFinite(video.duration) ? video.duration : null,
     paused: video.paused,
     ended: video.ended,
+    ...(loud !== undefined && { loud }),
   });
 }, 1000);
 
@@ -464,17 +545,26 @@ ipcRenderer.on("theater:control", (_event, command: Command) => {
     fadeVolume();
     return;
   }
+  if (command.action === "meter") {
+    meterWanted = command.on === true;
+    if (!video) attach(pick());
+    retap();
+    return;
+  }
   if (command.action === "fx") {
     if (!video) attach(pick());
-    const presets: Preset[] = ["smooth", "filter", "echo", "brake", "bassswap", "riser"];
-    if (!command.preset || !presets.includes(command.preset) || (command.role !== "in" && command.role !== "out")) return;
+    if (!command.preset || !PRESETS.includes(command.preset) || (command.role !== "in" && command.role !== "out")) return;
     const seconds = typeof command.seconds === "number" && command.seconds > 0 && command.seconds <= 30 ? command.seconds : 8;
-    runFx(command.preset, command.role, seconds);
+    const beat = typeof command.beat === "number" && command.beat >= 0.2 && command.beat <= 2 ? command.beat : 0.5;
+    runFx(command.preset, command.role, seconds, beat);
     return;
   }
   const target = video ?? pick();
   if (!target) return;
   if (target !== video) attach(target);
+  // play() on a finished video starts it over from the top: a room still on this track
+  // (its "ended" not processed yet) must never replay it.
+  if (command.action === "play" && target.ended && typeof command.position === "number" && Number.isFinite(target.duration) && command.position >= target.duration - 5) return;
   // The room starting a held deck: it plays from here on, and its transition takes it in.
   if (holding && command.action === "play") {
     holding = false;

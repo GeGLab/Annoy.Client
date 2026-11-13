@@ -9,7 +9,9 @@ import { ActivityStack } from "../../features/activity/ActivityCard.tsx";
 import { GameInviteCard, sendGameInvite, useCurrentGame } from "../../features/game-invite.tsx";
 import { startDirectCall } from "../../features/direct-calls.ts";
 import { acceptFriend, addFriend, displayName, ensureProfiles, removeFriend, setFriendNickname } from "../../social/index.ts";
-import { deleteDm, editDm, loadDmPins, loadThread, markDmRead, openAttachment, openDmWith, retryDm, sendDm, sendDmTyping, setStore, setDmPinned } from "../../social/dms.ts";
+import { deleteDm, editDm, foldDmReactions, loadDmPins, loadThread, markDmRead, openAttachment, openDmWith, reactDm, retryDm, sendDm, sendDmTyping, setStore, setDmPinned } from "../../social/dms.ts";
+import { REACTION_SHORTCUTS, ReactionChips } from "../../features/expression/MessageReactions.tsx";
+import { EmojiMenu } from "../../features/expression/MediaPicker.tsx";
 import { cloudUser } from "../../social/profile.ts";
 import { CLOUD_ACCOUNT, type CloudPresence, type CloudRelationship, type DmAttachment, type DmMessage } from "../../social/types.ts";
 import { ResizablePanel } from "../layout/ResizablePanel.tsx";
@@ -22,6 +24,7 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
+import { TypingIndicator } from "../TypingIndicator.tsx";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
 import { DmIntegrationsDialog, DmIntegrationRequests } from "../../features/integrations/DmIntegrations.tsx";
 import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
@@ -41,6 +44,8 @@ const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 const isOnline = (p: CloudPresence | undefined) => !!p && p.status !== "offline";
 const GROUP_WINDOW_MS = 7 * 60_000;
 const EMPTY: DmMessage[] = [];
+type DmReactions = { emoji: string; userIds: string[] }[];
+const NO_REACTIONS: DmReactions = [];
 
 function presenceLabel(p: CloudPresence | undefined): string {
   if (!p || p.status === "offline") return translate("social.offline");
@@ -276,7 +281,7 @@ function AttachmentView({ attachment }: { attachment: DmAttachment }) {
   );
 }
 
-function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink }: { message: DmMessage; compact: boolean; me: string; nameOf: (id: string) => string | undefined; replyTo: DmMessage | undefined; onReply: () => void; integrationLink?: DmLink }) {
+function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink, reactions = NO_REACTIONS }: { message: DmMessage; compact: boolean; me: string; nameOf: (id: string) => string | undefined; replyTo: DmMessage | undefined; onReply: () => void; integrationLink?: DmLink; reactions?: DmReactions }) {
   const profile = useStore((s) => s.social.profiles[message.senderId]);
   const isPinned=useStore(s=>s.social.threads[message.conversationId]?.pins?.some(p=>p.message.id===message.id)??false);
   const connected=useStore(s=>s.social.status==="ready");
@@ -289,6 +294,19 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink
   const meta = message.integration;
   const link = integrationLink;
   const [answering, setAnswering] = useState(false);
+  const [reacting, setReacting] = useState(false);
+  const reactable = connected && !message.state && !message.id.startsWith("~");
+  const react = async (emoji: string) => {
+    if (reacting || !reactable) return;
+    setReacting(true);
+    try {
+      await reactDm(message, emoji, reactions.some((r) => r.emoji === emoji && r.userIds.includes(me)));
+    } catch (error) {
+      toast((error as Error).message);
+    } finally {
+      setReacting(false);
+    }
+  };
   if (meta && meta.op !== "reply") {
     const pending = meta.op === "request" && link?.status === "pending" && link.owner === message.senderId && !message.state;
     const canAnswer = pending && !own;
@@ -385,6 +403,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink
               ))}
             </div>
           )}
+          <ReactionChips reactions={reactions} me={me} nameOf={nameOf} disabled={reacting || !reactable} stickers={false} onToggle={(emoji) => void react(emoji)} />
           {message.state === "sending" && <small className="muted">{translate("social.sending")}</small>}
           {message.state === "failed" && (
             <small className="danger-text">
@@ -398,6 +417,11 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink
       </div>
       {!editing && !message.state && (
         <div className="message-actions">
+          {reactable && <>
+            <div className="reaction-shortcuts" aria-label={translate("chat.d767e158a964")}>{REACTION_SHORTCUTS.map((emoji) => <button key={emoji} className="reaction-quick" aria-label={translate("chat.e113ea72ab1d", { p0: emoji })} aria-pressed={reactions.some((r) => r.emoji === emoji && r.userIds.includes(me))} title={translate("chat.e113ea72ab1d", { p0: emoji })} disabled={reacting} onClick={() => void react(emoji)}>{emoji}</button>)}</div>
+            <EmojiMenu disabled={reacting} onSelect={(emoji) => void react(emoji)} />
+            <span className="message-action-divider" aria-hidden="true" />
+          </>}
           <button className={`icon-btn tiny message-pin-button${isPinned?" on":""}`} title={translate(isPinned?"chat.39b764469fcf":"chat.0cc3fad10ab0")} aria-label={translate(isPinned?"chat.39b764469fcf":"chat.0cc3fad10ab0")} aria-pressed={isPinned} disabled={pinning||!connected} onClick={async()=>{
             if(pinningRef.current)return;
             pinningRef.current=true;setPinning(true);
@@ -446,7 +470,16 @@ function DmConversation({ dmId }: { dmId: string }) {
   const other = useStore((s) => (conversation ? s.social.profiles[conversation.recipientId] : undefined));
   const nickname = useStore((s) => s.social.relationships.find((r) => r.user.id === conversation?.recipientId)?.nickname);
   const presence = useStore((s) => (conversation ? s.social.presences[conversation.recipientId] : undefined));
-  const typing = useStore((s) => (conversation ? (s.social.typing[conversation.recipientId] ?? 0) > Date.now() : false));
+  const typingUntil = useStore((s) => (conversation ? s.social.typing[conversation.recipientId] ?? 0 : 0));
+  const [, setTypingTick] = useState(0);
+  const typing = typingUntil > Date.now();
+  // The typing state expires by time alone: redraw when it does, so the dots never linger.
+  useEffect(() => {
+    const left = typingUntil - Date.now();
+    if (left <= 0) return;
+    const timer = setTimeout(() => setTypingTick((n) => n + 1), left + 50);
+    return () => clearTimeout(timer);
+  }, [typingUntil]);
   const ready = useStore((s) => s.social.status === "ready");
   const muted = useStore((s) => s.settings.mutedChannels.includes(`annoy:${dmId}`));
   const [text, setText] = useState("");
@@ -465,32 +498,82 @@ function DmConversation({ dmId }: { dmId: string }) {
   const game = useCurrentGame();
   const items = thread?.items ?? EMPTY;
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
+  // Reaction messages only feed the chips of the message they point at.
+  const visible = useMemo(() => items.filter((m) => !m.reaction), [items]);
+  const reactions = useMemo(() => foldDmReactions(items), [items]);
+  const hasOlder = !!(thread?.hasMoreLocal || thread?.hasMoreRemote);
 
   useEffect(() => {
     void loadThread(dmId);
     markDmRead(dmId);
     if (conversation) void ensureProfiles([conversation.recipientId]).catch(() => undefined);
   }, [dmId, conversation?.recipientId]);
-  // A conversation opens at its newest message and stays there while the reader is at the end,
-  // also when images or embeds grow after the first paint.
-  const pinned = useRef(true);
-  const toEnd = () => { const el = scroller.current; if (el && pinned.current) el.scrollTop = el.scrollHeight; };
-  useLayoutEffect(() => { pinned.current = true; }, [dmId]);
+
+  /**
+   * The conversation follows its newest message while the reader is at the end;
+   * otherwise the first visible row keeps its place through older pages, edits
+   * and images growing above it. Older pages load before the reader reaches the top.
+   */
+  const view = useRef<{ pinned: boolean; anchor: { id: string; offset: number } | null; top: number }>({ pinned: true, anchor: null, top: 0 });
+  const setTop = (el: HTMLElement, value: number) => {
+    el.scrollTop = value;
+    view.current.top = el.scrollTop;
+  };
+  const loadOlderNearTop = (el: HTMLElement) => {
+    if (el.scrollTop < Math.max(400, el.clientHeight)) void loadThread(dmId, true);
+  };
+  const readerMoved = (el: HTMLElement) => {
+    const state = view.current;
+    state.top = el.scrollTop;
+    state.pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const top = el.getBoundingClientRect().top;
+    const first = [...el.querySelectorAll<HTMLElement>("[data-row-id]")].find((row) => row.getBoundingClientRect().bottom > top + 1);
+    state.anchor = first?.dataset.rowId ? { id: first.dataset.rowId, offset: first.getBoundingClientRect().top - top } : null;
+  };
+  const settle = () => {
+    const el = scroller.current, state = view.current;
+    if (!el) return;
+    const drift = el.scrollTop - state.top;
+    const moved = Math.abs(drift) > 1;
+    if (state.pinned && drift > -1) {
+      if (el.scrollHeight - el.clientHeight - el.scrollTop > 0.5) setTop(el, el.scrollHeight);
+      else state.top = el.scrollTop;
+      return;
+    }
+    const anchor = state.pinned ? null : state.anchor;
+    const row = anchor && el.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(anchor.id)}"]`);
+    if (anchor && row) {
+      const target = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - anchor.offset + (moved ? drift : 0);
+      if (Math.abs(target - el.scrollTop) > 0.5) setTop(el, target);
+      else state.top = el.scrollTop;
+    }
+    if (moved || !row) {
+      readerMoved(el);
+      if (moved) loadOlderNearTop(el);
+    }
+  };
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  useLayoutEffect(() => {
+    settle();
+  });
   useLayoutEffect(() => {
     markDmRead(dmId);
-    toEnd();
-    const frame = requestAnimationFrame(toEnd);
-    return () => cancelAnimationFrame(frame);
   }, [items.length, dmId]);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
-    const observer = new ResizeObserver(toEnd);
-    for (const child of [el, ...el.children]) observer.observe(child);
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => { observer.disconnect(); el.removeEventListener("scroll", onScroll); };
-  }, [dmId, items.length > 0]);
+    const observer = new ResizeObserver(() => settleRef.current());
+    observer.observe(el);
+    const log = el.querySelector(".message-log");
+    if (log) observer.observe(log);
+    return () => observer.disconnect();
+  }, [!!conversation && !!me]);
+  // A page that arrived while the reader still sits near the top leads straight to the next one.
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && !thread?.loadingOlder && !view.current.pinned && hasOlder) loadOlderNearTop(el);
+  }, [thread?.loadingOlder, hasOlder]);
 
   if (!conversation || !me) return <div className="empty-main" />;
   const title = nickname || displayName(other) || translate("social.unknownUser");
@@ -575,29 +658,36 @@ function DmConversation({ dmId }: { dmId: string }) {
           else setPreviewPin(pin.message.id);
         }}><span><strong>{nameOf(pin.message.senderId)}</strong><small>{formatTime(pin.pinnedAt)}</small></span><span className="pinned-message-content">{pin.message.state==="undecryptable"?translate("social.undecryptable"):pin.message.content||translate("common.e186297c35aa")}</span></button>)}
       </div>}
-      <Dialog open={!!preview} onOpenChange={open=>{if(!open)setPreviewPin(null);}}><DialogContent aria-describedby={undefined}><DialogTitle>{translate("chat.dd5705122a58")}</DialogTitle>{preview&&<DmRow message={preview} compact={false} me={me.id} nameOf={nameOf} replyTo={preview.replyTo?byId.get(preview.replyTo):undefined} integrationLink={integrationLinks[preview.integration?.id ?? ""]} onReply={()=>{setReplyTo(preview);setPreviewPin(null);}}/>}</DialogContent></Dialog>
-      <div className="messages" ref={scroller}>
+      <Dialog open={!!preview} onOpenChange={open=>{if(!open)setPreviewPin(null);}}><DialogContent aria-describedby={undefined}><DialogTitle>{translate("chat.dd5705122a58")}</DialogTitle>{preview&&<DmRow message={preview} compact={false} me={me.id} nameOf={nameOf} replyTo={preview.replyTo?byId.get(preview.replyTo):undefined} integrationLink={integrationLinks[preview.integration?.id ?? ""]} reactions={reactions.get(preview.id)} onReply={()=>{setReplyTo(preview);setPreviewPin(null);}}/>}</DialogContent></Dialog>
+      <div
+        className="messages"
+        ref={scroller}
+        onScroll={() => settle()}
+        onWheel={(event) => {
+          const el = scroller.current;
+          // At the very top the wheel no longer scrolls, so it asks for the older page itself.
+          if (el && event.deltaY < 0) loadOlderNearTop(el);
+        }}
+      >
         <div className="message-log">
-          <div className="channel-start">
-            <h2>{title}</h2>
-            {thread?.hasMoreRemote && (
-              <button className="btn btn-ghost" onClick={() => void loadThread(dmId, true)}>
-                {translate("social.loadOlder")}
-              </button>
-            )}
-          </div>
-          {items.map((m, i) => {
-            const prev = items[i - 1];
+          {thread?.loadingOlder && <div className="history-loading" role="status"><span>{translate("chat.d5818e7a4245")}</span></div>}
+          {thread?.loaded && !hasOlder && (
+            <div className="channel-start">
+              <h2>{title}</h2>
+            </div>
+          )}
+          {visible.map((m, i) => {
+            const prev = visible[i - 1];
             const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
             const compact = !newDay && !!prev && !m.replyTo && prev.senderId === m.senderId && !m.integration && !prev.integration && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_WINDOW_MS;
             return (
-              <div key={m.clientId}>
+              <div key={m.clientId} data-row-id={m.clientId}>
                 {newDay && (
                   <div className="day-divider" role="separator">
                     <span>{formatDay(m.createdAt)}</span>
                   </div>
                 )}
-                <DmRow message={m} compact={compact} me={me.id} nameOf={nameOf} replyTo={m.replyTo ? byId.get(m.replyTo) : undefined} integrationLink={integrationLinks[m.integration?.id ?? ""]} onReply={() => setReplyTo(m)} />
+                <DmRow message={m} compact={compact} me={me.id} nameOf={nameOf} replyTo={m.replyTo ? byId.get(m.replyTo) : undefined} integrationLink={integrationLinks[m.integration?.id ?? ""]} reactions={reactions.get(m.id)} onReply={() => setReplyTo(m)} />
               </div>
             );
           })}
@@ -664,7 +754,7 @@ function DmConversation({ dmId }: { dmId: string }) {
         </Button>
       </div>
       </div>
-      <div className="typing-line" aria-live="polite">{typing ? translate("social.typing", { p0: title }) : ""}</div>
+      <div className="typing-line" aria-live="polite">{typing ? <TypingIndicator text={translate("social.typing", { p0: title })} /> : null}</div>
     </section>
   );
 }

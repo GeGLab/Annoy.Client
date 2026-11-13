@@ -70,6 +70,23 @@ export function readDmIntegrationMeta(raw: unknown): DmIntegrationMeta | undefin
   return undefined;
 }
 
+/**
+ * A reaction travels as its own encrypted message (chatannoy never sees it):
+ * `add` puts the sender's emoji on message `to`, `add: false` takes it back.
+ * The conversation folds these in order and never shows them as rows.
+ */
+export interface DmReaction {
+  to: string;
+  emoji: string;
+  add: boolean;
+}
+
+export function readDmReaction(raw: unknown): DmReaction | undefined {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  if (!r || typeof r.to !== "string" || !r.to || r.to.length > 64 || typeof r.emoji !== "string" || !r.emoji.trim() || r.emoji.length > 64 || typeof r.add !== "boolean") return undefined;
+  return { to: r.to, emoji: r.emoji, add: r.add };
+}
+
 /** What goes inside the encrypted message. */
 export interface DmPayload {
   v: 1;
@@ -78,6 +95,7 @@ export interface DmPayload {
   replyTo?: string | null;
   integration?: DmIntegrationMeta;
   invite?: GameInvite;
+  reaction?: DmReaction;
 }
 
 export interface DmMessage {
@@ -95,6 +113,8 @@ export interface DmMessage {
   integration?: DmIntegrationMeta;
   /** "Come play with me": the sender's game when the invite was sent. */
   invite?: GameInvite;
+  /** A reaction to another message: folded into that message, never drawn as a row. */
+  reaction?: DmReaction;
 }
 
 /** A game invite travels inside the encrypted message; older clients just show its text. */
@@ -122,6 +142,10 @@ export interface DmThread {
   loaded: boolean;
   /** More stored history on chatannoy (only with "store"). */
   hasMoreRemote: boolean;
+  /** More history in this device's own copy. */
+  hasMoreLocal?: boolean;
+  /** An older page is on its way. */
+  loadingOlder?: boolean;
   pins?: DmPin[];
   pinsLoading?: boolean;
   pinsError?: string | null;
