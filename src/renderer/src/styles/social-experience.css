@@ -271,7 +271,8 @@
 .message-reactions .reaction, .message-reactions > .icon-btn { box-sizing: border-box; height: 32px; min-height: 32px; }
 .message-reactions .reaction { padding: 0 9px; }
 .message-reactions .reaction.sticker { padding: 0 9px 0 4px; }
-.message-reactions .reaction > span:first-child { font-size: 1.35rem; line-height: 1; }
+/* The emoji fills the same 24px box as a sticker, so both kinds read at one size. */
+.message-reactions .reaction > span:first-child { display: grid; place-items: center; width: 24px; height: 24px; flex: none; font-size: 22px; line-height: 1; }
 .message-reactions > .icon-btn { width: 32px; }
 .reaction-picker .expression-tabs { flex: none; }
 .reaction-sticker-scroll { max-height: 300px; overflow-y: auto; overflow-x: hidden; }

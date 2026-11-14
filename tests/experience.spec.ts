@@ -2842,9 +2842,14 @@ test("reacting never moves the message: every chip has the sticker's height and 
     await seed(page);
     const sticker=`https://cdn.experience.test/i/${"1".repeat(40)}.png`;
     await page.evaluate(async(sticker)=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};const m=s.instances.test.messages.general.items.find((x:any)=>x.id==="message");m.reactions=[{emoji:"😂",userIds:["peer"]},{emoji:sticker,userIds:["peer"]}];});},sticker);
+    await page.route("https://cdn.experience.test/i/**", async route => route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }));
     const reactions=await uiReactionFixture(app);
     const row=page.locator('[data-message-id="message"]'), chips=row.locator(".message-reactions");
     await expect(chips.locator(".reaction")).toHaveCount(2);
+    // An emoji takes the same 24px box as a sticker picture.
+    const box=(selector:string)=>chips.locator(selector).first().evaluate((e)=>{const r=e.getBoundingClientRect();return [Math.round(r.width),Math.round(r.height)];});
+    await expect.poll(()=>box(".reaction:not(.sticker) > span:first-child")).toEqual([24,24]);
+    await expect.poll(()=>box(".reaction.sticker .reaction-sticker")).toEqual([24,24]);
     const heights=()=>chips.locator(":scope > *").evaluateAll(els=>els.map(e=>Math.round(e.getBoundingClientRect().height)));
     await expect.poll(heights).toEqual([32,32,32]);
     // Every frame while a reaction goes out and comes back: where the message is and how tall.
@@ -2865,7 +2870,7 @@ test("reacting never moves the message: every chip has the sticker's height and 
     await page.waitForTimeout(300);
     expect(await frames()).toHaveLength(1);
     await expect.poll(heights).toEqual([32,32,32,32]);
-    await row.screenshot({path:join(capture,"reaction-chips-uniform-dark.png")});
+    await chips.screenshot({path:join(capture,"reaction-chips-uniform-dark.png")});
     expect(reactions.writes).toEqual(["PUT","PUT"]);
   } finally { await close(); }
 });
