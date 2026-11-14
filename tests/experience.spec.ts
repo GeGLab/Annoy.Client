@@ -1725,6 +1725,21 @@ test("friend sidebar, elapsed activity, animated stack and persistent personal v
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await sidebar.evaluate((element) => { element.scrollTop = 250; });
     await page.screenshot({ path: join(capture, "dm-profile-expanded-light-minimum.png") });
+    // A pasted screenshot shows its picture in the DM composer before it is sent.
+    const png = (await readFile("build/icon.png")).toString("base64");
+    await page.locator(".dm-conversation .composer textarea").evaluate((textarea, data) => {
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], "image.png", { type: "image/png" }));
+      textarea.dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }));
+    }, png);
+    const pasted = page.locator(".dm-conversation .pending-file");
+    await expect(pasted).toHaveCount(1);
+    await expect.poll(() => pasted.locator(".pending-preview img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(pasted.locator(".pending-file-size")).not.toBeEmpty();
+    await page.screenshot({ path: join(capture, "dm-pasted-image-preview-light.png") });
+    await pasted.getByRole("button", { name: "Remover image.png" }).click();
+    await expect(pasted).toHaveCount(0);
   } finally { await close(); }
 });
 

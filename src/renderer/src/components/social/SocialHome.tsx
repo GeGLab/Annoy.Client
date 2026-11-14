@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
+import { PendingFile } from "../PendingFile.tsx";
 import { TypingIndicator } from "../TypingIndicator.tsx";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
 import { DmIntegrationsDialog, DmIntegrationRequests } from "../../features/integrations/DmIntegrations.tsx";
@@ -697,12 +698,7 @@ function DmConversation({ dmId }: { dmId: string }) {
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <span key={`${f.name}-${i}`} className="pending-file">
-              <span className="truncate">{f.name}</span>
-              <button className="icon-btn tiny" aria-label={translate("social.cancel")} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
-                <Icon name="x" size={14} />
-              </button>
-            </span>
+            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={false} onRemove={() => setFiles((current) => current.filter((_, j) => j !== i))} />
           ))}
         </div>
       )}
