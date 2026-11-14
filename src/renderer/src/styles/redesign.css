@@ -84,6 +84,9 @@
 }
 .live-community-cover .live-cover-art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; opacity: .8; }
 .live-community-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg,#0c131d 0%,transparent 95%); z-index: -1; }
+/* A server's own cover is a photo: shown at full strength, with shade where the text sits. */
+.live-community-cover .live-cover-photo { object-fit: cover; opacity: 1; pointer-events: none; user-select: none; }
+.live-community-cover.has-banner::after { background: linear-gradient(0deg,#0c131d 0%,rgb(12 19 29 / .55) 45%,transparent 70%), linear-gradient(180deg,rgb(12 19 29 / .6) 0%,transparent 34%); }
 .live-cover-eyebrow { position: absolute; top: 17px; left: 18px; display: flex; align-items: center; gap: 6px; font-size: 7px; letter-spacing: 1.3px; font-weight: 600; opacity: .65; }
 .live-community-identity { position: absolute; left: 16px; right: 17px; bottom: 12px; display: flex; align-items: center; gap: 9px; }
 .live-community-identity > strong { font-size: 21px; font-weight: 700; letter-spacing: -.7px; flex: 1; }

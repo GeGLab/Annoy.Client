@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "共同的游戏，聊不完的话题。你喜爱的地方，就在这里。",
   "redesign.communityApps": "社区应用",
   "layout.showChannels": "显示频道",
-  "layout.closePanel": "关闭面板"
+  "layout.closePanel": "关闭面板",
+  "settings.banner.title": "服务器封面",
+  "settings.banner.hint": "显示在频道列表顶部，所有人可见。宽幅图片效果最佳。",
+  "settings.banner.formats": "PNG、JPEG、WebP 或 GIF · 最大 8 MB · 始终为静态图片",
+  "settings.banner.preview": "服务器封面预览",
+  "settings.banner.input": "服务器封面文件",
+  "settings.banner.change": "更换封面",
+  "settings.banner.remove": "使用默认封面",
+  "settings.banner.unsupported": "更新实例以使用自定义封面。"
 }

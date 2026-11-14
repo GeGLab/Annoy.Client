@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "共通のゲーム、弾む会話。お気に入りの場所をここに。",
   "redesign.communityApps": "コミュニティのアプリ",
   "layout.showChannels": "チャンネルを表示",
-  "layout.closePanel": "パネルを閉じる"
+  "layout.closePanel": "パネルを閉じる",
+  "settings.banner.title": "サーバーのカバー",
+  "settings.banner.hint": "チャンネル一覧の上部に全員に表示されます。横長の画像がおすすめです。",
+  "settings.banner.formats": "PNG・JPEG・WebP・GIF · 8 MB まで · 常に静止画",
+  "settings.banner.preview": "サーバーのカバーのプレビュー",
+  "settings.banner.input": "サーバーのカバー画像ファイル",
+  "settings.banner.change": "カバーを変更",
+  "settings.banner.remove": "既定のカバーを使う",
+  "settings.banner.unsupported": "独自のカバーを使うにはインスタンスを更新してください。"
 }

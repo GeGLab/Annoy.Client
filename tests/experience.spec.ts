@@ -1955,6 +1955,69 @@ test("global search keeps server context and server editing saves image drafts",
   } finally {await close();}
 });
 
+test("a server cover replaces the default art at the top of the channel list and saves as a draft", async () => {
+  const { page, close } = await launch();
+  const writes: { kind: string; body?: unknown }[] = [];
+  try {
+    await seed(page);
+    const setInstance = (banners: boolean) => page.evaluate(async (banners) => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { const i = s.instances.test; i.instance = { ...i.instance, serverIcons: true, serverBanners: banners }; });
+    }, banners);
+    await setInstance(true);
+    const cover = page.locator(".live-community-cover");
+    await expect(cover.locator(".scenery")).toBeVisible();
+    await expect(cover.locator(".live-cover-photo")).toHaveCount(0);
+    await page.route("https://experience.test/api/servers/server", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      const body = route.request().postDataJSON(); writes.push({ kind: "patch", body });
+      return route.fulfill({ json: { id: "server", name: body.name, ownerId: "person", iconUrl: null, bannerUrl: null } });
+    });
+    await page.route("https://experience.test/api/servers/server/banner", (route) => {
+      writes.push({ kind: "banner" });
+      return route.fulfill({ json: { id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null, bannerUrl: "https://experience.test/image.png" } });
+    });
+    const openSettings = async () => {
+      await page.getByRole("button", { name: "Menu de Comunidade de teste" }).click();
+      await page.getByRole("menuitem", { name: "Configurações do servidor", exact: true }).click();
+    };
+    await openSettings();
+    const editor = page.locator(".server-banner-editor");
+    await expect(editor.getByRole("heading", { name: "Capa do servidor" })).toBeVisible();
+    await expect(editor.locator(".server-banner-preview .scenery")).toBeVisible();
+    await page.getByLabel("Arquivo da capa do servidor", { exact: true }).setInputFiles("build/icon.png");
+    await expect(page.getByAltText("Prévia da capa do servidor")).toHaveAttribute("src", /^blob:/);
+    expect(writes).toHaveLength(0);
+    await page.screenshot({ path: join(capture, "server-cover-settings-dark.png") });
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.locator(".settings-savebar")).toHaveCount(0);
+    expect(writes.map((write) => write.kind)).toEqual(["patch", "banner"]);
+    expect(writes[0]!.body).not.toHaveProperty("bannerUrl");
+    await page.keyboard.press("Escape");
+    await expect(cover).toHaveClass(/has-banner/);
+    await expect(cover.locator(".live-cover-photo")).toHaveAttribute("src", "https://experience.test/image.png");
+    await expect(cover.locator(".scenery")).toHaveCount(0);
+    await expect(cover.locator(".live-community-identity")).toContainText("Comunidade de teste");
+    await page.locator(".resizable-panel.channels").screenshot({ path: join(capture, "server-cover-channel-list-dark.png") });
+    // Back to the default art.
+    writes.length = 0;
+    await openSettings();
+    await editor.getByRole("button", { name: "Usar a capa padrão", exact: true }).click();
+    await expect(editor.locator(".server-banner-preview .scenery")).toBeVisible();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.locator(".settings-savebar")).toHaveCount(0);
+    expect(writes).toEqual([{ kind: "patch", body: { name: "Comunidade de teste", bannerUrl: null } }]);
+    await page.keyboard.press("Escape");
+    await expect(cover.locator(".scenery")).toBeVisible();
+    await expect(cover).not.toHaveClass(/has-banner/);
+    // An instance without covers explains why there is nothing to upload.
+    await setInstance(false);
+    await openSettings();
+    await expect(editor).toContainText("Atualize a instância para usar uma capa própria.");
+    await expect(page.getByLabel("Arquivo da capa do servidor", { exact: true })).toHaveCount(0);
+  } finally { await close(); }
+});
+
 test("emoji reactions toggle, the Annoy set shows for everyone and the library imports and restores packs", async()=>{
   const {app,page,close}=await launch();
   try{

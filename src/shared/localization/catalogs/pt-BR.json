@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "Um jogo em comum. Um papo que rende. Seus lugares favoritos, bem aqui.",
   "redesign.communityApps": "Apps da comunidade",
   "layout.showChannels": "Mostrar canais",
-  "layout.closePanel": "Fechar painel"
+  "layout.closePanel": "Fechar painel",
+  "settings.banner.title": "Capa do servidor",
+  "settings.banner.hint": "Aparece no topo da lista de canais para todo mundo. Imagens largas ficam melhores.",
+  "settings.banner.formats": "PNG, JPEG, WebP ou GIF · até 8 MB · sempre imagem fixa",
+  "settings.banner.preview": "Prévia da capa do servidor",
+  "settings.banner.input": "Arquivo da capa do servidor",
+  "settings.banner.change": "Alterar capa",
+  "settings.banner.remove": "Usar a capa padrão",
+  "settings.banner.unsupported": "Atualize a instância para usar uma capa própria."
 }

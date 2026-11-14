@@ -11,7 +11,7 @@ import { Scenery } from "./Scenery.tsx";
 
 export function CommunityCover({ state }: { state: ServerState }) {
   return <>
-    <Scenery className="live-cover-art" />
+    {state.server.bannerUrl ? <img className="live-cover-art live-cover-photo" src={state.server.bannerUrl} alt="" draggable={false}/> : <Scenery className="live-cover-art" />}
     <span className="live-cover-eyebrow"><Icon name="radio" size={12}/>{t("redesign.communityEyebrow")}</span>
     <span className="live-community-identity">
       <span className="live-community-mark">{state.server.iconUrl ? <img src={state.server.iconUrl} alt=""/> : <Icon name="radio" size={21}/>}</span>

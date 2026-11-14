@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "A shared game. A conversation that flows. Your favorite places, right here.",
   "redesign.communityApps": "Community apps",
   "layout.showChannels": "Show channels",
-  "layout.closePanel": "Close panel"
+  "layout.closePanel": "Close panel",
+  "settings.banner.title": "Server cover",
+  "settings.banner.hint": "Shown at the top of the channel list for everyone. Wide images work best.",
+  "settings.banner.formats": "PNG, JPEG, WebP or GIF · up to 8 MB · always a still image",
+  "settings.banner.preview": "Server cover preview",
+  "settings.banner.input": "Server cover file",
+  "settings.banner.change": "Change cover",
+  "settings.banner.remove": "Use the default cover",
+  "settings.banner.unsupported": "Update the instance to use a custom cover."
 }

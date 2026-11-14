@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "Un jeu en commun. Une discussion qui dure. Tes endroits préférés, juste ici.",
   "redesign.communityApps": "Applications de la communauté",
   "layout.showChannels": "Afficher les salons",
-  "layout.closePanel": "Fermer le panneau"
+  "layout.closePanel": "Fermer le panneau",
+  "settings.banner.title": "Couverture du serveur",
+  "settings.banner.hint": "Affichée en haut de la liste des salons pour tout le monde. Les images larges rendent mieux.",
+  "settings.banner.formats": "PNG, JPEG, WebP ou GIF · jusqu'à 8 Mo · toujours une image fixe",
+  "settings.banner.preview": "Aperçu de la couverture du serveur",
+  "settings.banner.input": "Fichier de couverture du serveur",
+  "settings.banner.change": "Changer la couverture",
+  "settings.banner.remove": "Utiliser la couverture par défaut",
+  "settings.banner.unsupported": "Mettez à jour l'instance pour utiliser une couverture personnalisée."
 }

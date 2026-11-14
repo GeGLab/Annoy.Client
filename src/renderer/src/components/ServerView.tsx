@@ -252,7 +252,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
     <ResizablePanel panel="channels" otherVisible={state.channels.some((c) => c.id === activeId && c.type === "text")}>
       <DropdownMenu open={menu} onOpenChange={setMenu}>
         <DropdownMenuTrigger asChild>
-          <button className="channels-header server-menu-trigger live-community-cover" aria-label={translate("common.78ef0e3d7cfb",{p0:(state.server.name)})}>
+          <button className={`channels-header server-menu-trigger live-community-cover${state.server.bannerUrl ? " has-banner" : ""}`} aria-label={translate("common.78ef0e3d7cfb",{p0:(state.server.name)})}>
             <CommunityCover state={state}/>
           </button>
         </DropdownMenuTrigger>

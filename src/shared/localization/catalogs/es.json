@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "Un juego en común. Una buena charla. Tus lugares favoritos, aquí mismo.",
   "redesign.communityApps": "Apps de la comunidad",
   "layout.showChannels": "Mostrar canales",
-  "layout.closePanel": "Cerrar panel"
+  "layout.closePanel": "Cerrar panel",
+  "settings.banner.title": "Portada del servidor",
+  "settings.banner.hint": "Aparece arriba de la lista de canales para todos. Las imágenes anchas quedan mejor.",
+  "settings.banner.formats": "PNG, JPEG, WebP o GIF · hasta 8 MB · siempre imagen fija",
+  "settings.banner.preview": "Vista previa de la portada del servidor",
+  "settings.banner.input": "Archivo de la portada del servidor",
+  "settings.banner.change": "Cambiar portada",
+  "settings.banner.remove": "Usar la portada predeterminada",
+  "settings.banner.unsupported": "Actualiza la instancia para usar una portada propia."
 }

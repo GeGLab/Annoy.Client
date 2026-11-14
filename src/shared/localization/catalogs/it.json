@@ -2583,5 +2583,13 @@
   "redesign.directoryBody": "Un gioco in comune. Una bella conversazione. I tuoi posti preferiti, proprio qui.",
   "redesign.communityApps": "App della comunità",
   "layout.showChannels": "Mostra canali",
-  "layout.closePanel": "Chiudi pannello"
+  "layout.closePanel": "Chiudi pannello",
+  "settings.banner.title": "Copertina del server",
+  "settings.banner.hint": "Appare in cima all'elenco dei canali per tutti. Le immagini larghe rendono meglio.",
+  "settings.banner.formats": "PNG, JPEG, WebP o GIF · fino a 8 MB · sempre un'immagine fissa",
+  "settings.banner.preview": "Anteprima della copertina del server",
+  "settings.banner.input": "File della copertina del server",
+  "settings.banner.change": "Cambia copertina",
+  "settings.banner.remove": "Usa la copertina predefinita",
+  "settings.banner.unsupported": "Aggiorna l'istanza per usare una copertina personalizzata."
 }

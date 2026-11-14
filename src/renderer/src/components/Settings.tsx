@@ -34,6 +34,7 @@ import { HiddenServices } from "./Services.tsx";
 import { ServerIntegrations } from "../features/integrations/ServerIntegrations.tsx";
 import { UpdateSettings } from "./Updates.tsx";
 import { Brand } from "./Brand.tsx";
+import { Scenery } from "../features/redesign/Scenery.tsx";
 import { ColorPicker } from "./ui/color-picker.tsx";
 import { useSettingsDraft, useSettingsGuard } from "./settings/SettingsGuard.tsx";
 import { requestNavigation } from "../lib/navigation-guard.ts";
@@ -245,6 +246,15 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
   const [name, setName] = useState(state?.server.name ?? "");
   const [icon, setIcon] = useState<File | null | undefined>();
   const [preview, setPreview] = useState<string | null>(state?.server.iconUrl ?? null);
+  // The cover at the top of the channel list: undefined = unchanged, null = back to the default art.
+  const bannersSupported = useStore((s) => s.instances[accountId]?.instance?.serverBanners === true);
+  const [banner, setBanner] = useState<File | null | undefined>();
+  const [bannerPreview, setBannerPreview] = useState<string | null>(state?.server.bannerUrl ?? null);
+  const bannerInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (banner) { const url = URL.createObjectURL(banner); setBannerPreview(url); return () => URL.revokeObjectURL(url); }
+    setBannerPreview(banner === null ? null : state?.server.bannerUrl ?? null);
+  }, [banner, state?.server.bannerUrl]);
   const [savingServer, setSavingServer] = useState(false);
   const guard = useSettingsGuard();
   const iconInput = useRef<HTMLInputElement>(null);
@@ -261,9 +271,11 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
     setSavingServer(true);
     try {
       const api = apiFor(accountId);
-      let server = await api.patch<ServerSummary>(`/servers/${serverId}`, { name: name.trim(), ...(icon === null && { iconUrl: null }) }, signal);
+      let server = await api.patch<ServerSummary>(`/servers/${serverId}`, { name: name.trim(), ...(icon === null && { iconUrl: null }), ...(banner === null && { bannerUrl: null }) }, signal);
       signal.throwIfAborted();
       if (icon) server = await api.uploadServerIcon<ServerSummary>(serverId, icon, signal);
+      signal.throwIfAborted();
+      if (banner) server = await api.uploadServerBanner<ServerSummary>(serverId, banner, signal);
       signal.throwIfAborted();
       setState((s) => {
         const instance = s.instances[accountId];
@@ -271,13 +283,13 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
         const index = instance?.servers.findIndex((item) => item.id === serverId) ?? -1;
         if (instance && index >= 0) instance.servers[index] = server;
       });
-      setName(server.name); setBaselineName(server.name); setIcon(undefined);
+      setName(server.name); setBaselineName(server.name); setIcon(undefined); setBanner(undefined);
       return true;
     } catch (error) { if (!isCancellation(error)) toast((error as Error).message); return false; }
     finally { setSavingServer(false); }
   };
-  useSettingsDraft("server-name", !!state && (name !== baselineName || icon !== undefined), saveName, () => {
-    setName(state?.server.name ?? ""); setBaselineName(state?.server.name ?? ""); setIcon(undefined);
+  useSettingsDraft("server-name", !!state && (name !== baselineName || icon !== undefined || banner !== undefined), saveName, () => {
+    setName(state?.server.name ?? ""); setBaselineName(state?.server.name ?? ""); setIcon(undefined); setBanner(undefined);
   });
   if (!state || !me) return null;
   const isOwner = state.server.ownerId === me;
@@ -333,6 +345,21 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             <div><h2>{translate("settings.d5430e10d673")}</h2><p>{translate("settings.2d0730e4b559")}</p><div className="profile-actions"><button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => iconInput.current?.click()}>{rich("common.9d7834105f23",{p0:(<Icon name="upload" size={16} />)})}</button>{preview && <button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => setIcon(null)}>{translate("settings.a3037dc71a43")}</button>}</div><small>{translate("settings.aaab0145bf73")}</small></div>
             <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.3d36c034c960")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setIcon(file); } event.target.value = ""; }} />
           </div>
+          <div className="server-banner-editor">
+            <div className="server-banner-preview">{bannerPreview ? <img src={bannerPreview} alt={translate("settings.banner.preview")} /> : <Scenery />}</div>
+            <div>
+              <h2>{translate("settings.banner.title")}</h2>
+              <p>{translate("settings.banner.hint")}</p>
+              {bannersSupported ? <>
+                <div className="profile-actions">
+                  <button type="button" className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => bannerInput.current?.click()}><Icon name="upload" size={16} />{translate("settings.banner.change")}</button>
+                  {bannerPreview && <button type="button" className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => setBanner(null)}>{translate("settings.banner.remove")}</button>}
+                </div>
+                <small>{translate("settings.banner.formats")}</small>
+              </> : <small>{translate("settings.banner.unsupported")}</small>}
+            </div>
+            {bannersSupported && <input ref={bannerInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.banner.input")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setBanner(file); } event.target.value = ""; }} />}
+          </div>
           <form
             className="inline-form"
             onSubmit={(e) => {
@@ -343,7 +370,7 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             <Field label={translate("common.87f8ee74878a")}>
               <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer || savingServer} maxLength={100} />
             </Field>
-            <button className="btn" disabled={!canServer || savingServer || !name.trim() || (name === baselineName && icon === undefined)}>{translate("common.aef7cd5b2081")}</button>
+            <button className="btn" disabled={!canServer || savingServer || !name.trim() || (name === baselineName && icon === undefined && banner === undefined)}>{translate("common.aef7cd5b2081")}</button>
           </form>
           <p className="muted small">{rich("common.599e82279c68",{p0:(state.members.length),p1:(state.channels.length),p2:(displayNameOf(state.members.find((m) => m.user.id === state.server.ownerId)!))})}</p>
           {isOwner && (

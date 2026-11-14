@@ -164,6 +164,13 @@ export class Api {
     return this.fetch(`/servers/${serverId}/icon`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
   }
 
+  /** The server's cover; the instance keeps one fixed frame (serverBanners). */
+  async uploadServerBanner<T>(serverId: string, image: Blob, signal?: AbortSignal): Promise<T> {
+    this.requireConnection();
+    const body = new FormData(); body.append("banner", image, "banner");
+    return this.fetch(`/servers/${serverId}/banner`, { method: "POST", headers: { authorization: `Bearer ${this.token}` }, body }, signal, WRITE_TIMEOUT_MS);
+  }
+
   /** A sticker for the server's own pack; the name goes before the image. */
   async uploadSticker<T>(serverId: string, name: string, image: Blob, signal?: AbortSignal): Promise<T> {
     this.requireConnection();
