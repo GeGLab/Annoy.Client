@@ -2596,5 +2596,9 @@
   "settings.server.nav": "サーバー設定のセクション",
   "settings.server.advanced": "詳細設定",
   "settings.server.overviewHint": "参加しているメンバーからのサーバーの見え方です。",
-  "settings.server.advancedHint": "サーバーの管理者を変えたり、すべてを削除したりする操作です。どれも確認が必要で、元に戻せません。"
+  "settings.server.advancedHint": "サーバーの管理者を変えたり、すべてを削除したりする操作です。どれも確認が必要で、元に戻せません。",
+  "settings.crop.iconTitle": "サーバー画像の範囲を調整",
+  "settings.crop.iconHint": "画像をドラッグしてズームを調整します。強調された範囲がサーバー一覧とチャンネルの上部に表示されます。",
+  "settings.crop.bannerTitle": "サーバーのカバーの範囲を調整",
+  "settings.crop.bannerHint": "画像をドラッグしてズームを調整します。カバーには強調された範囲全体が使われ、点線の内側はチャンネル一覧の幅に関係なく表示されます。"
 }

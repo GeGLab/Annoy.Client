@@ -2596,5 +2596,9 @@
   "settings.server.nav": "Sections des paramètres du serveur",
   "settings.server.advanced": "Avancé",
   "settings.server.overviewHint": "L'apparence du serveur pour ses membres.",
-  "settings.server.advancedHint": "Des actions qui changent qui contrôle le serveur ou effacent tout. Chacune demande une confirmation et ne peut pas être annulée."
+  "settings.server.advancedHint": "Des actions qui changent qui contrôle le serveur ou effacent tout. Chacune demande une confirmation et ne peut pas être annulée.",
+  "settings.crop.iconTitle": "Cadrez l'image du serveur",
+  "settings.crop.iconHint": "Faites glisser l'image et ajustez le zoom. La zone mise en évidence est ce qui apparaît dans la liste des serveurs et au-dessus des salons.",
+  "settings.crop.bannerTitle": "Cadrez la couverture du serveur",
+  "settings.crop.bannerHint": "Faites glisser l'image et ajustez le zoom. La couverture utilise toute la zone mise en évidence ; ce qui est dans les pointillés reste visible quelle que soit la largeur de la liste des salons."
 }

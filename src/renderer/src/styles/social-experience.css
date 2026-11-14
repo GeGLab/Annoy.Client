@@ -346,7 +346,7 @@
 
 /* Overview: a live preview of how the server looks, then what changes it. */
 .server-profile-card { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-channels); }
-.server-profile-cover { position: relative; isolation: isolate; height: 148px; overflow: hidden; background: #101c2d; }
+.server-profile-cover { position: relative; isolation: isolate; aspect-ratio: 960 / 400; overflow: hidden; background: #101c2d; }
 .server-profile-cover > img, .server-profile-cover > .scenery { position: absolute; inset: 0; z-index: -2; display: block; width: 100%; height: 100%; object-fit: cover; }
 .server-profile-cover::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(12 19 29 / .85) 0%, transparent 65%); }
 .server-profile-identity { position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; align-items: center; gap: 14px; min-width: 0; color: #f2f5f9; }

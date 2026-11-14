@@ -126,6 +126,13 @@
 .avatar-crop-dialog > p { margin: 0; font-size: 0.85714rem; line-height: 1.65; }
 .avatar-crop-stage { position: relative; min-height: 280px; flex: none; background: var(--bg-deep); border-radius: 12px; overflow: hidden; }
 .avatar-crop-mask { border-radius: 35%; }
+/* Server images: the icon keeps the server's rounded square; the cover is wide and
+   shows, dashed, the part every channel list width keeps. */
+.wide-crop-dialog { width: min(720px, calc(100vw - 48px)); }
+.wide-crop-dialog .avatar-crop-stage { min-height: 320px; }
+.server-icon-crop-mask { border-radius: 24%; }
+.server-cover-crop-mask { border-radius: 10px; }
+.image-crop-safe::after { content: ""; position: absolute; pointer-events: none; top: calc((1 - var(--safe-h, 1)) * 50%); bottom: calc((1 - var(--safe-h, 1)) * 50%); left: calc((1 - var(--safe-w, 1)) * 50%); right: calc((1 - var(--safe-w, 1)) * 50%); border: 1.5px dashed rgb(255 255 255 / .85); border-radius: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .35); }
 .server-menu-trigger { width: 100%; text-align: left; }
 .resizable-panel.channels .channels-header { padding-right: 18px; }
 .server-menu { min-width: 230px; max-width: calc(100vw - 24px); }

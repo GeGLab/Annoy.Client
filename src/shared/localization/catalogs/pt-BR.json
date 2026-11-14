@@ -2596,5 +2596,9 @@
   "settings.server.nav": "Seções das configurações do servidor",
   "settings.server.advanced": "Avançado",
   "settings.server.overviewHint": "Como o servidor aparece para quem participa dele.",
-  "settings.server.advancedHint": "Ações que mudam quem controla o servidor ou apagam tudo. Cada uma pede confirmação e não pode ser desfeita."
+  "settings.server.advancedHint": "Ações que mudam quem controla o servidor ou apagam tudo. Cada uma pede confirmação e não pode ser desfeita.",
+  "settings.crop.iconTitle": "Enquadre a imagem do servidor",
+  "settings.crop.iconHint": "Arraste a imagem e ajuste o zoom. A área destacada é o que aparece na lista de servidores e no topo dos canais.",
+  "settings.crop.bannerTitle": "Enquadre a capa do servidor",
+  "settings.crop.bannerHint": "Arraste a imagem e ajuste o zoom. A capa usa toda a área destacada; o que fica dentro do tracejado aparece em qualquer largura da lista de canais."
 }

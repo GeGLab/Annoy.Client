@@ -24,7 +24,7 @@ import {
   type User,
   type ServerStickerList,
 } from "@annoy/protocol";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
 import { apiFor, ensureServer, openChannel, removeAccount, updateVoiceSettings } from "../client.ts";
 import { displayNameOf, rankOf } from "../perms.ts";
@@ -35,6 +35,12 @@ import { ServerIntegrations } from "../features/integrations/ServerIntegrations.
 import { UpdateSettings } from "./Updates.tsx";
 import { Brand } from "./Brand.tsx";
 import { Scenery } from "../features/redesign/Scenery.tsx";
+const ImageCropper = lazy(() => import("./settings/AvatarCropper.tsx").then((module) => ({ default: module.ImageCropper })));
+
+/** The cover is stored at 960×400; the channel list shows it 132px tall at 220–380px wide. */
+const COVER = { width: 960, height: 400 };
+const COVER_ASPECT = COVER.width / COVER.height;
+const COVER_SAFE = { width: Math.min(1, (220 / 132) / COVER_ASPECT), height: Math.min(1, COVER_ASPECT / (380 / 132)) };
 import { ColorPicker } from "./ui/color-picker.tsx";
 import { useSettingsDraft, useSettingsGuard } from "./settings/SettingsGuard.tsx";
 import { requestNavigation } from "../lib/navigation-guard.ts";
@@ -253,6 +259,33 @@ export function ServerSettingsModal({ accountId, serverId, initialPage = "overvi
   const [banner, setBanner] = useState<File | null | undefined>();
   const [bannerPreview, setBannerPreview] = useState<string | null>(state?.server.bannerUrl ?? null);
   const bannerInput = useRef<HTMLInputElement>(null);
+  // Framing before upload: the file being cropped, and the last original of each so it can be reframed.
+  const [cropping, setCropping] = useState<{ kind: "icon" | "banner"; file: File } | null>(null);
+  const originals = useRef<{ icon?: File; banner?: File }>({});
+  const pickImage = (kind: "icon" | "banner", file: File) => {
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) { toast(translate("settings.4dbb650e6a3d")); return; }
+    originals.current[kind] = file;
+    // An animated server image keeps its animation; covers are always one still frame.
+    if (kind === "icon" && file.type === "image/gif") setIcon(file);
+    else setCropping({ kind, file });
+  };
+  const reframe = async (kind: "icon" | "banner") => {
+    const original = originals.current[kind];
+    if (original) { setCropping({ kind, file: original }); return; }
+    const url = kind === "icon" ? state?.server.iconUrl : state?.server.bannerUrl;
+    if (!url) return;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      setCropping({ kind, file: new File([blob], `${kind}.webp`, { type: blob.type }) });
+    } catch { toast(translate("settings.9666f56d98a7")); }
+  };
+  const applyCrop = (blob: Blob) => {
+    if (!cropping) return;
+    const framed = new File([blob], `${cropping.kind}.webp`, { type: "image/webp" });
+    if (cropping.kind === "icon") setIcon(framed); else setBanner(framed);
+  };
   useEffect(() => {
     if (banner) { const url = URL.createObjectURL(banner); setBannerPreview(url); return () => URL.revokeObjectURL(url); }
     setBannerPreview(banner === null ? null : state?.server.bannerUrl ?? null);
@@ -377,10 +410,11 @@ export function ServerSettingsModal({ accountId, serverId, initialPage = "overvi
                 <p>{translate("settings.2d0730e4b559")}</p>
                 <div className="profile-actions">
                   <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => iconInput.current?.click()}>{rich("common.9d7834105f23",{p0:(<Icon name="upload" size={16} />)})}</button>
+                  {preview && !(icon ?? originals.current.icon)?.type.includes("gif") && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => void reframe("icon")}>{rich("common.a3a3d1eeeba5",{p0:(<Icon name="crop" size={16} />)})}</button>}
                   {preview && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => setIcon(null)}>{translate("settings.a3037dc71a43")}</button>}
                 </div>
                 <small>{translate("settings.aaab0145bf73")}</small>
-                <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.3d36c034c960")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setIcon(file); } event.target.value = ""; }} />
+                <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.3d36c034c960")} onChange={(event) => { const file = event.target.files?.[0]; if (file) pickImage("icon", file); event.target.value = ""; }} />
               </div>
               <div className="server-media-control server-banner-editor">
                 <h4>{translate("settings.banner.title")}</h4>
@@ -388,10 +422,11 @@ export function ServerSettingsModal({ accountId, serverId, initialPage = "overvi
                 {bannersSupported ? <>
                   <div className="profile-actions">
                     <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => bannerInput.current?.click()}><Icon name="upload" size={16} />{translate("settings.banner.change")}</button>
+                    {bannerPreview && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => void reframe("banner")}>{rich("common.a3a3d1eeeba5",{p0:(<Icon name="crop" size={16} />)})}</button>}
                     {bannerPreview && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => setBanner(null)}>{translate("settings.banner.remove")}</button>}
                   </div>
                   <small>{translate("settings.banner.formats")}</small>
-                  <input ref={bannerInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.banner.input")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setBanner(file); } event.target.value = ""; }} />
+                  <input ref={bannerInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.banner.input")} onChange={(event) => { const file = event.target.files?.[0]; if (file) pickImage("banner", file); event.target.value = ""; }} />
                 </> : <small>{translate("settings.banner.unsupported")}</small>}
               </div>
             </div>
@@ -407,6 +442,22 @@ export function ServerSettingsModal({ accountId, serverId, initialPage = "overvi
               <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} maxLength={100} />
             </Field>
           </form>
+          {cropping && (
+            <Suspense fallback={null}>
+              <ImageCropper
+                key={`${cropping.kind}-${cropping.file.name}-${cropping.file.size}`}
+                file={cropping.file}
+                aspect={cropping.kind === "icon" ? 1 : COVER_ASPECT}
+                output={cropping.kind === "icon" ? { width: 512, height: 512 } : COVER}
+                title={cropping.kind === "icon" ? translate("settings.crop.iconTitle") : translate("settings.crop.bannerTitle")}
+                description={cropping.kind === "icon" ? translate("settings.crop.iconHint") : translate("settings.crop.bannerHint")}
+                maskClassName={cropping.kind === "icon" ? "server-icon-crop-mask" : "server-cover-crop-mask"}
+                safeArea={cropping.kind === "banner" ? COVER_SAFE : undefined}
+                onApply={applyCrop}
+                onClose={() => setCropping(null)}
+              />
+            </Suspense>
+          )}
           <p className="muted small server-overview-stats">{rich("common.599e82279c68",{p0:(state.members.length),p1:(state.channels.length),p2:(ownerMember ? displayNameOf(ownerMember) : "—")})}</p>
         </section>
       )}

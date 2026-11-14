@@ -2596,5 +2596,9 @@
   "settings.server.nav": "服务器设置分区",
   "settings.server.advanced": "高级",
   "settings.server.overviewHint": "服务器在成员眼中的样子。",
-  "settings.server.advancedHint": "这些操作会更改服务器的控制者或删除全部内容。每项操作都需要确认，且无法撤销。"
+  "settings.server.advancedHint": "这些操作会更改服务器的控制者或删除全部内容。每项操作都需要确认，且无法撤销。",
+  "settings.crop.iconTitle": "调整服务器图片的取景",
+  "settings.crop.iconHint": "拖动图片并调整缩放。高亮区域会显示在服务器列表和频道上方。",
+  "settings.crop.bannerTitle": "调整服务器封面的取景",
+  "settings.crop.bannerHint": "拖动图片并调整缩放。封面使用整个高亮区域；虚线内的部分在任何频道列表宽度下都会显示。"
 }

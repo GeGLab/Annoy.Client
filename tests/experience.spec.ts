@@ -1956,6 +1956,12 @@ test("global search keeps server context and server editing saves image drafts",
     await page.getByRole("button",{name:"Menu de Comunidade de teste"}).click();
     await page.getByRole("menuitem",{name:"Configurações do servidor",exact:true}).click();
     await page.getByLabel("Imagem do servidor",{exact:true}).setInputFiles("build/icon.png");
+    // A still image is framed (square) before it becomes the draft.
+    const iconCrop=page.getByRole("dialog",{name:"Enquadre a imagem do servidor"});
+    await expect(iconCrop.locator(".server-icon-crop-mask")).toBeVisible();
+    await iconCrop.getByRole("button",{name:"Usar este recorte",exact:true}).click();
+    await expect(iconCrop).toHaveCount(0);
+    await expect.poll(()=>page.getByAltText("Prévia da imagem do servidor").evaluate((img:HTMLImageElement)=>[img.naturalWidth,img.naturalHeight])).toEqual([512,512]);
     await page.getByLabel("Nome do servidor",{exact:true}).fill("Comunidade renovada");
     expect(writes).toHaveLength(0);
     await expect(page.getByAltText("Prévia da imagem do servidor")).toHaveAttribute("src",/^blob:/);
@@ -2009,7 +2015,28 @@ test("a server cover replaces the default art at the top of the channel list and
     await expect(editor.getByRole("heading", { name: "Capa do servidor" })).toBeVisible();
     await expect(page.locator(".server-profile-cover .scenery")).toBeVisible();
     await page.getByLabel("Arquivo da capa do servidor", { exact: true }).setInputFiles("build/icon.png");
+    // The cover is framed wide, with the always-visible part dashed inside.
+    const coverCrop = page.getByRole("dialog", { name: "Enquadre a capa do servidor" });
+    const frame = coverCrop.locator(".server-cover-crop-mask");
+    await expect(frame).toBeVisible();
+    const guide = await frame.evaluate((element) => {
+      const area = element.getBoundingClientRect(), after = getComputedStyle(element, "::after");
+      return { ratio: Math.round(area.width / area.height * 10) / 10, left: parseFloat(after.left) / area.width, top: parseFloat(after.top) / area.height, dashed: after.borderTopStyle };
+    });
+    expect(guide.ratio).toBe(2.4);
+    expect(guide.dashed).toBe("dashed");
+    expect(guide.left).toBeGreaterThan(0.1);
+    expect(guide.top).toBeGreaterThan(0.05);
+    await page.screenshot({ path: join(capture, "server-cover-crop-dark.png") });
+    await coverCrop.getByRole("button", { name: "Usar este recorte", exact: true }).click();
+    await expect(coverCrop).toHaveCount(0);
     await expect(page.getByAltText("Prévia da capa do servidor")).toHaveAttribute("src", /^blob:/);
+    await expect.poll(() => page.getByAltText("Prévia da capa do servidor").evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([960, 400]);
+    // The same original can be framed again before saving.
+    await editor.getByRole("button", { name: "Ajustar recorte", exact: true }).click();
+    await expect(coverCrop).toBeVisible();
+    await coverCrop.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(coverCrop).toHaveCount(0);
     expect(writes).toHaveLength(0);
     await page.screenshot({ path: join(capture, "server-cover-settings-dark.png") });
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();

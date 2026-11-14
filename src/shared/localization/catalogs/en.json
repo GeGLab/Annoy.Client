@@ -2596,5 +2596,9 @@
   "settings.server.nav": "Server settings sections",
   "settings.server.advanced": "Advanced",
   "settings.server.overviewHint": "How the server looks to the people in it.",
-  "settings.server.advancedHint": "Actions that change who controls the server or erase everything. Each one asks for confirmation and cannot be undone."
+  "settings.server.advancedHint": "Actions that change who controls the server or erase everything. Each one asks for confirmation and cannot be undone.",
+  "settings.crop.iconTitle": "Frame the server image",
+  "settings.crop.iconHint": "Drag the image and adjust the zoom. The highlighted area is what shows in the server list and above the channels.",
+  "settings.crop.bannerTitle": "Frame the server cover",
+  "settings.crop.bannerHint": "Drag the image and adjust the zoom. The cover uses the whole highlighted area; what is inside the dashed line shows at any channel list width."
 }
