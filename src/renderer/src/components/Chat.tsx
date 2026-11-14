@@ -1,4 +1,5 @@
 import { IntegrationIcon } from "../features/integrations/Setup.tsx";
+import { useComposerAttach } from "../lib/composer-attach.ts";
 import { useCommandSuggestions } from "../features/integrations/CommandSuggestions.tsx";
 import { useServerCommandChoices } from "../features/integrations/command-choices.ts";
 import {rich} from "../lib/localization.ts";
@@ -481,6 +482,7 @@ function Composer({
     onDraftChange({ attachmentCount: next.length });
   };
   dropRef.current = addFiles;
+  useComposerAttach(canAttach && connected ? addFiles : null);
 
   const send = async () => {
     if (!connected) return;

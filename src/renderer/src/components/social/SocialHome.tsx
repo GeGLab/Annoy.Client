@@ -1,4 +1,5 @@
 import { FriendsDashboard, PersonalHeading } from "../../features/redesign/LiveExperience.tsx";
+import { useComposerAttach } from "../../lib/composer-attach.ts";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
@@ -516,6 +517,7 @@ function DmConversation({ dmId }: { dmId: string }) {
   const muted = useStore((s) => s.settings.mutedChannels.includes(`annoy:${dmId}`));
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  useComposerAttach(ready ? (picked) => setFiles((current) => [...current, ...picked].slice(0, 10)) : null);
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
   const [pinsOpen,setPinsOpen]=useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);

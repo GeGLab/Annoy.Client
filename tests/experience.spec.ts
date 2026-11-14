@@ -1636,6 +1636,108 @@ test("wheel zoom and native in-app audio/video lifecycle", async () => {
   }
 });
 
+test("the image viewer is a slim frame around the picture with screenshot-style annotations", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.route("https://experience.test/image.png", async (route) =>
+      route.fulfill({ contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body: await readFile("build/icon.png") }),
+    );
+    await page.getByRole("button", { name: "Visualizar imagem.png" }).click();
+    const viewer = page.locator(".image-viewer");
+    await expect(page.locator(".viewer-file-info")).toContainText("512 × 512");
+    // The frame hugs a small picture instead of taking the window, under a single thin bar.
+    const frame = (await viewer.boundingBox())!;
+    const windowWidth = await page.evaluate(() => window.innerWidth);
+    expect(frame.width).toBeLessThan(windowWidth - 200);
+    expect((await page.locator(".viewer-bar").boundingBox())!.height).toBeLessThanOrEqual(45);
+    await expect(page.locator(".viewer-footer")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "image-viewer-slim.png") });
+
+    await page.getByRole("button", { name: "Anotar imagem", exact: true }).click();
+    const tools = page.getByRole("toolbar", { name: "Ferramentas de anotação" });
+    await expect(tools).toBeVisible();
+    const layer = page.locator(".viewer-layer");
+    const box = (await layer.boundingBox())!;
+    const at = (x: number, y: number) => ({ x: box.x + box.width * x, y: box.y + box.height * y });
+    const drag = async (from: [number, number], to: [number, number]) => {
+      const a = at(...from), b = at(...to);
+      await page.mouse.move(a.x, a.y); await page.mouse.down();
+      await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2); await page.mouse.move(b.x, b.y); await page.mouse.up();
+    };
+    const shapes = () => page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>(".viewer-layer")!;
+      const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+      let painted = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) painted++;
+      return painted;
+    });
+    // Arrow is the default tool; keyboard letters switch tools like in screenshot tools.
+    await expect(tools.getByRole("button", { name: "Seta", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await drag([0.15, 0.8], [0.45, 0.55]);
+    const afterArrow = await shapes();
+    expect(afterArrow).toBeGreaterThan(200);
+    await page.keyboard.press("r");
+    await expect(tools.getByRole("button", { name: "Retângulo", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await tools.getByRole("button", { name: "Cor #0a84ff", exact: true }).click();
+    await drag([0.55, 0.1], [0.9, 0.35]);
+    expect(await shapes()).toBeGreaterThan(afterArrow);
+    await tools.getByRole("button", { name: "Numerar", exact: true }).click();
+    await page.mouse.click(at(0.2, 0.2).x, at(0.2, 0.2).y);
+    await page.mouse.click(at(0.3, 0.2).x, at(0.3, 0.2).y);
+    await tools.getByRole("button", { name: "Texto", exact: true }).click();
+    await page.mouse.click(at(0.1, 0.4).x, at(0.1, 0.4).y);
+    await page.getByRole("textbox", { name: "Texto", exact: true }).fill("Olha aqui");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Texto", exact: true })).toHaveCount(0);
+    const annotated = await shapes();
+    await page.keyboard.press("Control+z");
+    expect(await shapes()).toBeLessThan(annotated);
+    await page.keyboard.press("Control+Shift+z");
+    expect(await shapes()).toBe(annotated);
+    // A crop dims everything outside it and decides the size of the result.
+    await page.keyboard.press("x");
+    await drag([0.1, 0.1], [0.6, 0.85]);
+    await expect(page.locator(".viewer-crop")).toBeVisible();
+    await page.screenshot({ path: join(capture, "image-viewer-annotate.png") });
+
+    // Saving downloads the annotated, cropped picture as a PNG.
+    await page.evaluate(() => {
+      (window as any).__saved = null;
+      HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { if (this.download) (window as any).__saved = { name: this.download, href: this.href }; };
+    });
+    await page.keyboard.press("Control+s");
+    await expect.poll(() => page.evaluate(() => (window as any).__saved?.name)).toBe("imagem-anotada.png");
+    const saved = await page.evaluate(async () => {
+      const image = new Image();
+      image.src = (window as any).__saved.href;
+      await image.decode();
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    });
+    expect(Math.abs(saved.width - 256)).toBeLessThanOrEqual(3);
+    expect(Math.abs(saved.height - 384)).toBeLessThanOrEqual(3);
+    // Copying puts the picture on the system clipboard.
+    await page.getByRole("button", { name: "Copiar imagem", exact: true }).click();
+    await expect(page.getByText("Imagem copiada.")).toBeVisible();
+    // Escape leaves the tools first, then closes the viewer.
+    await page.keyboard.press("Escape");
+    await expect(tools).toHaveCount(0);
+    await expect(viewer).toBeVisible();
+    // The edit goes out as a new picture in the message being written; the original attachment is untouched.
+    await page.getByRole("button", { name: "Enviar como nova imagem", exact: true }).click();
+    await expect(viewer).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Visualizar imagem.png" }).locator("img")).toHaveAttribute("src", "https://experience.test/image.png");
+    const pending = page.locator(".pending-files .pending-file");
+    await expect(pending).toHaveCount(1);
+    await expect(pending).toContainText("imagem-anotada.png");
+    // What was copied pastes into the composer as a picture, like a screenshot.
+    await page.getByRole("textbox", { name: "Conversar em #geral" }).focus();
+    await page.keyboard.press("Control+v");
+    await expect(pending).toHaveCount(2);
+    await page.screenshot({ path: join(capture, "image-viewer-attached.png") });
+  } finally { await close(); }
+});
+
 test("animated menus, custom selects, color history and unsaved settings", async () => {
   const { page, close } = await launch();
   try {

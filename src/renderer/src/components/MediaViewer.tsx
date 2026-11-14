@@ -3,7 +3,7 @@ import {t as translate} from "../../../shared/localization/index.ts";
 import { Slider } from "./ui/slider.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
-import { Button } from "./ui/button.tsx";
+import { Button, buttonVariants } from "./ui/button.tsx";
 import { Select } from "./ui/select.tsx";
 import { Icon } from "./ui.tsx";
 
@@ -80,11 +80,14 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className={`media-viewer${video ? "" : " media-audio"}`} aria-describedby={undefined} showClose={false}>
         <header className="viewer-header">
-          <Icon name={video ? "film" : "music"} size={22} />
+          <span className="viewer-file-icon"><Icon name={video ? "film" : "music"} size={17} /></span>
           <div className="viewer-file-info">
             <DialogTitle className="truncate">{media.filename}</DialogTitle>
             <span className="muted small">{rich("common.f8a2ed698698",{p0:(video ? translate("common.bc10c86c24b5") : translate("common.195c60bb2325"))})}</span>
           </div>
+          <a className={`${buttonVariants({ variant: "ghost", size: "icon" })} viewer-original`} href={media.url} target="_blank" rel="noreferrer" aria-label={translate("image.openOriginal")} title={translate("image.openOriginal")}>
+              <Icon name="external" />
+            </a>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label={translate("common.6efb3d8ad1c1")}>
             <Icon name="x" />
           </Button>
@@ -214,10 +217,6 @@ export default function MediaViewer({ media, onClose }: { media: ViewerMedia; on
             )}
           </div>
         </div>
-        <footer className="media-footer">
-          <span>{translate("common.a092c0f470be")}</span>
-          <a href={media.url} target="_blank" rel="noreferrer">{rich("common.7dbf0da46b54",{p0:(<Icon name="external" size={13} />)})}</a>
-        </footer>
       </DialogContent>
     </Dialog>
   );
