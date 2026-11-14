@@ -2022,6 +2022,33 @@ test("a server cover replaces the default art at the top of the channel list and
   } finally { await close(); }
 });
 
+test("server settings pages that fetch their data (bans, stickers, integrations) finish loading", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { const i = s.instances.test; i.instance = { ...i.instance, serverStickers: true, integrations: true }; });
+    });
+    await page.route("https://experience.test/api/servers/server/stickers", (route) => route.fulfill({ json: { stickers: [], limit: 30 } }));
+    await page.getByRole("button", { name: "Menu de Comunidade de teste" }).click();
+    await page.getByRole("menuitem", { name: "Configurações do servidor", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Comunidade de teste · Configurações", exact: true });
+    const content = settings.locator(".settings-content");
+    await settings.getByRole("button", { name: "Banimentos", exact: true }).click();
+    await expect(content).toContainText("Ninguém foi banido.");
+    await settings.getByRole("button", { name: "Figurinhas", exact: true }).click();
+    await expect(content.getByRole("heading", { name: "Figurinhas", exact: true })).toBeVisible();
+    await expect(content).not.toContainText("Carregando…");
+    await settings.getByRole("button", { name: "Integrações", exact: true }).click();
+    await expect(content.locator(".server-integrations")).toBeVisible();
+    await expect(content).not.toContainText("Carregando…");
+    // Coming back reloads the page instead of staying on the placeholder.
+    await settings.getByRole("button", { name: "Banimentos", exact: true }).click();
+    await expect(content).toContainText("Ninguém foi banido.");
+  } finally { await close(); }
+});
+
 test("emoji reactions toggle, the Annoy set shows for everyone and the library imports and restores packs", async()=>{
   const {app,page,close}=await launch();
   try{
