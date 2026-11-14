@@ -278,7 +278,12 @@
 .settings-shell .theme-preset { border-radius: 9px; padding: 5px; }
 .settings-shell .theme-preset-caption { padding: 9px 5px 6px; font-size: 10px; }
 .settings-shell .preference-card { border-radius: 10px; background: var(--bg-channels); }
-.member-profile, .full-profile { border-radius: 15px; background: var(--bg-main); }
+.full-profile { border-radius: 15px; background: var(--bg-main); }
+/* Profile cards float above the sidebar: their own surface, an edge and a shadow, never the sidebar's colour. */
+.member-profile { border: 1px solid var(--border-strong); border-radius: 15px; background: var(--bg-popover); box-shadow: var(--shadow-overlay); }
+.member-profile .btn-ghost { background: color-mix(in srgb, var(--text) 7%, var(--bg-popover)); color: var(--text); }
+.member-profile .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 13%, var(--bg-popover)); }
+.self-profile > .btn + .btn { margin-top: 10px; }
 .live-redesign .stage-card { border-radius: 13px; background: radial-gradient(circle at center,var(--bg-elev),var(--bg-channels)); border: 1px solid var(--border); }
 .live-redesign .stage-card.person .avatar { border-radius: 35%; }
 .live-redesign .voice-stage { background: var(--bg-rail); }

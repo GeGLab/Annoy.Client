@@ -137,12 +137,31 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
     await identity.click();
     await expect(page.locator(".self-profile .member-card-name")).toHaveText("Gordziilla");
     await expect(page.locator(".self-profile .profile-bio")).toHaveText("My Annoy biography");
+    // The card is clearly its own surface over the sidebar, and only "Editar perfil" stays in it.
+    const surfaces = () => page.evaluate(() => {
+      const rgb = (element: Element) => getComputedStyle(element).backgroundColor.match(/\d+(\.\d+)?/g)!.slice(0, 3).map(Number);
+      const card = document.querySelector(".self-profile")!, panel = document.querySelector(".user-panel")!.closest(".resizable-panel, .channels, aside") ?? document.querySelector(".user-panel")!;
+      const [a, b] = [rgb(card), rgb(panel)];
+      return { difference: a.reduce((sum, value, index) => sum + Math.abs(value - b[index]!), 0), border: getComputedStyle(card).borderTopWidth };
+    });
+    const surface = await surfaces();
+    expect(surface.difference).toBeGreaterThanOrEqual(24);
+    expect(surface.border).toBe("1px");
+    await expect(page.locator(".self-profile").getByRole("button", { name: /Editar perfil/ })).toBeVisible();
+    await expect(page.locator(".self-profile").getByRole("button", { name: /Trocar de conta/ })).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "self-profile-card-dark.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    expect((await surfaces()).difference).toBeGreaterThanOrEqual(24);
+    await page.screenshot({ path: join(capture, "self-profile-card-light.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "dark"; }); });
     await page.keyboard.press("Escape");
     await page.locator(".user-panel").getByRole("button", { name: "Configurações", exact: true }).click();
     await expect(page.locator(".settings-identity strong")).toHaveText("Gordziilla");
     await expect(page.locator(".settings-identity img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
     await expect(page.locator(".cloud-profile-head img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
     await page.screenshot({ path: join(capture, "annoy-profile-settings.png") });
+    // Switching accounts stays available in the user settings.
+    await expect(page.locator(".settings-shell").getByRole("button", { name: /Trocar de conta/ })).toBeVisible();
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {

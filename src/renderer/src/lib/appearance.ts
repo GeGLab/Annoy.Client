@@ -55,6 +55,7 @@ const CUSTOM_PROPERTIES = [
   "--bg-channels",
   "--bg-main",
   "--bg-elev",
+  "--bg-popover",
   "--bg-hover",
   "--bg-active",
   "--bg-input",
@@ -96,6 +97,8 @@ export function applyAppearance(settings: Pick<Settings, "accentColor" | "surfac
         mix(base, amount >= 0 ? (light ? "#c6c1b7" : "#000000") : light ? "#b6b0a7" : "#ffffff", Math.abs(amount)),
       );
     }
+    // Floating cards lift towards white in both themes, so they never match the sidebar.
+    root.style.setProperty("--bg-popover", mix(base, "#ffffff", light ? 0.7 : 0.07));
   }
   if (curated || validColor(settings.accentColor)) {
     const background = getComputedStyle(root).getPropertyValue("--bg-main").trim();
