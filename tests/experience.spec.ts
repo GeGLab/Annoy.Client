@@ -963,6 +963,10 @@ test("owners with other members must transfer ownership before leaving or removi
     await menu.getByRole("menuitem", { name: "Transferir propriedade…", exact: true }).click();
     const settings = page.getByRole("dialog", { name: "Comunidade de teste · Configurações", exact: true });
     await expect(settings.getByRole("button", { name: "Excluir servidor", exact: true })).toBeDisabled();
+    // The ownership shortcut lands on Advanced, where the critical actions live.
+    await expect(settings.getByRole("button", { name: "Avançado", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(settings.getByRole("heading", { name: "Avançado", exact: true })).toBeVisible();
+    await page.screenshot({ path: join(capture, "server-settings-advanced-dark.png") });
     await settings.getByRole("combobox", { name: "Novo dono do servidor" }).click();
     await page.getByRole("option", { name: "Outro membro", exact: true }).click();
     await settings.getByRole("button", { name: "Transferir propriedade", exact: true }).click();
@@ -1984,7 +1988,7 @@ test("a server cover replaces the default art at the top of the channel list and
     await openSettings();
     const editor = page.locator(".server-banner-editor");
     await expect(editor.getByRole("heading", { name: "Capa do servidor" })).toBeVisible();
-    await expect(editor.locator(".server-banner-preview .scenery")).toBeVisible();
+    await expect(page.locator(".server-profile-cover .scenery")).toBeVisible();
     await page.getByLabel("Arquivo da capa do servidor", { exact: true }).setInputFiles("build/icon.png");
     await expect(page.getByAltText("Prévia da capa do servidor")).toHaveAttribute("src", /^blob:/);
     expect(writes).toHaveLength(0);
@@ -2003,7 +2007,7 @@ test("a server cover replaces the default art at the top of the channel list and
     writes.length = 0;
     await openSettings();
     await editor.getByRole("button", { name: "Usar a capa padrão", exact: true }).click();
-    await expect(editor.locator(".server-banner-preview .scenery")).toBeVisible();
+    await expect(page.locator(".server-profile-cover .scenery")).toBeVisible();
     await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await expect(page.locator(".settings-savebar")).toHaveCount(0);
     expect(writes).toEqual([{ kind: "patch", body: { name: "Comunidade de teste", bannerUrl: null } }]);

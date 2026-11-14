@@ -2591,5 +2591,10 @@
   "settings.banner.input": "Archivo de la portada del servidor",
   "settings.banner.change": "Cambiar portada",
   "settings.banner.remove": "Usar la portada predeterminada",
-  "settings.banner.unsupported": "Actualiza la instancia para usar una portada propia."
+  "settings.banner.unsupported": "Actualiza la instancia para usar una portada propia.",
+  "settings.server.sidebarCaption": "Ajustes del servidor",
+  "settings.server.nav": "Secciones de los ajustes del servidor",
+  "settings.server.advanced": "Avanzado",
+  "settings.server.overviewHint": "Cómo ven el servidor las personas que participan en él.",
+  "settings.server.advancedHint": "Acciones que cambian quién controla el servidor o lo borran todo. Cada una pide confirmación y no se puede deshacer."
 }

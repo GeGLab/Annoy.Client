@@ -2591,5 +2591,10 @@
   "settings.banner.input": "File della copertina del server",
   "settings.banner.change": "Cambia copertina",
   "settings.banner.remove": "Usa la copertina predefinita",
-  "settings.banner.unsupported": "Aggiorna l'istanza per usare una copertina personalizzata."
+  "settings.banner.unsupported": "Aggiorna l'istanza per usare una copertina personalizzata.",
+  "settings.server.sidebarCaption": "Impostazioni del server",
+  "settings.server.nav": "Sezioni delle impostazioni del server",
+  "settings.server.advanced": "Avanzate",
+  "settings.server.overviewHint": "Come appare il server a chi ne fa parte.",
+  "settings.server.advancedHint": "Azioni che cambiano chi controlla il server o cancellano tutto. Ognuna chiede conferma e non si può annullare."
 }

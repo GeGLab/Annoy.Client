@@ -394,7 +394,7 @@ export function UserSettingsModal() {
         title={translate("common.76b0fb6ad189")}
         wide
         onClose={() => leave(close)}
-        className="user-settings-modal"
+        className="settings-shell user-settings-modal"
         busy={saving}
         footer={
           dirty ? (

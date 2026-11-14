@@ -128,15 +128,7 @@
 .service-logo[src*="slack"] { filter: none; }
 .server-icon { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .edit-settings-modal { width: min(940px, calc(100vw - 64px)); }
-.server-settings-modal .modal-body > .tabs { gap: 8px; padding: 0 0 20px; margin-bottom: 24px; border-bottom: 1px solid var(--border); background: transparent; border-radius: 0; }
-.server-settings-modal .modal-body > .tabs .tab { padding: 10px 16px; border-radius: 8px; }
 .server-overview { gap: 24px; }
-.server-identity-editor { display: flex; align-items: center; gap: 24px; padding: 8px 0 28px; border-bottom: 1px solid var(--border); }
-.server-image-preview { width: 112px; height: 112px; flex: none; display: grid; place-items: center; border-radius: 24px; overflow: hidden; background: var(--accent-soft); color: var(--accent-strong); }
-.server-image-preview img { width: 100%; height: 100%; object-fit: cover; }
-.server-identity-editor h2 { font-size: 1.42857rem; line-height: 1.3; margin: 0 0 8px; }
-.server-identity-editor p, .server-identity-editor small { font-size: 0.85714rem; line-height: 1.6; color: var(--text-muted); margin: 0 0 12px; }
-.server-identity-editor .profile-actions { margin: 0 0 8px; }
 .server-overview > .inline-form { max-width: 640px; align-items: flex-end; }
 .message-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .reaction { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); font-size: 0.85714rem; font-variant-numeric: tabular-nums; }
@@ -229,7 +221,6 @@
 .giphy-message { display: inline-flex; flex-direction: column; margin-top: 8px; gap: 6px; max-width: 100%; }
 .giphy-message img { max-width: min(360px, 100%); max-height: 300px; object-fit: contain; border-radius: 12px; }
 .giphy-message small { font-size: 0.71429rem; color: var(--text-muted); }
-@media (max-width: 1000px) { .server-identity-editor { gap: 16px; } .server-image-preview { width: 84px; height: 84px; border-radius: 16px; } }
 @media (prefers-reduced-motion: reduce) { .expression-picker { animation: none; } }
 
 .giphy-attribution, .giphy-message .giphy-attribution { display: block; width: 100px; height: auto; max-height: 40px; border-radius: 0; object-fit: contain; }
@@ -338,11 +329,45 @@
 .clean-rail .dm-shortcut:hover .avatar-face { border-radius: 14px; }
 .clean-rail .dm-shortcut .tab-badge, .app.bar-top .clean-rail .dm-shortcut .tab-badge { top: auto; left: auto; right: -3px; bottom: -3px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; border: 3px solid var(--bg-rail); background: var(--danger); color: #fff; font-size: 11px; font-weight: 750; line-height: 1; }
 
-/* Server cover: previewed at the channel list's own proportions. */
-.server-banner-editor { display: flex; align-items: center; gap: 24px; padding: 24px 0 28px; border-bottom: 1px solid var(--border); }
-.server-banner-preview { position: relative; width: 240px; aspect-ratio: 240 / 132; flex: none; overflow: hidden; border-radius: 14px; background: #101c2d; }
-.server-banner-preview img, .server-banner-preview .scenery { display: block; width: 100%; height: 100%; object-fit: cover; }
-.server-banner-editor h2 { font-size: 1.42857rem; line-height: 1.3; margin: 0 0 8px; }
-.server-banner-editor p, .server-banner-editor small { font-size: 0.85714rem; line-height: 1.6; color: var(--text-muted); margin: 0 0 12px; }
-.server-banner-editor .profile-actions { margin: 0 0 8px; }
-@media (max-width: 1000px) { .server-banner-editor { flex-direction: column; align-items: flex-start; gap: 16px; } .server-banner-preview { width: 100%; max-width: 360px; } }
+/* Server settings ------------------------------------------------------------ */
+.server-settings-identity { display: flex; align-items: center; }
+.server-settings-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; overflow: hidden; border-radius: 11px; background: var(--accent-soft); color: var(--accent-strong); }
+.server-settings-mark img { width: 100%; height: 100%; object-fit: cover; }
+.settings-nav-divider { margin: 10px 4px; border: 0; border-top: 1px solid var(--border); }
+.settings-sidebar nav .settings-nav-advanced:not([aria-current=page]) { color: var(--text-muted); }
+
+/* Overview: a live preview of how the server looks, then what changes it. */
+.server-profile-card { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-channels); }
+.server-profile-cover { position: relative; isolation: isolate; height: 148px; overflow: hidden; background: #101c2d; }
+.server-profile-cover > img, .server-profile-cover > .scenery { position: absolute; inset: 0; z-index: -2; display: block; width: 100%; height: 100%; object-fit: cover; }
+.server-profile-cover::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(12 19 29 / .85) 0%, transparent 65%); }
+.server-profile-identity { position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; align-items: center; gap: 14px; min-width: 0; color: #f2f5f9; }
+.server-profile-identity strong { min-width: 0; font-size: 1.42857rem; font-weight: 700; letter-spacing: -.02em; }
+.server-profile-icon { display: grid; place-items: center; width: 64px; height: 64px; flex: none; overflow: hidden; border: 3px solid var(--bg-channels); border-radius: 18px; background: var(--bg-elev); color: var(--text-muted); }
+.server-profile-icon img { width: 100%; height: 100%; object-fit: cover; }
+.server-profile-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.server-media-control { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; padding: 18px 20px 20px; }
+.server-media-control + .server-media-control { border-left: 1px solid var(--border); }
+.server-media-control h4 { margin: 0; font-size: 1rem; }
+.server-media-control p, .server-media-control small { margin: 0; color: var(--text-muted); font-size: 0.85714rem; line-height: 1.55; }
+.server-media-control .profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
+.server-name-form { display: block; max-width: 480px; }
+.server-overview-stats { margin: 0; }
+
+/* Advanced: one card per critical action, the destructive one marked. */
+.advanced-card { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-channels); }
+.advanced-card-copy { min-width: 0; max-width: 440px; }
+.advanced-card-copy h4 { margin: 0 0 6px; font-size: 1rem; }
+.advanced-card-copy p { margin: 0; color: var(--text-muted); font-size: 0.85714rem; line-height: 1.55; }
+.advanced-card-copy .advanced-card-note { margin-top: 8px; color: var(--text-soft); }
+.advanced-card-action { display: flex; align-items: flex-end; gap: 10px; flex: none; }
+.advanced-card-action .field { min-width: 200px; }
+.advanced-card-danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: color-mix(in srgb, var(--danger) 5%, var(--bg-channels)); }
+.advanced-card-danger h4 { color: var(--danger); }
+
+@media (max-width: 1000px) {
+  .server-profile-controls { grid-template-columns: minmax(0, 1fr); }
+  .server-media-control + .server-media-control { border-left: 0; border-top: 1px solid var(--border); }
+  .advanced-card, .advanced-card-action { flex-direction: column; align-items: stretch; }
+  .advanced-card-action .field { min-width: 0; }
+}

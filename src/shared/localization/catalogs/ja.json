@@ -2591,5 +2591,10 @@
   "settings.banner.input": "サーバーのカバー画像ファイル",
   "settings.banner.change": "カバーを変更",
   "settings.banner.remove": "既定のカバーを使う",
-  "settings.banner.unsupported": "独自のカバーを使うにはインスタンスを更新してください。"
+  "settings.banner.unsupported": "独自のカバーを使うにはインスタンスを更新してください。",
+  "settings.server.sidebarCaption": "サーバー設定",
+  "settings.server.nav": "サーバー設定のセクション",
+  "settings.server.advanced": "詳細設定",
+  "settings.server.overviewHint": "参加しているメンバーからのサーバーの見え方です。",
+  "settings.server.advancedHint": "サーバーの管理者を変えたり、すべてを削除したりする操作です。どれも確認が必要で、元に戻せません。"
 }

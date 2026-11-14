@@ -57,9 +57,9 @@
 .unsaved-dialog p { font-size: 0.92857rem; line-height: 1.7; margin: 16px 0 24px; }
 .unsaved-dialog .form-actions { gap: 7px; }
 .settings-account { margin: 18px 0; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
-.user-settings-modal { width: min(1100px, calc(100vw - 48px)); height: min(800px, calc(100dvh - 84px)); }
-.user-settings-modal > .modal-header { flex: none; padding: 16px 24px; border-bottom: 1px solid var(--border); }
-.user-settings-modal > .modal-body { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+.settings-shell { width: min(1100px, calc(100vw - 48px)); height: min(800px, calc(100dvh - 84px)); }
+.settings-shell > .modal-header { flex: none; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.settings-shell > .modal-body { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
 .settings-layout { height: 100%; display: grid; grid-template-columns: 228px minmax(0, 1fr); }
 .settings-sidebar { padding: 24px 16px; overflow-y: auto; background: var(--bg-channels); border-right: 1px solid var(--border); }
 .settings-sidebar input { width: 100%; font-size: 0.85714rem; margin-bottom: 20px; }

@@ -235,11 +235,13 @@ function ServerStickers({ accountId, serverId }: { accountId: string; serverId: 
   );
 }
 
-export function ServerSettingsModal({ accountId, serverId }: { accountId: string; serverId: string }) {
+export type ServerSettingsPage = "overview" | "roles" | "bans" | "stickers" | "integrations" | "advanced";
+
+export function ServerSettingsModal({ accountId, serverId, initialPage = "overview" }: { accountId: string; serverId: string; initialPage?: ServerSettingsPage }) {
   const requests = useRequestOwner(JSON.stringify([accountId, serverId, "server-settings"]));
   const signal = requests.signal;
   const { state, me } = useServer(accountId, serverId);
-  const [tab, setTab] = useState<"overview" | "roles" | "bans" | "stickers" | "integrations">("overview");
+  const [tab, setTab] = useState<ServerSettingsPage>(initialPage);
   const stickersSupported = useStore((s) => s.instances[accountId]?.instance?.serverStickers === true);
   const integrationsSupported = useStore((s) => s.instances[accountId]?.instance?.integrations === true);
   const [roleId, setRoleId] = useState<string | null>(null);
@@ -320,63 +322,106 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
     finally { setTransferring(false); }
   };
 
-  return (
-    <Modal title={translate("settings.f9c1ead13901",{p0:(state.server.name)})} wide className="edit-settings-modal server-settings-modal">
-      <div className="tabs">
-        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("overview"))}>{translate("common.36664e8242af")}</button>
-        {canRoles && (
-          <button className={tab === "roles" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("roles"))}>{translate("common.0ca317ead9f6")}</button>
-        )}
-        {canBans && (
-          <button className={tab === "bans" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("bans"))}>{translate("settings.3fa784bd9f2f")}</button>
-        )}
-        {canStickers && (
-          <button className={tab === "stickers" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("stickers"))}>{translate("settings.stickers.tab")}</button>
-        )}
-        {integrationsSupported && (
-          <button className={tab === "integrations" ? "tab active" : "tab"} onClick={() => requestNavigation(() => setTab("integrations"))}>{translate("integrations.server.tab")}</button>
-        )}
-      </div>
+  const pages: { id: ServerSettingsPage; icon: IconName; label: string }[] = [
+    { id: "overview", icon: "gear", label: translate("common.36664e8242af") },
+    ...(canRoles ? [{ id: "roles" as const, icon: "shield" as IconName, label: translate("common.0ca317ead9f6") }] : []),
+    ...(canBans ? [{ id: "bans" as const, icon: "lock" as IconName, label: translate("settings.3fa784bd9f2f") }] : []),
+    ...(canStickers ? [{ id: "stickers" as const, icon: "smile" as IconName, label: translate("settings.stickers.tab") }] : []),
+    ...(integrationsSupported ? [{ id: "integrations" as const, icon: "bot" as IconName, label: translate("integrations.server.tab") }] : []),
+  ];
+  // Critical actions (ownership, deleting the server) live apart, only for the owner.
+  const page: ServerSettingsPage = tab === "advanced" ? (isOwner ? "advanced" : "overview") : pages.some((item) => item.id === tab) ? tab : "overview";
+  const go = (next: ServerSettingsPage) => requestNavigation(() => setTab(next));
+  const ownerMember = state.members.find((m) => m.user.id === state.server.ownerId);
+  const editable = canServer && !savingServer;
 
-      {tab === "overview" && (
-        <div className="form server-overview">
-          <div className="server-identity-editor">
-            <div className="server-image-preview">{preview ? <img src={preview} alt={translate("settings.e01c38cf8f6a")} /> : <Icon name="users" size={42} />}</div>
-            <div><h2>{translate("settings.d5430e10d673")}</h2><p>{translate("settings.2d0730e4b559")}</p><div className="profile-actions"><button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => iconInput.current?.click()}>{rich("common.9d7834105f23",{p0:(<Icon name="upload" size={16} />)})}</button>{preview && <button className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => setIcon(null)}>{translate("settings.a3037dc71a43")}</button>}</div><small>{translate("settings.aaab0145bf73")}</small></div>
-            <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.3d36c034c960")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setIcon(file); } event.target.value = ""; }} />
+  return (
+    <Modal title={translate("settings.f9c1ead13901",{p0:(state.server.name)})} className="settings-shell server-settings-modal">
+      <div className="settings-layout">
+        <aside className="settings-sidebar">
+          <div className="settings-identity server-settings-identity">
+            <span className="server-settings-mark">{preview ? <img src={preview} alt="" /> : <Icon name="users" size={18} />}</span>
+            <span><strong className="truncate">{state.server.name}</strong><small>{translate("settings.server.sidebarCaption")}</small></span>
           </div>
-          <div className="server-banner-editor">
-            <div className="server-banner-preview">{bannerPreview ? <img src={bannerPreview} alt={translate("settings.banner.preview")} /> : <Scenery />}</div>
-            <div>
-              <h2>{translate("settings.banner.title")}</h2>
-              <p>{translate("settings.banner.hint")}</p>
-              {bannersSupported ? <>
-                <div className="profile-actions">
-                  <button type="button" className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => bannerInput.current?.click()}><Icon name="upload" size={16} />{translate("settings.banner.change")}</button>
-                  {bannerPreview && <button type="button" className="btn btn-ghost" disabled={!canServer || savingServer} onClick={() => setBanner(null)}>{translate("settings.banner.remove")}</button>}
-                </div>
-                <small>{translate("settings.banner.formats")}</small>
-              </> : <small>{translate("settings.banner.unsupported")}</small>}
+          <nav aria-label={translate("settings.server.nav")}>
+            {pages.map((item) => (
+              <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => go(item.id)}>
+                <Icon name={item.icon} size={18} />{item.label}
+              </button>
+            ))}
+            {isOwner && <>
+              <hr className="settings-nav-divider" />
+              <button className="settings-nav-advanced" aria-current={page === "advanced" ? "page" : undefined} onClick={() => go("advanced")}>
+                <Icon name="sliders" size={18} />{translate("settings.server.advanced")}
+              </button>
+            </>}
+          </nav>
+        </aside>
+        <div className="settings-content" key={page}>
+
+      {page === "overview" && (
+        <section className="settings-section server-overview">
+          <h3>{translate("common.36664e8242af")}</h3>
+          <p className="muted">{translate("settings.server.overviewHint")}</p>
+          <div className="server-profile-card">
+            <div className="server-profile-cover">
+              {bannerPreview ? <img src={bannerPreview} alt={translate("settings.banner.preview")} /> : <Scenery />}
+              <div className="server-profile-identity">
+                <span className="server-profile-icon">{preview ? <img src={preview} alt={translate("settings.e01c38cf8f6a")} /> : <Icon name="users" size={28} />}</span>
+                <strong className="truncate">{name.trim() || state.server.name}</strong>
+              </div>
             </div>
-            {bannersSupported && <input ref={bannerInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.banner.input")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setBanner(file); } event.target.value = ""; }} />}
+            <div className="server-profile-controls">
+              <div className="server-media-control">
+                <h4>{translate("settings.d5430e10d673")}</h4>
+                <p>{translate("settings.2d0730e4b559")}</p>
+                <div className="profile-actions">
+                  <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => iconInput.current?.click()}>{rich("common.9d7834105f23",{p0:(<Icon name="upload" size={16} />)})}</button>
+                  {preview && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => setIcon(null)}>{translate("settings.a3037dc71a43")}</button>}
+                </div>
+                <small>{translate("settings.aaab0145bf73")}</small>
+                <input ref={iconInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.3d36c034c960")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setIcon(file); } event.target.value = ""; }} />
+              </div>
+              <div className="server-media-control server-banner-editor">
+                <h4>{translate("settings.banner.title")}</h4>
+                <p>{translate("settings.banner.hint")}</p>
+                {bannersSupported ? <>
+                  <div className="profile-actions">
+                    <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => bannerInput.current?.click()}><Icon name="upload" size={16} />{translate("settings.banner.change")}</button>
+                    {bannerPreview && <button type="button" className="btn btn-ghost" disabled={!editable} onClick={() => setBanner(null)}>{translate("settings.banner.remove")}</button>}
+                  </div>
+                  <small>{translate("settings.banner.formats")}</small>
+                  <input ref={bannerInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={translate("settings.banner.input")} onChange={(event) => { const file = event.target.files?.[0]; if (file) { if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) toast(translate("settings.4dbb650e6a3d")); else setBanner(file); } event.target.value = ""; }} />
+                </> : <small>{translate("settings.banner.unsupported")}</small>}
+              </div>
+            </div>
           </div>
           <form
-            className="inline-form"
+            className="server-name-form"
             onSubmit={(e) => {
               e.preventDefault();
               void saveName().then((ok) => { if (ok) guard?.showSaved(); });
             }}
           >
             <Field label={translate("common.87f8ee74878a")}>
-              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canServer || savingServer} maxLength={100} />
+              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} maxLength={100} />
             </Field>
-            <button className="btn" disabled={!canServer || savingServer || !name.trim() || (name === baselineName && icon === undefined && banner === undefined)}>{translate("common.aef7cd5b2081")}</button>
           </form>
-          <p className="muted small">{rich("common.599e82279c68",{p0:(state.members.length),p1:(state.channels.length),p2:(displayNameOf(state.members.find((m) => m.user.id === state.server.ownerId)!))})}</p>
-          {isOwner && (
-            <div className="danger-zone">
-              <strong>{translate("settings.783ff587a891")}</strong>
-              {state.members.length > 1 && <>
+          <p className="muted small server-overview-stats">{rich("common.599e82279c68",{p0:(state.members.length),p1:(state.channels.length),p2:(ownerMember ? displayNameOf(ownerMember) : "—")})}</p>
+        </section>
+      )}
+
+      {page === "advanced" && isOwner && (
+        <section className="settings-section server-advanced">
+          <h3>{translate("settings.server.advanced")}</h3>
+          <p className="muted">{translate("settings.server.advancedHint")}</p>
+          {state.members.length > 1 && (
+            <div className="advanced-card">
+              <div className="advanced-card-copy">
+                <h4>{translate("settings.2ffa385a1bc4")}</h4>
+                <p>{ownershipSupported ? translate("settings.ad208b966e27") : translate("settings.675043339ee8")}</p>
+              </div>
+              <div className="advanced-card-action">
                 <Field label={translate("settings.f13545530622")}>
                   <Select aria-label={translate("settings.f13545530622")} value={nextOwner} disabled={!ownershipSupported || transferring} onChange={(event) => setNextOwner(event.target.value)}>
                     <option value="">{translate("settings.e4ff0744869e")}</option>
@@ -386,9 +431,16 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
                 <button className="btn btn-ghost" disabled={!ownershipSupported || !nextOwner || transferring} onClick={() => void transfer()}>
                   {transferring ? translate("common.25135fc46d48") : translate("settings.2ffa385a1bc4")}
                 </button>
-                <p className="muted small">{ownershipSupported ? translate("settings.ad208b966e27") : translate("settings.675043339ee8")}</p>
-              </>}
-              <p className="muted small">{translate("settings.a5a64afbc77b")}</p>
+              </div>
+            </div>
+          )}
+          <div className="advanced-card advanced-card-danger">
+            <div className="advanced-card-copy">
+              <h4>{translate("common.e5851a510556")}</h4>
+              <p>{translate("settings.a5a64afbc77b")}</p>
+              {!alone && <p className="advanced-card-note">{translate("settings.11382df9e2be")}</p>}
+            </div>
+            <div className="advanced-card-action">
               <button
                 className="btn btn-danger"
                 disabled={!alone || transferring}
@@ -401,13 +453,14 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
                   }
                 }}
               >{translate("common.e5851a510556")}</button>
-              {!alone && <p className="muted small">{translate("settings.11382df9e2be")}</p>}
             </div>
-          )}
-        </div>
+          </div>
+        </section>
       )}
 
-      {tab === "roles" && (
+      {page === "roles" && (
+        <section className="settings-section server-roles">
+        <h3>{translate("common.0ca317ead9f6")}</h3>
         <div className="roles-layout">
           <div className="roles-list">
             <button
@@ -438,11 +491,14 @@ export function ServerSettingsModal({ accountId, serverId }: { accountId: string
             )}
           </div>
         </div>
+        </section>
       )}
 
-      {tab === "bans" && <Bans accountId={accountId} serverId={serverId} />}
-      {tab === "stickers" && canStickers && <ServerStickers accountId={accountId} serverId={serverId} />}
-      {tab === "integrations" && integrationsSupported && <ServerIntegrations accountId={accountId} serverId={serverId} isOwner={isOwner} />}
+      {page === "bans" && <section className="settings-section"><h3>{translate("settings.3fa784bd9f2f")}</h3><Bans accountId={accountId} serverId={serverId} /></section>}
+      {page === "stickers" && canStickers && <section className="settings-section"><h3>{translate("settings.stickers.tab")}</h3><ServerStickers accountId={accountId} serverId={serverId} /></section>}
+      {page === "integrations" && integrationsSupported && <section className="settings-section"><h3>{translate("integrations.server.tab")}</h3><ServerIntegrations accountId={accountId} serverId={serverId} isOwner={isOwner} /></section>}
+        </div>
+      </div>
     </Modal>
   );
 }

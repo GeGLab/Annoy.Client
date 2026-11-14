@@ -2591,5 +2591,10 @@
   "settings.banner.input": "服务器封面文件",
   "settings.banner.change": "更换封面",
   "settings.banner.remove": "使用默认封面",
-  "settings.banner.unsupported": "更新实例以使用自定义封面。"
+  "settings.banner.unsupported": "更新实例以使用自定义封面。",
+  "settings.server.sidebarCaption": "服务器设置",
+  "settings.server.nav": "服务器设置分区",
+  "settings.server.advanced": "高级",
+  "settings.server.overviewHint": "服务器在成员眼中的样子。",
+  "settings.server.advancedHint": "这些操作会更改服务器的控制者或删除全部内容。每项操作都需要确认，且无法撤销。"
 }

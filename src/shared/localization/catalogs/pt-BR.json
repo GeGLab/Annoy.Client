@@ -2591,5 +2591,10 @@
   "settings.banner.input": "Arquivo da capa do servidor",
   "settings.banner.change": "Alterar capa",
   "settings.banner.remove": "Usar a capa padrão",
-  "settings.banner.unsupported": "Atualize a instância para usar uma capa própria."
+  "settings.banner.unsupported": "Atualize a instância para usar uma capa própria.",
+  "settings.server.sidebarCaption": "Configurações do servidor",
+  "settings.server.nav": "Seções das configurações do servidor",
+  "settings.server.advanced": "Avançado",
+  "settings.server.overviewHint": "Como o servidor aparece para quem participa dele.",
+  "settings.server.advancedHint": "Ações que mudam quem controla o servidor ou apagam tudo. Cada uma pede confirmação e não pode ser desfeita."
 }

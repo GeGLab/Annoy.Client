@@ -2591,5 +2591,10 @@
   "settings.banner.input": "Fichier de couverture du serveur",
   "settings.banner.change": "Changer la couverture",
   "settings.banner.remove": "Utiliser la couverture par défaut",
-  "settings.banner.unsupported": "Mettez à jour l'instance pour utiliser une couverture personnalisée."
+  "settings.banner.unsupported": "Mettez à jour l'instance pour utiliser une couverture personnalisée.",
+  "settings.server.sidebarCaption": "Paramètres du serveur",
+  "settings.server.nav": "Sections des paramètres du serveur",
+  "settings.server.advanced": "Avancé",
+  "settings.server.overviewHint": "L'apparence du serveur pour ses membres.",
+  "settings.server.advancedHint": "Des actions qui changent qui contrôle le serveur ou effacent tout. Chacune demande une confirmation et ne peut pas être annulée."
 }

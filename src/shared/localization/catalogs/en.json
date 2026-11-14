@@ -2591,5 +2591,10 @@
   "settings.banner.input": "Server cover file",
   "settings.banner.change": "Change cover",
   "settings.banner.remove": "Use the default cover",
-  "settings.banner.unsupported": "Update the instance to use a custom cover."
+  "settings.banner.unsupported": "Update the instance to use a custom cover.",
+  "settings.server.sidebarCaption": "Server settings",
+  "settings.server.nav": "Server settings sections",
+  "settings.server.advanced": "Advanced",
+  "settings.server.overviewHint": "How the server looks to the people in it.",
+  "settings.server.advancedHint": "Actions that change who controls the server or erase everything. Each one asks for confirmation and cannot be undone."
 }

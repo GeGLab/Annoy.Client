@@ -98,7 +98,7 @@ export type Modal =
   | { kind: "switchAccount" }
   | { kind: "search"; accountId: string; serverId?: string; channelId?: string }
   | { kind: "createServer"; accountId?: string; initialMode?: "create" | "join" }
-  | { kind: "serverSettings"; accountId: string; serverId: string }
+  | { kind: "serverSettings"; accountId: string; serverId: string; page?: "overview" | "roles" | "bans" | "stickers" | "integrations" | "advanced" }
   | { kind: "channelSettings"; accountId: string; serverId: string; channelId: string }
   | { kind: "createChannel"; accountId: string; serverId: string; parentId: string | null; type: CreatableChannel }
   | { kind: "invite"; accountId: string; serverId: string }

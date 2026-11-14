@@ -257,24 +257,24 @@
 .live-redesign .server-directory-card > .icon { color: var(--text-muted); margin-left: auto; }
 
 /* Settings, profiles and media use the same visual system. */
-.user-settings-modal { width: min(930px,calc(100vw - 48px)); border-radius: 16px; background: var(--bg-main); overflow: hidden; }
-.user-settings-modal > .modal-header { padding: 24px 29px; min-height: 80px; }
-.user-settings-modal .modal-header h2 { font-size: 24px; letter-spacing: -.8px; font-weight: 650; }
-.user-settings-modal .settings-layout { min-height: 490px; }
-.user-settings-modal .settings-sidebar { background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
-.user-settings-modal .settings-identity { padding: 4px 7px 20px; gap: 11px; }
-.user-settings-modal .settings-identity .avatar { border-radius: 14px; }
-.user-settings-modal .settings-sidebar input { min-height: 33px; font-size: 10px; margin-bottom: 16px; border-radius: 7px; }
-.user-settings-modal .settings-sidebar nav button { border-radius: 7px; padding: 10px 11px; font-size: 11px; gap: 10px; }
-.user-settings-modal .settings-sidebar nav button[aria-current=page] { color: var(--text); background: var(--accent-soft); }
-.user-settings-modal .settings-content { padding: 27px 32px 35px; background: var(--bg-main); }
-.user-settings-modal .settings-section > h3 { font-size: 20px; font-weight: 600; letter-spacing: -.6px; }
-.user-settings-modal .settings-section > .muted { font-size: 12px; line-height: 1.8; }
-.user-settings-modal .profile-banner { border-radius: 10px; }
-.user-settings-modal .theme-preview { height: 86px; border-radius: 6px; }
-.user-settings-modal .theme-preset { border-radius: 9px; padding: 5px; }
-.user-settings-modal .theme-preset-caption { padding: 9px 5px 6px; font-size: 10px; }
-.user-settings-modal .preference-card { border-radius: 10px; background: var(--bg-channels); }
+.settings-shell { width: min(930px,calc(100vw - 48px)); border-radius: 16px; background: var(--bg-main); overflow: hidden; }
+.settings-shell > .modal-header { padding: 24px 29px; min-height: 80px; }
+.settings-shell .modal-header h2 { font-size: 24px; letter-spacing: -.8px; font-weight: 650; }
+.settings-shell .settings-layout { min-height: 490px; }
+.settings-shell .settings-sidebar { background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
+.settings-shell .settings-identity { padding: 4px 7px 20px; gap: 11px; }
+.settings-shell .settings-identity .avatar { border-radius: 14px; }
+.settings-shell .settings-sidebar input { min-height: 33px; font-size: 10px; margin-bottom: 16px; border-radius: 7px; }
+.settings-shell .settings-sidebar nav button { border-radius: 7px; padding: 10px 11px; font-size: 11px; gap: 10px; }
+.settings-shell .settings-sidebar nav button[aria-current=page] { color: var(--text); background: var(--accent-soft); }
+.settings-shell .settings-content { padding: 27px 32px 35px; background: var(--bg-main); }
+.settings-shell .settings-section > h3 { font-size: 20px; font-weight: 600; letter-spacing: -.6px; }
+.settings-shell .settings-section > .muted { font-size: 12px; line-height: 1.8; }
+.settings-shell .profile-banner { border-radius: 10px; }
+.settings-shell .theme-preview { height: 86px; border-radius: 6px; }
+.settings-shell .theme-preset { border-radius: 9px; padding: 5px; }
+.settings-shell .theme-preset-caption { padding: 9px 5px 6px; font-size: 10px; }
+.settings-shell .preference-card { border-radius: 10px; background: var(--bg-channels); }
 .member-profile, .full-profile { border-radius: 15px; background: var(--bg-main); }
 .live-redesign .stage-card { border-radius: 13px; background: radial-gradient(circle at center,var(--bg-elev),var(--bg-channels)); border: 1px solid var(--border); }
 .live-redesign .stage-card.person .avatar { border-radius: 35%; }
