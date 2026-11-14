@@ -311,7 +311,7 @@ function MessageRow({
           <GiphyMessage accountId={accountId} content={message.content} />
           {message.content && <StickerMessage content={message.content} />}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
-          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} stickers={stickerReactions} onToggle={(emoji) => void react(emoji)} />
+          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={!reactionsEnabled || !canReact} busy={reacting} stickers={stickerReactions} onToggle={(emoji) => void react(emoji)} />
         </div>
       </div>
       {!editing && (

@@ -415,7 +415,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink
               ))}
             </div>
           )}
-          <ReactionChips reactions={reactions} me={me} nameOf={nameOf} disabled={reacting || !reactable} stickers={false} onToggle={(emoji) => void react(emoji)} />
+          <ReactionChips reactions={reactions} me={me} nameOf={nameOf} disabled={!reactable} busy={reacting} stickers={false} onToggle={(emoji) => void react(emoji)} />
           {message.state === "sending" && <small className="muted">{translate("social.sending")}</small>}
           {message.state === "failed" && (
             <small className="danger-text">

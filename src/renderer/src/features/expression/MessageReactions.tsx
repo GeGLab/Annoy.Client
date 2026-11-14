@@ -30,18 +30,21 @@ function ReactionChip({ emoji, userIds, me, nameOf, disabled, onToggle }: { emoj
   </button>;
 }
 
-export function ReactionChips({ reactions, me, nameOf, disabled, stickers, onToggle }: {
+export function ReactionChips({ reactions, me, nameOf, disabled, busy = false, stickers, onToggle }: {
   reactions: NonNullable<Message["reactions"]>;
   me: string;
   nameOf: NameOf;
+  /** This person cannot react here: no add button. */
   disabled: boolean;
+  /** A reaction is being sent: everything stays in place, only disabled, so the message never shifts. */
+  busy?: boolean;
   /** The server accepts sticker links as reactions. */
   stickers: boolean;
   onToggle: (emoji: string) => void;
 }) {
   if (!reactions.length) return null;
   return <div className="message-reactions" aria-label={translate("expression.b6ea01c01618")}>
-    {reactions.map(({ emoji, userIds }) => <ReactionChip key={emoji} emoji={emoji} userIds={userIds} me={me} nameOf={nameOf} disabled={disabled} onToggle={onToggle} />)}
-    {!disabled && <EmojiMenu stickers={stickers} onSelect={onToggle} />}
+    {reactions.map(({ emoji, userIds }) => <ReactionChip key={emoji} emoji={emoji} userIds={userIds} me={me} nameOf={nameOf} disabled={disabled || busy} onToggle={onToggle} />)}
+    {!disabled && <EmojiMenu stickers={stickers} disabled={busy} onSelect={onToggle} />}
   </div>;
 }

@@ -2835,3 +2835,37 @@ test("microphone audio keeps flowing when the app is covered, hidden and restore
     await close();
   }
 });
+
+test("reacting never moves the message: every chip has the sticker's height and the add button stays put", async()=>{
+  const {app,page,close}=await launch();
+  try{
+    await seed(page);
+    const sticker=`https://cdn.experience.test/i/${"1".repeat(40)}.png`;
+    await page.evaluate(async(sticker)=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};const m=s.instances.test.messages.general.items.find((x:any)=>x.id==="message");m.reactions=[{emoji:"😂",userIds:["peer"]},{emoji:sticker,userIds:["peer"]}];});},sticker);
+    const reactions=await uiReactionFixture(app);
+    const row=page.locator('[data-message-id="message"]'), chips=row.locator(".message-reactions");
+    await expect(chips.locator(".reaction")).toHaveCount(2);
+    const heights=()=>chips.locator(":scope > *").evaluateAll(els=>els.map(e=>Math.round(e.getBoundingClientRect().height)));
+    await expect.poll(heights).toEqual([32,32,32]);
+    // Every frame while a reaction goes out and comes back: where the message is and how tall.
+    const watch=()=>page.evaluate(()=>{const w=window as any;w.__frames=new Set<string>();const tick=()=>{const r=document.querySelector('[data-message-id="message"]')!.getBoundingClientRect();w.__frames.add(`${Math.round(r.top)}:${Math.round(r.height)}`);w.__raf=requestAnimationFrame(tick);};tick();});
+    const frames=()=>page.evaluate(()=>{const w=window as any;cancelAnimationFrame(w.__raf);return [...w.__frames];});
+    reactions.delay=true;
+    await watch();
+    await chips.locator(".reaction").first().click();
+    await expect(chips.getByRole("button",{name:"Adicionar reação",exact:true})).toBeDisabled();
+    reactions.release?.();
+    await expect(chips.locator(".reaction.selected")).toHaveCount(1);
+    await page.waitForTimeout(300);
+    expect(await frames()).toHaveLength(1);
+    await watch();
+    await chips.getByRole("button",{name:"Adicionar reação",exact:true}).click();
+    await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
+    await expect(chips.locator(".reaction")).toHaveCount(3);
+    await page.waitForTimeout(300);
+    expect(await frames()).toHaveLength(1);
+    await expect.poll(heights).toEqual([32,32,32,32]);
+    await row.screenshot({path:join(capture,"reaction-chips-uniform-dark.png")});
+    expect(reactions.writes).toEqual(["PUT","PUT"]);
+  } finally { await close(); }
+});
