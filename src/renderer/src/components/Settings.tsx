@@ -764,24 +764,27 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
   const shareText = invite ? translate("settings.dad5e4dea793",{p0:(state?.server.name ?? "servidor"),p1:(address),p2:(invite.code)}) : "";
 
   return (
-    <Modal title={translate("settings.da11a4766d0f",{p0:(state?.server.name ?? "servidor")})}>
-      <p className="muted">{translate("settings.9d3bb8f1f7de")}</p>
-      <div className="invite-box">
-        <div>
+    <Modal className="invite-modal" title={translate("settings.da11a4766d0f",{p0:(state?.server.name ?? "servidor")})}>
+      <p className="muted invite-hint">{translate("settings.9d3bb8f1f7de")}</p>
+      <section className="invite-share" aria-live="polite">
+        <div className="invite-share-row">
           <span className="section-label">{translate("common.ef5e7e12bdac")}</span>
-          <code>{address}</code>
+          <code className="invite-address" title={address}>{address}</code>
         </div>
-        <div>
+        <div className="invite-share-row">
           <span className="section-label">{translate("settings.fd2dea51bf78")}</span>
-          <code className="invite-code">{invite?.code ?? translate("settings.829454028287")}</code>
+          <div className="invite-code-line">
+            {invite ? <code className="invite-code">{invite.code}</code> : <span className="invite-code-empty">{translate("settings.829454028287")}</span>}
+            {invite && (
+              <button
+                className="btn invite-copy"
+                onClick={() => void navigator.clipboard.writeText(shareText).then(() => toast(translate("settings.93b61881e9ef")))}
+              >{rich("common.fc99510c240c",{p0:(<Icon name="link" size={16} />)})}</button>
+            )}
+          </div>
         </div>
-        <button
-          className="btn"
-          disabled={!invite}
-          onClick={() => void navigator.clipboard.writeText(shareText).then(() => toast(translate("settings.93b61881e9ef")))}
-        >{rich("common.fc99510c240c",{p0:(<Icon name="link" size={16} />)})}</button>
-      </div>
-      <div className="grid-2">
+      </section>
+      <div className="grid-2 invite-options">
         <Field label={translate("common.e5b7cdb2f565")}>
           <Select value={expires} disabled={creating} onChange={(e) => setExpires(e.target.value)}>
             <option value="1">{translate("settings.7e93c7711c40")}</option>
@@ -800,7 +803,7 @@ export function InviteModal({ accountId, serverId }: { accountId: string; server
         </Field>
       </div>
       <div className="form-actions">
-        <button className="btn btn-ghost" disabled={creating} onClick={() => void create()}>
+        <button className={invite ? "btn btn-ghost" : "btn"} disabled={creating} onClick={() => void create()}>
           {creating ? translate("common.7bf220a3c328") : invite ? translate("settings.911b7023c02d") : translate("settings.3d461f35dfb4")}
         </button>
       </div>

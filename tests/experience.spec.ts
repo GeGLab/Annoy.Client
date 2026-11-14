@@ -342,9 +342,26 @@ test("live redesign opens real community invites, activity conversations and dis
     await expect(page.locator(".live-room-card")).toContainText("Sala de conversa");
     await expect(page.locator(".live-room-card")).toContainText("Puxa uma cadeira");
     await page.locator(".live-conversation-welcome").getByRole("button", { name: "Traga sua galera" }).click();
+    // Before an invite exists there is nothing to copy: a plain hint, no squeezed button.
+    const share = page.locator(".invite-share");
+    await expect(share.locator(".invite-code-empty")).toHaveText("Gere um convite para compartilhar");
+    await expect(share.getByRole("button")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "invite-modal-empty-dark.png") });
     await page.getByRole("button", { name: "Gerar convite", exact: true }).click();
     await expect(page.locator(".invite-code")).toHaveText("real-invite");
     expect(invites).toEqual([{ expiresInHours: 168, maxUses: null }]);
+    const inviteLayout = () => page.locator(".invite-modal").evaluate((modal: HTMLElement) => {
+      const copy = modal.querySelector<HTMLElement>(".invite-copy")!, address = modal.querySelector<HTMLElement>(".invite-address")!;
+      const box = modal.getBoundingClientRect(), copyBox = copy.getBoundingClientRect(), addressBox = address.getBoundingClientRect();
+      return { copyOneLine: copyBox.height <= 44 && copyBox.width >= 70, addressInside: addressBox.right <= box.right && addressBox.left >= box.left, noOverflow: modal.scrollWidth <= modal.clientWidth };
+    });
+    await expect.poll(inviteLayout).toEqual({ copyOneLine: true, addressInside: true, noOverflow: true });
+    await expect(page.locator(".invite-share").getByRole("button", { name: /Copiar/ })).toBeVisible();
+    await page.screenshot({ path: join(capture, "invite-modal-ready-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await fullyInside(page, ".invite-modal");
+    await expect.poll(inviteLayout).toEqual({ copyOneLine: true, addressInside: true, noOverflow: true });
+    await page.screenshot({ path: join(capture, "invite-modal-ready-minimum.png") });
     await page.keyboard.press("Escape");
     await page.screenshot({ path: join(capture, "redesign-live-community.png") });
     await page.getByRole("button", { name: "Ocultar boas-vindas" }).click();
