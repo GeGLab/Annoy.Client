@@ -164,6 +164,46 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
   } finally { await close(); }
 });
 
+test("clicking a friend's name or row opens the conversation, not only the message bubble", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const me = { id: "annoy-person", username: "gordziilla", displayName: "Gordziilla", avatar: null, bio: null, banner: null, accentColor: null, dmKey: null, dmKeyVersion: null };
+        const other = { ...me, id: "friend", username: "bruna", displayName: "Bruna" };
+        s.social.status = "offline";
+        s.social.me = me;
+        s.social.profiles = { [me.id]: me, friend: other };
+        s.social.relationships = [{ user: other, status: "friend", nickname: null }];
+        s.social.presences = { friend: { status: "online", activities: [] } };
+        s.social.dms = [{ id: "cloud-dm", recipientId: "friend", store: { mine: false, theirs: false }, lastMessageId: null }];
+        s.social.threads["cloud-dm"] = { loaded: true, items: [], hasMoreRemote: false };
+        s.view = { kind: "home", accountId: null, dmId: null };
+      });
+    });
+    const openDm = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().view.dmId ?? null);
+    const backToFriends = async () => {
+      await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.view = { kind: "home", accountId: null, dmId: null }; }); });
+      await expect(page.locator(".friend").filter({ hasText: "Bruna" })).toBeVisible();
+      expect(await openDm()).toBeNull();
+    };
+    const row = page.locator(".friend").filter({ hasText: "Bruna" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Mensagem para Bruna", exact: true }).click();
+    await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    // Anywhere on the row that is not one of its own buttons.
+    await row.locator(".friend-names > .muted").click();
+    await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    await row.getByRole("button", { name: "Mensagem para Bruna", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(openDm).toBe("cloud-dm");
+  } finally { await close(); }
+});
+
 async function fullyInside(page: Page, selector: string, top = 12) {
   let observed:unknown;
   await expect

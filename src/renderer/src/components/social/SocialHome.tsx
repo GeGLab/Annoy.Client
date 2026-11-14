@@ -1,5 +1,5 @@
 import { FriendsDashboard, PersonalHeading } from "../../features/redesign/LiveExperience.tsx";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { navigate } from "../../client.ts";
@@ -85,11 +85,22 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
       toast((error as Error).message);
     }
   };
+  const friend = rel.status === "friend";
+  const name = rel.nickname || user.displayName;
+  // The whole row opens the conversation; its own buttons and links keep their action.
+  const openFromRow = (event: MouseEvent<HTMLDivElement>) => {
+    if (!friend || (event.target as HTMLElement).closest("button, a, input, [role='button']")) return;
+    void message();
+  };
   return (
-    <div className="friend">
-      <Avatar user={user} size={36} presence={rel.status === "friend" ? (presence?.status ?? "offline") : undefined} />
+    <div className={`friend${friend ? " friend-openable" : ""}`} onClick={openFromRow}>
+      <Avatar user={user} size={36} presence={friend ? (presence?.status ?? "offline") : undefined} />
       <div className="friend-names">
-        <strong>{rel.nickname || user.displayName}</strong>
+        {friend ? (
+          <button type="button" className="friend-name-link" aria-label={translate("social.messageTo", { p0: name })} title={translate("social.messageTo", { p0: name })} onClick={() => void message()}>
+            <strong>{name}</strong>
+          </button>
+        ) : <strong>{name}</strong>}
         <span className="muted">
           {rel.status === "incoming" ? translate("social.incoming") : rel.status === "outgoing" ? translate("social.outgoing") : presenceLabel(presence)}
           {rel.user.username && <> · @{rel.user.username}</>}

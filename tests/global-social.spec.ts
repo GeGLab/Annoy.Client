@@ -101,7 +101,7 @@ test("two Annoy accounts become friends, see each other online, talk by encrypte
     expect(await b.page.evaluate(async () => JSON.stringify((await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().social))).not.toContain("Bruninho");
 
     // Encrypted DM, both ways.
-    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: "Mensagem" }).click();
+    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: "Mensagem", exact: true }).click();
     // Alice's side shows her private nickname for Bruno.
     const aBox = a.page.getByRole("textbox", { name: "Mensagem para Bruninho" });
     await aBox.fill("oi Bruno, mensagem criptografada");
