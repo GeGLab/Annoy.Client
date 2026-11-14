@@ -2605,7 +2605,6 @@
   "image.copied": "Image copied.",
   "image.save": "Save image",
   "image.attach": "Send as a new image",
-  "image.attached": "Your edit was added to the message as a new image. The original stays as it was.",
   "image.exportFailed": "Could not prepare the image. Try opening the original.",
   "image.openOriginal": "Open original",
   "image.editedSuffix": "annotated",

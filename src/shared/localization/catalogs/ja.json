@@ -2605,7 +2605,6 @@
   "image.copied": "画像をコピーしました。",
   "image.save": "画像を保存",
   "image.attach": "新しい画像として送信",
-  "image.attached": "編集した画像を新しい画像としてメッセージに追加しました。元の画像は変わりません。",
   "image.exportFailed": "画像を準備できませんでした。元の画像を開いてみてください。",
   "image.openOriginal": "元のファイルを開く",
   "image.editedSuffix": "annotated",

@@ -255,7 +255,6 @@ export default function ImageViewer({ images, initialIndex, onClose }: { images:
     if (!attachTarget) return;
     const { blob, name } = await result(false);
     attachTarget([new File([blob], name, { type: blob.type || "image/png" })]);
-    toast(translate("image.attached"));
     onClose();
   });
 

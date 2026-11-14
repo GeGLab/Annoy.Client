@@ -2605,7 +2605,6 @@
   "image.copied": "图片已复制。",
   "image.save": "保存图片",
   "image.attach": "作为新图片发送",
-  "image.attached": "编辑后的图片已作为新图片加入消息，原图保持不变。",
   "image.exportFailed": "无法准备图片。请尝试打开原图。",
   "image.openOriginal": "打开原文件",
   "image.editedSuffix": "annotated",
