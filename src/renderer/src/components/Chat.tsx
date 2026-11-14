@@ -761,9 +761,19 @@ export function Chat(props: ChatProps) {
     state.top = el.scrollTop;
     const fromEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
     state.pinned = fromEnd < 80 && !entryRef.current?.hasMoreAfter;
-    const top = el.getBoundingClientRect().top;
-    const first = [...el.querySelectorAll<HTMLElement>(".virtual-message[data-row-id]")].find((row) => row.getBoundingClientRect().bottom > top + 1);
-    if (first?.dataset.rowId) {
+    const { top, bottom } = el.getBoundingClientRect();
+    // Only a row actually on screen can be the anchor. After a long jump (scrollbar drag,
+    // Home/End) the virtual window still holds the rows of the old position until the next
+    // commit; anchoring to one of those would pull the reader back to where they left.
+    const first = [...el.querySelectorAll<HTMLElement>(".virtual-message[data-row-id]")].find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.bottom > top + 1 && rect.top < bottom;
+    });
+    if (!first) {
+      state.anchor = null;
+      return;
+    }
+    if (first.dataset.rowId) {
       state.anchor = { id: first.dataset.rowId, offset: first.getBoundingClientRect().top - top };
       if (state.pinned) clearChatAnchor(accountId, channelId);
       else writeChatAnchor(accountId, channelId, { messageId: state.anchor.id, offset: state.anchor.offset! });

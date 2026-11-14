@@ -25,6 +25,11 @@
 .live-redesign .titlebar-context { position: absolute; left: 50%; width: auto; max-width: 40%; padding: 0; text-align: center; transform: translateX(-50%); font-size: 11px; color: var(--text-muted); }
 .live-redesign .titlebar-search { position: static; width: 290px; max-width: 33vw; height: 28px; margin-left: auto; border-radius: 6px; background: var(--bg-channels); font-size: 10px; }
 .live-redesign .window-controls, .live-redesign .titlebar .window-controls { margin-left: auto; }
+/* Search in the title bar is a magnifier, not a box: the channel name keeps the centre. */
+.live-redesign .titlebar .titlebar-search-compact { width: 32px; height: 28px; padding: 0; margin: 0 4px 0 auto; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); }
+.live-redesign .titlebar .titlebar-search-compact:hover { background: var(--bg-hover); color: var(--text); }
+.live-redesign .titlebar .titlebar-search-compact > span, .live-redesign .titlebar .titlebar-search-compact > kbd { display: none; }
+.live-redesign .titlebar .titlebar-search-compact + .window-controls { margin-left: 0; }
 .live-redesign.bar-side .clean-rail { width: 76px; padding: 17px 10px 14px; gap: 13px; border-right: 0; background: var(--bg-rail); }
 .live-redesign.bar-side .clean-rail .rail-brand { width: 47px; height: 47px; min-height: 47px; margin: 0 auto; }
 .live-redesign.bar-side .clean-rail .rail-brand img { width: 36px; height: 36px; border-radius: 12px; }
