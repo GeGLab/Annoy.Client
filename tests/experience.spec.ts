@@ -2069,6 +2069,16 @@ test("a server cover replaces the default art at the top of the channel list and
     await expect(cover.locator(".scenery")).toHaveCount(0);
     await expect(cover.locator(".live-community-identity")).toContainText("Comunidade de teste");
     await page.locator(".resizable-panel.channels").screenshot({ path: join(capture, "server-cover-channel-list-dark.png") });
+    // The server's card in the Servers tab shows the same cover.
+    await page.route("https://experience.test/api/servers?**", (route) => route.fulfill({ json: { servers: [{ id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null, bannerUrl: "https://experience.test/image.png" }], total: 1, nextCursor: null } }));
+    await page.locator(".directory-tab:not(.store-tab)").click();
+    const card = page.locator(".server-directory-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.locator(".live-directory-card-photo")).toHaveAttribute("src", "https://experience.test/image.png");
+    await expect(card.locator(".scenery")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "server-cover-directory-dark.png") });
+    await card.click();
+    await expect(cover).toHaveClass(/has-banner/);
     // Back to the default art.
     writes.length = 0;
     await openSettings();

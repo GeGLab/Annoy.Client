@@ -17,6 +17,8 @@ import { Select } from "./ui/select.tsx";
 
 const checkedLabel = (at: number | null) => at === null ? translate("common.88bad3263261")
   : new Intl.DateTimeFormat(localizationPreferences().region, { dateStyle: "short", timeStyle: "short",hourCycle:localizationPreferences().hourCycle }).format(at);
+/** A server changes on screen when its name, image or cover changes, so any of them refreshes the list. */
+const serverKey = (server: ServerSummary) => `${server.id}/${server.name}/${server.iconUrl ?? ""}/${server.bannerUrl ?? ""}`;
 type DirectoryPage = { servers: ServerSummary[]; cursor: string | null; total: number; loading: boolean; error: string | null; cached: boolean; key: string; term: string };
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -33,7 +35,7 @@ export function ServerDirectory() {
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
   const connectionSignature = accounts.map((account) => `${account.id}:${instances[account.id]?.status ?? "none"}`).join("|");
-  const summarySignature = accounts.map((account) => `${account.id}:${(instances[account.id]?.servers ?? []).map((server) => `${server.id}/${server.name}`).join(",")}`).join("|");
+  const summarySignature = accounts.map((account) => `${account.id}:${(instances[account.id]?.servers ?? []).map(serverKey).join(",")}`).join("|");
   useEffect(() => {
     const next = query.trim().toLocaleLowerCase(localizationPreferences().region);
     const timer = setTimeout(() => setNormalized(next), next ? SEARCH_DEBOUNCE_MS : 0);
@@ -50,7 +52,7 @@ export function ServerDirectory() {
     const wanted = new Map(candidates.map((account) => {
       const instance = instances[account.id];
       const term = normalized && !account.instanceName.toLocaleLowerCase(region).includes(normalized) ? normalized : "";
-      const serverSignature = (instance?.servers ?? []).map((server) => `${server.id}/${server.name}`).join(",");
+      const serverSignature = (instance?.servers ?? []).map(serverKey).join(",");
       return [account.id, { account, term, key: `${term}\u0000${instance?.status ?? "none"}\u0000${serverSignature}` }];
     }));
     for (const [accountId, request] of inflight.current) {
@@ -178,7 +180,7 @@ export function ServerDirectory() {
           </p>
           {awaiting ? <div className="server-directory-skeleton" role="status" aria-label={translate("common.e12549431de7")}><span /><span /><span /></div> :
             servers.length ? <><div className="server-directory-cards">{servers.map((server) => <button className="server-directory-card" key={server.id} onClick={() => void openServer(account.id, server.id)}>
-              <span className="live-directory-card-art"><Scenery/></span>
+              <span className={`live-directory-card-art${server.bannerUrl ? " has-banner" : ""}`}>{server.bannerUrl ? <img className="live-directory-card-photo" src={server.bannerUrl} alt="" draggable={false} /> : <Scenery/>}</span>
               <span className="server-directory-avatar">{server.iconUrl ? <img src={server.iconUrl} alt="" /> : initials(server.name)}</span>
               <span className="server-directory-card-copy"><strong>{server.name}</strong><small>{translate("servers.on", { p0: account.instanceName })}</small><small>{ready ? translate("common.b093850c7839") : translate("common.d8fb58e618d8")}{server.ownerId === instance?.user?.id && <> · {translate("servers.owner")}</>}</small></span><Icon name="right" size={17} />
             </button>)}</div>

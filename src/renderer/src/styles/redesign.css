@@ -252,6 +252,7 @@
 .live-redesign .server-directory-card { position: relative; display: flex; flex-wrap: wrap; align-items: center; padding: 142px 18px 19px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-channels); overflow: hidden; gap: 12px; min-height: 218px; }
 .live-directory-card-art { position: absolute; top: 0; left: 0; right: 0; height: 118px; overflow: hidden; background: #101c2d; }
 .live-directory-card-art > .scenery { width: 100%; height: 100%; }
+.live-directory-card-photo { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
 .live-redesign .server-directory-card:nth-child(3n+2) .live-directory-card-art > .scenery { transform: scale(1.3); transform-origin: 35% 70%; }
 .live-redesign .server-directory-card:nth-child(3n) .live-directory-card-art > .scenery { transform: scale(1.15); transform-origin: 70% 50%; }
 .live-redesign .server-directory-avatar { position: absolute; top: 95px; left: 16px; width: 44px; height: 44px; border: 4px solid var(--bg-channels); border-radius: 15px; background: var(--accent); color: var(--on-accent); font-size: 12px; }
