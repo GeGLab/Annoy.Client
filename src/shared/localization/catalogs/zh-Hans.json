@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "调整服务器图片的取景",
   "settings.crop.iconHint": "拖动图片并调整缩放。高亮区域会显示在服务器列表和频道上方。",
   "settings.crop.bannerTitle": "调整服务器封面的取景",
-  "settings.crop.bannerHint": "拖动图片并调整缩放。封面使用整个高亮区域；虚线内的部分在任何频道列表宽度下都会显示。"
+  "settings.crop.bannerHint": "拖动图片并调整缩放。封面使用整个高亮区域；虚线内的部分在任何频道列表宽度下都会显示。",
+  "social.friendOptions": "{p0} 的选项"
 }

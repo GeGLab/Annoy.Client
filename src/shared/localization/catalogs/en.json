@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "Frame the server image",
   "settings.crop.iconHint": "Drag the image and adjust the zoom. The highlighted area is what shows in the server list and above the channels.",
   "settings.crop.bannerTitle": "Frame the server cover",
-  "settings.crop.bannerHint": "Drag the image and adjust the zoom. The cover uses the whole highlighted area; what is inside the dashed line shows at any channel list width."
+  "settings.crop.bannerHint": "Drag the image and adjust the zoom. The cover uses the whole highlighted area; what is inside the dashed line shows at any channel list width.",
+  "social.friendOptions": "Options for {p0}"
 }

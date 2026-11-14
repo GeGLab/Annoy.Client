@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "Encuadra la imagen del servidor",
   "settings.crop.iconHint": "Arrastra la imagen y ajusta el zoom. El área resaltada es lo que aparece en la lista de servidores y sobre los canales.",
   "settings.crop.bannerTitle": "Encuadra la portada del servidor",
-  "settings.crop.bannerHint": "Arrastra la imagen y ajusta el zoom. La portada usa toda el área resaltada; lo que queda dentro de la línea discontinua se ve con cualquier ancho de la lista de canales."
+  "settings.crop.bannerHint": "Arrastra la imagen y ajusta el zoom. La portada usa toda el área resaltada; lo que queda dentro de la línea discontinua se ve con cualquier ancho de la lista de canales.",
+  "social.friendOptions": "Opciones de {p0}"
 }

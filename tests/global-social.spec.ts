@@ -90,7 +90,9 @@ test("two Annoy accounts become friends, see each other online, talk by encrypte
     await expect(a.page.locator(".friend").filter({ hasText: bruno.name })).toContainText("Online", { timeout: 15_000 });
 
     // Friend nickname: private, only Alice (who gave it) sees it.
-    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: `Editar apelido de ${bruno.name}` }).click();
+    // The nickname is in the friend's menu (⋯), with the other per-friend options.
+    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: `Opções de ${bruno.name}`, exact: true }).click();
+    await a.page.getByRole("menuitem", { name: `Editar apelido de ${bruno.name}` }).click();
     await expect(a.page.getByText("Apelido para seu amigo. Só você vê.")).toBeVisible();
     await a.page.getByRole("textbox").last().fill("Bruninho");
     await a.page.getByRole("button", { name: "Confirmar" }).click();

@@ -26,7 +26,8 @@ import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
 import { PendingFile } from "../PendingFile.tsx";
 import { TypingIndicator } from "../TypingIndicator.tsx";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { EntryContextMenu, type MenuEntry } from "../ui/entry-menu.tsx";
 import { DmIntegrationsDialog, DmIntegrationRequests } from "../../features/integrations/DmIntegrations.tsx";
 import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
 import { answerDmIntegration, controlText } from "../../features/integrations/dm.ts";
@@ -89,10 +90,31 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
   const name = rel.nickname || user.displayName;
   // The whole row opens the conversation; its own buttons and links keep their action.
   const openFromRow = (event: MouseEvent<HTMLDivElement>) => {
-    if (!friend || (event.target as HTMLElement).closest("button, a, input, [role='button']")) return;
+    if (!friend || (event.target as HTMLElement).closest("button, a, input, [role='button'], [role='menu']")) return;
     void message();
   };
-  return (
+  const editNickname = async () => {
+    const nickname = await promptText(translate("common.91e4e0317865"), rel.nickname ?? "");
+    if (nickname !== null) await run(() => setFriendNickname(rel.user.id, nickname.trim().slice(0, 64) || null));
+  };
+  const unfriend = async () => {
+    if (!(await confirmAction(translate("social.removeFriendConfirm", { p0: user.displayName })))) return;
+    void run(() => removeFriend(rel.user.id));
+  };
+  // Everything about a friend, in one place: the ⋯ button and a right click open the same menu.
+  // Unfriending sits last and apart, so it is never one stray click away.
+  const entries: MenuEntry[] = friend ? [
+    { kind: "item", id: "message", text: translate("social.message"), icon: "message", run: () => void message() },
+    { kind: "item", id: "voice", text: translate("social.voiceCall", { p0: user.displayName }), icon: "phone", disabled: !ready || !online, run: () => void startDirectCall(CLOUD_ACCOUNT, rel.user.id, false) },
+    { kind: "item", id: "video", text: translate("social.videoCall", { p0: user.displayName }), icon: "camera", disabled: !ready || !online, run: () => void startDirectCall(CLOUD_ACCOUNT, rel.user.id, true) },
+    ...(game && online ? [{ kind: "item" as const, id: "invite", text: translate("invite.actionTo", { p0: user.displayName, p1: game.name }), icon: "play" as const, disabled: !ready, run: () => void sendGameInvite({ userId: rel.user.id }) }] : []),
+    { kind: "separator" },
+    // Private friend nickname: only you see it (not the server nickname).
+    { kind: "item", id: "nickname", text: translate("social.editNickname", { p0: user.displayName }), icon: "edit", disabled: !ready, run: () => void editNickname() },
+    { kind: "separator" },
+    { kind: "item", id: "unfriend", text: translate("social.removeFriend"), icon: "trash", destructive: true, disabled: !ready, run: () => void unfriend() },
+  ] : [];
+  const row = (
     <div className={`friend${friend ? " friend-openable" : ""}`} onClick={openFromRow}>
       <Avatar user={user} size={36} presence={friend ? (presence?.status ?? "offline") : undefined} />
       <div className="friend-names">
@@ -105,11 +127,11 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
           {rel.status === "incoming" ? translate("social.incoming") : rel.status === "outgoing" ? translate("social.outgoing") : presenceLabel(presence)}
           {rel.user.username && <> · @{rel.user.username}</>}
         </span>
-        {rel.status === "friend" && <WhereLine presence={presence} />}
-        {rel.status === "friend" && presence && <ActivityStack activities={presence.activities} compact />}
+        {friend && <WhereLine presence={presence} />}
+        {friend && presence && <ActivityStack activities={presence.activities} compact />}
       </div>
       <span className="spacer" />
-      {rel.status === "friend" && (
+      {friend && (
         <>
           {game && online && <button className="icon-btn" disabled={!ready} aria-label={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} title={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} onClick={() => void sendGameInvite({ userId: rel.user.id })}>
             <Icon name="play" />
@@ -123,14 +145,18 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
           <button className="icon-btn" title={translate("social.message")} aria-label={translate("social.message")} onClick={() => void message()}>
             <Icon name="message" />
           </button>
-          {/* Private friend nickname: only you see it (not the server nickname). */}
-          <button className="icon-btn" disabled={!ready} title={translate("social.editNickname", { p0: user.displayName })} aria-label={translate("social.editNickname", { p0: user.displayName })}
-            onClick={async () => {
-              const nickname = await promptText(translate("common.91e4e0317865"), rel.nickname ?? "");
-              if (nickname !== null) await run(() => setFriendNickname(rel.user.id, nickname.trim().slice(0, 64) || null));
-            }}>
-            <Icon name="edit" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="icon-btn friend-more" aria-label={translate("social.friendOptions", { p0: name })} title={translate("social.friendOptions", { p0: name })}>
+                <Icon name="more" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label={translate("social.friendOptions", { p0: name })}>
+              {entries.map((entry, index) => entry.kind === "separator" ? <DropdownMenuSeparator key={`separator-${index}`} />
+                : entry.kind === "item" ? <DropdownMenuItem key={entry.id} destructive={entry.destructive} disabled={entry.disabled} onSelect={entry.run}>{entry.icon && <Icon name={entry.icon} />}{entry.text}</DropdownMenuItem>
+                : null)}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
       {rel.status === "incoming" && (
@@ -138,20 +164,14 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
           <Icon name="check" />
         </button>
       )}
-      <button
-        className="icon-btn danger"
-        disabled={!ready}
-        title={rel.status === "friend" ? translate("social.removeFriend") : translate("social.cancelRequest")}
-        aria-label={rel.status === "friend" ? translate("social.removeFriend") : translate("social.cancelRequest")}
-        onClick={async () => {
-          if (rel.status === "friend" && !(await confirmAction(translate("social.removeFriendConfirm", { p0: user.displayName })))) return;
-          void run(() => removeFriend(rel.user.id));
-        }}
-      >
-        <Icon name="x" />
-      </button>
+      {!friend && (
+        <button className="icon-btn danger" disabled={!ready} title={translate("social.cancelRequest")} aria-label={translate("social.cancelRequest")} onClick={() => void run(() => removeFriend(rel.user.id))}>
+          <Icon name="x" />
+        </button>
+      )}
     </div>
   );
+  return friend ? <EntryContextMenu label={translate("social.friendOptions", { p0: name })} entries={entries}>{row}</EntryContextMenu> : row;
 }
 
 type Tab = "online" | "all" | "pending" | "add";

@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "Enquadre a imagem do servidor",
   "settings.crop.iconHint": "Arraste a imagem e ajuste o zoom. A área destacada é o que aparece na lista de servidores e no topo dos canais.",
   "settings.crop.bannerTitle": "Enquadre a capa do servidor",
-  "settings.crop.bannerHint": "Arraste a imagem e ajuste o zoom. A capa usa toda a área destacada; o que fica dentro do tracejado aparece em qualquer largura da lista de canais."
+  "settings.crop.bannerHint": "Arraste a imagem e ajuste o zoom. A capa usa toda a área destacada; o que fica dentro do tracejado aparece em qualquer largura da lista de canais.",
+  "social.friendOptions": "Opções de {p0}"
 }

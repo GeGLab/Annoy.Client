@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "サーバー画像の範囲を調整",
   "settings.crop.iconHint": "画像をドラッグしてズームを調整します。強調された範囲がサーバー一覧とチャンネルの上部に表示されます。",
   "settings.crop.bannerTitle": "サーバーのカバーの範囲を調整",
-  "settings.crop.bannerHint": "画像をドラッグしてズームを調整します。カバーには強調された範囲全体が使われ、点線の内側はチャンネル一覧の幅に関係なく表示されます。"
+  "settings.crop.bannerHint": "画像をドラッグしてズームを調整します。カバーには強調された範囲全体が使われ、点線の内側はチャンネル一覧の幅に関係なく表示されます。",
+  "social.friendOptions": "{p0} のオプション"
 }

@@ -192,7 +192,7 @@ test("clicking a friend's name or row opens the conversation, not only the messa
       setState((s: any) => {
         const me = { id: "annoy-person", username: "gordziilla", displayName: "Gordziilla", avatar: null, bio: null, banner: null, accentColor: null, dmKey: null, dmKeyVersion: null };
         const other = { ...me, id: "friend", username: "bruna", displayName: "Bruna" };
-        s.social.status = "offline";
+        s.social.status = "ready";
         s.social.me = me;
         s.social.profiles = { [me.id]: me, friend: other };
         s.social.relationships = [{ user: other, status: "friend", nickname: null }];
@@ -220,6 +220,26 @@ test("clicking a friend's name or row opens the conversation, not only the messa
     await row.getByRole("button", { name: "Mensagem para Bruna", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    // Unfriending is no longer a button on the row: it lives last in the friend's menu.
+    await expect(row.getByRole("button", { name: "Desfazer amizade" })).toHaveCount(0);
+    await expect(row.getByRole("button", { name: /Editar apelido/ })).toHaveCount(0);
+    const menu = page.getByRole("menu", { name: "Opções de Bruna" });
+    await row.locator(".friend-names > .muted").click({ button: "right" });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem").last()).toHaveText("Desfazer amizade");
+    await page.keyboard.press("Escape");
+    expect(await openDm()).toBeNull();
+    await row.getByRole("button", { name: "Opções de Bruna", exact: true }).click();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Mensagem", "Ligar para Bruna", "Chamada de vídeo com Bruna", "Editar apelido de Bruna", "Desfazer amizade"]);
+    await page.screenshot({ path: join(capture, "friend-menu-dark.png") });
+    await menu.getByRole("menuitem", { name: "Desfazer amizade" }).click();
+    const confirm = page.getByRole("alertdialog");
+    await expect(confirm).toContainText("Desfazer a amizade com Bruna?");
+    await confirm.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(row).toBeVisible();
+    // Picking from the menu never also opens the conversation behind it.
+    expect(await openDm()).toBeNull();
   } finally { await close(); }
 });
 

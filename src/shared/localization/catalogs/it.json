@@ -2600,5 +2600,6 @@
   "settings.crop.iconTitle": "Inquadra l'immagine del server",
   "settings.crop.iconHint": "Trascina l'immagine e regola lo zoom. L'area evidenziata è ciò che appare nell'elenco dei server e sopra i canali.",
   "settings.crop.bannerTitle": "Inquadra la copertina del server",
-  "settings.crop.bannerHint": "Trascina l'immagine e regola lo zoom. La copertina usa tutta l'area evidenziata; ciò che sta dentro la linea tratteggiata si vede con qualsiasi larghezza dell'elenco dei canali."
+  "settings.crop.bannerHint": "Trascina l'immagine e regola lo zoom. La copertina usa tutta l'area evidenziata; ciò che sta dentro la linea tratteggiata si vede con qualsiasi larghezza dell'elenco dei canali.",
+  "social.friendOptions": "Opzioni per {p0}"
 }
