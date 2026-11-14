@@ -136,8 +136,11 @@
 .live-redesign .composer > .icon-btn:first-child { color: var(--text-muted); }
 .live-redesign .composer-send { border-radius: 7px; background: var(--accent); color: var(--on-accent); width: 31px; height: 31px; min-height: 31px; margin-left: 4px; }
 .live-redesign .composer-send:hover { background: var(--accent-hover); }
-.live-redesign .reaction { min-height: 24px; border-radius: 6px; padding: 2px 7px; gap: 5px; font-size: 10px; background: var(--bg-elev); }
-.live-redesign .reaction > span:first-child { font-size: 13px; }
+/* Reaction chips: one 32px height for emoji, stickers and the add button; the emoji
+   fills the same 24px box as a sticker picture (see social-experience.css). */
+.live-redesign .reaction { min-height: 32px; border-radius: 6px; padding: 0 9px; gap: 6px; font-size: 10px; background: var(--bg-elev); }
+.live-redesign .reaction.sticker { padding: 0 9px 0 4px; }
+.live-redesign .reaction > span:first-child { font-size: 22px; }
 .live-redesign .message-tools { border-radius: 8px; padding: 3px; background: var(--bg-channels); box-shadow: 0 4px 15px #0003; }
 .live-redesign .attachment-image { border-radius: 9px; }
 .live-redesign .dm-conversation .chat-header { padding-inline: 23px; }

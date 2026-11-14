@@ -2850,6 +2850,15 @@ test("reacting never moves the message: every chip has the sticker's height and 
     const box=(selector:string)=>chips.locator(selector).first().evaluate((e)=>{const r=e.getBoundingClientRect();return [Math.round(r.width),Math.round(r.height)];});
     await expect.poll(()=>box(".reaction:not(.sticker) > span:first-child")).toEqual([24,24]);
     await expect.poll(()=>box(".reaction.sticker .reaction-sticker")).toEqual([24,24]);
+    // The size the app really applies, and the glyph it draws at that size.
+    const emoji=await chips.locator(".reaction:not(.sticker) > span:first-child").first().evaluate((span)=>{
+      const style=getComputedStyle(span), c=document.createElement("canvas");c.width=c.height=80;
+      const g=c.getContext("2d")!;g.font=`${style.fontSize} ${style.fontFamily}`;g.textBaseline="middle";g.textAlign="center";g.fillText(span.textContent||"",40,40);
+      const d=g.getImageData(0,0,80,80).data;let top=80,bottom=0;for(let y=0;y<80;y++)for(let x=0;x<80;x++)if(d[(y*80+x)*4+3]>40){top=Math.min(top,y);bottom=Math.max(bottom,y);}
+      return { fontSize: style.fontSize, glyph: bottom-top+1 };
+    });
+    expect(emoji.fontSize).toBe("22px");
+    expect(emoji.glyph).toBeGreaterThanOrEqual(20);
     const heights=()=>chips.locator(":scope > *").evaluateAll(els=>els.map(e=>Math.round(e.getBoundingClientRect().height)));
     await expect.poll(heights).toEqual([32,32,32]);
     // Every frame while a reaction goes out and comes back: where the message is and how tall.
