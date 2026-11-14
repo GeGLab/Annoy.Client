@@ -4,7 +4,7 @@
 
 **One desktop app for all your communities: self-hosted Annoy servers plus Discord, WhatsApp, TeamSpeak and more, each in its own tab.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-7b61ff.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
@@ -195,7 +195,7 @@ npm run build
 
 ## License
 
-[MIT](LICENSE) © Gustavo Cruz
+[GNU AGPL-3.0](LICENSE) © Gustavo Cruz
 
 ## Desktop interface development
 
