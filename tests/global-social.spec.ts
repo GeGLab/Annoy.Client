@@ -1,7 +1,8 @@
 // TODO item 1, end to end: two real Annoy apps, two Annoy accounts, no server
 // at all. Friends, status, encrypted DMs and a direct call go through the
 // Annoy cloud. Needs the local cloud stack (annoy-api-global: npm run
-// cloud:dev, the services and a dev Global); set ANNOY_TEST_CLOUD=1 to run.
+// cloud:dev, the services and a dev Global); set ANNOY_TEST_CLOUD=1 to run
+// (authannoy with REGISTRATION=open: sign-up is closed by default).
 import { electron } from "./fixtures/electron-launch.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { createRequire } from "node:module";
@@ -37,7 +38,7 @@ async function account(name: string) {
   const keys = kdf.newAccountKeys(), salt = kdf.newSalt();
   const pk = await kdf.derivePasswordKeys(password, salt, iterations);
   const terms = (await json("/v1/terms")).body.version;
-  await json("/v1/auth/register", { acceptTerms: terms, email, name, salt, authKey: pk.authKey, wrappedKeys: await kdf.wrapKeys(pk.wrapKey, keys), recovery: { mode: "recoveryKey", wrapped: await kdf.wrapWithRecovery(kdf.newRecoveryKey(), keys) } });
+  await json("/v1/auth/register", { acceptTerms: terms, ageConfirmed: true, email, name, salt, authKey: pk.authKey, wrappedKeys: await kdf.wrapKeys(pk.wrapKey, keys), recovery: { mode: "recoveryKey", wrapped: await kdf.wrapWithRecovery(kdf.newRecoveryKey(), keys) } });
   return { email, password, name };
 }
 
