@@ -2227,6 +2227,38 @@ test("server settings pages that fetch their data (bans, stickers, integrations)
   } finally { await close(); }
 });
 
+test("user settings manage the account's store integrations without leaving the server", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const settings = page.getByRole("dialog").filter({ has: page.locator(".settings-sidebar") });
+    const openSettings = () => page.evaluate(async () => {
+      const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`);
+      openModal({ kind: "userSettings" });
+    });
+    await openSettings();
+    await settings.getByRole("button", { name: "Integrações", exact: true }).click();
+    const content = settings.locator(".account-integrations");
+    await expect(content.getByRole("heading", { name: "Integrações" })).toBeVisible();
+    await expect(content).toContainText("sem sair de onde você está");
+    // This fixture has no Annoy cloud session: the catalog fails, says so and offers to retry in place.
+    await expect(content).toContainText("Não foi possível carregar a Loja.");
+    await content.getByRole("button", { name: "Tentar de novo" }).click();
+    await expect(content.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+    await settings.getByRole("searchbox", { name: "Buscar configurações" }).fill("chave api");
+    await expect(settings.locator(".settings-sidebar nav button")).toHaveText(["Integrações"]);
+    // Still in the server: managing integrations never navigated to the Store.
+    expect(await page.evaluate(async () => { const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); return getState().view.kind; })).toBe("server");
+    await page.keyboard.press("Escape");
+    await expect(settings).toHaveCount(0);
+    // Integrations belong to the Annoy account: without one the page is not offered.
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.global = null; }); });
+    await openSettings();
+    await expect(settings.locator(".settings-sidebar nav")).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Integrações", exact: true })).toHaveCount(0);
+  } finally { await close(); }
+});
+
 test("emoji reactions toggle, the Annoy set shows for everyone and the library imports and restores packs", async()=>{
   const {app,page,close}=await launch();
   try{

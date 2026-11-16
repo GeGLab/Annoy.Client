@@ -45,6 +45,7 @@ import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 import { SavedNotice, useSavedNotice } from "./SavedNotice.tsx";
 import { ownCloudUser } from "../../social/profile.ts";
+import { AccountIntegrations } from "../../features/integrations/AccountIntegrations.tsx";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
   {id:"desktop",label:translate("desktop.title"),icon:"monitor",search:translate("desktop.title")},
@@ -54,6 +55,7 @@ let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string 
   { id: "voice", label: translate("settings.7bb3eccdf5f8"), icon: "mic", search: translate("settings.7e1b71648e19") },
   { id: "appearance", label: translate("settings.04f9f0a78dbe"), icon: "palette", search: translate("settings.ae256cfcdedc") },
   { id: "tabs", label: translate("settings.0ac1d8649dc7"), icon: "sliders", search: translate("settings.1ae5d2bcf2c5") },
+  { id: "integrations", label: translate("integrations.tab"), icon: "cable", search: translate("integrations.settings.search") },
   { id: "activity", label: translate("common.a5121730503f"), icon: "radio", search: translate("settings.a19ddf531397") },
   { id: "notifications", label: translate("settings.6b8e9ecbc2ba"), icon: "message", search: translate("settings.95f1668c7abc") },
   { id: "security", label: translate("common.797c0d01ff48"), icon: "lock", search: translate("common.fd32174ee399") },
@@ -226,7 +228,8 @@ export function UserSettingsModal() {
   const [desktopDraft,setDesktopDraft]=useState<DesktopPreferences|null>(null);
   const [desktopLoadError,setDesktopLoadError]=useState(false);
   const desktopDirty=!!desktopDraft&&!!desktopStatus&&JSON.stringify(desktopDraft)!==JSON.stringify(desktopStatus.saved);
-  const filteredPages = SETTINGS_PAGES.filter((item) => normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
+  // Integrations belong to the Annoy account: without one there is nothing to connect.
+  const filteredPages = SETTINGS_PAGES.filter((item) => (item.id !== "integrations" || !!annoy) && normalizeSearch(`${item.label} ${item.search}`).includes(normalizeSearch(search.trim())));
   const desktopActivity = useStore((s) => s.desktopActivity);
   const [draft, setDraft] = useState<Settings>(() => ({ ...getState().settings }));
   const [profiles, setProfiles] = useState<Record<string, ProfileDraft>>({});
@@ -453,6 +456,7 @@ export function UserSettingsModal() {
             {page === "localization"&&<LocalizationSettings draft={draft} onChange={update} disabled={saving}/>}
             {page === "desktop"&&<DesktopSettings status={desktopStatus} draft={desktopDraft} onChange={patch=>setDesktopDraft(current=>current?{...current,...patch}:current)} disabled={saving} loadError={desktopLoadError} refresh={refreshDesktop}/>}
             {page === "expressions" && <MediaLibrarySettings />}
+            {page === "integrations" && annoy && <AccountIntegrations />}
             {page === "profile" && (
               <section className="settings-section">
                 <h3>{rich("common.ce989b279c2d",{p0:(<Icon name="users" size={24} />)})}</h3>
@@ -706,6 +710,7 @@ onLocalizationChange(()=>{SETTINGS_PAGES=[
   { id: "voice", label: translate("settings.7bb3eccdf5f8"), icon: "mic", search: translate("settings.7e1b71648e19") },
   { id: "appearance", label: translate("settings.04f9f0a78dbe"), icon: "palette", search: translate("settings.ae256cfcdedc") },
   { id: "tabs", label: translate("settings.0ac1d8649dc7"), icon: "sliders", search: translate("settings.1ae5d2bcf2c5") },
+  { id: "integrations", label: translate("integrations.tab"), icon: "cable", search: translate("integrations.settings.search") },
   { id: "activity", label: translate("common.a5121730503f"), icon: "radio", search: translate("settings.a19ddf531397") },
   { id: "notifications", label: translate("settings.6b8e9ecbc2ba"), icon: "message", search: translate("settings.95f1668c7abc") },
   { id: "security", label: translate("common.797c0d01ff48"), icon: "lock", search: translate("common.fd32174ee399") },
