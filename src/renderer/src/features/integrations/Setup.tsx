@@ -1,5 +1,5 @@
-import { cleanSettings, missingSettings, openaiModels, type IntegrationSettings, type ServerIntegration, type StoreIntegration } from "@annoy/protocol";
-import { useId, useState, type FormEvent } from "react";
+import { cleanSettings, missingSettings, openaiModels, type IntegrationSettings, type ServerIntegration, type SteamConnectionStatus, type StoreIntegration } from "@annoy/protocol";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 import { apiFor } from "../../client.ts";
@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../../com
 import { Input } from "../../components/ui/input.tsx";
 import { Select } from "../../components/ui/select.tsx";
 import { runtime } from "../../social/runtime.ts";
+import { cloudSteam } from "../../social/details.ts";
+import { linkSteam } from "../activity/SteamConnection.tsx";
 import { removeDmIntegration } from "./dm.ts";
 import { connectIntegration, disconnectIntegration, iconOf, integrations, setProfilePanel, useIntegrations } from "./state.ts";
 import { integrationHttp } from "./transport.ts";
@@ -34,6 +36,7 @@ export function IntegrationIcon({ integration, size = 46 }: { integration: Pick<
 export function IntegrationDialog({ integration, target, onClose }: { integration: StoreIntegration; target: SetupTarget; onClose: () => void }) {
   const connected = useIntegrations((s) => s.account.connected[integration.id]);
   const shownOnProfile = useIntegrations((s) => s.panels.includes(integration.id));
+  const savedManualSteam = useIntegrations((s) => s.manualSteam);
   const signedIn = useIntegrations((s) => s.accountStatus === "ready");
   const server = target.kind === "server" ? target : null;
   const current = server ? server.installed : connected;
@@ -41,6 +44,7 @@ export function IntegrationDialog({ integration, target, onClose }: { integratio
   const [key, setKey] = useState(server ? "" : (connected?.key ?? ""));
   const [settings, setSettings] = useState<Record<string, string>>(() => Object.fromEntries(integration.settings.map((s) => [s.key, savedSettings[s.key] === undefined ? "" : String(savedSettings[s.key])])));
   const [panel, setPanel] = useState(shownOnProfile);
+  const [manualSteam, setManualSteam] = useState(savedManualSteam ?? "");
   const [models, setModels] = useState<string[]>([]);
   const [busy, setBusy] = useState<"save" | "remove" | "models" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +54,13 @@ export function IntegrationDialog({ integration, target, onClose }: { integratio
   const openai = integration.runtime.type === "builtin" && integration.runtime.name === "openai";
   const vpngo = integration.runtime.type === "builtin" && integration.runtime.name === "vpngo";
   const callable = integration.commands.length > 0 || integration.mention;
+  const steamPanel = !server && canEdit && integration.profile?.connection === "steam";
 
-  const fail = (err: unknown) => { if (!isCancellation(err)) setError((err as Error).message); };
+  const fail = (err: unknown) => {
+    if (isCancellation(err)) return;
+    const code = (err as { code?: string }).code;
+    setError(code === "steam_profile_not_found" ? translate("integrations.steam.notFound") : code === "invalid_steam_profile" ? translate("integrations.steam.invalid") : (err as Error).message);
+  };
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || !canEdit) return;
@@ -64,7 +73,10 @@ export function IntegrationDialog({ integration, target, onClose }: { integratio
       if (server) server.onChange(await apiFor(server.accountId).put<ServerIntegration[]>(`/servers/${server.serverId}/integrations/${integration.id}`, { ...(key.trim() && { apiKey: key.trim() }), settings: clean }));
       else {
         await connectIntegration(integration, key, clean);
-        if (integration.profile && panel !== shownOnProfile) await setProfilePanel(integration.id, panel);
+        // The Steam profile typed by hand goes with the panel; an empty field forgets it.
+        const typed = manualSteam.trim() || null;
+        const typedChanged = steamPanel && panel && typed !== savedManualSteam;
+        if (integration.profile && (panel !== shownOnProfile || typedChanged)) await setProfilePanel(integration.id, panel, typedChanged ? typed : undefined);
       }
       onClose();
     } catch (err) { fail(err); }
@@ -170,6 +182,7 @@ export function IntegrationDialog({ integration, target, onClose }: { integratio
           {!server && canEdit && integration.profile && (
             <label className="perm"><Checkbox checked={panel} disabled={!!busy} onChange={(e) => setPanel(e.target.checked)} />{translate("integrations.showOnProfile")}</label>
           )}
+          {steamPanel && panel && <SteamPanelSource value={manualSteam} onChange={setManualSteam} disabled={!!busy} />}
           {!server && vpngo && connected && <VpngoRoutes />}
           {error && <p className="error" role="alert">{error}</p>}
           <div className="form-actions">
@@ -180,5 +193,45 @@ export function IntegrationDialog({ integration, target, onClose }: { integratio
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Where a Steam panel's profile comes from: the linked Steam account or, without one, a profile typed by hand. */
+function SteamPanelSource({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled: boolean }) {
+  const [status, setStatus] = useState<SteamConnectionStatus | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const linkRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const abort = new AbortController();
+    const load = () => void cloudSteam.status(abort.signal).then((next) => { setStatus(next); setError(null); }, (err: Error) => { if (!abort.signal.aborted) setError(err.message); });
+    load();
+    window.addEventListener("steam-connection-changed", load);
+    return () => { abort.abort(); linkRequest.current?.abort(); window.removeEventListener("steam-connection-changed", load); };
+  }, []);
+  const link = async () => {
+    const abort = new AbortController();
+    linkRequest.current = abort;
+    setLinking(true);
+    setError(null);
+    try { setStatus(await linkSteam(cloudSteam, abort.signal)); }
+    catch (err) { if (!abort.signal.aborted) setError((err as Error).message); }
+    finally { if (linkRequest.current === abort) { linkRequest.current = null; setLinking(false); } }
+  };
+  if (!status && !error) return <p className="muted small" role="status">{translate("integrations.steam.checking")}</p>;
+  const connection = status?.connection;
+  if (connection) return <p className="integration-steam-linked small"><Icon name="check" size={14} />{translate("integrations.steam.linked", { p0: connection.personaName || connection.steamId })}</p>;
+  return (
+    <div className="integration-steam-source">
+      <p className="muted small">{translate("integrations.steam.notLinked")}</p>
+      <div className="integration-steam-link">
+        <Button type="button" variant="secondary" size="sm" loading={linking} disabled={disabled || linking} onClick={() => void link()}>{translate("integrations.steam.link")}</Button>
+        {linking && <span className="muted small" role="status">{translate("integrations.steam.waiting")}</span>}
+      </div>
+      <Field label={translate("integrations.steam.manual")} hint={translate("integrations.steam.manualHint")}>
+        <Input value={value} disabled={disabled} maxLength={200} spellCheck={false} autoComplete="off" placeholder="https://steamcommunity.com/id/…" onChange={(e) => onChange(e.target.value)} />
+      </Field>
+      {error && <p className="error small" role="alert">{error}</p>}
+    </div>
   );
 }

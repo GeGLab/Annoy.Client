@@ -9,7 +9,7 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { Check, ExternalLink, Info, Link2, LoaderCircle, Unplug, UserRound } from "lucide-react";
 import { ActivityCard } from "./ActivityCard.tsx";
 
-interface SteamApi {
+export interface SteamApi {
   status(signal?: AbortSignal): Promise<SteamConnectionStatus>;
   begin(signal?: AbortSignal): Promise<SteamLinkBegin>;
   poll(handoff: string, signal?: AbortSignal): Promise<SteamLinkPoll>;
@@ -23,6 +23,29 @@ const serverSteam = (accountId: string): SteamApi => ({
 });
 
 const noGame = (s: AppState) => !s.settings.shareActivity || !!s.desktopActivity?.activities.some((a) => a.kind === "game");
+
+/** Opens Steam's sign-in in the browser and waits (up to 10 minutes) for it to finish. */
+export async function linkSteam(api: SteamApi, signal: AbortSignal): Promise<SteamConnectionStatus> {
+  const { url, handoff } = await api.begin(signal);
+  window.open(url, "_blank");
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => {
+      const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+      const timer = setTimeout(done, 1500);
+      signal.addEventListener("abort", done, { once: true });
+    });
+    signal.throwIfAborted();
+    const result = await api.poll(handoff, signal);
+    if (result.status === "error") throw new Error(result.message);
+    if (result.status === "done") {
+      const status = await api.status(signal);
+      window.dispatchEvent(new Event("steam-connection-changed"));
+      return status;
+    }
+  }
+  throw new Error(translate("activity.de798be734d3"));
+}
 
 /** Steam of the Annoy account: one link for the person, on every server. */
 export function AnnoySteamConnection() {
@@ -68,25 +91,7 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
     controller.current = abort;
     setBusy(true); setWaiting(true); setError(null);
     try {
-      const { url, handoff } = await api.begin(abort.signal);
-      window.open(url, "_blank");
-      const deadline = Date.now() + 10 * 60_000;
-      while (Date.now() < deadline) {
-        await new Promise<void>((resolve) => {
-          const done = () => { clearTimeout(timer); abort.signal.removeEventListener("abort", done); resolve(); };
-          const timer = setTimeout(done, 1500);
-          abort.signal.addEventListener("abort", done, { once: true });
-        });
-        abort.signal.throwIfAborted();
-        const result = await api.poll(handoff, abort.signal);
-        if (result.status === "error") throw new Error(result.message);
-        if (result.status === "done") {
-          setStatus(await api.status(abort.signal));
-          window.dispatchEvent(new Event("steam-connection-changed"));
-          return;
-        }
-      }
-      throw new Error(translate("activity.de798be734d3"));
+      setStatus(await linkSteam(api, abort.signal));
     } catch (error) {
       if (!abort.signal.aborted) setError((error as Error).message);
     } finally {

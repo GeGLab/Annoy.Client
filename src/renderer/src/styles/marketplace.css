@@ -105,3 +105,7 @@
 .server-listing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
 .server-listing-tags > span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
 .server-listing-tags .server-listing-ready { color: var(--ok); }
+.integration-steam-source { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.integration-steam-source > p { margin: 0; }
+.integration-steam-link { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.integration-steam-linked { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ok); }
