@@ -337,6 +337,15 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await dialog.getByRole("slider", { name: "Transparência" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--glass-fill"))).toBe("55%");
+  // A long YouTube title wraps inside the panel: nothing scrolls sideways and "add" stays in reach.
+  await page.route("https://www.youtube.com/oembed**", (route) => route.fulfill({ json: { title: 'Falling In Reverse - "Ronald" (feat. Tech N9ne & Alex Terrible) [Official Music Video] — a very long title that keeps going', author_name: "Falling In Reverse" } }));
+  await dialog.getByRole("textbox", { name: "Link para adicionar à fila" }).fill("https://youtu.be/wWoQ7PFSYlk");
+  const add = dialog.getByRole("button", { name: "Adicionar à fila", exact: true });
+  await expect(dialog.locator(".song-request-copy strong")).toContainText("Official Music Video");
+  await expect(add).toBeVisible();
+  expect(await dialog.locator(".modal-body").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const [box, panel] = await Promise.all([add.boundingBox(), dialog.boundingBox()]);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
   await mkdir(".impeccable/review", { recursive: true });
   await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
   await page.keyboard.press("Escape");

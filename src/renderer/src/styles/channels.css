@@ -364,7 +364,7 @@
 .song-request-thumb { display: grid; place-items: center; width: 64px; aspect-ratio: 16 / 9; flex: none; overflow: hidden; border-radius: 7px; background: var(--soft); color: var(--text-muted); }
 .song-request-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .song-request-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.song-request-copy strong { color: var(--text); font-size: 0.82rem; font-weight: 700; }
+.song-request-copy strong { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .song-request-copy small { color: var(--text-muted); font-size: 0.72rem; }
 .song-request-add { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--text); color: var(--bg-main); font-size: 0.78rem; font-weight: 750; white-space: nowrap; transition: transform .15s var(--spring), opacity .15s ease; }
 .song-request-add:hover:not(:disabled) { transform: translateY(-1px); }
@@ -642,7 +642,8 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
   border: 1px solid color-mix(in srgb, #fff 14%, transparent);
   box-shadow: 0 24px 60px #0008, inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
 }
-.glass-dialog .modal-body { display: grid; gap: 14px; }
+/* One column that may shrink: a long track title must never push the panel sideways. */
+.glass-dialog .modal-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; overflow-x: hidden; }
 .glass-dialog h2 { display: flex; align-items: center; gap: 8px; font-size: 1.28571rem; font-weight: 650; }
 .song-request-dialog { width: min(560px, calc(100vw - 32px)); }
 .song-request-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 32px; }
@@ -676,4 +677,4 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 
 /* The request form in its glass dialog: the room's variables, and the full width of the panel. */
 .song-request-dialog { --glass: color-mix(in srgb, var(--bg-elev) 52%, transparent); --glass-strong: color-mix(in srgb, var(--bg-elev) 72%, transparent); --glass-line: color-mix(in srgb, var(--text) 10%, transparent); --soft: color-mix(in srgb, var(--text) 7%, transparent); --spring: cubic-bezier(.2, .8, .2, 1); }
-.song-request-dialog .song-request { margin: 0; }
+.song-request-dialog .song-request { min-width: 0; margin: 0; }
