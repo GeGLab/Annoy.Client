@@ -321,7 +321,9 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
   // An admin setting: it lives in the room's settings, not among the player's options.
-  await expect(page.locator(".song-modes")).not.toContainText("Tirar da fila o que já tocou");
+  // Nothing playing: a discreet empty room, without the player's options.
+  await expect(page.locator(".song-panel.empty")).toBeVisible();
+  await expect(page.locator(".song-modes")).toHaveCount(0);
   await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`)).openModal({ kind: "channelSettings", accountId: "a", serverId: "shared", channelId: "radio" }));
   const option = page.getByRole("switch", { name: "Tirar da fila o que já tocou" });
   await expect(option).toHaveAttribute("aria-checked", "true");
@@ -329,7 +331,8 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await page.screenshot({ path: ".impeccable/review/radio-settings.png" });
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
-  await page.keyboard.press("Escape");
+  await expect(page.locator(".settings-savebar")).toHaveCount(0);
+  await page.locator(".channel-settings-modal .modal-header .icon-btn").click();
   await expect(page.locator(".channel-settings-modal")).toHaveCount(0);
   // Back to the queue, which keeps its own request field.
   await page.getByRole("tab", { name: /Na fila/ }).click();
@@ -360,11 +363,18 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await mkdir(".impeccable/review", { recursive: true });
   await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
   await page.keyboard.press("Escape");
-  await page.locator(".song-modes").screenshot({ path: ".impeccable/review/song-modes.png" });
-  await page.locator(".song-panel").getByRole("button", { name: "Pedir uma música" }).click();
-  await page.keyboard.press("Escape");
+  // The mixer belongs to a playing room: start a track and listen.
+  Object.assign(playback, { queue: [{ id: "now", url: "https://requests-a.test/song.mp3", title: "Faixa atual", kind: "direct", addedBy: "me", addedAt: "2026-11-16T10:10:00Z" }], currentId: "now", paused: false, updatedAt: Date.now() });
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "chat"));
+  await expect(page.locator(".song-room")).toHaveCount(0);
+  await page.evaluate(async () => {
+    (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "radio");
+    (await import(/* @vite-ignore */ `${location.origin}/src/features/channels/PlaybackRooms.tsx`)).listenTo({ accountId: "a", serverId: "shared", channelId: "radio", name: "radio" });
+  });
+  await expect(page.locator(".song-modes")).toBeVisible();
   // The mixer: a preset turns it on, only on this device.
-  await page.getByRole("button", { name: "Mixer", exact: true }).click();
+  await page.getByRole("button", { name: "Mixer", exact: true }).focus();
+  await page.keyboard.press("Enter");
   const studio = page.locator(".sound-studio");
   await studio.getByRole("button", { name: "Rock" }).click();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "rock", eq: [4, 3, 2, 0, -1, -1, 1, 3, 4, 4], preamp: -2 });

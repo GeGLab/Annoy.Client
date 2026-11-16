@@ -1849,8 +1849,6 @@ function SongPanel({ playback, here, lite, canControl, canManage, canSkip, names
         <h2 className="song-title">{translate("common.29f1d2c89080")}</h2>
         <p className="song-empty-hint">{translate("song.emptyHint")}</p>
         {canControl && <button className="song-invite-join small" onClick={onRequest}><Icon name="plus" size={16} /> {translate("song.request")}</button>}
-        {/* The room's options stay reachable with nothing playing (an emptied queue, the studio). */}
-        {state && <RoomOptions playback={playback} here={here} lite={lite} canControl={canControl} canManage={canManage} canVideo={false} video={video} onVideo={onVideo} />}
       </div>
     );
   }

@@ -713,6 +713,10 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 @keyframes song-idle-breathe { 50% { opacity: .55; transform: scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .song-panel.empty .song-disc { animation: none; } }
 /* Always one centred column, whatever the room's width (narrow rooms turn the playing panel into a grid). */
-.song-main.idle .song-panel.empty { display: flex; flex-direction: column; align-items: center; width: min(380px, 100%); }
-.song-main.idle .song-panel.empty .song-stage { width: 200px; }
-.song-main.idle .song-panel.empty .song-modes { align-self: stretch; }
+.song-main.idle .song-panel.empty { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(380px, 100%); }
+/* Discreet: a small record instead of the big cover, a smaller title, no room options until a song plays. */
+.song-main.idle .song-panel.empty .song-stage { width: 72px; margin-bottom: 4px; }
+.song-main.idle .song-panel.empty .song-art { border: 0; border-radius: 50%; }
+.song-main.idle .song-panel.empty .song-disc { width: 100%; }
+.song-main.idle .song-panel.empty .song-title { font-size: 1.14286rem; font-weight: 650; }
+.song-main.idle .song-panel.empty .song-empty-hint { margin: 0 0 6px; color: var(--text-muted); font-size: .85714rem; }
