@@ -269,7 +269,7 @@ export function registerTheater(win: BrowserWindow, allowed: () => boolean): voi
         if (channel==="theater:user" && !["play","pause","seek"].includes(String(value.action))) return;
         const duration=typeof value.duration==="number" && Number.isFinite(value.duration) && value.duration>0 && value.duration<=8640000 ? value.duration : null;
         // Song rooms' DJ: whether the media finished, and how loud its last second was (dBFS).
-        const extra=channel!=="theater:status"?{}:{duration,...(typeof value.ended==="boolean"?{ended:value.ended}:{}),...(typeof value.loud==="number" && Number.isFinite(value.loud) && value.loud>=-200 && value.loud<=20 && isMusic(slot)?{loud:value.loud}:{})};
+        const extra=channel!=="theater:status"?{}:{duration,...(typeof value.ended==="boolean"?{ended:value.ended}:{}),...(typeof value.loud==="number" && Number.isFinite(value.loud) && value.loud>=-200 && value.loud<=20 && isMusic(slot)?{loud:value.loud}:{}),...(typeof value.mixer==="boolean" && isMusic(slot)?{mixer:value.mixer}:{})};
         window?.webContents.send(channel, slot, {position:value.position,...(typeof value.action==="string"?{action:value.action}:{}),...(typeof value.paused==="boolean"?{paused:value.paused}:{}),...extra});
       }
     });

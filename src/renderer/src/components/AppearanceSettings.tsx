@@ -8,6 +8,7 @@ import { validColor } from "../lib/appearance.ts";
 import { APP_ICONS } from "../../../shared/app-icon.ts";
 import { brandImage } from "./Brand.tsx";
 import { Icon } from "./ui.tsx";
+import { GlassControls } from "./GlassControls.tsx";
 
 const lightQuery = () => matchMedia("(prefers-color-scheme: light)");
 const subscribeToMode = (listener: () => void) => {
@@ -91,6 +92,11 @@ export function AppearanceSettings({ settings, update }: { settings: Settings; u
         disabled={!settings.accentColor && !settings.surfaceColor}
         onClick={() => update({ accentColor: null, surfaceColor: null })}
       >{translate("settings.28178cb6879c")}</Button>
+      <section className="glass-settings" aria-label={translate("glass.title")}>
+        <strong>{translate("glass.title")}</strong>
+        <p className="muted small">{translate("glass.hint")}</p>
+        <GlassControls blur={settings.glassBlur} transparency={settings.glassTransparency} onChange={update} />
+      </section>
     </div>
   );
 }

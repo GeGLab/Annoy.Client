@@ -160,6 +160,9 @@ export interface Settings extends LocalizationPreferences {
   serviceDisplay: TabDisplay;
   /** Where the community bar sits: down the left side or across the top. */
   barPosition: "side" | "top";
+  /** Glass panels (the song request): how much they blur what's behind (px), and how see-through they are (%). */
+  glassBlur: number;
+  glassTransparency: number;
   shareActivity: boolean;
   showVoiceBar: boolean;
   voiceBarMode: "external" | "always";
@@ -267,6 +270,8 @@ const DEFAULT_SETTINGS: Settings = {
   servicePlacement: "after",
   serviceDisplay: "full",
   barPosition: "side",
+  glassBlur: 16,
+  glassTransparency: 40,
   appIcon: "white",
   shareActivity: true,
   showVoiceBar: true,
@@ -287,7 +292,8 @@ function load<T>(key: string, fallback: T): T {
       saved.screenFps = saved.screenQuality === "max" ? 0 : Number(saved.screenQuality);
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon) } : {}) } as T;
+    const glass = (value: unknown, max: number, fallbackValue: number) => (typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(0, Math.round(value))) : fallbackValue);
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon), glassBlur: glass(saved.glassBlur, 30, 16), glassTransparency: glass(saved.glassTransparency, 90, 40) } : {}) } as T;
   } catch {
     return fallback;
   }

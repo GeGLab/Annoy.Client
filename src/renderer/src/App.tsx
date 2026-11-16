@@ -155,6 +155,14 @@ export function App() {
   useEffect(() => { window.annoy?.voiceActive?.(inVoice); }, [inVoice]);
   useUnreadBadge();
 
+  // Glass panels read these: blur behind and how much of the panel is solid.
+  const glassBlur = useStore((s) => s.settings.glassBlur);
+  const glassTransparency = useStore((s) => s.settings.glassTransparency);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--glass-blur", `${glassBlur}px`);
+    document.documentElement.style.setProperty("--glass-fill", `${100 - glassTransparency}%`);
+  }, [glassBlur, glassTransparency]);
+
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor, themePreset });
     const media = matchMedia("(prefers-color-scheme: dark)");

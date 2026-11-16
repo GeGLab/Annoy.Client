@@ -299,3 +299,58 @@ test("playback failures preserve the submitted URL and ignore stale responses af
   await expect(page.getByRole("heading", { name: "geral", exact: true })).toBeVisible();
   await expect(page.locator(".playback-feedback")).toHaveCount(0);
 });
+
+test("radio rooms: played tracks wait in a history, the option is for managers, the request is glass and the studio is local", async ({ page }) => {
+  await seed(page);
+  const played = { id: "old", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Faixa antiga", kind: "youtube", addedBy: "me", addedAt: "2026-11-16T10:00:00Z", playedAt: "2026-11-16T10:04:00Z" };
+  const playback = { channelId: "radio", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true, ducking: true, dj: false, djStyle: "auto", listeners: [], removePlayed: true, history: [played] };
+  const sent: Record<string, unknown>[] = [];
+  await page.route("https://requests-a.test/api/channels/radio/playback", async (route) => {
+    if (route.request().method() === "POST") sent.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ...playback, serverTime: Date.now() } });
+  });
+  await special(page, "radio", "song");
+  // The history, under the queue: one click puts a played track back.
+  await page.getByRole("tab", { name: /Na fila/ }).click();
+  const history = page.getByRole("region", { name: "Tocadas" });
+  await expect(history).toContainText("Faixa antiga");
+  await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
+  await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
+  // The room option: whoever manages the room flips it for everyone.
+  await page.getByRole("button", { name: "Mais opções" }).click();
+  const option = page.getByRole("menuitemcheckbox", { name: "Tirar da fila o que já tocou" });
+  await expect(option).toHaveAttribute("aria-checked", "true");
+  await option.click();
+  await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
+  await page.keyboard.press("Escape");
+  // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.
+  await page.locator(".song-request-open").click();
+  const dialog = page.locator(".song-request-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator(".glass-overlay")).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: "Link para adicionar à fila" })).toBeFocused();
+  await dialog.getByRole("button", { name: "Ajustar o vidro" }).click();
+  const blur = dialog.getByRole("slider", { name: "Desfoque" });
+  await blur.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--glass-blur"))).toBe("17px");
+  await dialog.getByRole("slider", { name: "Transparência" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--glass-fill"))).toBe("55%");
+  await mkdir(".impeccable/review", { recursive: true });
+  await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
+  await page.keyboard.press("Escape");
+  // The studio: a preset turns the mixer on, only on this device; pads play here.
+  await page.getByRole("button", { name: "Estúdio" }).click();
+  const studio = page.locator(".sound-studio");
+  await studio.getByRole("button", { name: "Grave forte" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "bass", eq: [8, 4, 0, 0, 1] });
+  await page.screenshot({ path: ".impeccable/review/sound-studio-mixer.png" });
+  await studio.getByRole("tab", { name: "Pads" }).click();
+  await studio.getByRole("button", { name: /Bumbo/ }).click();
+  await studio.getByRole("radio", { name: "Quadrada" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.pads") ?? "{}"))).toMatchObject({ wave: "square" });
+  await page.screenshot({ path: ".impeccable/review/sound-studio-pads.png" });
+  // Nothing the studio does reaches the room.
+  expect(sent.every((body) => body.op === "requeue" || body.op === "removePlayed")).toBe(true);
+});

@@ -1,5 +1,5 @@
 import {rich} from "../../lib/localization.ts";
-import {t as translate,counted,onLocalizationChange} from "../../../../shared/localization/index.ts";
+import {t as translate,counted,onLocalizationChange,localizationPreferences} from "../../../../shared/localization/index.ts";
 import { DJ_STYLES, has, Permission, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackItem, type PlaybackState, type ServerState } from "@annoy/protocol";
 import { familyHue, genreFamily, planMix, type MixPlan, type MixPreset } from "./dj.ts";
 import { useRoomPulse } from "./room-pulse.ts";
@@ -17,6 +17,11 @@ import { currentItem, elementDriver, useSync, usePlayback, viewDriver, type Driv
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 import type { LyricLine, SongInfo } from "../../../../shared/song-info.ts";
+import { SoundStudio } from "./SoundStudio.tsx";
+import { GlassControls } from "../../components/GlassControls.tsx";
+import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog.tsx";
+import { setMixerReach, useMixer } from "./sound-studio.ts";
+import { mixerNeutral } from "../../../../shared/sound-mixer.ts";
 
 type Slot = "theater" | "music" | "musicB";
 const inView = (item: PlaybackItem | null) => item?.kind === "youtube" || item?.kind === "site";
@@ -136,12 +141,44 @@ function PlaybackFeedback({ playback }: { playback: Playback }) {
   return <div className="playback-feedback error" role="alert"><span>{rich("common.3e66b8012f4a",{p0:(playback.error)})}</span><button className="btn btn-ghost btn-small" disabled={playback.loading} onClick={playback.retry}>{playback.loading ? translate("common.5da1f0aee3ad") : translate("common.b9e10688be01")}</button></div>;
 }
 
-function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean }) {
-  const { state, send } = playback;
-  const [url, setUrl] = useState("");
+/** Adding to the queue: a link, or files uploaded to the room's chat first. One at a time. */
+function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
+  const submit = async (link: string): Promise<boolean> => {
+    if (!link.trim() || pending.current) return false;
+    pending.current = true;
+    setBusy(true);
+    try {
+      return await send({ op: "add", url: link.trim() });
+    } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
+  };
+  // An upload is a message in the room's chat; its file then joins the queue.
+  const upload = async (list: File[]) => {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    try {
+      for (const f of list) {
+        const message = await apiFor(accountId).sendMessage<Message>(channel.id, translate("common.d8571b73592d",{p0:(f.name)}), [f], null, null, requests.signal);
+        requests.signal.throwIfAborted();
+        const attachment = message.attachments[0];
+        if (attachment && !await send({ op: "add", url: "", uploadId: attachment.id })) break;
+      }
+    } catch (err) {
+      if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
+    }
+    pending.current = false;
+    if (!requests.signal.aborted) setBusy(false);
+  };
+  return { busy, submit, upload };
+}
+
+function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false, onRequest }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean; onRequest?: () => void }) {
+  const { state, send } = playback;
+  const [url, setUrl] = useState("");
+  const { busy, submit, upload } = useQueueAdd(accountId, channel, send);
   const file = useRef<HTMLInputElement>(null);
   const canAdd = has(perms, Permission.SEND_MESSAGES);
   const canAttach = canAdd && has(perms, Permission.ATTACH_FILES);
@@ -163,42 +200,15 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
     void send({ op: "move", itemId, index }).then((saved) => { if (!saved) setMoved(null); });
   };
 
-  const submit = async (link: string): Promise<boolean> => {
-    if (!link.trim() || pending.current) return false;
-    pending.current = true;
-    setBusy(true);
-    try {
-      return await send({ op: "add", url: link.trim() });
-    } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
-  };
   const add = async (e: FormEvent) => {
     e.preventDefault();
     const submitted = url.trim();
     if (await submit(submitted)) setUrl((current) => current.trim() === submitted ? "" : current);
   };
 
-  // An upload is a message in the room's chat; its file then joins the queue.
-  const upload = async (list: File[]) => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
-    try {
-      for (const f of list) {
-        const message = await apiFor(accountId).sendMessage<Message>(channel.id, translate("common.d8571b73592d",{p0:(f.name)}), [f], null, null, requests.signal);
-        requests.signal.throwIfAborted();
-        const attachment = message.attachments[0];
-        if (attachment && !await send({ op: "add", url: "", uploadId: attachment.id })) break;
-      }
-    } catch (err) {
-      if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
-    }
-    pending.current = false;
-    if (!requests.signal.aborted) setBusy(false);
-  };
-
   return (
     <div className="playback-queue">
-      {canAdd && song && <SongRequest id={songRequestId(channel.id)} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />}
+      {canAdd && song && onRequest && <button type="button" className="song-request-open" onClick={onRequest}><Icon name="plus" size={15} /> {translate("song.request")}</button>}
       {canAdd && !song && (
         <form className="queue-add" onSubmit={add}>
           <input
@@ -311,7 +321,55 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
           );
         })}
       </ol>
+      {/* Tracks that left the queue after playing: back to the end of the queue with one click. */}
+      {song && !!state?.history?.length && (
+        <section className="queue-history" aria-label={translate("song.history")}>
+          <h3>{translate("song.history")}</h3>
+          <ol className="queue-list">
+            {state.history.map((item) => (
+              <li key={item.id} className="queue-item played">
+                <QueueThumb item={item} />
+                <span className="queue-meta">
+                  <strong className="queue-title" title={item.title}>{songInfos.get(item.id)?.track ?? item.title}</strong>
+                  <small className="muted truncate">{[songInfos.get(item.id)?.artist, translate("song.playedAt", { p0: new Date(item.playedAt).toLocaleTimeString(localizationPreferences().region, { hour: "2-digit", minute: "2-digit" }) })].filter(Boolean).join(" · ")}</small>
+                </span>
+                <span className="queue-end">
+                  {canAdd && (
+                    <button className="icon-btn tiny" title={translate("song.requeue")} aria-label={translate("song.requeueItem", { p0: item.title })} onClick={() => void send({ op: "requeue", itemId: item.id })}>
+                      <Icon name="repeat" size={14} />
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** "Pedir uma música" over the room: glass that blurs what's behind, as much as the person set. */
+function SongRequestDialog({ accountId, channel, playback, perms, onClose }: { accountId: string; channel: Channel; playback: Playback; perms: number; onClose: () => void }) {
+  const { busy, submit, upload } = useQueueAdd(accountId, channel, playback.send);
+  const [tuning, setTuning] = useState(false);
+  const blur = useStore((s) => s.settings.glassBlur);
+  const transparency = useStore((s) => s.settings.glassTransparency);
+  const setGlass = (patch: { glassBlur?: number; glassTransparency?: number }) => setState((s) => { Object.assign(s.settings, patch); });
+  const canAttach = has(perms, Permission.ATTACH_FILES);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="modal glass-dialog song-request-dialog" overlayClassName="glass-overlay" aria-describedby={undefined} onOpenAutoFocus={(e) => { e.preventDefault(); document.getElementById(songRequestId(channel.id))?.focus(); }}>
+        <div className="modal-body">
+          <div className="song-request-dialog-head">
+            <DialogTitle asChild><h2><Icon name="song" size={19} /> {translate("song.request")}</h2></DialogTitle>
+            <button type="button" className={`icon-btn${tuning ? " active" : ""}`} aria-expanded={tuning} title={translate("glass.adjust")} aria-label={translate("glass.adjust")} onClick={() => setTuning((v) => !v)}><Icon name="sliders" size={16} /></button>
+          </div>
+          {tuning && <GlassControls blur={blur} transparency={transparency} onChange={setGlass} />}
+          <SongRequest id={songRequestId(channel.id)} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1399,8 +1457,8 @@ function MenuSwitch({ icon, label, hint, on, disabled = false, onToggle }: { ico
  * The room's modes in one place: DJ and ducking as switches anyone in the room can flip (they
  * apply to everyone), the rest behind one button. A line underneath says what's happening now.
  */
-function RoomOptions({ playback, here, lite, canControl, canVideo, video, onVideo }: {
-  playback: Playback; here: boolean; lite: boolean; canControl: boolean; canVideo: boolean; video: boolean; onVideo: (next: boolean) => void;
+function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, video, onVideo }: {
+  playback: Playback; here: boolean; lite: boolean; canControl: boolean; canManage: boolean; canVideo: boolean; video: boolean; onVideo: (next: boolean) => void;
 }) {
   const state = playback.state!;
   const { send } = playback;
@@ -1411,8 +1469,13 @@ function RoomOptions({ playback, here, lite, canControl, canVideo, video, onVide
   const [style, setStyle] = useOptimistic<DjStyle>(state.djStyle ?? "auto");
   const [ducking, setDucking] = useOptimistic(state.ducking === true);
   const [autoplay, setAutoplay] = useOptimistic(state.autoplay);
+  const [removePlayed, setRemovePlayed] = useOptimistic(state.removePlayed === true);
   const [menu, setMenu] = useState<"styles" | "more" | null>(null);
-  useOverlay(menu !== null);
+  const [studio, setStudio] = useState(false);
+  useOverlay(menu !== null || studio);
+  // The mixer works where the page playing the track can be read: YouTube and sites, not files or links.
+  const playing = currentItem(state);
+  const effectsHere = !playing || playing.kind === "youtube" || playing.kind === "site";
 
   let live: { icon: IconName; text: string; active?: boolean } | null = null;
   if (mixing) live = { icon: "disc", text: translate("song.mixing", { p0: djLabel(mixing) }), active: true };
@@ -1430,6 +1493,10 @@ function RoomOptions({ playback, here, lite, canControl, canVideo, video, onVide
         <DropdownMenuLabel>{translate("song.forEveryone")}</DropdownMenuLabel>
         {/* A DJ always moves on to the next track: autoplay stays on while DJ mode is. */}
         <MenuSwitch icon="repeat" label={translate("common.aaae0f8a9481")} on={autoplay || dj} disabled={!canControl || dj} onToggle={() => setAutoplay(!autoplay, () => send({ op: "autoplay", value: !autoplay }))} />
+        {/* Only whoever manages the room: a finished track leaves the queue and waits in "Tocadas". */}
+        {state.removePlayed !== undefined && (
+          <MenuSwitch icon="trash" label={translate("song.removePlayed")} hint={canManage ? translate("song.removePlayedHint") : translate("song.removePlayedAdmins")} on={removePlayed} disabled={!canManage} onToggle={() => setRemovePlayed(!removePlayed, () => send({ op: "removePlayed", value: !removePlayed }))} />
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{translate("song.justYou")}</DropdownMenuLabel>
         <MenuSwitch icon="feather" label={translate("song.lite")} hint={translate("song.liteHint")} on={lite} onToggle={() => withTransition(() => setSongLite(!lite))} />
@@ -1444,8 +1511,10 @@ function RoomOptions({ playback, here, lite, canControl, canVideo, video, onVide
         {live
           ? <p className={`song-modes-live${live.active ? " active" : ""}`} role="status"><Icon name={live.icon} size={13} /> <span className="truncate">{live.text}</span></p>
           : <span className="song-modes-title">{translate("song.roomOptions")}</span>}
+        <button type="button" className="song-modes-more" title={translate("studio.title")} aria-label={translate("studio.title")} onClick={() => setStudio(true)}><Icon name="music" size={15} /></button>
         {more}
       </div>
+      {studio && <SoundStudio effectsHere={effectsHere} onClose={() => setStudio(false)} />}
       {(state.dj !== undefined || state.ducking !== undefined) && (
         <div className="song-modes-row">
           {state.dj !== undefined && (
@@ -1737,12 +1806,15 @@ function goBack(playback: Playback, at: number): void {
   const item = currentItem(state);
   if (!state || !item) return;
   const previous = state.queue[state.queue.findIndex((entry) => entry.id === item.id) - 1];
-  if (at > 3 || !previous) void send({ op: "seek", position: 0 });
+  if (at > 3) void send({ op: "seek", position: 0 });
+  // Played tracks that left the queue wait in the history: back brings the last one.
+  else if (state.removePlayed && state.history?.length) void send({ op: "previous" });
+  else if (!previous) void send({ op: "seek", position: 0 });
   else void send({ op: "play", itemId: previous.id });
 }
 
-function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loading, duration, position, video, onVideo, onRequest, onSeek, onQueue }: {
-  playback: Playback; here: boolean; lite: boolean; canControl: boolean; canSkip: boolean; names: Map<string, string>;
+function SongPanel({ playback, here, lite, canControl, canManage, canSkip, names, info, loading, duration, position, video, onVideo, onRequest, onSeek, onQueue }: {
+  playback: Playback; here: boolean; lite: boolean; canControl: boolean; canManage: boolean; canSkip: boolean; names: Map<string, string>;
   info: SongInfo | null; loading: boolean; duration: number | null; position: () => number; video: boolean; onVideo: (next: boolean) => void;
   onRequest: () => void; onSeek: ((seconds: number) => void) | null; onQueue: () => void;
 }) {
@@ -1765,6 +1837,8 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
         <h2 className="song-title">{translate("common.29f1d2c89080")}</h2>
         <p className="song-empty-hint">{translate("song.emptyHint")}</p>
         {canControl && <button className="song-invite-join small" onClick={onRequest}><Icon name="plus" size={16} /> {translate("song.request")}</button>}
+        {/* The room's options stay reachable with nothing playing (an emptied queue, the studio). */}
+        {state && <RoomOptions playback={playback} here={here} lite={lite} canControl={canControl} canManage={canManage} canVideo={false} video={video} onVideo={onVideo} />}
       </div>
     );
   }
@@ -1810,7 +1884,7 @@ function SongPanel({ playback, here, lite, canControl, canSkip, names, info, loa
 
       {here && <VolumeControl />}
 
-      <RoomOptions playback={playback} here={here} lite={lite} canControl={canControl} canVideo={canVideo} video={video} onVideo={onVideo} />
+      <RoomOptions playback={playback} here={here} lite={lite} canControl={canControl} canManage={canManage} canVideo={canVideo} video={video} onVideo={onVideo} />
 
       <UpNext playback={playback} canRequest={canControl} onOpen={onQueue} onRequest={onRequest} />
     </div>
@@ -1940,13 +2014,8 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
   const duration = known ?? info?.duration ?? null;
   const [video, setVideo] = useState(false);
   const [side, setSide] = useState<"chat" | "queue">("chat");
-  const [requested, setRequested] = useState(0);
-  // "Request a song" opens the queue and puts the cursor in its field.
-  useEffect(() => {
-    if (!requested) return;
-    const frame = requestAnimationFrame(() => document.getElementById(songRequestId(channel.id))?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [requested, channel.id]);
+  // "Request a song" opens over the room, the cursor already in its field.
+  const [requesting, setRequesting] = useState(false);
   // The room re-renders only on its own changes; the clock lives in the panel, so the chat
   // beside it doesn't redraw every second.
   const playbackRef = useRef(playback);
@@ -1997,9 +2066,9 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
             <PlaybackFeedback playback={playback} />
             <div className="song-layout">
               <SongPanel
-                playback={playback} here={here} lite={lite} canControl={canControl} canSkip={canSkip} names={names} info={info} loading={loading} duration={duration}
+                playback={playback} here={here} lite={lite} canControl={canControl} canManage={has(perms, Permission.MANAGE_CHANNELS)} canSkip={canSkip} names={names} info={info} loading={loading} duration={duration}
                 position={position} video={video} onVideo={setVideo} onSeek={seek} onQueue={() => setSide("queue")}
-                onRequest={() => { setSide("queue"); setRequested((n) => n + 1); }}
+                onRequest={() => setRequesting(true)}
               />
               {item && !lite && <Lyrics key={item.id} item={item} info={info} loading={loading} position={position} playing={playing} onSeek={seek} />}
             </div>
@@ -2013,11 +2082,12 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
             {side === "chat" ? (
               <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
             ) : (
-              <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song />
+              <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song onRequest={() => setRequesting(true)} />
             )}
           </aside>
         </div>
       )}
+      {requesting && canControl && <SongRequestDialog accountId={accountId} channel={channel} playback={playback} perms={perms} onClose={() => setRequesting(false)} />}
     </section>
   );
 }
@@ -2178,11 +2248,13 @@ function SongPlayer({ session }: { session: Listening }) {
   // Pages fade themselves; volume and spectrum are asked again on every status, so a newly
   // loaded track gets them too. Only the active deck speaks for the room.
   const wantLevels = useVisualizerShown() && !songLite;
+  const mixer = useMixer();
   useEffect(() => {
     const bridge = window.annoy?.theater;
     if (!bridge || !view || !itemId) return;
     const ask = () => {
       for (const d of DECKS) bridge.control(d, { action: "volume", volume });
+      for (const d of DECKS) bridge.control(d, { action: "mixer", mixer: mixerNeutral(mixer) ? null : mixer });
       bridge.control(deck, { action: "levels", on: wantLevels });
       bridge.control(otherDeck(deck), { action: "levels", on: false });
       bridge.control(deck, { action: "meter", on: dj });
@@ -2192,6 +2264,7 @@ function SongPlayer({ session }: { session: Listening }) {
     const offStatus = bridge.on("status", (from, status) => {
       if (from !== deckRef.current) return;
       ask();
+      setMixerReach(status.mixer ?? null);
       tickLocal(itemId, status.position, status.paused);
       if (status.duration) rememberDuration(itemId, status.duration);
       if (dj && typeof status.loud === "number" && !status.paused) hearOutro(itemId, status.position, status.loud, status.duration ?? durations.get(itemId) ?? null);
@@ -2206,9 +2279,9 @@ function SongPlayer({ session }: { session: Listening }) {
     // A track that played to its end is over here at once, not when the next status comes: the
     // room moving on now is the next track, not a skip that would mix out of a finished one.
     const offEnded = bridge.on("ended", (from, payload) => { if (from === deckRef.current) tickLocal(itemId, payload.position, true); });
-    return () => { offStatus(); offLevels(); offEnded(); spectrum = null; };
+    return () => { offStatus(); offLevels(); offEnded(); spectrum = null; setMixerReach(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hearOutro only reads refs
-  }, [view, itemId, volume, wantLevels, deck, dj]);
+  }, [view, itemId, volume, wantLevels, deck, dj, mixer]);
 
   /** Starts the transition from `from` (playing `fromId`) into the deck holding `toId`, at `at` seconds into it. Once per track. */
   const startMix = (from: Deck, fromId: string, to: Deck, toId: string, mix: MixPlan, at = 0): boolean => {
