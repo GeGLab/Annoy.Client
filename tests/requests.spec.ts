@@ -300,7 +300,7 @@ test("playback failures preserve the submitted URL and ignore stale responses af
   await expect(page.locator(".playback-feedback")).toHaveCount(0);
 });
 
-test("radio rooms: played tracks wait in a history, the option is for managers, the request is glass and the studio is local", async ({ page }) => {
+test("radio rooms: played tracks wait in a history, the option is for managers, the request is glass and the mixer is local", async ({ page }) => {
   await seed(page);
   const played = { id: "old", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Faixa antiga", kind: "youtube", addedBy: "me", addedAt: "2026-11-16T10:00:00Z", playedAt: "2026-11-16T10:04:00Z" };
   const playback = { channelId: "radio", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true, ducking: true, dj: false, djStyle: "auto", listeners: [], removePlayed: true, history: [played] };
@@ -340,17 +340,12 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await mkdir(".impeccable/review", { recursive: true });
   await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
   await page.keyboard.press("Escape");
-  // The studio: a preset turns the mixer on, only on this device; pads play here.
-  await page.getByRole("button", { name: "Estúdio" }).click();
+  // The mixer: a preset turns it on, only on this device.
+  await page.getByRole("button", { name: "Mixer", exact: true }).click();
   const studio = page.locator(".sound-studio");
   await studio.getByRole("button", { name: "Grave forte" }).click();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "bass", eq: [8, 4, 0, 0, 1] });
   await page.screenshot({ path: ".impeccable/review/sound-studio-mixer.png" });
-  await studio.getByRole("tab", { name: "Pads" }).click();
-  await studio.getByRole("button", { name: /Bumbo/ }).click();
-  await studio.getByRole("radio", { name: "Quadrada" }).click();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.pads") ?? "{}"))).toMatchObject({ wave: "square" });
-  await page.screenshot({ path: ".impeccable/review/sound-studio-pads.png" });
-  // Nothing the studio does reaches the room.
+  // Nothing the mixer does reaches the room.
   expect(sent.every((body) => body.op === "requeue" || body.op === "removePlayed")).toBe(true);
 });
