@@ -25,6 +25,7 @@ import {
   type ServerSummary,
   type User,
   type ServerStickerList,
+  type PlaybackState,
 } from "@annoy/protocol";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { discordLogin, fetchInfo } from "../api.ts";
@@ -48,6 +49,7 @@ import { useSettingsDraft, useSettingsGuard } from "./settings/SettingsGuard.tsx
 import { requestNavigation } from "../lib/navigation-guard.ts";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation } from "../../../shared/requests.ts";
+import { Switch } from "./ui/switch.tsx";
 import { channelNameTaken, storedChannelName } from "../../../shared/channel-order.ts";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
@@ -678,6 +680,18 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const kindsSupported = useStore((s) => s.instances[accountId]?.instance?.categoryKinds === true);
   const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0), channel?.categoryKind ?? "mixed"]));
   const values = JSON.stringify([name, topic, parentId, ttl, kind]);
+  // Music rooms: whether a finished track leaves the queue for the history. It lives with the
+  // room's playback; "unsupported" when the server doesn't have it yet.
+  const [removePlayed, setRemovePlayed] = useState<boolean | "unsupported" | null>(null);
+  const [removeSaved, setRemoveSaved] = useState<boolean | "unsupported" | null>(null);
+  useEffect(() => {
+    if (channel?.type !== "song") return;
+    void apiFor(accountId).get<PlaybackState>(`/channels/${channelId}/playback`, signal).then(
+      (playback) => { const value = playback.removePlayed ?? "unsupported"; setRemovePlayed(value); setRemoveSaved(value); },
+      () => undefined,
+    );
+  }, [accountId, channelId, channel?.type]);
+  const removeChanged = typeof removePlayed === "boolean" && removePlayed !== removeSaved;
   const saveChannel = async () => {
     if (!channel || !name.trim()) return false;
     const place = channel.type === "category" ? null : parentId || null;
@@ -690,6 +704,12 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
     if (channel.type === "category" && kind !== (channel.categoryKind ?? "mixed") && state?.channels.some((c) => c.parentId === channel.id && !categoryAccepts(kind, c.type))) {
       toast(translate("channels.kindDoesNotFit"));
       return false;
+    }
+    if (removeChanged) {
+      const saved = await act(apiFor(accountId).post(`/channels/${channel.id}/playback`, { op: "removePlayed", value: removePlayed }, signal), translate("settings.286e2185677a"));
+      if (!saved) return false;
+      setRemoveSaved(removePlayed);
+      if (values === baseline) return true;
     }
     const ok = await act(
       apiFor(accountId).patch(`/channels/${channel.id}`, {
@@ -704,7 +724,8 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
     if (ok) setBaseline(values);
     return ok;
   };
-  useSettingsDraft("channel", !!channel && values !== baseline, saveChannel, () => {
+  useSettingsDraft("channel", !!channel && (values !== baseline || removeChanged), saveChannel, () => {
+    setRemovePlayed(removeSaved);
     setName(channel?.name ?? "");
     setTopic(channel?.topic ?? "");
     setParentId(channel?.parentId ?? "");
@@ -750,6 +771,16 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
             </Field>
           )}
           {channel.type === "category" && kindsSupported && <CategoryKindChoice value={kind} onChange={setKind} />}
+          {channel.type === "song" && removePlayed !== null && (
+            removePlayed === "unsupported"
+              ? <p className="muted small">{translate("song.removePlayedServer")}</p>
+              : (
+                <label className="switch-setting">
+                  <span><strong>{translate("song.removePlayed")}</strong><small>{translate("song.removePlayedHint")}</small></span>
+                  <Switch aria-label={translate("song.removePlayed")} checked={removePlayed} onCheckedChange={setRemovePlayed} />
+                </label>
+              )
+          )}
           {channel.type !== "category" && (
             <Field label={translate("settings.54276aa0307f")}>
               <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>

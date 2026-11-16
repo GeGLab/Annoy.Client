@@ -316,11 +316,17 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await expect(history).toContainText("Faixa antiga");
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
-  // The room option, in plain sight next to DJ: whoever manages the room flips it for everyone.
-  const option = page.getByRole("switch", { name: /Tirar da fila o que já tocou/ });
+  // An admin setting: it lives in the room's settings, not among the player's options.
+  await expect(page.locator(".song-modes")).not.toContainText("Tirar da fila o que já tocou");
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`)).openModal({ kind: "channelSettings", accountId: "a", serverId: "shared", channelId: "radio" }));
+  const option = page.getByRole("switch", { name: "Tirar da fila o que já tocou" });
   await expect(option).toHaveAttribute("aria-checked", "true");
   await option.click();
+  await page.screenshot({ path: ".impeccable/review/radio-settings.png" });
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".channel-settings-modal")).toHaveCount(0);
   // The queue keeps its own request field.
   await expect(page.locator(".song-side .song-request").getByRole("textbox", { name: "Link para adicionar à fila" })).toBeVisible();
   // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.

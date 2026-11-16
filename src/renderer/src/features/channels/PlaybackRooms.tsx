@@ -1469,7 +1469,6 @@ function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, vi
   const [style, setStyle] = useOptimistic<DjStyle>(state.djStyle ?? "auto");
   const [ducking, setDucking] = useOptimistic(state.ducking === true);
   const [autoplay, setAutoplay] = useOptimistic(state.autoplay);
-  const [removePlayed, setRemovePlayed] = useOptimistic(state.removePlayed === true);
   const [menu, setMenu] = useState<"styles" | "more" | null>(null);
   const [studio, setStudio] = useState(false);
   useOverlay(menu !== null || studio);
@@ -1511,7 +1510,7 @@ function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, vi
         {more}
       </div>
       {studio && <SoundStudio effectsHere={effectsHere} onClose={() => setStudio(false)} />}
-      <div className="song-modes-row">
+      {(state.dj !== undefined || state.ducking !== undefined) && <div className="song-modes-row">
           {state.dj !== undefined && (
             <ModeTile
               icon="disc" label={translate("song.dj")} on={dj} disabled={!canControl} title={translate("song.djHint")}
@@ -1542,16 +1541,7 @@ function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, vi
               onToggle={() => setDucking(!ducking, () => send({ op: "ducking", value: !ducking }))}
             />
           )}
-          {/* Only whoever manages the room: a finished track leaves the queue and waits in "Tocadas".
-              On a server without it the tile stays, greyed, saying why. */}
-          <ModeTile
-            icon="trash" label={translate("song.removePlayed")} on={removePlayed}
-            disabled={!canManage || state.removePlayed === undefined}
-            title={state.removePlayed === undefined ? translate("song.removePlayedServer") : canManage ? translate("song.removePlayedHint") : translate("song.removePlayedAdmins")}
-            status={state.removePlayed === undefined ? translate("song.removePlayedServerShort") : removePlayed ? translate("song.on") : translate("song.off")}
-            onToggle={() => setRemovePlayed(!removePlayed, () => send({ op: "removePlayed", value: !removePlayed }))}
-          />
-        </div>
+        </div>}
     </div>
   );
 }
