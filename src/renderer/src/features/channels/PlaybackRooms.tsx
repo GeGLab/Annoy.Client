@@ -161,7 +161,9 @@ function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]
     pending.current = true;
     setBusy(true);
     try {
-      return await send({ op: "add", url: link.trim() });
+      const added = await send({ op: "add", url: link.trim() });
+      if (added) joinAfterPlaying(accountId, channel);
+      return added;
     } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
   };
   // An upload is a message in the room's chat; its file then joins the queue.
@@ -175,6 +177,7 @@ function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]
         requests.signal.throwIfAborted();
         const attachment = message.attachments[0];
         if (attachment && !await send({ op: "add", url: "", uploadId: attachment.id })) break;
+        if (attachment) joinAfterPlaying(accountId, channel);
       }
     } catch (err) {
       if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
@@ -316,7 +319,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
                 {song && <QueueDuration id={item.id} />}
                 <span className="row-actions">
                   {!current && canAdd && (
-                    <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id })}>
+                    <button className="icon-btn tiny" title={translate("common.8f94597e6108")} onClick={() => void send({ op: "play", itemId: item.id }).then((ok) => { if (ok) joinAfterPlaying(accountId, channel); })}>
                       <Icon name="play" size={14} />
                     </button>
                   )}
@@ -336,7 +339,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
 }
 
 /** Tracks that left the queue after playing (rooms that keep a history): back to the end of the queue with one click. */
-function SongHistory({ playback, perms }: { playback: Playback; perms: number }) {
+function SongHistory({ accountId, channel, playback, perms }: { accountId: string; channel: Channel; playback: Playback; perms: number }) {
   const { state, send } = playback;
   const canAdd = has(perms, Permission.SEND_MESSAGES);
   const history = state?.history ?? [];
@@ -354,7 +357,7 @@ function SongHistory({ playback, perms }: { playback: Playback; perms: number })
                 </span>
                 <span className="queue-end">
                   {canAdd && (
-                    <button className="icon-btn tiny" title={translate("song.requeue")} aria-label={translate("song.requeueItem", { p0: item.title })} onClick={() => void send({ op: "requeue", itemId: item.id })}>
+                    <button className="icon-btn tiny" title={translate("song.requeue")} aria-label={translate("song.requeueItem", { p0: item.title })} onClick={() => void send({ op: "requeue", itemId: item.id }).then((ok) => { if (ok) joinAfterPlaying(accountId, channel); })}>
                       <Icon name="repeat" size={14} />
                     </button>
                   )}
@@ -534,6 +537,14 @@ export function listenTo(next: Listening | null): void {
 }
 
 const useListening = () => useSyncExternalStore(subscribe, () => listening);
+
+/** Putting a song on in a music room you aren't listening to brings you into it. */
+function joinAfterPlaying(accountId: string, channel: Channel): void {
+  if (channel.type !== "song" || !channel.serverId) return;
+  if (listening?.accountId === accountId && listening.channelId === channel.id) return;
+  const serverId = channel.serverId;
+  withTransition(() => listenTo({ accountId, serverId, channelId: channel.id, name: channel.name }));
+}
 const useVideoSlot = () => useSyncExternalStore(subscribe, () => videoSlot);
 const useDucked = () => useSyncExternalStore(subscribe, () => duckedNow);
 const useMixing = () => useSyncExternalStore(subscribe, () => mixingNow);
@@ -2101,7 +2112,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
             {side === "chat" ? (
               <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
             ) : side === "history" ? (
-              <SongHistory playback={playback} perms={perms} />
+              <SongHistory accountId={accountId} channel={channel} playback={playback} perms={perms} />
             ) : (
               <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song />
             )}

@@ -320,6 +320,8 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await expect(history).toContainText("Faixa antiga");
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
+  // Putting a song on while not listening brings you into the room.
+  await expect(page.getByRole("button", { name: "Parar de ouvir" })).toBeVisible();
   // An admin setting: it lives in the room's settings, not among the player's options.
   // Nothing playing: a discreet empty room, without the player's options.
   await expect(page.locator(".song-panel.empty")).toBeVisible();
