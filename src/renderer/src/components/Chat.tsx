@@ -29,7 +29,9 @@ import {
   type UIEvent,
   type WheelEvent,
 } from "react";
-import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
+import { annoyIdOf, apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
+import { fillSteamArgs } from "../../../shared/integration-commands.ts";
+import { ownSteam, ownSteamOrFail, steamOfAnnoy } from "../features/integrations/steam-args.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -494,6 +496,17 @@ function Composer({
     setSending(true);
     const signal = requests.signal;
     try {
+      // An integration that reads Steam profiles gets the Steam accounts behind mentions (and the sender's own when none is given).
+      if (content.startsWith("/")) {
+        const own = getState().instances[accountId]?.user?.id;
+        content = await fillSteamArgs(content, commands.choices, {
+          own: ownSteam,
+          mention: (token) => {
+            const id = token.slice(2, -1);
+            return id === own ? ownSteamOrFail() : steamOfAnnoy(annoyIdOf(accountId, id), picked.find((m) => m.id === id)?.name ?? id, "channel");
+          },
+        });
+      }
       await apiFor(accountId).sendMessage(channelId, content, files, replyToId, expiresIn ? new Date(Date.now() + expiresIn).toISOString() : null, signal);
       signal.throwIfAborted();
       onDraftChange({ text: "", replyToId: null, attachmentCount: 0 });

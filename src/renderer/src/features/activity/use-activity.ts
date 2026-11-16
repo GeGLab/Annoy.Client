@@ -87,8 +87,10 @@ export function useDesktopActivity() {
       if (!gateway) return;
       // Older instances validate activity strictly: don't disconnect their users with a new field.
       const filtered = activities.filter((activity) => (activity.kind !== "development" || instance.instance?.developmentActivity) && (!["video","generic"].includes(activity.kind) || instance.instance?.extendedActivity)).map((activity) => {
-          if (instance.instance?.activityArtwork) return activity;
-          const { artwork: _artwork, ...legacy } = activity;
+          // Lobbies are for the Annoy account's friends only; servers validate activity strictly.
+          const { lobbyId: _lobby, ...forServer } = activity;
+          if (instance.instance?.activityArtwork) return forServer;
+          const { artwork: _artwork, ...legacy } = forServer;
           return legacy;
         });
       const payload = JSON.stringify(filtered), previous = lastSent.get(id), now = Date.now();
@@ -102,7 +104,8 @@ export function useDesktopActivity() {
       if (s.social.status !== "ready") return;
       const visible = s.settings.shareActivity && s.settings.manualPresence !== "offline";
       const local = visible ? (s.desktopActivity?.activities ?? []) : [];
-      const remote = visible && !local.some((a) => a.kind === "game") ? online.current.get(ANNOY_STEAM) : undefined;
+      // Steam's own report also counts while the game runs here: it adds the lobby friends can join.
+      const remote = visible ? online.current.get(ANNOY_STEAM) : undefined;
       const activities: UserActivity[] = [...withSteamFallback(local, remote)];
       if (visible && s.voice?.screen) activities.push({ kind: "video", provider: "annoy-screen", name: translate("activity.81dadf9352cb") });
       if (visible && s.songActivity) activities.push(s.songActivity);
@@ -112,7 +115,9 @@ export function useDesktopActivity() {
       const s = getState();
       sendCloud();
       for (const [id, instance] of Object.entries(s.instances)) if (instance.status === "ready" && !instance.instance?.annoySocial) send(id);
-      if (inFlight || !s.settings.shareActivity || s.settings.manualPresence === "offline" || s.desktopActivity?.activities.some((a) => a.kind === "game")) return;
+      if (inFlight || !s.settings.shareActivity || s.settings.manualPresence === "offline") return;
+      // A game detected here makes the servers' Steam fallback useless; the Annoy account still asks, for the lobby.
+      const localGame = !!s.desktopActivity?.activities.some((a) => a.kind === "game");
       inFlight = true;
       // The Annoy account's Steam link (usersannoy).
       const annoySteam = async () => {
@@ -130,7 +135,7 @@ export function useDesktopActivity() {
       };
       void Promise.all([annoySteam(), ...Object.entries(s.instances).map(async ([id, instance]) => {
         // Servers signed in with the Annoy account have no Steam link of their own.
-        if (instance.status !== "ready" || !instance.instance?.steamConnection || instance.instance?.annoySocial) return;
+        if (localGame || instance.status !== "ready" || !instance.instance?.steamConnection || instance.instance?.annoySocial) return;
         let game: UserActivity | undefined;
         try {
           const result = await apiFor(id).request<{ activities: UserActivity[] }>("GET", "/users/@me/steam/activity", undefined,

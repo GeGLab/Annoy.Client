@@ -23,3 +23,23 @@ test("typing slash or a prefix filters available commands while complete argumen
   assert.equal(matchingCommands("text /steam", choices).length, 0);
   assert.equal(matchingCommands("/steam\nprofile", choices).length, 0);
 });
+
+test("Steam profile commands: nothing means me, mentions become the Steam accounts they show, anything else stays", async () => {
+  const { fillSteamArgs } = await import("../../src/shared/integration-commands.ts");
+  const choices = integrationCommands([{ ...steam, profile: { connection: "steam", image: "https://x.test/{id}" } }, gpt], "dm");
+  const accounts = { "<@ana>": "76561198000000002", "<@other>": "76561198000000003" };
+  const steamOf = { own: async () => "76561198000000001", mention: async (token) => { if (!accounts[token]) throw new Error(`hidden ${token}`); return accounts[token]; } };
+  assert.equal(await fillSteamArgs("/steam profile", choices, steamOf), "/steam profile 76561198000000001");
+  assert.equal(await fillSteamArgs("/steam profile gabelogannewell", choices, steamOf), "/steam profile gabelogannewell");
+  assert.equal(await fillSteamArgs("/steam profile <@ana>", choices, steamOf), "/steam profile 76561198000000002");
+  assert.equal(await fillSteamArgs("/steam versus <@ana>", choices, steamOf), "/steam versus 76561198000000001 76561198000000002");
+  assert.equal(await fillSteamArgs("/steam versus <@ana> someone", choices, steamOf), "/steam versus 76561198000000002 someone");
+  assert.equal(await fillSteamArgs("/steam versus @Ana Maria", choices, steamOf, [["@Ana Maria", "<@other>"]]), "/steam versus 76561198000000001 76561198000000003");
+  assert.equal(await fillSteamArgs("/steam versus", choices, steamOf), "/steam versus", "two missing: left for the integration to explain");
+  assert.equal(await fillSteamArgs("/gpt <@ana>", choices, steamOf), "/gpt <@ana>", "integrations without Steam are untouched");
+  assert.equal(await fillSteamArgs("hello <@ana>", choices, steamOf), "hello <@ana>");
+  await assert.rejects(fillSteamArgs("/steam profile <@bob>", choices, steamOf), /hidden <@bob>/);
+  await assert.rejects(fillSteamArgs("/steam profile", choices, { ...steamOf, own: async () => null }), /Steam/);
+  // Without a Steam panel the manifest doesn't say it reads Steam profiles.
+  assert.equal(await fillSteamArgs("/steam profile", integrationCommands([steam], "dm"), steamOf), "/steam profile");
+});

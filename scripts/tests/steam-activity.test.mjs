@@ -14,3 +14,17 @@ test("Steam online fallback supplements music and development without duplicatin
   assert.deepEqual(withSteamFallback([], { ...remote, appId: "invalid" }), []);
   assert.deepEqual(withSteamFallback([], music), []);
 });
+
+test("Steam's report adds the lobby to the same game running here, and builds a join link only with a Steam account", async () => {
+  const { steamJoinUrl } = await import("../../src/shared/steam-activity.ts");
+  const lobby = { ...remote, lobbyId: "109775241000000001" };
+  const here = { kind: "game", provider: "steam", name: "Local name", appId: "480", startedAt: 5 };
+  assert.deepEqual(withSteamFallback([here], lobby), [{ ...here, lobbyId: "109775241000000001" }]);
+  assert.deepEqual(withSteamFallback([{ ...here, appId: "730" }], lobby), [{ ...here, appId: "730" }], "another game keeps no lobby");
+  assert.deepEqual(withSteamFallback([here], remote), [here], "no lobby, nothing added");
+  assert.equal(steamJoinUrl(lobby, "76561198000000001"), "steam://joinlobby/480/109775241000000001/76561198000000001");
+  assert.equal(steamJoinUrl(lobby, null), null);
+  assert.equal(steamJoinUrl(remote, "76561198000000001"), null);
+  assert.equal(steamJoinUrl({ ...lobby, lobbyId: "1/../x" }, "76561198000000001"), null);
+  assert.equal(steamJoinUrl({ ...lobby, provider: "spotify" }, "76561198000000001"), null);
+});

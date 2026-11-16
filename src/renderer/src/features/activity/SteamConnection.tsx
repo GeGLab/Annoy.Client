@@ -1,9 +1,10 @@
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
-import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, UserActivity } from "@annoy/protocol";
+import type { SteamAudience, SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, UserActivity } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { useStore, type AppState } from "../../store.ts";
-import { cloudSteam } from "../../social/details.ts";
+import { cloudSteam, saveCloudDetails } from "../../social/details.ts";
+import { Select } from "../../components/ui/select.tsx";
 import { Button } from "../../components/ui/button.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { Check, ExternalLink, Info, Link2, LoaderCircle, Unplug, UserRound } from "lucide-react";
@@ -126,10 +127,11 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
     <div className="steam-connection-body">
       {connection && <a className="steam-profile-link" href={connection.profileUrl} target="_blank" rel="noreferrer"
         aria-label={translate("common.13e868e9ba0d", { p0: profileName })}>
-        <span className="steam-profile-symbol"><UserRound size={22} aria-hidden /></span>
+        <span className="steam-profile-symbol">{connection.avatarUrl ? <img src={connection.avatarUrl} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <UserRound size={22} aria-hidden />}</span>
         <span className="steam-profile-copy"><strong>{profileName}</strong><span>{translate("activity.steam.viewProfile")}</span></span>
         <ExternalLink size={16} aria-hidden />
       </a>}
+      {connection && api === cloudSteam && <SteamAudienceChoice value={connection.audience ?? "friends"} onSaved={(audience) => setStatus((current) => current?.connection ? { ...current, connection: { ...current.connection, audience } } : current)} />}
       {connection && ownGame && <ActivityCard activity={ownGame} />}
       {status && <div className="steam-activity-note">
         <Info size={16} aria-hidden />
@@ -148,4 +150,30 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
       {!status && error && <Button variant="secondary" size="sm" onClick={() => { void api.status().then(setStatus).catch((error) => setError(error.message)); }}>{translate("common.b9e10688be01")}</Button>}
     </footer>}
   </section>;
+}
+
+/** Who sees the Annoy account's Steam on the profile: saved at once, like linking. */
+function SteamAudienceChoice({ value, onSaved }: { value: SteamAudience; onSaved: (audience: SteamAudience) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const change = async (audience: SteamAudience) => {
+    setSaving(true);
+    setError(null);
+    try { await saveCloudDetails({ steamAudience: audience }); onSaved(audience); }
+    catch (err) { setError((err as Error).message); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="steam-audience">
+      <label>
+        <span><strong>{translate("activity.steam.audience")}</strong><small>{translate("activity.steam.audienceHelp")}</small></span>
+        <Select value={value} disabled={saving} aria-label={translate("activity.steam.audience")} onChange={(event) => void change(event.target.value as SteamAudience)}>
+          <option value="self">{translate("activity.steam.audienceSelf")}</option>
+          <option value="friends">{translate("activity.steam.audienceFriends")}</option>
+          <option value="community">{translate("activity.steam.audienceCommunity")}</option>
+        </Select>
+      </label>
+      {error && <p className="error small" role="alert">{error}</p>}
+    </div>
+  );
 }

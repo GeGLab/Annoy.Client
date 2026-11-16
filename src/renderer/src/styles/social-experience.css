@@ -379,3 +379,19 @@
   .advanced-card, .advanced-card-action { flex-direction: column; align-items: stretch; }
   .advanced-card-action .field { min-width: 0; }
 }
+.steam-profile-symbol img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.steam-audience label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.steam-audience label > span { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
+.steam-audience strong { font-size: .85714rem; }
+.steam-audience small { color: var(--text-muted); font-size: .78571rem; line-height: 1.5; }
+.steam-audience select { flex: 0 1 240px; }
+.steam-profile-section { display: grid; gap: 12px; }
+.steam-common h4 { font-size: .85714rem; font-weight: 650; color: var(--text-soft); margin: 4px 0 8px; }
+.steam-common-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.steam-common-list li { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.steam-common-list img { border-radius: 4px; object-fit: cover; background: var(--bg-elev); }
+.steam-common-list a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.steam-common-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.steam-common-empty > p { margin: 0; flex: 1 1 200px; }
+.activity-join { flex: none; }
+@media (max-width: 520px) { .steam-common-list li { grid-template-columns: 48px minmax(0, 1fr); } .steam-common-list li > span { grid-column: 2; } }

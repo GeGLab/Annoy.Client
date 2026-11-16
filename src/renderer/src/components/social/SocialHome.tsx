@@ -36,6 +36,8 @@ import type { DmLink } from "../../features/integrations/state.ts";
 import { useDmLinks } from "../../features/integrations/dm-links.ts";
 import { useCommandSuggestions } from "../../features/integrations/CommandSuggestions.tsx";
 import { useDmCommandChoices } from "../../features/integrations/command-choices.ts";
+import { fillSteamArgs } from "../../../../shared/integration-commands.ts";
+import { ownSteam, steamOfAnnoy } from "../../features/integrations/steam-args.ts";
 
 const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
@@ -615,8 +617,14 @@ function DmConversation({ dmId }: { dmId: string }) {
   const stored = conversation.store.mine || conversation.store.theirs;
 
   const send = async () => {
-    const content = text.trim();
+    let content = text.trim();
     if (!content && !files.length) return;
+    // An integration that reads Steam profiles: "@name" is the other person's Steam (if they show it), nothing is mine.
+    if (content.startsWith("/")) {
+      const aliases: [string, string][] = [[`@${title}`, "<@other>"], ...(other?.username ? [[`@${other.username}`, "<@other>"] as [string, string]] : [])];
+      try { content = await fillSteamArgs(content, commands, { own: ownSteam, mention: () => steamOfAnnoy(conversation.recipientId, title, "dm") }, aliases); }
+      catch (error) { return void toast((error as Error).message); }
+    }
     const picked = files, reply = replyTo?.id ?? null;
     setText("");
     setFiles([]);

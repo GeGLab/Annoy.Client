@@ -68,6 +68,38 @@ test("slash preview lists installed commands, fills without sending and respects
   } finally { await close(); }
 });
 
+test("Steam profile commands send what was typed and ask for a linked Steam when no profile is given", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const steam = { id: "steamprofiler", name: "SteamProfiler", summary: "", scopes: ["server", "dm"], runtime: { type: "http" }, profile: { connection: "steam", image: "https://steamprofiler.test/{id}.png" }, commands: [{ name: "steam", description: "Steam profile card or comparison", usage: "profile <id> | versus <id1> <id2>" }] };
+    const sent: string[] = [];
+    await page.route("https://experience.test/api/servers/server/integrations", (route) => route.fulfill({ json: [{ integration: steam }] }));
+    await page.route("https://experience.test/api/channels/general/messages", async (route) => {
+      if (route.request().method() === "POST") sent.push(route.request().postData() ?? "");
+      await route.fulfill({ json: {} });
+    });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, integrations: true }; });
+    });
+    const input = page.getByRole("textbox", { name: "Conversar em #geral" });
+    await input.fill("/steam profile gordziilla");
+    await expect(page.getByRole("listbox", { name: "Comandos" })).toHaveCount(0);
+    await input.press("Enter");
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toContain("/steam profile gordziilla");
+    // No profile means "mine": without a Steam linked to the Annoy account nothing is sent and the draft stays.
+    await input.fill("/steam profile");
+    await input.press("Enter"); // picks the suggestion
+    await expect(input).toHaveValue("/steam profile ");
+    await input.press("Enter");
+    await expect(page.getByText("Conecte a sua Steam (Configurações → Atividade) para usar o comando sem informar o perfil.")).toBeVisible();
+    await expect(input).toHaveValue("/steam profile ");
+    expect(sent.length).toBe(1);
+  } finally { await close(); }
+});
+
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {

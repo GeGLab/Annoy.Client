@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useStore, EMPTY_ACTIVITIES } from "../store.ts";
 import { canViewActivity } from "../features/activity/access.ts";
 import { ActivityStack } from "../features/activity/ActivityCard.tsx";
+import { SteamProfileSection } from "../features/activity/SteamProfile.tsx";
 import { useProfileDetails } from "../features/profile/use-profile.ts";
 import {
   PROFILE_LABELS,
@@ -52,6 +53,11 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
     ? (instance?.activities[user.id] ?? EMPTY_ACTIVITIES)
     : EMPTY_ACTIVITIES;
   const identity = details?.user ?? user;
+  const annoyId = accountId === CLOUD_ACCOUNT ? user.id : user.annoyId;
+  const ownAnnoyId = useStore((s) => s.social.me?.id ?? null);
+  const self = !!annoyId && annoyId === ownAnnoyId;
+  // Seeing someone's Steam lets you join the lobby their game is in.
+  const joinAs = self ? null : details?.steam?.steamId;
   return (
     <DialogContent
       className="modal full-profile"
@@ -84,7 +90,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
       {activities.length > 0 && (
         <section>
           <h3>{translate("common.60e8f5cb5d84")}</h3>
-          <ActivityStack activities={activities} />
+          <ActivityStack activities={activities} joinAs={joinAs} />
         </section>
       )}
       {!connected ? (
@@ -144,7 +150,8 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
                 <p className="muted small">{translate("common.a887eaea4bd8")}</p>
               )}
             </section>
-            <ProfilePanels annoyId={accountId === CLOUD_ACCOUNT ? user.id : user.annoyId} />
+            {details.steam && annoyId && <SteamProfileSection steam={details.steam} annoyId={annoyId} name={relationship?.nickname || identity.displayName} self={self} />}
+            <ProfilePanels annoyId={annoyId} />
             <section>
               <h3>{translate("common.83549f764bc9")}</h3>
               {details.history.visibility === "disabled" ? (

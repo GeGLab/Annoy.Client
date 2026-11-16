@@ -177,8 +177,8 @@ function openExternal(raw: string): void {
   try {
     const url = new URL(raw);
     if (["https:", "http:", "mailto:", "ts3server:"].includes(url.protocol)) void shell.openExternal(url.toString());
-    // Game invites: only "launch this Steam game", never other steam:// commands.
-    else if (url.protocol === "steam:" && /^steam:\/\/rungameid\/\d{1,10}$/.test(raw)) void shell.openExternal(raw);
+    // Game invites and lobbies: only "launch this Steam game" and "join this lobby", never other steam:// commands.
+    else if (url.protocol === "steam:" && /^steam:\/\/(?:rungameid\/\d{1,10}|joinlobby\/\d{1,10}\/\d{17,20}\/\d{17})$/.test(raw)) void shell.openExternal(raw);
   } catch {
     // Ignore malformed URLs.
   }

@@ -1,6 +1,6 @@
 // Profile contacts, activity history and the Steam link of the Annoy account
 // (usersannoy). They are about the person, so no server holds them.
-import type { ProfileField, ProfileDetails, SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, User } from "@annoy/protocol";
+import type { ProfileField, ProfileDetails, SteamAudience, SteamCommonGames, SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, User } from "@annoy/protocol";
 import { cloud } from "./cloud.ts";
 import { setState } from "../store.ts";
 
@@ -12,7 +12,7 @@ export const readCloudDetails = (annoyId: string, signal?: AbortSignal) =>
 /** Same shape the server used to answer, with the server user the view already has. */
 export const withUser = (details: CloudProfileDetails, user: User): ProfileDetails => ({ ...details, user });
 
-export async function saveCloudDetails(patch: { fields?: ProfileField[]; historyEnabled?: boolean }): Promise<CloudProfileDetails> {
+export async function saveCloudDetails(patch: { fields?: ProfileField[]; historyEnabled?: boolean; steamAudience?: SteamAudience }): Promise<CloudProfileDetails> {
   const details = await cloud<CloudProfileDetails>("users", "/v1/users/@me/profile-details", { method: "PATCH", body: patch });
   bumpDetails();
   return details;
@@ -33,5 +33,7 @@ export const cloudSteam = {
   begin: (signal?: AbortSignal) => cloud<SteamLinkBegin>("users", "/v1/steam/begin", { method: "POST", body: {}, signal }),
   poll: (handoff: string, signal?: AbortSignal) => cloud<SteamLinkPoll>("users", "/v1/steam/poll", { method: "POST", body: { handoff }, signal }),
   disconnect: (signal?: AbortSignal) => cloud<SteamConnectionStatus>("users", "/v1/users/@me/steam", { method: "DELETE", signal }),
+  /** Steam games both accounts own, for someone whose Steam this account may see. */
+  commonGames: (annoyId: string, signal?: AbortSignal) => cloud<SteamCommonGames>("users", `/v1/users/${encodeURIComponent(annoyId)}/steam/common-games`, { signal }),
   activity: (signal?: AbortSignal) => cloud<{ activities: import("@annoy/protocol").UserActivity[] }>("users", "/v1/users/@me/steam/activity", { signal }),
 };
