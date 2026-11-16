@@ -690,3 +690,5 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .studio-actions { display: flex; justify-content: flex-end; }
 @media (max-width: 560px) { .studio-band output { display: none; } .studio-eq { gap: 8px; padding-inline: 8px; } .studio-band.preamp { padding-right: 8px; } }
 .studio-band .ui-slider-fill { display: none; }
+.song-modes-row { flex-wrap: wrap; }
+.song-modes-row > .song-mode { flex: 1 1 150px; }

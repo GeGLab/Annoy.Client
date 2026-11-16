@@ -2711,5 +2711,7 @@
   "studio.preamp": "プリアンプ",
   "studio.preampShort": "プリ",
   "studio.bands": "イコライザーの帯域",
-  "studio.reset": "リセット"
+  "studio.reset": "リセット",
+  "song.removePlayedServer": "このサーバーにはまだこのオプションがありません。使うにはannoy-serverを更新してください。",
+  "song.removePlayedServerShort": "サーバーの更新が必要"
 }

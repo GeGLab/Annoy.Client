@@ -2711,5 +2711,7 @@
   "studio.preamp": "Preamp",
   "studio.preampShort": "Pre",
   "studio.bands": "Equalizer bands",
-  "studio.reset": "Reset"
+  "studio.reset": "Reset",
+  "song.removePlayedServer": "This server doesn't have this option yet. Update annoy-server to use it.",
+  "song.removePlayedServerShort": "Needs a server update"
 }

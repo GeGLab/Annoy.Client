@@ -316,13 +316,11 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await expect(history).toContainText("Faixa antiga");
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
-  // The room option: whoever manages the room flips it for everyone.
-  await page.getByRole("button", { name: "Mais opções" }).click();
-  const option = page.getByRole("menuitemcheckbox", { name: "Tirar da fila o que já tocou" });
+  // The room option, in plain sight next to DJ: whoever manages the room flips it for everyone.
+  const option = page.getByRole("switch", { name: /Tirar da fila o que já tocou/ });
   await expect(option).toHaveAttribute("aria-checked", "true");
   await option.click();
   await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
-  await page.keyboard.press("Escape");
   // The queue keeps its own request field.
   await expect(page.locator(".song-side .song-request").getByRole("textbox", { name: "Link para adicionar à fila" })).toBeVisible();
   // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.
@@ -350,6 +348,9 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
   await mkdir(".impeccable/review", { recursive: true });
   await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
+  await page.keyboard.press("Escape");
+  await page.locator(".song-modes").screenshot({ path: ".impeccable/review/song-modes.png" });
+  await page.locator(".song-panel").getByRole("button", { name: "Pedir uma música" }).click();
   await page.keyboard.press("Escape");
   // The mixer: a preset turns it on, only on this device.
   await page.getByRole("button", { name: "Mixer", exact: true }).click();

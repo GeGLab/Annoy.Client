@@ -2711,5 +2711,7 @@
   "studio.preamp": "Preamplificazione",
   "studio.preampShort": "Pre",
   "studio.bands": "Bande dell'equalizzatore",
-  "studio.reset": "Azzera"
+  "studio.reset": "Azzera",
+  "song.removePlayedServer": "Questo server non ha ancora questa opzione. Aggiorna annoy-server per usarla.",
+  "song.removePlayedServerShort": "Richiede un server aggiornato"
 }
