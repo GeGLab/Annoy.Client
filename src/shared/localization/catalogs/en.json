@@ -2665,5 +2665,16 @@
   "image.clear": "Clear annotations",
   "image.textPlaceholder": "Type, then press Enter",
   "channels.nameTaken": "There is already a room of this type with this name here.",
-  "channels.categoryNameTaken": "There is already a category with this name."
+  "channels.categoryNameTaken": "There is already a category with this name.",
+  "channels.createMenu": "Create a room or category",
+  "channels.createRoom": "Create room",
+  "channels.createCategory": "Create category",
+  "channels.kind": "Category type",
+  "channels.kindMixed": "Mixed",
+  "channels.kindMixedHint": "Text and voice rooms",
+  "channels.kindText": "Text only",
+  "channels.kindTextHint": "Text, files, code and music",
+  "channels.kindVoice": "Voice only",
+  "channels.kindVoiceHint": "Voice and cinema",
+  "channels.kindDoesNotFit": "This category has rooms of another kind. Move them before changing its type."
 }

@@ -2665,5 +2665,16 @@
   "image.clear": "Limpar anotações",
   "image.textPlaceholder": "Digite e tecle Enter",
   "channels.nameTaken": "Já existe uma sala desse tipo com esse nome aqui.",
-  "channels.categoryNameTaken": "Já existe uma categoria com esse nome."
+  "channels.categoryNameTaken": "Já existe uma categoria com esse nome.",
+  "channels.createMenu": "Criar sala ou categoria",
+  "channels.createRoom": "Criar sala",
+  "channels.createCategory": "Criar categoria",
+  "channels.kind": "Tipo da categoria",
+  "channels.kindMixed": "Mista",
+  "channels.kindMixedHint": "Salas de texto e de voz",
+  "channels.kindText": "Só texto",
+  "channels.kindTextHint": "Texto, arquivos, código e música",
+  "channels.kindVoice": "Só voz",
+  "channels.kindVoiceHint": "Voz e cinema",
+  "channels.kindDoesNotFit": "Essa categoria tem salas de outro tipo. Mova-as antes de mudar o tipo."
 }

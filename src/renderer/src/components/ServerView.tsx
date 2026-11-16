@@ -18,7 +18,7 @@ import { EMPTY_ACTIVITIES } from "../store.ts";
 import { useOwnActivities } from "../features/activity/use-activity.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
-import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
+import { categoryAccepts, has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
 import { useEffect, useMemo, useState, type DragEvent, type LiHTMLAttributes } from "react";
 import { channelNameTaken, dropFor, moveInOrder, type ChannelDrop } from "../../../shared/channel-order.ts";
 import { apiFor, editServerNickname, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
@@ -286,7 +286,9 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
     onDragOver: (event) => {
       if (!dragged || dragged.id === c.id) return;
       const edge = edgeOf(event, c, dragged);
-      if (!dropFor(dragged, c, edge, placeOf(c), siblingsOf(c))) return;
+      const drop = dropFor(dragged, c, edge, placeOf(c), siblingsOf(c));
+      // Text-only and voice-only categories refuse the other kind of room.
+      if (!drop || (dragged.type !== "category" && drop.parentId && !categoryAccepts(categories.find((k) => k.cat.id === drop.parentId)?.cat.categoryKind, dragged.type))) return;
       event.preventDefault();
       event.stopPropagation();
       event.dataTransfer.dropEffect = "move";
@@ -373,11 +375,12 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
         {categories.map(({ cat, children }) => (
           <li key={cat.id} className="category" {...itemProps(cat)}>
             <div className="category-header">
-              <button className="category-toggle" onClick={() => setCollapsed((c) => ({ ...c, [cat.id]: !c[cat.id] }))}>
+              <button className="category-toggle" onClick={() => setCollapsed((c) => ({ ...c, [cat.id]: !c[cat.id] }))} title={cat.categoryKind === "text" ? translate("channels.kindText") : cat.categoryKind === "voice" ? translate("channels.kindVoice") : undefined}>
                 <span className={collapsed[cat.id] ? "chev collapsed" : "chev"}>
                   <Icon name="chevron" size={12} />
                 </span>
                 {cat.name}
+                {cat.categoryKind && <span className="category-kind" aria-label={translate(cat.categoryKind === "text" ? "channels.kindText" : "channels.kindVoice")}><Icon name={cat.categoryKind === "text" ? "hash" : "speaker"} size={11} /></span>}
               </button>
               {canChannels && (
                 <>

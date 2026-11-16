@@ -2665,5 +2665,16 @@
   "image.clear": "書き込みを消去",
   "image.textPlaceholder": "入力して Enter",
   "channels.nameTaken": "ここには同じ種類・同じ名前のルームがすでにあります。",
-  "channels.categoryNameTaken": "同じ名前のカテゴリーがすでにあります。"
+  "channels.categoryNameTaken": "同じ名前のカテゴリーがすでにあります。",
+  "channels.createMenu": "ルームまたはカテゴリーを作成",
+  "channels.createRoom": "ルームを作成",
+  "channels.createCategory": "カテゴリーを作成",
+  "channels.kind": "カテゴリーの種類",
+  "channels.kindMixed": "混合",
+  "channels.kindMixedHint": "テキストとボイスのルーム",
+  "channels.kindText": "テキストのみ",
+  "channels.kindTextHint": "テキスト、ファイル、コード、音楽",
+  "channels.kindVoice": "ボイスのみ",
+  "channels.kindVoiceHint": "ボイスとシアター",
+  "channels.kindDoesNotFit": "このカテゴリーには別の種類のルームがあります。種類を変える前に移動してください。"
 }

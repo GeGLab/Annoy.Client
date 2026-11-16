@@ -2665,5 +2665,16 @@
   "image.clear": "Effacer les annotations",
   "image.textPlaceholder": "Tapez puis appuyez sur Entrée",
   "channels.nameTaken": "Il existe déjà un salon de ce type avec ce nom ici.",
-  "channels.categoryNameTaken": "Il existe déjà une catégorie avec ce nom."
+  "channels.categoryNameTaken": "Il existe déjà une catégorie avec ce nom.",
+  "channels.createMenu": "Créer un salon ou une catégorie",
+  "channels.createRoom": "Créer un salon",
+  "channels.createCategory": "Créer une catégorie",
+  "channels.kind": "Type de catégorie",
+  "channels.kindMixed": "Mixte",
+  "channels.kindMixedHint": "Salons textuels et vocaux",
+  "channels.kindText": "Texte uniquement",
+  "channels.kindTextHint": "Texte, fichiers, code et musique",
+  "channels.kindVoice": "Voix uniquement",
+  "channels.kindVoiceHint": "Voix et cinéma",
+  "channels.kindDoesNotFit": "Cette catégorie contient des salons d'un autre type. Déplacez-les avant de changer son type."
 }

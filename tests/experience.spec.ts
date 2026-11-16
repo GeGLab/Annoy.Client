@@ -152,6 +152,84 @@ test("rooms reorder by drag and drop, into categories, and names repeat only acr
   } finally { await close(); }
 });
 
+test("the cover's + creates rooms and categories, and text- or voice-only categories take only their rooms", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const created: Record<string, unknown>[] = [];
+    await page.route("https://experience.test/api/servers/server/channels", async (route) => {
+      const body = route.request().postDataJSON();
+      created.push(body);
+      await route.fulfill({ json: { id: `new-${created.length}`, serverId: "server", topic: "", position: 9, overwrites: [], ...body } });
+    });
+    const moves: unknown[] = [];
+    await page.route(/https:\/\/experience\.test\/api\/channels\/[^/]+\/move$/, async (route) => { moves.push(route.request().postDataJSON()); await route.fulfill({ json: {} }); });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        inst.instance = { ...inst.instance, channelOrder: true, categoryKinds: true };
+        inst.serverStates.server.channels.push(
+          { id: "voz", serverId: "server", name: "Voz", type: "category", categoryKind: "voice", topic: "", position: 2, parentId: null, overwrites: [] },
+          { id: "texto", serverId: "server", name: "Texto", type: "category", categoryKind: "text", topic: "", position: 3, parentId: null, overwrites: [] },
+        );
+      });
+    });
+    // The + next to the server name: create a room or a category, never an invite.
+    const plus = page.locator(".live-community-summary").getByRole("button", { name: "Criar sala ou categoria" });
+    await plus.click();
+    await expect(page.getByRole("menuitem")).toHaveText(["Criar sala", "Criar categoria"]);
+    await page.getByRole("menuitem", { name: "Criar categoria" }).click();
+    let dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").first().fill("Jogatina");
+    await dialog.getByRole("radio", { name: /Só voz/ }).click();
+    await page.screenshot({ path: join(capture, "category-kind.png") });
+    await dialog.getByRole("button", { name: "Criar", exact: true }).click();
+    await expect.poll(() => created.length).toBe(1);
+    expect(created[0]).toMatchObject({ name: "Jogatina", type: "category", parentId: null, categoryKind: "voice" });
+    // A room: the category list only has the categories that take its kind.
+    await plus.click();
+    await page.getByRole("menuitem", { name: "Criar sala" }).click();
+    dialog = page.getByRole("dialog");
+    const categoryOptions = async () => {
+      await dialog.getByRole("combobox").click();
+      await expect(page.getByRole("option").first()).toBeVisible();
+      const names = (await page.getByRole("option").allTextContents()).map((t) => t.trim());
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("option")).toHaveCount(0);
+      return names;
+    };
+    expect(await categoryOptions()).toEqual(["Sem categoria", "Texto"]);
+    await dialog.getByRole("radio", { name: /Voz/ }).first().click();
+    expect(await categoryOptions()).toEqual(["Sem categoria", "Voz"]);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Opened from a voice-only category, the room starts as voice.
+    await page.locator(".category-header", { hasText: "Voz" }).hover();
+    await page.locator(".category-header", { hasText: "Voz" }).getByRole("button").nth(1).click();
+    await expect(page.getByRole("dialog").getByRole("radio", { name: /Voz/ }).first()).toBeChecked();
+    await page.keyboard.press("Escape");
+    // A text room dragged onto a voice-only category stays where it is.
+    const sidebar = page.locator(".channel-scroll");
+    await sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: "geral" }) }).dragTo(sidebar.locator(".category-header", { hasText: "Voz" }));
+    await sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: "geral" }) }).dragTo(sidebar.locator(".category-header", { hasText: "Texto" }));
+    await expect.poll(() => moves).toEqual([{ parentId: "texto", beforeId: null }]);
+  } finally { await close(); }
+});
+
+test("without Manage channels the cover has no + button", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await expect(page.locator(".live-community-summary")).toContainText("online");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.serverStates.server.permissions = 1 | 2 | 1024; });
+    });
+    await expect(page.locator(".live-community-summary button")).toHaveCount(0);
+  } finally { await close(); }
+});
+
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {

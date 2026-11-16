@@ -12,7 +12,9 @@ import {
   has,
   Permission,
   PERMISSION_LABELS,
+  categoryAccepts,
   type Ban,
+  type CategoryKind,
   type Channel,
   type DiscordLoginBegin,
   type Invite,
@@ -672,8 +674,10 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const [topic, setTopic] = useState(channel?.topic ?? "");
   const [parentId, setParentId] = useState(channel?.parentId ?? "");
   const [ttl, setTtl] = useState(String(channel?.messageTtlMs ?? 0));
-  const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0)]));
-  const values = JSON.stringify([name, topic, parentId, ttl]);
+  const [kind, setKind] = useState<CategoryKind>(channel?.categoryKind ?? "mixed");
+  const kindsSupported = useStore((s) => s.instances[accountId]?.instance?.categoryKinds === true);
+  const [baseline, setBaseline] = useState(() => JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0), channel?.categoryKind ?? "mixed"]));
+  const values = JSON.stringify([name, topic, parentId, ttl, kind]);
   const saveChannel = async () => {
     if (!channel || !name.trim()) return false;
     const place = channel.type === "category" ? null : parentId || null;
@@ -682,12 +686,18 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
       toast(translate(channel.type === "category" ? "channels.categoryNameTaken" : "channels.nameTaken"));
       return false;
     }
+    // A category becomes text or voice only once every room in it is of that kind.
+    if (channel.type === "category" && kind !== (channel.categoryKind ?? "mixed") && state?.channels.some((c) => c.parentId === channel.id && !categoryAccepts(kind, c.type))) {
+      toast(translate("channels.kindDoesNotFit"));
+      return false;
+    }
     const ok = await act(
       apiFor(accountId).patch(`/channels/${channel.id}`, {
         name,
         topic,
         ...(channel.type !== "category" && { parentId: parentId || null }),
         ...(channel.type === "text" && { messageTtlMs: Number(ttl) || null }),
+        ...(channel.type === "category" && kindsSupported && kind !== (channel.categoryKind ?? "mixed") && { categoryKind: kind }),
       }, signal),
       translate("settings.286e2185677a"),
     );
@@ -699,11 +709,13 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
     setTopic(channel?.topic ?? "");
     setParentId(channel?.parentId ?? "");
     setTtl(String(channel?.messageTtlMs ?? 0));
-    setBaseline(JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0)]));
+    setKind(channel?.categoryKind ?? "mixed");
+    setBaseline(JSON.stringify([channel?.name ?? "", channel?.topic ?? "", channel?.parentId ?? "", String(channel?.messageTtlMs ?? 0), channel?.categoryKind ?? "mixed"]));
   });
   if (!state || !channel || !me) return null;
   const api = apiFor(accountId);
-  const categories = state.channels.filter((c) => c.type === "category");
+  // A room may only go into categories that take its kind (and stays listed where it already is).
+  const categories = state.channels.filter((c) => c.type === "category" && (c.id === channel.parentId || categoryAccepts(c.categoryKind, channel.type)));
 
   return (
     <Modal title={translate("settings.9d291f786fc2",{p0:(channel.type === "category" ? "categoria" : "canal"),p1:(channel.name)})} wide className="edit-settings-modal channel-settings-modal">
@@ -737,6 +749,7 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
               </Select>
             </Field>
           )}
+          {channel.type === "category" && kindsSupported && <CategoryKindChoice value={kind} onChange={setKind} />}
           {channel.type !== "category" && (
             <Field label={translate("settings.54276aa0307f")}>
               <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
@@ -793,13 +806,21 @@ export function CreateChannelModal({
   const requests = useRequestOwner(JSON.stringify([accountId, serverId, "create-channel"]));
   const signal = requests.signal;
   const { state } = useServer(accountId, serverId);
-  const [type, setType] = useState(initialType);
+  const kindsSupported = useStore((s) => s.instances[accountId]?.instance?.categoryKinds === true);
+  // Opened from a voice-only category, a room starts as voice (and the other way round).
+  const [type, setType] = useState<CreatableChannel>(() => {
+    const kind = state?.channels.find((c) => c.id === initialParent)?.categoryKind;
+    return initialType === "category" || categoryAccepts(kind, initialType) ? initialType : kind === "voice" ? "voice" : "text";
+  });
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState(initialParent ?? "");
+  const [categoryKind, setCategoryKind] = useState<CategoryKind>("mixed");
   const [creating, setCreating] = useState(false);
-  const categories = state?.channels.filter((c) => c.type === "category") ?? [];
+  // Only the categories that take this kind of room.
+  const categories = state?.channels.filter((c) => c.type === "category" && categoryAccepts(c.categoryKind, type)) ?? [];
+  const place = type !== "category" && categories.some((c) => c.id === parentId) ? parentId : "";
   // Same rule as the server: one name per type and place.
-  const taken = !!state && !!name.trim() && channelNameTaken(state.channels, type, storedChannelName(type, name), type === "category" ? null : parentId || null);
+  const taken = !!state && !!name.trim() && channelNameTaken(state.channels, type, storedChannelName(type, name), place || null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -809,7 +830,8 @@ export function CreateChannelModal({
       const channel = await apiFor(accountId).post<Channel>(`/servers/${serverId}/channels`, {
         name,
         type,
-        parentId: type === "category" ? null : parentId || null,
+        parentId: place || null,
+        ...(type === "category" && kindsSupported && { categoryKind }),
       }, signal);
       signal.throwIfAborted();
       closeModal();
@@ -856,9 +878,10 @@ export function CreateChannelModal({
           />
         </Field>
         {taken && <p className="error small" role="alert">{translate(type === "category" ? "channels.categoryNameTaken" : "channels.nameTaken")}</p>}
+        {type === "category" && kindsSupported && <CategoryKindChoice value={categoryKind} onChange={setCategoryKind} />}
         {type !== "category" && categories.length > 0 && (
           <Field label={translate("settings.54276aa0307f")}>
-            <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+            <Select value={place} onChange={(e) => setParentId(e.target.value)}>
               <option value="">{translate("settings.ccad7dc69cc9")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -973,3 +996,35 @@ onLocalizationChange(()=>{CHANNEL_KINDS=[
   { type: "theater", icon: "theater", label: translate("settings.fbfbad677c30"), hint: translate("settings.40870c267edf"), placeholder: translate("settings.89ec0bb81771") },
   { type: "song", icon: "song", label: translate("settings.fea4b5ceffa8"), hint: translate("settings.5ec4ffe12cbf"), placeholder: translate("settings.0ff883c0e9cf") },
 ];});
+
+/** Mixed, text-only or voice-only: what rooms a category takes. */
+function CategoryKindChoice({ value, onChange }: { value: CategoryKind; onChange: (kind: CategoryKind) => void }) {
+  const kinds: { value: CategoryKind; icon: IconName; label: string; hint: string }[] = [
+    { value: "mixed", icon: "folder", label: translate("channels.kindMixed"), hint: translate("channels.kindMixedHint") },
+    { value: "text", icon: "hash", label: translate("channels.kindText"), hint: translate("channels.kindTextHint") },
+    { value: "voice", icon: "speaker", label: translate("channels.kindVoice"), hint: translate("channels.kindVoiceHint") },
+  ];
+  return (
+    <div className="field category-kind-choice">
+    <span className="field-label" aria-hidden>{translate("channels.kind")}</span>
+    <RadioGroup
+      cards
+      label={translate("channels.kind")}
+      value={value}
+      onValueChange={(next) => onChange(next as CategoryKind)}
+      options={kinds.map((kind) => ({
+        value: kind.value,
+        label: (
+          <>
+            <Icon name={kind.icon} />
+            <span>
+              <strong>{kind.label}</strong>
+              <span className="muted small">{kind.hint}</span>
+            </span>
+          </>
+        ),
+      }))}
+    />
+    </div>
+  );
+}

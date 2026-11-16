@@ -2665,5 +2665,16 @@
   "image.clear": "清除标注",
   "image.textPlaceholder": "输入后按 Enter",
   "channels.nameTaken": "这里已有同类型、同名的房间。",
-  "channels.categoryNameTaken": "已有同名的分类。"
+  "channels.categoryNameTaken": "已有同名的分类。",
+  "channels.createMenu": "创建房间或分类",
+  "channels.createRoom": "创建房间",
+  "channels.createCategory": "创建分类",
+  "channels.kind": "分类类型",
+  "channels.kindMixed": "混合",
+  "channels.kindMixedHint": "文字和语音房间",
+  "channels.kindText": "仅文字",
+  "channels.kindTextHint": "文字、文件、代码和音乐",
+  "channels.kindVoice": "仅语音",
+  "channels.kindVoiceHint": "语音和影院",
+  "channels.kindDoesNotFit": "此分类中有其他类型的房间。请先移走它们再更改类型。"
 }

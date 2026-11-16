@@ -2665,5 +2665,16 @@
   "image.clear": "Cancella annotazioni",
   "image.textPlaceholder": "Scrivi e premi Invio",
   "channels.nameTaken": "Esiste già una stanza di questo tipo con questo nome qui.",
-  "channels.categoryNameTaken": "Esiste già una categoria con questo nome."
+  "channels.categoryNameTaken": "Esiste già una categoria con questo nome.",
+  "channels.createMenu": "Crea stanza o categoria",
+  "channels.createRoom": "Crea stanza",
+  "channels.createCategory": "Crea categoria",
+  "channels.kind": "Tipo di categoria",
+  "channels.kindMixed": "Mista",
+  "channels.kindMixedHint": "Stanze di testo e vocali",
+  "channels.kindText": "Solo testo",
+  "channels.kindTextHint": "Testo, file, codice e musica",
+  "channels.kindVoice": "Solo voce",
+  "channels.kindVoiceHint": "Voce e cinema",
+  "channels.kindDoesNotFit": "Questa categoria ha stanze di un altro tipo. Spostale prima di cambiarne il tipo."
 }
