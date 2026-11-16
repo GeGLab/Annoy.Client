@@ -13,7 +13,7 @@ const h = { items: [], state: {}, cached: undefined, resolveDmLinks };
 globalThis.__annoyConsentUI = h;
 const stubs = new Map();
 const stub = (path, source) => stubs.set(new URL(`../../src/renderer/src/${path}`, import.meta.url).href, source);
-stub("client.ts", "export const navigate=()=>{};");
+stub("components/ui.tsx", "export const openModal=()=>{};");
 stub("store.ts", "export const toast=()=>{};");
 stub("features/integrations/Setup.tsx", "export const IntegrationIcon=()=>null;");
 stub("features/integrations/dm.ts", "export const answerDmIntegration=()=>{},removeDmIntegration=()=>{},requestDmIntegration=()=>{};");
