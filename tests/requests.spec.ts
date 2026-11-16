@@ -310,6 +310,7 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
     await route.fulfill({ json: { ...playback, serverTime: Date.now() } });
   });
   await special(page, "radio", "song");
+  await page.screenshot({ path: ".impeccable/review/song-idle.png" });
   // The queue stays the queue; the history is a small button beside the tabs.
   await page.getByRole("tab", { name: /Na fila/ }).click();
   await expect(page.getByRole("region", { name: "Tocadas" })).toHaveCount(0);

@@ -699,3 +699,20 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .song-history-btn { display: grid; place-items: center; width: 34px; flex: none; border: 0; border-radius: 10px; background: var(--soft); color: var(--text-muted); transition: background var(--duration), color var(--duration); }
 .song-history-btn:hover { color: var(--text); }
 .song-history-btn.active { background: color-mix(in srgb, var(--text) 13%, transparent); color: var(--text); }
+
+/* Nothing playing: the room waits, quietly. A neutral, outlined record with no glow, a dashed
+   frame, the room's colour toned down and everything centred, so it never reads as "playing". */
+.song-main.idle .song-layout { display: flex; align-items: center; justify-content: center; }
+.song-main.idle { --art: color-mix(in srgb, var(--text) 32%, var(--bg-main)); }
+.song-room:has(.song-main.idle) .song-ambient { opacity: .35; }
+.song-room:has(.song-main.idle) .song-aurora { display: none; }
+.song-panel.empty .song-art { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--text) 18%, transparent); box-shadow: none; }
+.song-panel.empty .song-disc { width: 64%; background: radial-gradient(circle, transparent 54%, color-mix(in srgb, var(--text) 14%, transparent) 55%, transparent 56%), color-mix(in srgb, var(--text) 6%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent); animation: song-idle-breathe 3.6s ease-in-out infinite; }
+.song-panel.empty .song-label { background: color-mix(in srgb, var(--text) 22%, transparent); }
+.song-panel.empty .song-title { color: var(--text-soft); }
+@keyframes song-idle-breathe { 50% { opacity: .55; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .song-panel.empty .song-disc { animation: none; } }
+/* Always one centred column, whatever the room's width (narrow rooms turn the playing panel into a grid). */
+.song-main.idle .song-panel.empty { display: flex; flex-direction: column; align-items: center; width: min(380px, 100%); }
+.song-main.idle .song-panel.empty .song-stage { width: 200px; }
+.song-main.idle .song-panel.empty .song-modes { align-self: stretch; }
