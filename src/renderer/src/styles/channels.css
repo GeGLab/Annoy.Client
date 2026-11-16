@@ -652,9 +652,7 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .glass-settings { display: grid; gap: 8px; margin-top: 24px; }
 .glass-settings > p { margin: 0; }
 
-/* The queue's way into the request, and what already played. */
-.song-request-open { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; margin-bottom: 10px; border: 1px dashed var(--border-strong); border-radius: 12px; background: transparent; color: var(--text); font-weight: 650; transition: background var(--duration), border-color var(--duration); }
-.song-request-open:hover { background: var(--bg-hover); border-color: var(--accent-strong); }
+/* What already played, under the queue. */
 .queue-history h3 { margin: 18px 12px 6px; color: var(--text-muted); font-size: .78571rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 .queue-item.played { opacity: .82; }
 .queue-item.played:hover { opacity: 1; }

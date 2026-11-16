@@ -175,7 +175,7 @@ function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]
   return { busy, submit, upload };
 }
 
-function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false, onRequest }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean; onRequest?: () => void }) {
+function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean }) {
   const { state, send } = playback;
   const [url, setUrl] = useState("");
   const { busy, submit, upload } = useQueueAdd(accountId, channel, send);
@@ -208,7 +208,7 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
 
   return (
     <div className="playback-queue">
-      {canAdd && song && onRequest && <button type="button" className="song-request-open" onClick={onRequest}><Icon name="plus" size={15} /> {translate("song.request")}</button>}
+      {canAdd && song && <SongRequest id={`${songRequestId(channel.id)}-queue`} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />}
       {canAdd && !song && (
         <form className="queue-add" onSubmit={add}>
           <input
@@ -2082,7 +2082,7 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
             {side === "chat" ? (
               <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
             ) : (
-              <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song onRequest={() => setRequesting(true)} />
+              <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song />
             )}
           </aside>
         </div>

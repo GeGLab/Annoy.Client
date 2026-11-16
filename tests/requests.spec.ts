@@ -323,8 +323,10 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await option.click();
   await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
   await page.keyboard.press("Escape");
+  // The queue keeps its own request field.
+  await expect(page.locator(".song-side .song-request").getByRole("textbox", { name: "Link para adicionar à fila" })).toBeVisible();
   // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.
-  await page.locator(".song-request-open").click();
+  await page.locator(".song-panel").getByRole("button", { name: "Pedir uma música" }).click();
   const dialog = page.locator(".song-request-dialog");
   await expect(dialog).toBeVisible();
   await expect(page.locator(".glass-overlay")).toBeVisible();
