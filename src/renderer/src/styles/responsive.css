@@ -122,50 +122,50 @@
 
 /* Settings ------------------------------------------------------------------------------ */
 /* The grid sizes the sidebar; nothing else sets its width (it used to fight the one-column layout). */
-.user-settings-modal .settings-sidebar { width: auto; }
-.user-settings-modal .settings-layout { grid-template-columns: 228px minmax(0, 1fr); min-height: 0; }
+.settings-shell .settings-sidebar { width: auto; }
+.settings-shell .settings-layout { grid-template-columns: 228px minmax(0, 1fr); min-height: 0; }
 @media (min-width: 1600px) {
-  .user-settings-modal { width: min(1120px, calc(100vw - 96px)); height: min(860px, calc(100dvh - var(--topbar-height) - 72px)); }
-  .user-settings-modal .settings-layout { grid-template-columns: 248px minmax(0, 1fr); }
+  .settings-shell { width: min(1120px, calc(100vw - 96px)); height: min(860px, calc(100dvh - var(--topbar-height) - 72px)); }
+  .settings-shell .settings-layout { grid-template-columns: 248px minmax(0, 1fr); }
 }
 @media (min-width: 2200px) {
-  .user-settings-modal { width: min(1320px, calc(100vw - 160px)); height: min(980px, calc(100dvh - var(--topbar-height) - 96px)); }
-  .user-settings-modal .settings-layout { grid-template-columns: 272px minmax(0, 1fr); }
+  .settings-shell { width: min(1320px, calc(100vw - 160px)); height: min(980px, calc(100dvh - var(--topbar-height) - 96px)); }
+  .settings-shell .settings-layout { grid-template-columns: 272px minmax(0, 1fr); }
   .settings-content .settings-section { max-width: 860px; }
 }
 @media (max-width: 1099px) {
-  .user-settings-modal { width: calc(100vw - 32px); height: min(800px, calc(100dvh - var(--topbar-height) - 32px)); }
-  .user-settings-modal .settings-layout { grid-template-columns: 200px minmax(0, 1fr); }
-  .user-settings-modal .settings-sidebar { padding: 18px 12px; }
-  .user-settings-modal .settings-content { padding: 24px; }
+  .settings-shell { width: calc(100vw - 32px); height: min(800px, calc(100dvh - var(--topbar-height) - 32px)); }
+  .settings-shell .settings-layout { grid-template-columns: 200px minmax(0, 1fr); }
+  .settings-shell .settings-sidebar { padding: 18px 12px; }
+  .settings-shell .settings-content { padding: 24px; }
 }
 @media (max-width: 859px) {
   /* One column: search and a row of sections that scrolls sideways, then the page. */
-  .user-settings-modal { width: calc(100vw - 24px); height: calc(100dvh - var(--topbar-height) - 24px); max-height: none; }
-  .user-settings-modal > .modal-header { min-height: 0; padding: 14px 18px; }
-  .user-settings-modal .modal-header h2 { font-size: 20px; }
-  .user-settings-modal .settings-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-  .user-settings-modal .settings-sidebar { flex: none; max-height: none; overflow: visible; padding: 10px 14px 0; border-right: 0; border-bottom: 1px solid var(--border); }
-  .user-settings-modal .settings-identity { display: none; }
-  .user-settings-modal .settings-sidebar input { margin-bottom: 8px; }
-  .user-settings-modal .settings-sidebar nav {
+  .settings-shell { width: calc(100vw - 24px); height: calc(100dvh - var(--topbar-height) - 24px); max-height: none; }
+  .settings-shell > .modal-header { min-height: 0; padding: 14px 18px; }
+  .settings-shell .modal-header h2 { font-size: 20px; }
+  .settings-shell .settings-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .settings-shell .settings-sidebar { flex: none; max-height: none; overflow: visible; padding: 10px 14px 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-shell .settings-identity { display: none; }
+  .settings-shell .settings-sidebar input { margin-bottom: 8px; }
+  .settings-shell .settings-sidebar nav {
     flex-direction: row; flex-wrap: nowrap; gap: 4px;
     margin-inline: -14px; padding: 0 14px 10px;
     overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin;
   }
-  .user-settings-modal .settings-sidebar nav button { flex: none; width: auto; white-space: nowrap; padding: 8px 12px; scroll-snap-align: start; }
-  .user-settings-modal .settings-content { flex: 1; min-height: 0; padding: 18px 18px 28px; }
-  .user-settings-modal.has-savebar .settings-content { padding-bottom: 120px; }
+  .settings-shell .settings-sidebar nav button { flex: none; width: auto; white-space: nowrap; padding: 8px 12px; scroll-snap-align: start; }
+  .settings-shell .settings-content { flex: 1; min-height: 0; padding: 18px 18px 28px; }
+  .settings-shell.has-savebar .settings-content { padding-bottom: 120px; }
   .settings-savebar { left: 12px; right: 12px; bottom: 12px; }
 }
 @media (max-width: 599px) {
   /* Phones: settings take the whole window under the title bar. */
-  .user-settings-modal { width: 100vw; height: calc(100dvh - var(--topbar-height)); top: calc(50% + var(--topbar-height) / 2); border-radius: 0; }
-  .user-settings-modal > .modal-header { padding: 10px 12px; }
-  .user-settings-modal .modal-header h2 { font-size: 18px; }
-  .user-settings-modal .settings-sidebar { padding: 8px 12px 0; }
-  .user-settings-modal .settings-sidebar nav { margin-inline: -12px; padding-inline: 12px; }
-  .user-settings-modal .settings-content { padding: 14px 12px 24px; }
+  .settings-shell { width: 100vw; height: calc(100dvh - var(--topbar-height)); top: calc(50% + var(--topbar-height) / 2); border-radius: 0; }
+  .settings-shell > .modal-header { padding: 10px 12px; }
+  .settings-shell .modal-header h2 { font-size: 18px; }
+  .settings-shell .settings-sidebar { padding: 8px 12px 0; }
+  .settings-shell .settings-sidebar nav { margin-inline: -12px; padding-inline: 12px; }
+  .settings-shell .settings-content { padding: 14px 12px 24px; }
   .settings-content .settings-section h3 { font-size: 1.125rem; }
   .settings-savebar { flex-wrap: wrap; }
   .settings-savebar > span { flex-basis: 100%; }

@@ -1,5 +1,6 @@
 import { FriendsDashboard, PersonalHeading } from "../../features/redesign/LiveExperience.tsx";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useComposerAttach } from "../../lib/composer-attach.ts";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { isStickerMessage, StickerMessage } from "../../features/expression/AnnoySticker.tsx";
 import { t as translate } from "../../../../shared/localization/index.ts";
 import { navigate } from "../../client.ts";
@@ -24,8 +25,10 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { Avatar, Icon } from "../ui.tsx";
 import { WelcomeMain } from "../Home.tsx";
 import { ReplyPreview } from "../ReplyPreview.tsx";
+import { PendingFile } from "../PendingFile.tsx";
 import { TypingIndicator } from "../TypingIndicator.tsx";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu.tsx";
+import { EntryContextMenu, type MenuEntry } from "../ui/entry-menu.tsx";
 import { DmIntegrationsDialog, DmIntegrationRequests } from "../../features/integrations/DmIntegrations.tsx";
 import { IntegrationIcon } from "../../features/integrations/Setup.tsx";
 import { answerDmIntegration, controlText } from "../../features/integrations/dm.ts";
@@ -33,6 +36,8 @@ import type { DmLink } from "../../features/integrations/state.ts";
 import { useDmLinks } from "../../features/integrations/dm-links.ts";
 import { useCommandSuggestions } from "../../features/integrations/CommandSuggestions.tsx";
 import { useDmCommandChoices } from "../../features/integrations/command-choices.ts";
+import { fillSteamArgs } from "../../../../shared/integration-commands.ts";
+import { ownSteam, steamOfAnnoy } from "../../features/integrations/steam-args.ts";
 
 const ImageViewer = lazy(() => import("../ImageViewer.tsx"));
 
@@ -84,20 +89,52 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
       toast((error as Error).message);
     }
   };
-  return (
-    <div className="friend">
-      <Avatar user={user} size={36} presence={rel.status === "friend" ? (presence?.status ?? "offline") : undefined} />
+  const friend = rel.status === "friend";
+  const name = rel.nickname || user.displayName;
+  // The whole row opens the conversation; its own buttons and links keep their action.
+  const openFromRow = (event: MouseEvent<HTMLDivElement>) => {
+    if (!friend || (event.target as HTMLElement).closest("button, a, input, [role='button'], [role='menu']")) return;
+    void message();
+  };
+  const editNickname = async () => {
+    const nickname = await promptText(translate("common.91e4e0317865"), rel.nickname ?? "");
+    if (nickname !== null) await run(() => setFriendNickname(rel.user.id, nickname.trim().slice(0, 64) || null));
+  };
+  const unfriend = async () => {
+    if (!(await confirmAction(translate("social.removeFriendConfirm", { p0: user.displayName })))) return;
+    void run(() => removeFriend(rel.user.id));
+  };
+  // Everything about a friend, in one place: the ⋯ button and a right click open the same menu.
+  // Unfriending sits last and apart, so it is never one stray click away.
+  const entries: MenuEntry[] = friend ? [
+    { kind: "item", id: "message", text: translate("social.message"), icon: "message", run: () => void message() },
+    { kind: "item", id: "voice", text: translate("social.voiceCall", { p0: user.displayName }), icon: "phone", disabled: !ready || !online, run: () => void startDirectCall(CLOUD_ACCOUNT, rel.user.id, false) },
+    { kind: "item", id: "video", text: translate("social.videoCall", { p0: user.displayName }), icon: "camera", disabled: !ready || !online, run: () => void startDirectCall(CLOUD_ACCOUNT, rel.user.id, true) },
+    ...(game && online ? [{ kind: "item" as const, id: "invite", text: translate("invite.actionTo", { p0: user.displayName, p1: game.name }), icon: "play" as const, disabled: !ready, run: () => void sendGameInvite({ userId: rel.user.id }) }] : []),
+    { kind: "separator" },
+    // Private friend nickname: only you see it (not the server nickname).
+    { kind: "item", id: "nickname", text: translate("social.editNickname", { p0: user.displayName }), icon: "edit", disabled: !ready, run: () => void editNickname() },
+    { kind: "separator" },
+    { kind: "item", id: "unfriend", text: translate("social.removeFriend"), icon: "trash", destructive: true, disabled: !ready, run: () => void unfriend() },
+  ] : [];
+  const row = (
+    <div className={`friend${friend ? " friend-openable" : ""}`} onClick={openFromRow}>
+      <Avatar user={user} size={36} presence={friend ? (presence?.status ?? "offline") : undefined} />
       <div className="friend-names">
-        <strong>{rel.nickname || user.displayName}</strong>
+        {friend ? (
+          <button type="button" className="friend-name-link" aria-label={translate("social.messageTo", { p0: name })} title={translate("social.messageTo", { p0: name })} onClick={() => void message()}>
+            <strong>{name}</strong>
+          </button>
+        ) : <strong>{name}</strong>}
         <span className="muted">
           {rel.status === "incoming" ? translate("social.incoming") : rel.status === "outgoing" ? translate("social.outgoing") : presenceLabel(presence)}
           {rel.user.username && <> · @{rel.user.username}</>}
         </span>
-        {rel.status === "friend" && <WhereLine presence={presence} />}
-        {rel.status === "friend" && presence && <ActivityStack activities={presence.activities} compact />}
+        {friend && <WhereLine presence={presence} />}
+        {friend && presence && <ActivityStack activities={presence.activities} compact />}
       </div>
       <span className="spacer" />
-      {rel.status === "friend" && (
+      {friend && (
         <>
           {game && online && <button className="icon-btn" disabled={!ready} aria-label={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} title={translate("invite.actionTo", { p0: user.displayName, p1: game.name })} onClick={() => void sendGameInvite({ userId: rel.user.id })}>
             <Icon name="play" />
@@ -111,14 +148,18 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
           <button className="icon-btn" title={translate("social.message")} aria-label={translate("social.message")} onClick={() => void message()}>
             <Icon name="message" />
           </button>
-          {/* Private friend nickname: only you see it (not the server nickname). */}
-          <button className="icon-btn" disabled={!ready} title={translate("social.editNickname", { p0: user.displayName })} aria-label={translate("social.editNickname", { p0: user.displayName })}
-            onClick={async () => {
-              const nickname = await promptText(translate("common.91e4e0317865"), rel.nickname ?? "");
-              if (nickname !== null) await run(() => setFriendNickname(rel.user.id, nickname.trim().slice(0, 64) || null));
-            }}>
-            <Icon name="edit" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="icon-btn friend-more" aria-label={translate("social.friendOptions", { p0: name })} title={translate("social.friendOptions", { p0: name })}>
+                <Icon name="more" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label={translate("social.friendOptions", { p0: name })}>
+              {entries.map((entry, index) => entry.kind === "separator" ? <DropdownMenuSeparator key={`separator-${index}`} />
+                : entry.kind === "item" ? <DropdownMenuItem key={entry.id} destructive={entry.destructive} disabled={entry.disabled} onSelect={entry.run}>{entry.icon && <Icon name={entry.icon} />}{entry.text}</DropdownMenuItem>
+                : null)}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
       {rel.status === "incoming" && (
@@ -126,20 +167,14 @@ function FriendRow({ rel }: { rel: CloudRelationship }) {
           <Icon name="check" />
         </button>
       )}
-      <button
-        className="icon-btn danger"
-        disabled={!ready}
-        title={rel.status === "friend" ? translate("social.removeFriend") : translate("social.cancelRequest")}
-        aria-label={rel.status === "friend" ? translate("social.removeFriend") : translate("social.cancelRequest")}
-        onClick={async () => {
-          if (rel.status === "friend" && !(await confirmAction(translate("social.removeFriendConfirm", { p0: user.displayName })))) return;
-          void run(() => removeFriend(rel.user.id));
-        }}
-      >
-        <Icon name="x" />
-      </button>
+      {!friend && (
+        <button className="icon-btn danger" disabled={!ready} title={translate("social.cancelRequest")} aria-label={translate("social.cancelRequest")} onClick={() => void run(() => removeFriend(rel.user.id))}>
+          <Icon name="x" />
+        </button>
+      )}
     </div>
   );
+  return friend ? <EntryContextMenu label={translate("social.friendOptions", { p0: name })} entries={entries}>{row}</EntryContextMenu> : row;
 }
 
 type Tab = "online" | "all" | "pending" | "add";
@@ -403,7 +438,7 @@ function DmRow({ message, compact, me, nameOf, replyTo, onReply, integrationLink
               ))}
             </div>
           )}
-          <ReactionChips reactions={reactions} me={me} nameOf={nameOf} disabled={reacting || !reactable} stickers={false} onToggle={(emoji) => void react(emoji)} />
+          <ReactionChips reactions={reactions} me={me} nameOf={nameOf} disabled={!reactable} busy={reacting} stickers={false} onToggle={(emoji) => void react(emoji)} />
           {message.state === "sending" && <small className="muted">{translate("social.sending")}</small>}
           {message.state === "failed" && (
             <small className="danger-text">
@@ -484,6 +519,7 @@ function DmConversation({ dmId }: { dmId: string }) {
   const muted = useStore((s) => s.settings.mutedChannels.includes(`annoy:${dmId}`));
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  useComposerAttach(ready ? (picked) => setFiles((current) => [...current, ...picked].slice(0, 10)) : null);
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
   const [pinsOpen,setPinsOpen]=useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
@@ -581,8 +617,14 @@ function DmConversation({ dmId }: { dmId: string }) {
   const stored = conversation.store.mine || conversation.store.theirs;
 
   const send = async () => {
-    const content = text.trim();
+    let content = text.trim();
     if (!content && !files.length) return;
+    // An integration that reads Steam profiles: "@name" is the other person's Steam (if they show it), nothing is mine.
+    if (content.startsWith("/")) {
+      const aliases: [string, string][] = [[`@${title}`, "<@other>"], ...(other?.username ? [[`@${other.username}`, "<@other>"] as [string, string]] : [])];
+      try { content = await fillSteamArgs(content, commands, { own: ownSteam, mention: () => steamOfAnnoy(conversation.recipientId, title, "dm") }, aliases); }
+      catch (error) { return void toast((error as Error).message); }
+    }
     const picked = files, reply = replyTo?.id ?? null;
     setText("");
     setFiles([]);
@@ -697,12 +739,7 @@ function DmConversation({ dmId }: { dmId: string }) {
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <span key={`${f.name}-${i}`} className="pending-file">
-              <span className="truncate">{f.name}</span>
-              <button className="icon-btn tiny" aria-label={translate("social.cancel")} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
-                <Icon name="x" size={14} />
-              </button>
-            </span>
+            <PendingFile key={`${f.name}-${f.lastModified}-${i}`} file={f} disabled={false} onRemove={() => setFiles((current) => current.filter((_, j) => j !== i))} />
           ))}
         </div>
       )}

@@ -1,15 +1,16 @@
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useEffect, useRef, useState } from "react";
-import type { SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, UserActivity } from "@annoy/protocol";
+import type { SteamAudience, SteamConnectionStatus, SteamLinkBegin, SteamLinkPoll, UserActivity } from "@annoy/protocol";
 import { apiFor } from "../../client.ts";
 import { useStore, type AppState } from "../../store.ts";
-import { cloudSteam } from "../../social/details.ts";
+import { cloudSteam, saveCloudDetails } from "../../social/details.ts";
+import { Select } from "../../components/ui/select.tsx";
 import { Button } from "../../components/ui/button.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { Check, ExternalLink, Info, Link2, LoaderCircle, Unplug, UserRound } from "lucide-react";
 import { ActivityCard } from "./ActivityCard.tsx";
 
-interface SteamApi {
+export interface SteamApi {
   status(signal?: AbortSignal): Promise<SteamConnectionStatus>;
   begin(signal?: AbortSignal): Promise<SteamLinkBegin>;
   poll(handoff: string, signal?: AbortSignal): Promise<SteamLinkPoll>;
@@ -23,6 +24,29 @@ const serverSteam = (accountId: string): SteamApi => ({
 });
 
 const noGame = (s: AppState) => !s.settings.shareActivity || !!s.desktopActivity?.activities.some((a) => a.kind === "game");
+
+/** Opens Steam's sign-in in the browser and waits (up to 10 minutes) for it to finish. */
+export async function linkSteam(api: SteamApi, signal: AbortSignal): Promise<SteamConnectionStatus> {
+  const { url, handoff } = await api.begin(signal);
+  window.open(url, "_blank");
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => {
+      const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+      const timer = setTimeout(done, 1500);
+      signal.addEventListener("abort", done, { once: true });
+    });
+    signal.throwIfAborted();
+    const result = await api.poll(handoff, signal);
+    if (result.status === "error") throw new Error(result.message);
+    if (result.status === "done") {
+      const status = await api.status(signal);
+      window.dispatchEvent(new Event("steam-connection-changed"));
+      return status;
+    }
+  }
+  throw new Error(translate("activity.de798be734d3"));
+}
 
 /** Steam of the Annoy account: one link for the person, on every server. */
 export function AnnoySteamConnection() {
@@ -68,25 +92,7 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
     controller.current = abort;
     setBusy(true); setWaiting(true); setError(null);
     try {
-      const { url, handoff } = await api.begin(abort.signal);
-      window.open(url, "_blank");
-      const deadline = Date.now() + 10 * 60_000;
-      while (Date.now() < deadline) {
-        await new Promise<void>((resolve) => {
-          const done = () => { clearTimeout(timer); abort.signal.removeEventListener("abort", done); resolve(); };
-          const timer = setTimeout(done, 1500);
-          abort.signal.addEventListener("abort", done, { once: true });
-        });
-        abort.signal.throwIfAborted();
-        const result = await api.poll(handoff, abort.signal);
-        if (result.status === "error") throw new Error(result.message);
-        if (result.status === "done") {
-          setStatus(await api.status(abort.signal));
-          window.dispatchEvent(new Event("steam-connection-changed"));
-          return;
-        }
-      }
-      throw new Error(translate("activity.de798be734d3"));
+      setStatus(await linkSteam(api, abort.signal));
     } catch (error) {
       if (!abort.signal.aborted) setError((error as Error).message);
     } finally {
@@ -121,10 +127,11 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
     <div className="steam-connection-body">
       {connection && <a className="steam-profile-link" href={connection.profileUrl} target="_blank" rel="noreferrer"
         aria-label={translate("common.13e868e9ba0d", { p0: profileName })}>
-        <span className="steam-profile-symbol"><UserRound size={22} aria-hidden /></span>
+        <span className="steam-profile-symbol">{connection.avatarUrl ? <img src={connection.avatarUrl} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <UserRound size={22} aria-hidden />}</span>
         <span className="steam-profile-copy"><strong>{profileName}</strong><span>{translate("activity.steam.viewProfile")}</span></span>
         <ExternalLink size={16} aria-hidden />
       </a>}
+      {connection && api === cloudSteam && <SteamAudienceChoice value={connection.audience ?? "friends"} onSaved={(audience) => setStatus((current) => current?.connection ? { ...current, connection: { ...current.connection, audience } } : current)} />}
       {connection && ownGame && <ActivityCard activity={ownGame} />}
       {status && <div className="steam-activity-note">
         <Info size={16} aria-hidden />
@@ -143,4 +150,30 @@ function SteamCard({ api, title, description, ownGame }: { api: SteamApi; title:
       {!status && error && <Button variant="secondary" size="sm" onClick={() => { void api.status().then(setStatus).catch((error) => setError(error.message)); }}>{translate("common.b9e10688be01")}</Button>}
     </footer>}
   </section>;
+}
+
+/** Who sees the Annoy account's Steam on the profile: saved at once, like linking. */
+function SteamAudienceChoice({ value, onSaved }: { value: SteamAudience; onSaved: (audience: SteamAudience) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const change = async (audience: SteamAudience) => {
+    setSaving(true);
+    setError(null);
+    try { await saveCloudDetails({ steamAudience: audience }); onSaved(audience); }
+    catch (err) { setError((err as Error).message); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="steam-audience">
+      <label>
+        <span><strong>{translate("activity.steam.audience")}</strong><small>{translate("activity.steam.audienceHelp")}</small></span>
+        <Select value={value} disabled={saving} aria-label={translate("activity.steam.audience")} onChange={(event) => void change(event.target.value as SteamAudience)}>
+          <option value="self">{translate("activity.steam.audienceSelf")}</option>
+          <option value="friends">{translate("activity.steam.audienceFriends")}</option>
+          <option value="community">{translate("activity.steam.audienceCommunity")}</option>
+        </Select>
+      </label>
+      {error && <p className="error small" role="alert">{error}</p>}
+    </div>
+  );
 }

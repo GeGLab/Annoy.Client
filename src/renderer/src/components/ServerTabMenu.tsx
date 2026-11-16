@@ -43,7 +43,7 @@ export function ServerTabMenu({ account, server, inst, children }: {
     ...(ready ? [{ kind: "item", id: "nickname", icon: "edit", text: translate("server.nicknameMenu"), run: () => void editServerNickname(account.id, server.id) } as const] : []),
     { kind: "item", id: "mute", icon: muted ? "bell" : "bellOff", text: muted ? translate("common.615490f2cb43") : translate("common.b60be554ff31"), run: () => toggleMessageMute("server", account.id, server.id) },
     ...(settings ? [{ kind: "item", id: "settings", icon: "gear", text: translate("common.a86cf2b71570",{p0:""}), run: () => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id }) } as const] : []),
-    ...(ready && owner ? [{ kind: "item", id: "ownership", icon: "crown", text: translate("common.f2d74b4ab9eb",{p0:""}), run: () => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id }) } as const] : []),
+    ...(ready && owner ? [{ kind: "item", id: "ownership", icon: "crown", text: translate("common.f2d74b4ab9eb",{p0:""}), run: () => openModal({ kind: "serverSettings", accountId: account.id, serverId: server.id, page: "advanced" }) } as const] : []),
     ...(ready && has(perms, Permission.MANAGE_CHANNELS) ? [
       { kind: "item", id: "channel", icon: "hash", text: translate("common.df6ff3015259",{p0:""}), run: () => openModal({ kind: "createChannel", accountId: account.id, serverId: server.id, parentId: null, type: "text" }) } as const,
       { kind: "item", id: "category", icon: "plus", text: translate("common.4d8d42aa234f",{p0:""}), run: () => openModal({ kind: "createChannel", accountId: account.id, serverId: server.id, parentId: null, type: "category" }) } as const,

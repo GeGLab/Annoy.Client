@@ -93,7 +93,7 @@ jobs:
         working-directory: annoy-client
       - run: npm run test:activity
         working-directory: annoy-client
-      - run: node --experimental-strip-types --test scripts/tests/app-access.test.mjs scripts/tests/async-secrets.test.mjs scripts/tests/server-removal.test.mjs scripts/tests/user-volume.test.mjs
+      - run: node --experimental-strip-types --test scripts/tests/app-access.test.mjs scripts/tests/async-secrets.test.mjs scripts/tests/server-removal.test.mjs scripts/tests/user-volume.test.mjs scripts/tests/integration-commands.test.mjs scripts/tests/channel-order.test.mjs scripts/tests/sound-mixer.test.mjs
         working-directory: annoy-client
       - run: npm run test:security
         working-directory: annoy-server

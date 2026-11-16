@@ -8,10 +8,11 @@ import { openDmWith } from "../../social/dms.ts";
 import { channelPerms, displayNameOf } from "../../perms.ts";
 import { Avatar, Icon, openModal } from "../../components/ui.tsx";
 import { Scenery } from "./Scenery.tsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu.tsx";
 
 export function CommunityCover({ state }: { state: ServerState }) {
   return <>
-    <Scenery className="live-cover-art" />
+    {state.server.bannerUrl ? <img className="live-cover-art live-cover-photo" src={state.server.bannerUrl} alt="" draggable={false}/> : <Scenery className="live-cover-art" />}
     <span className="live-cover-eyebrow"><Icon name="radio" size={12}/>{t("redesign.communityEyebrow")}</span>
     <span className="live-community-identity">
       <span className="live-community-mark">{state.server.iconUrl ? <img src={state.server.iconUrl} alt=""/> : <Icon name="radio" size={21}/>}</span>
@@ -27,7 +28,14 @@ export function CommunitySummary({ accountId, state }: { accountId: string; stat
   return <div className="live-community-summary">
     <span><i className={connected ? "live-dot" : "live-dot offline"}/>{t("redesign.onlineCount", { p0: connected ? online : 0 })}</span>
     <span>{t("redesign.memberCount", { p0: state.membersTotal ?? state.members.length })}</span>
-    {has(state.permissions, Permission.CREATE_INVITE) && <button type="button" className="icon-btn tiny" aria-label={t("redesign.invite")} disabled={!connected} onClick={() => openModal({ kind: "invite", accountId, serverId: state.server.id })}><Icon name="plus" size={15}/></button>}
+    {/* Creating rooms is for whoever manages them; inviting stays in the server menu and the welcome card. */}
+    {has(state.permissions, Permission.MANAGE_CHANNELS) && <DropdownMenu>
+      <DropdownMenuTrigger asChild><button type="button" className="icon-btn tiny" aria-label={t("channels.createMenu")} title={t("channels.createMenu")} disabled={!connected}><Icon name="plus" size={15}/></button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "text" })}><Icon name="hash"/>{t("channels.createRoom")}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => openModal({ kind: "createChannel", accountId, serverId: state.server.id, parentId: null, type: "category" })}><Icon name="folderPlus"/>{t("channels.createCategory")}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>}
   </div>;
 }
 

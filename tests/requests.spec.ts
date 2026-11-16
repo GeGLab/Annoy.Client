@@ -299,3 +299,105 @@ test("playback failures preserve the submitted URL and ignore stale responses af
   await expect(page.getByRole("heading", { name: "geral", exact: true })).toBeVisible();
   await expect(page.locator(".playback-feedback")).toHaveCount(0);
 });
+
+test("radio rooms: played tracks wait in a history, the option is for managers, the request is glass and the mixer is local", async ({ page }) => {
+  await seed(page);
+  const played = { id: "old", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Faixa antiga", kind: "youtube", addedBy: "me", addedAt: "2026-11-16T10:00:00Z", playedAt: "2026-11-16T10:04:00Z" };
+  // A long history (the server keeps up to 50): the panel must scroll through it.
+  const older = Array.from({ length: 30 }, (_, i) => ({ ...played, id: `older-${i}`, title: `Faixa ${i}` }));
+  const playback = { channelId: "radio", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true, ducking: true, dj: false, djStyle: "auto", listeners: [], removePlayed: true, history: [played, ...older] };
+  const sent: Record<string, unknown>[] = [];
+  await page.route("https://requests-a.test/api/channels/radio/playback", async (route) => {
+    if (route.request().method() === "POST") sent.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ...playback, serverTime: Date.now() } });
+  });
+  await special(page, "radio", "song");
+  await page.screenshot({ path: ".impeccable/review/song-idle.png" });
+  // The queue stays the queue; the history is a small button beside the tabs.
+  await page.getByRole("tab", { name: /Na fila/ }).click();
+  await expect(page.getByRole("region", { name: "Tocadas" })).toHaveCount(0);
+  await page.locator(".song-tabs-row").screenshot({ path: ".impeccable/review/song-tabs.png" });
+  await page.getByRole("button", { name: "Tocadas", exact: true }).click();
+  const history = page.getByRole("region", { name: "Tocadas" });
+  await expect(history).toContainText("Faixa antiga");
+  const list = history.locator(".queue-list");
+  expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await list.hover();
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 800);
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await expect(history.getByText("Faixa 29")).toBeInViewport();
+  await list.evaluate((el) => { el.scrollTop = 0; });
+  await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
+  await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
+  // Putting a song on while not listening brings you into the room.
+  await expect(page.getByRole("button", { name: "Parar de ouvir" })).toBeVisible();
+  // An admin setting: it lives in the room's settings, not among the player's options.
+  // Nothing playing: a discreet empty room, without the player's options.
+  await expect(page.locator(".song-panel.empty")).toBeVisible();
+  await expect(page.locator(".song-modes")).toHaveCount(0);
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`)).openModal({ kind: "channelSettings", accountId: "a", serverId: "shared", channelId: "radio" }));
+  const option = page.getByRole("switch", { name: "Tirar da fila o que já tocou" });
+  await expect(option).toHaveAttribute("aria-checked", "true");
+  await option.click();
+  await page.screenshot({ path: ".impeccable/review/radio-settings.png" });
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+  await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
+  await expect(page.locator(".settings-savebar")).toHaveCount(0);
+  await page.locator(".channel-settings-modal .modal-header .icon-btn").click();
+  await expect(page.locator(".channel-settings-modal")).toHaveCount(0);
+  // Back to the queue, which keeps its own request field.
+  await page.getByRole("tab", { name: /Na fila/ }).click();
+  await expect(page.locator(".song-side .song-request").getByRole("textbox", { name: "Link para adicionar à fila" })).toBeVisible();
+  // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.
+  await page.locator(".song-panel").getByRole("button", { name: "Pedir uma música" }).click();
+  const dialog = page.locator(".song-request-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator(".glass-overlay")).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: "Link para adicionar à fila" })).toBeFocused();
+  await dialog.getByRole("button", { name: "Ajustar o vidro" }).click();
+  const blur = dialog.getByRole("slider", { name: "Desfoque" });
+  await blur.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--glass-blur"))).toBe("17px");
+  await dialog.getByRole("slider", { name: "Transparência" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--glass-fill"))).toBe("55%");
+  // A long YouTube title wraps inside the panel: nothing scrolls sideways and "add" stays in reach.
+  await page.route("https://www.youtube.com/oembed**", (route) => route.fulfill({ json: { title: 'Falling In Reverse - "Ronald" (feat. Tech N9ne & Alex Terrible) [Official Music Video] — a very long title that keeps going', author_name: "Falling In Reverse" } }));
+  await dialog.getByRole("textbox", { name: "Link para adicionar à fila" }).fill("https://youtu.be/wWoQ7PFSYlk");
+  const add = dialog.getByRole("button", { name: "Adicionar à fila", exact: true });
+  await expect(dialog.locator(".song-request-copy strong")).toContainText("Official Music Video");
+  await expect(add).toBeVisible();
+  expect(await dialog.locator(".modal-body").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const [box, panel] = await Promise.all([add.boundingBox(), dialog.boundingBox()]);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+  await mkdir(".impeccable/review", { recursive: true });
+  await page.screenshot({ path: ".impeccable/review/song-request-glass.png" });
+  await page.keyboard.press("Escape");
+  // The mixer belongs to a playing room: start a track and listen.
+  Object.assign(playback, { queue: [{ id: "now", url: "https://requests-a.test/song.mp3", title: "Faixa atual", kind: "direct", addedBy: "me", addedAt: "2026-11-16T10:10:00Z" }], currentId: "now", paused: false, updatedAt: Date.now() });
+  await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "chat"));
+  await expect(page.locator(".song-room")).toHaveCount(0);
+  await page.evaluate(async () => {
+    (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openChannel("a", "shared", "radio");
+    (await import(/* @vite-ignore */ `${location.origin}/src/features/channels/PlaybackRooms.tsx`)).listenTo({ accountId: "a", serverId: "shared", channelId: "radio", name: "radio" });
+  });
+  await expect(page.locator(".song-modes")).toBeVisible();
+  // The mixer: a preset turns it on, only on this device.
+  await page.getByRole("button", { name: "Mixer", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const studio = page.locator(".sound-studio");
+  await studio.getByRole("button", { name: "Rock" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "rock", eq: [4, 3, 2, 0, -1, -1, 1, 3, 4, 4], preamp: -2 });
+  // Ten bands and a preamp, as vertical faders; a fader turns the preset into a custom curve.
+  await expect(studio.getByRole("group", { name: "Faixas do equalizador" }).getByRole("slider")).toHaveCount(10);
+  const bass = studio.getByRole("slider", { name: "Faixa de 31 Hz" });
+  await expect(bass).toHaveAttribute("aria-orientation", "vertical");
+  await bass.focus();
+  await page.keyboard.press("ArrowUp");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ preset: "custom", eq: [4.5, 3, 2, 0, -1, -1, 1, 3, 4, 4] });
+  await expect(studio.getByRole("slider", { name: "Pré-amplificação" })).toBeVisible();
+  await page.screenshot({ path: ".impeccable/review/sound-studio-mixer.png" });
+  // Nothing the mixer does reaches the room.
+  expect(sent.every((body) => body.op === "requeue" || body.op === "removePlayed")).toBe(true);
+});

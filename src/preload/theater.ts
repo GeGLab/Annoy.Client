@@ -1,4 +1,5 @@
 import { ipcRenderer } from "electron";
+import { cleanMixer, createMixerChain, mixerNeutral, type MixerChain, type MixerSettings } from "../shared/sound-mixer.ts";
 
 // Runs in every frame of a theater page. The frame whose video is the biggest one on
 // screen reports its time and the viewer's own play/pause/seek, and obeys the room.
@@ -8,7 +9,9 @@ import { ipcRenderer } from "electron";
 type Preset = "smooth" | "filter" | "echo" | "brake" | "bassswap" | "riser" | "cut" | "wash";
 const PRESETS: readonly Preset[] = ["smooth", "filter", "echo", "brake", "bassswap", "riser", "cut", "wash"];
 interface Command {
-  action: "play" | "pause" | "seek" | "volume" | "levels" | "fx" | "meter";
+  action: "play" | "pause" | "seek" | "volume" | "levels" | "fx" | "meter" | "mixer";
+  /** For "mixer": this listener's equalizer and effects (null: none). */
+  mixer?: unknown;
   position?: number;
   /** 0 to 1, for "volume": how loud the room wants this device's player. */
   volume?: number;
@@ -52,8 +55,13 @@ interface Graph {
   wet: GainNode;
   fade: GainNode;
   master: GainNode;
+  mixer: MixerChain;
 }
 let graph: Graph | null = null;
+/** The listener's own sound (song rooms); routed through WebAudio only when it changes something. */
+let mixerWanted: MixerSettings | null = null;
+/** Whether that sound reaches the music: false when the media can't be read. Undefined when nothing is asked. */
+let mixerReach: boolean | undefined;
 
 function readable(el: HTMLVideoElement): boolean {
   try {
@@ -83,14 +91,28 @@ function ensureGraph(): Graph | null {
     lowpass.connect(dry).connect(fadeNode);
     lowpass.connect(delay).connect(feedback).connect(delay);
     delay.connect(wet).connect(fadeNode);
-    fadeNode.connect(master).connect(context.destination);
+    const mixer = createMixerChain(context);
+    fadeNode.connect(master).connect(mixer.input);
+    mixer.output.connect(context.destination);
+    mixer.apply(mixerWanted);
     // From here the graph sets the loudness; the element stays at full volume.
     video.volume = 1;
-    graph = { el: video, context, low, high, lowpass, dry, delay, feedback, wet, fade: fadeNode, master };
+    graph = { el: video, context, low, high, lowpass, dry, delay, feedback, wet, fade: fadeNode, master, mixer };
     return graph;
   } catch {
     return null;
   }
+}
+
+/** The listener's sound on the current player; a neutral one leaves the media untouched. */
+function applyMixer(): void {
+  if (!video) return;
+  if (mixerNeutral(mixerWanted) && graph?.el !== video) { mixerReach = undefined; return; }
+  const g = ensureGraph();
+  if (g) {
+    g.mixer.apply(mixerWanted);
+    mixerReach = mixerNeutral(mixerWanted) ? undefined : true;
+  } else mixerReach = false;
 }
 
 /** Eases the player to the wanted volume instead of jumping, so ducking doesn't pump. */
@@ -495,6 +517,7 @@ function attach(next: HTMLVideoElement | null): void {
   video.addEventListener("ended", onEnded);
   if (holding) { video.volume = 0; if (!video.paused) video.pause(); }
   fadeVolume();
+  applyMixer();
   retap();
 }
 
@@ -526,6 +549,7 @@ setInterval(() => {
     paused: video.paused,
     ended: video.ended,
     ...(loud !== undefined && { loud }),
+    ...(mixerReach !== undefined && { mixer: mixerReach }),
   });
 }, 1000);
 
@@ -543,6 +567,12 @@ ipcRenderer.on("theater:control", (_event, command: Command) => {
     wanted = next;
     if (!video) attach(pick());
     fadeVolume();
+    return;
+  }
+  if (command.action === "mixer") {
+    mixerWanted = command.mixer ? cleanMixer(command.mixer) : null;
+    if (!video) attach(pick());
+    else applyMixer();
     return;
   }
   if (command.action === "meter") {

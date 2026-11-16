@@ -2,7 +2,7 @@ import {t as translate} from "../../../shared/localization/index.ts";
 import { useEffect, useState } from "react";
 import { useStore } from "../store.ts";
 import { Brand } from "./Brand.tsx";
-import { useSearchShortcut } from "../features/search/SearchButton.tsx";
+import { SearchButton, useSearchShortcut } from "../features/search/SearchButton.tsx";
 import { Icon } from "./ui.tsx";
 
 export function TitleBar() {
@@ -28,6 +28,7 @@ export function TitleBar() {
     <header className={`titlebar${window.annoy?.platform === "darwin" ? " titlebar-mac" : ""}`}>
       <Brand size={24} wordmark />
       <span className="titlebar-context truncate">{title}</span>
+      <SearchButton compact />
       <div className="window-controls">
         <a
           className="window-control window-help"

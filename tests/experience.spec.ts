@@ -68,6 +68,210 @@ test("slash preview lists installed commands, fills without sending and respects
   } finally { await close(); }
 });
 
+test("Steam profile commands send what was typed and ask for a linked Steam when no profile is given", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const steam = { id: "steamprofiler", name: "SteamProfiler", summary: "", scopes: ["server", "dm"], runtime: { type: "http" }, profile: { connection: "steam", image: "https://steamprofiler.test/{id}.png" }, commands: [{ name: "steam", description: "Steam profile card or comparison", usage: "profile <id> | versus <id1> <id2>" }] };
+    const sent: string[] = [];
+    await page.route("https://experience.test/api/servers/server/integrations", (route) => route.fulfill({ json: [{ integration: steam }] }));
+    await page.route("https://experience.test/api/channels/general/messages", async (route) => {
+      if (route.request().method() === "POST") sent.push(route.request().postData() ?? "");
+      await route.fulfill({ json: {} });
+    });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.instance = { ...s.instances.test.instance, integrations: true }; });
+    });
+    const input = page.getByRole("textbox", { name: "Conversar em #geral" });
+    await input.fill("/steam profile gordziilla");
+    await expect(page.getByRole("listbox", { name: "Comandos" })).toHaveCount(0);
+    await input.press("Enter");
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toContain("/steam profile gordziilla");
+    // No profile means "mine": without a Steam linked to the Annoy account nothing is sent and the draft stays.
+    await input.fill("/steam profile");
+    await input.press("Enter"); // picks the suggestion
+    await expect(input).toHaveValue("/steam profile ");
+    await input.press("Enter");
+    await expect(page.getByText("Conecte a sua Steam (Configurações → Atividade) para usar o comando sem informar o perfil.")).toBeVisible();
+    await expect(input).toHaveValue("/steam profile ");
+    expect(sent.length).toBe(1);
+  } finally { await close(); }
+});
+
+test("rooms reorder by drag and drop, into categories, and names repeat only across types or places", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const moves: { id: string; body: unknown }[] = [];
+    await page.route(/https:\/\/experience\.test\/api\/channels\/[^/]+\/move$/, async (route) => {
+      moves.push({ id: route.request().url().split("/").at(-2)!, body: route.request().postDataJSON() });
+      await route.fulfill({ json: {} });
+    });
+    const sidebar = page.locator(".channel-scroll");
+    const row = (name: string) => sidebar.locator(".channel", { hasText: name }).first();
+    const item = (name: string) => sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: name }) });
+    // An older server (no channelOrder) keeps the list fixed.
+    await expect(row("geral")).toBeVisible();
+    await expect(item("geral")).not.toHaveAttribute("draggable", "true");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        inst.instance = { ...inst.instance, channelOrder: true };
+        inst.serverStates.server.channels.push(
+          { id: "cat", serverId: "server", name: "Categoria", type: "category", topic: "", position: 2, parentId: null, overwrites: [] },
+          { id: "memes", serverId: "server", name: "memes", type: "text", topic: "", position: 3, parentId: "cat", overwrites: [] },
+        );
+      });
+    });
+    const order = async () => (await sidebar.locator(".channel:not(.server-bot-link) .channel-name, .category-toggle").allTextContents()).map((t) => t.trim());
+    await expect.poll(order).toEqual(["geral", "Sala de conversa", "Categoria", "memes"]);
+    // The voice room above "geral".
+    await item("Sala de conversa").dragTo(row("geral"), { targetPosition: { x: 20, y: 3 } });
+    await expect.poll(() => moves.length).toBe(1);
+    expect(moves[0]).toEqual({ id: "voice", body: { parentId: null, beforeId: "general" } });
+    await expect.poll(order).toEqual(["Sala de conversa", "geral", "Categoria", "memes"]);
+    // "geral" into the category, at its end.
+    await item("geral").dragTo(sidebar.locator(".category-header", { hasText: "Categoria" }));
+    await expect.poll(() => moves.length).toBe(2);
+    expect(moves[1]).toEqual({ id: "general", body: { parentId: "cat", beforeId: null } });
+    await expect.poll(order).toEqual(["Sala de conversa", "Categoria", "memes", "geral"]);
+    // A text room named like another one in the same category is refused before asking the server.
+    await page.evaluate(async () => {
+      const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`);
+      openModal({ kind: "createChannel", accountId: "test", serverId: "server", parentId: "cat", type: "text" });
+    });
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").first().fill("Memes");
+    await expect(dialog.getByRole("alert")).toHaveText("Já existe uma sala desse tipo com esse nome aqui.");
+    await dialog.getByRole("radio").nth(1).click();
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "channel-order.png") });
+  } finally { await close(); }
+});
+
+test("the cover's + creates rooms and categories, and text- or voice-only categories take only their rooms", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const created: Record<string, unknown>[] = [];
+    await page.route("https://experience.test/api/servers/server/channels", async (route) => {
+      const body = route.request().postDataJSON();
+      created.push(body);
+      await route.fulfill({ json: { id: `new-${created.length}`, serverId: "server", topic: "", position: 9, overwrites: [], ...body } });
+    });
+    const moves: unknown[] = [];
+    await page.route(/https:\/\/experience\.test\/api\/channels\/[^/]+\/move$/, async (route) => { moves.push(route.request().postDataJSON()); await route.fulfill({ json: {} }); });
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        inst.instance = { ...inst.instance, channelOrder: true, categoryKinds: true };
+        inst.serverStates.server.channels.push(
+          { id: "voz", serverId: "server", name: "Voz", type: "category", categoryKind: "voice", topic: "", position: 2, parentId: null, overwrites: [] },
+          { id: "texto", serverId: "server", name: "Texto", type: "category", categoryKind: "text", topic: "", position: 3, parentId: null, overwrites: [] },
+        );
+      });
+    });
+    // The + next to the server name: create a room or a category, never an invite.
+    const plus = page.locator(".live-community-summary").getByRole("button", { name: "Criar sala ou categoria" });
+    await plus.click();
+    await expect(page.getByRole("menuitem")).toHaveText(["Criar sala", "Criar categoria"]);
+    await page.getByRole("menuitem", { name: "Criar categoria" }).click();
+    let dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").first().fill("Jogatina");
+    await dialog.getByRole("combobox", { name: "Tipo da categoria" }).click();
+    await page.getByRole("option", { name: "Só voz" }).click();
+    await expect(dialog).toContainText("Voz e cinema");
+    await page.screenshot({ path: join(capture, "category-kind.png") });
+    await dialog.getByRole("button", { name: "Criar", exact: true }).click();
+    await expect.poll(() => created.length).toBe(1);
+    expect(created[0]).toMatchObject({ name: "Jogatina", type: "category", parentId: null, categoryKind: "voice" });
+    // A room: the category list only has the categories that take its kind.
+    await plus.click();
+    await page.getByRole("menuitem", { name: "Criar sala" }).click();
+    dialog = page.getByRole("dialog");
+    const categoryOptions = async () => {
+      await dialog.getByRole("combobox").click();
+      await expect(page.getByRole("option").first()).toBeVisible();
+      const names = (await page.getByRole("option").allTextContents()).map((t) => t.trim());
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("option")).toHaveCount(0);
+      return names;
+    };
+    expect(await categoryOptions()).toEqual(["Sem categoria", "Texto"]);
+    await dialog.getByRole("radio", { name: /Voz/ }).first().click();
+    expect(await categoryOptions()).toEqual(["Sem categoria", "Voz"]);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Opened from a voice-only category, the room starts as voice.
+    await page.locator(".category-header", { hasText: "Voz" }).hover();
+    await page.locator(".category-header", { hasText: "Voz" }).getByRole("button").nth(1).click();
+    await expect(page.getByRole("dialog").getByRole("radio", { name: /Voz/ }).first()).toBeChecked();
+    await page.keyboard.press("Escape");
+    // A text room dragged onto a voice-only category stays where it is.
+    const sidebar = page.locator(".channel-scroll");
+    await sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: "geral" }) }).dragTo(sidebar.locator(".category-header", { hasText: "Voz" }));
+    await sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: "geral" }) }).dragTo(sidebar.locator(".category-header", { hasText: "Texto" }));
+    await expect.poll(() => moves).toEqual([{ parentId: "texto", beforeId: null }]);
+  } finally { await close(); }
+});
+
+test("without Manage channels the cover has no + button", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await expect(page.locator(".live-community-summary")).toContainText("online");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.instances.test.serverStates.server.permissions = 1 | 2 | 1024; });
+    });
+    await expect(page.locator(".live-community-summary button")).toHaveCount(0);
+  } finally { await close(); }
+});
+
+test("a page playing in a room follows its slot when the channel bar is resized", async () => {
+  const { app, page, close } = await launch();
+  try {
+    await seed(page);
+    // Every position the native page is given, as the main process receives it.
+    await app.evaluate(({ ipcMain }) => {
+      const seen: { slot: string; rect: { x: number; width: number } }[] = [];
+      (globalThis as any).__bounds = seen;
+      ipcMain.on("theater:bounds", (_event, slot, rect) => seen.push({ slot, rect }));
+    });
+    const item = { id: "page", url: "https://example.invalid/watch", title: "Página", kind: "site", addedBy: "person", addedAt: "2026-11-16T10:00:00Z" };
+    await page.route("https://experience.test/api/channels/cinema/playback**", (route) => route.fulfill({ json: { channelId: "cinema", queue: [item], currentId: "page", paused: false, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true } }));
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { openChannel } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      setState((s: any) => {
+        s.settings.channelsWidth = 240;
+        s.instances.test.serverStates.server.channels.push({ id: "cinema", serverId: "server", name: "cinema", type: "theater", topic: "", position: 5, parentId: null, overwrites: [] });
+      });
+      openChannel("test", "server", "cinema");
+    });
+    const lastX = () => app.evaluate(() => {
+      const seen = ((globalThis as any).__bounds as { slot: string; rect: { x: number; width: number } }[]).filter((b) => b.slot === "theater" && b.rect.width > 0);
+      return seen.at(-1)?.rect.x ?? null;
+    });
+    // Like the music room's video: a slot of fixed size, which a wider bar only moves.
+    await page.addStyleTag({ content: ".theater-view { flex: none !important; width: 400px !important; height: 225px !important; }" });
+    await expect.poll(lastX).not.toBeNull();
+    const before = (await lastX())!;
+    // Wider channel bar: the slot moves right (its size may not change at all).
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.channelsWidth = 340; });
+    });
+    await expect.poll(lastX).toBeGreaterThanOrEqual(before + 90);
+    const slot = await page.locator(".theater-view, .theater-slot, [data-theater-slot]").first().boundingBox().catch(() => null);
+    if (slot) expect(Math.abs((await lastX())! - Math.round(slot.x))).toBeLessThanOrEqual(1);
+  } finally { await close(); }
+});
+
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {
@@ -137,12 +341,31 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
     await identity.click();
     await expect(page.locator(".self-profile .member-card-name")).toHaveText("Gordziilla");
     await expect(page.locator(".self-profile .profile-bio")).toHaveText("My Annoy biography");
+    // The card is clearly its own surface over the sidebar, and only "Editar perfil" stays in it.
+    const surfaces = () => page.evaluate(() => {
+      const rgb = (element: Element) => getComputedStyle(element).backgroundColor.match(/\d+(\.\d+)?/g)!.slice(0, 3).map(Number);
+      const card = document.querySelector(".self-profile")!, panel = document.querySelector(".user-panel")!.closest(".resizable-panel, .channels, aside") ?? document.querySelector(".user-panel")!;
+      const [a, b] = [rgb(card), rgb(panel)];
+      return { difference: a.reduce((sum, value, index) => sum + Math.abs(value - b[index]!), 0), border: getComputedStyle(card).borderTopWidth };
+    });
+    const surface = await surfaces();
+    expect(surface.difference).toBeGreaterThanOrEqual(24);
+    expect(surface.border).toBe("1px");
+    await expect(page.locator(".self-profile").getByRole("button", { name: /Editar perfil/ })).toBeVisible();
+    await expect(page.locator(".self-profile").getByRole("button", { name: /Trocar de conta/ })).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "self-profile-card-dark.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "light"; }); });
+    expect((await surfaces()).difference).toBeGreaterThanOrEqual(24);
+    await page.screenshot({ path: join(capture, "self-profile-card-light.png") });
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.settings.theme = "dark"; }); });
     await page.keyboard.press("Escape");
     await page.locator(".user-panel").getByRole("button", { name: "Configurações", exact: true }).click();
     await expect(page.locator(".settings-identity strong")).toHaveText("Gordziilla");
     await expect(page.locator(".settings-identity img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
     await expect(page.locator(".cloud-profile-head img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
     await page.screenshot({ path: join(capture, "annoy-profile-settings.png") });
+    // Switching accounts stays available in the user settings.
+    await expect(page.locator(".settings-shell").getByRole("button", { name: /Trocar de conta/ })).toBeVisible();
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
@@ -161,6 +384,66 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
     await expect(identity.locator("strong")).toHaveText("Old server profile");
     await expect(identity).toContainText("@old-server-name");
     await expect(identity.locator("img")).toHaveCount(0);
+  } finally { await close(); }
+});
+
+test("clicking a friend's name or row opens the conversation, not only the message bubble", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const me = { id: "annoy-person", username: "gordziilla", displayName: "Gordziilla", avatar: null, bio: null, banner: null, accentColor: null, dmKey: null, dmKeyVersion: null };
+        const other = { ...me, id: "friend", username: "bruna", displayName: "Bruna" };
+        s.social.status = "ready";
+        s.social.me = me;
+        s.social.profiles = { [me.id]: me, friend: other };
+        s.social.relationships = [{ user: other, status: "friend", nickname: null }];
+        s.social.presences = { friend: { status: "online", activities: [] } };
+        s.social.dms = [{ id: "cloud-dm", recipientId: "friend", store: { mine: false, theirs: false }, lastMessageId: null }];
+        s.social.threads["cloud-dm"] = { loaded: true, items: [], hasMoreRemote: false };
+        s.view = { kind: "home", accountId: null, dmId: null };
+      });
+    });
+    const openDm = () => page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().view.dmId ?? null);
+    const backToFriends = async () => {
+      await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.view = { kind: "home", accountId: null, dmId: null }; }); });
+      await expect(page.locator(".friend").filter({ hasText: "Bruna" })).toBeVisible();
+      expect(await openDm()).toBeNull();
+    };
+    const row = page.locator(".friend").filter({ hasText: "Bruna" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Mensagem para Bruna", exact: true }).click();
+    await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    // Anywhere on the row that is not one of its own buttons.
+    await row.locator(".friend-names > .muted").click();
+    await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    await row.getByRole("button", { name: "Mensagem para Bruna", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(openDm).toBe("cloud-dm");
+    await backToFriends();
+    // Unfriending is no longer a button on the row: it lives last in the friend's menu.
+    await expect(row.getByRole("button", { name: "Desfazer amizade" })).toHaveCount(0);
+    await expect(row.getByRole("button", { name: /Editar apelido/ })).toHaveCount(0);
+    const menu = page.getByRole("menu", { name: "Opções de Bruna" });
+    await row.locator(".friend-names > .muted").click({ button: "right" });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem").last()).toHaveText("Desfazer amizade");
+    await page.keyboard.press("Escape");
+    expect(await openDm()).toBeNull();
+    await row.getByRole("button", { name: "Opções de Bruna", exact: true }).click();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Mensagem", "Ligar para Bruna", "Chamada de vídeo com Bruna", "Editar apelido de Bruna", "Desfazer amizade"]);
+    await page.screenshot({ path: join(capture, "friend-menu-dark.png") });
+    await menu.getByRole("menuitem", { name: "Desfazer amizade" }).click();
+    const confirm = page.getByRole("alertdialog");
+    await expect(confirm).toContainText("Desfazer a amizade com Bruna?");
+    await confirm.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(row).toBeVisible();
+    // Picking from the menu never also opens the conversation behind it.
+    expect(await openDm()).toBeNull();
   } finally { await close(); }
 });
 
@@ -302,9 +585,26 @@ test("live redesign opens real community invites, activity conversations and dis
     await expect(page.locator(".live-room-card")).toContainText("Sala de conversa");
     await expect(page.locator(".live-room-card")).toContainText("Puxa uma cadeira");
     await page.locator(".live-conversation-welcome").getByRole("button", { name: "Traga sua galera" }).click();
+    // Before an invite exists there is nothing to copy: a plain hint, no squeezed button.
+    const share = page.locator(".invite-share");
+    await expect(share.locator(".invite-code-empty")).toHaveText("Gere um convite para compartilhar");
+    await expect(share.getByRole("button")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "invite-modal-empty-dark.png") });
     await page.getByRole("button", { name: "Gerar convite", exact: true }).click();
     await expect(page.locator(".invite-code")).toHaveText("real-invite");
     expect(invites).toEqual([{ expiresInHours: 168, maxUses: null }]);
+    const inviteLayout = () => page.locator(".invite-modal").evaluate((modal: HTMLElement) => {
+      const copy = modal.querySelector<HTMLElement>(".invite-copy")!, address = modal.querySelector<HTMLElement>(".invite-address")!;
+      const box = modal.getBoundingClientRect(), copyBox = copy.getBoundingClientRect(), addressBox = address.getBoundingClientRect();
+      return { copyOneLine: copyBox.height <= 44 && copyBox.width >= 70, addressInside: addressBox.right <= box.right && addressBox.left >= box.left, noOverflow: modal.scrollWidth <= modal.clientWidth };
+    });
+    await expect.poll(inviteLayout).toEqual({ copyOneLine: true, addressInside: true, noOverflow: true });
+    await expect(page.locator(".invite-share").getByRole("button", { name: /Copiar/ })).toBeVisible();
+    await page.screenshot({ path: join(capture, "invite-modal-ready-dark.png") });
+    await page.setViewportSize({ width: 940, height: 620 });
+    await fullyInside(page, ".invite-modal");
+    await expect.poll(inviteLayout).toEqual({ copyOneLine: true, addressInside: true, noOverflow: true });
+    await page.screenshot({ path: join(capture, "invite-modal-ready-minimum.png") });
     await page.keyboard.press("Escape");
     await page.screenshot({ path: join(capture, "redesign-live-community.png") });
     await page.getByRole("button", { name: "Ocultar boas-vindas" }).click();
@@ -906,6 +1206,10 @@ test("owners with other members must transfer ownership before leaving or removi
     await menu.getByRole("menuitem", { name: "Transferir propriedade…", exact: true }).click();
     const settings = page.getByRole("dialog", { name: "Comunidade de teste · Configurações", exact: true });
     await expect(settings.getByRole("button", { name: "Excluir servidor", exact: true })).toBeDisabled();
+    // The ownership shortcut lands on Advanced, where the critical actions live.
+    await expect(settings.getByRole("button", { name: "Avançado", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(settings.getByRole("heading", { name: "Avançado", exact: true })).toBeVisible();
+    await page.screenshot({ path: join(capture, "server-settings-advanced-dark.png") });
     await settings.getByRole("combobox", { name: "Novo dono do servidor" }).click();
     await page.getByRole("option", { name: "Outro membro", exact: true }).click();
     await settings.getByRole("button", { name: "Transferir propriedade", exact: true }).click();
@@ -1536,6 +1840,108 @@ test("wheel zoom and native in-app audio/video lifecycle", async () => {
   }
 });
 
+test("the image viewer is a slim frame around the picture with screenshot-style annotations", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.route("https://experience.test/image.png", async (route) =>
+      route.fulfill({ contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body: await readFile("build/icon.png") }),
+    );
+    await page.getByRole("button", { name: "Visualizar imagem.png" }).click();
+    const viewer = page.locator(".image-viewer");
+    await expect(page.locator(".viewer-file-info")).toContainText("512 × 512");
+    // The frame hugs a small picture instead of taking the window, under a single thin bar.
+    const frame = (await viewer.boundingBox())!;
+    const windowWidth = await page.evaluate(() => window.innerWidth);
+    expect(frame.width).toBeLessThan(windowWidth - 200);
+    expect((await page.locator(".viewer-bar").boundingBox())!.height).toBeLessThanOrEqual(45);
+    await expect(page.locator(".viewer-footer")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "image-viewer-slim.png") });
+
+    await page.getByRole("button", { name: "Anotar imagem", exact: true }).click();
+    const tools = page.getByRole("toolbar", { name: "Ferramentas de anotação" });
+    await expect(tools).toBeVisible();
+    const layer = page.locator(".viewer-layer");
+    const box = (await layer.boundingBox())!;
+    const at = (x: number, y: number) => ({ x: box.x + box.width * x, y: box.y + box.height * y });
+    const drag = async (from: [number, number], to: [number, number]) => {
+      const a = at(...from), b = at(...to);
+      await page.mouse.move(a.x, a.y); await page.mouse.down();
+      await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2); await page.mouse.move(b.x, b.y); await page.mouse.up();
+    };
+    const shapes = () => page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>(".viewer-layer")!;
+      const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+      let painted = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) painted++;
+      return painted;
+    });
+    // Arrow is the default tool; keyboard letters switch tools like in screenshot tools.
+    await expect(tools.getByRole("button", { name: "Seta", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await drag([0.15, 0.8], [0.45, 0.55]);
+    const afterArrow = await shapes();
+    expect(afterArrow).toBeGreaterThan(200);
+    await page.keyboard.press("r");
+    await expect(tools.getByRole("button", { name: "Retângulo", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await tools.getByRole("button", { name: "Cor #0a84ff", exact: true }).click();
+    await drag([0.55, 0.1], [0.9, 0.35]);
+    expect(await shapes()).toBeGreaterThan(afterArrow);
+    await tools.getByRole("button", { name: "Numerar", exact: true }).click();
+    await page.mouse.click(at(0.2, 0.2).x, at(0.2, 0.2).y);
+    await page.mouse.click(at(0.3, 0.2).x, at(0.3, 0.2).y);
+    await tools.getByRole("button", { name: "Texto", exact: true }).click();
+    await page.mouse.click(at(0.1, 0.4).x, at(0.1, 0.4).y);
+    await page.getByRole("textbox", { name: "Texto", exact: true }).fill("Olha aqui");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Texto", exact: true })).toHaveCount(0);
+    const annotated = await shapes();
+    await page.keyboard.press("Control+z");
+    expect(await shapes()).toBeLessThan(annotated);
+    await page.keyboard.press("Control+Shift+z");
+    expect(await shapes()).toBe(annotated);
+    // A crop dims everything outside it and decides the size of the result.
+    await page.keyboard.press("x");
+    await drag([0.1, 0.1], [0.6, 0.85]);
+    await expect(page.locator(".viewer-crop")).toBeVisible();
+    await page.screenshot({ path: join(capture, "image-viewer-annotate.png") });
+
+    // Saving downloads the annotated, cropped picture as a PNG.
+    await page.evaluate(() => {
+      (window as any).__saved = null;
+      HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { if (this.download) (window as any).__saved = { name: this.download, href: this.href }; };
+    });
+    await page.keyboard.press("Control+s");
+    await expect.poll(() => page.evaluate(() => (window as any).__saved?.name)).toBe("imagem-anotada.png");
+    const saved = await page.evaluate(async () => {
+      const image = new Image();
+      image.src = (window as any).__saved.href;
+      await image.decode();
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    });
+    expect(Math.abs(saved.width - 256)).toBeLessThanOrEqual(3);
+    expect(Math.abs(saved.height - 384)).toBeLessThanOrEqual(3);
+    // Copying puts the picture on the system clipboard.
+    await page.getByRole("button", { name: "Copiar imagem", exact: true }).click();
+    await expect(page.getByText("Imagem copiada.")).toBeVisible();
+    // Escape leaves the tools first, then closes the viewer.
+    await page.keyboard.press("Escape");
+    await expect(tools).toHaveCount(0);
+    await expect(viewer).toBeVisible();
+    // The edit goes out as a new picture in the message being written; the original attachment is untouched.
+    await page.getByRole("button", { name: "Enviar como nova imagem", exact: true }).click();
+    await expect(viewer).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Visualizar imagem.png" }).locator("img")).toHaveAttribute("src", "https://experience.test/image.png");
+    const pending = page.locator(".pending-files .pending-file");
+    await expect(pending).toHaveCount(1);
+    await expect(pending).toContainText("imagem-anotada.png");
+    // What was copied pastes into the composer as a picture, like a screenshot.
+    await page.getByRole("textbox", { name: "Conversar em #geral" }).focus();
+    await page.keyboard.press("Control+v");
+    await expect(pending).toHaveCount(2);
+    await page.screenshot({ path: join(capture, "image-viewer-attached.png") });
+  } finally { await close(); }
+});
+
 test("animated menus, custom selects, color history and unsaved settings", async () => {
   const { page, close } = await launch();
   try {
@@ -1725,6 +2131,21 @@ test("friend sidebar, elapsed activity, animated stack and persistent personal v
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await sidebar.evaluate((element) => { element.scrollTop = 250; });
     await page.screenshot({ path: join(capture, "dm-profile-expanded-light-minimum.png") });
+    // A pasted screenshot shows its picture in the DM composer before it is sent.
+    const png = (await readFile("build/icon.png")).toString("base64");
+    await page.locator(".dm-conversation .composer textarea").evaluate((textarea, data) => {
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], "image.png", { type: "image/png" }));
+      textarea.dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }));
+    }, png);
+    const pasted = page.locator(".dm-conversation .pending-file");
+    await expect(pasted).toHaveCount(1);
+    await expect.poll(() => pasted.locator(".pending-preview img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(pasted.locator(".pending-file-size")).not.toBeEmpty();
+    await page.screenshot({ path: join(capture, "dm-pasted-image-preview-light.png") });
+    await pasted.getByRole("button", { name: "Remover image.png" }).click();
+    await expect(pasted).toHaveCount(0);
   } finally { await close(); }
 });
 
@@ -1861,6 +2282,12 @@ test("global search keeps server context and server editing saves image drafts",
     await page.getByRole("button",{name:"Menu de Comunidade de teste"}).click();
     await page.getByRole("menuitem",{name:"Configurações do servidor",exact:true}).click();
     await page.getByLabel("Imagem do servidor",{exact:true}).setInputFiles("build/icon.png");
+    // A still image is framed (square) before it becomes the draft.
+    const iconCrop=page.getByRole("dialog",{name:"Enquadre a imagem do servidor"});
+    await expect(iconCrop.locator(".server-icon-crop-mask")).toBeVisible();
+    await iconCrop.getByRole("button",{name:"Usar este recorte",exact:true}).click();
+    await expect(iconCrop).toHaveCount(0);
+    await expect.poll(()=>page.getByAltText("Prévia da imagem do servidor").evaluate((img:HTMLImageElement)=>[img.naturalWidth,img.naturalHeight])).toEqual([512,512]);
     await page.getByLabel("Nome do servidor",{exact:true}).fill("Comunidade renovada");
     expect(writes).toHaveLength(0);
     await expect(page.getByAltText("Prévia da imagem do servidor")).toHaveAttribute("src",/^blob:/);
@@ -1881,6 +2308,159 @@ test("global search keeps server context and server editing saves image drafts",
     await page.locator(".service-card").last().scrollIntoViewIfNeeded();
     await page.screenshot({path:join(capture,"official-service-logos-light.png")});
   } finally {await close();}
+});
+
+test("a server cover replaces the default art at the top of the channel list and saves as a draft", async () => {
+  const { page, close } = await launch();
+  const writes: { kind: string; body?: unknown }[] = [];
+  try {
+    await seed(page);
+    const setInstance = (banners: boolean) => page.evaluate(async (banners) => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { const i = s.instances.test; i.instance = { ...i.instance, serverIcons: true, serverBanners: banners }; });
+    }, banners);
+    await setInstance(true);
+    const cover = page.locator(".live-community-cover");
+    await expect(cover.locator(".scenery")).toBeVisible();
+    await expect(cover.locator(".live-cover-photo")).toHaveCount(0);
+    await page.route("https://experience.test/api/servers/server", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      const body = route.request().postDataJSON(); writes.push({ kind: "patch", body });
+      return route.fulfill({ json: { id: "server", name: body.name, ownerId: "person", iconUrl: null, bannerUrl: null } });
+    });
+    await page.route("https://experience.test/api/servers/server/banner", (route) => {
+      writes.push({ kind: "banner" });
+      return route.fulfill({ json: { id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null, bannerUrl: "https://experience.test/image.png" } });
+    });
+    const openSettings = async () => {
+      await page.getByRole("button", { name: "Menu de Comunidade de teste" }).click();
+      await page.getByRole("menuitem", { name: "Configurações do servidor", exact: true }).click();
+    };
+    await openSettings();
+    const editor = page.locator(".server-banner-editor");
+    await expect(editor.getByRole("heading", { name: "Capa do servidor" })).toBeVisible();
+    await expect(page.locator(".server-profile-cover .scenery")).toBeVisible();
+    await page.getByLabel("Arquivo da capa do servidor", { exact: true }).setInputFiles("build/icon.png");
+    // The cover is framed wide, with the always-visible part dashed inside.
+    const coverCrop = page.getByRole("dialog", { name: "Enquadre a capa do servidor" });
+    const frame = coverCrop.locator(".server-cover-crop-mask");
+    await expect(frame).toBeVisible();
+    const guide = await frame.evaluate((element) => {
+      const area = element.getBoundingClientRect(), after = getComputedStyle(element, "::after");
+      return { ratio: Math.round(area.width / area.height * 10) / 10, left: parseFloat(after.left) / area.width, top: parseFloat(after.top) / area.height, dashed: after.borderTopStyle };
+    });
+    expect(guide.ratio).toBe(2.4);
+    expect(guide.dashed).toBe("dashed");
+    expect(guide.left).toBeGreaterThan(0.1);
+    expect(guide.top).toBeGreaterThan(0.05);
+    await page.screenshot({ path: join(capture, "server-cover-crop-dark.png") });
+    await coverCrop.getByRole("button", { name: "Usar este recorte", exact: true }).click();
+    await expect(coverCrop).toHaveCount(0);
+    await expect(page.getByAltText("Prévia da capa do servidor")).toHaveAttribute("src", /^blob:/);
+    await expect.poll(() => page.getByAltText("Prévia da capa do servidor").evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([960, 400]);
+    // The same original can be framed again before saving.
+    await editor.getByRole("button", { name: "Ajustar recorte", exact: true }).click();
+    await expect(coverCrop).toBeVisible();
+    await coverCrop.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(coverCrop).toHaveCount(0);
+    expect(writes).toHaveLength(0);
+    await page.screenshot({ path: join(capture, "server-cover-settings-dark.png") });
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.locator(".settings-savebar")).toHaveCount(0);
+    expect(writes.map((write) => write.kind)).toEqual(["patch", "banner"]);
+    expect(writes[0]!.body).not.toHaveProperty("bannerUrl");
+    await page.keyboard.press("Escape");
+    await expect(cover).toHaveClass(/has-banner/);
+    await expect(cover.locator(".live-cover-photo")).toHaveAttribute("src", "https://experience.test/image.png");
+    await expect(cover.locator(".scenery")).toHaveCount(0);
+    await expect(cover.locator(".live-community-identity")).toContainText("Comunidade de teste");
+    await page.locator(".resizable-panel.channels").screenshot({ path: join(capture, "server-cover-channel-list-dark.png") });
+    // The server's card in the Servers tab shows the same cover.
+    await page.route("https://experience.test/api/servers?**", (route) => route.fulfill({ json: { servers: [{ id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null, bannerUrl: "https://experience.test/image.png" }], total: 1, nextCursor: null } }));
+    await page.locator(".directory-tab:not(.store-tab)").click();
+    const card = page.locator(".server-directory-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.locator(".live-directory-card-photo")).toHaveAttribute("src", "https://experience.test/image.png");
+    await expect(card.locator(".scenery")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "server-cover-directory-dark.png") });
+    await card.click();
+    await expect(cover).toHaveClass(/has-banner/);
+    // Back to the default art.
+    writes.length = 0;
+    await openSettings();
+    await editor.getByRole("button", { name: "Usar a capa padrão", exact: true }).click();
+    await expect(page.locator(".server-profile-cover .scenery")).toBeVisible();
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(page.locator(".settings-savebar")).toHaveCount(0);
+    expect(writes).toEqual([{ kind: "patch", body: { name: "Comunidade de teste", bannerUrl: null } }]);
+    await page.keyboard.press("Escape");
+    await expect(cover.locator(".scenery")).toBeVisible();
+    await expect(cover).not.toHaveClass(/has-banner/);
+    // An instance without covers explains why there is nothing to upload.
+    await setInstance(false);
+    await openSettings();
+    await expect(editor).toContainText("Atualize a instância para usar uma capa própria.");
+    await expect(page.getByLabel("Arquivo da capa do servidor", { exact: true })).toHaveCount(0);
+  } finally { await close(); }
+});
+
+test("server settings pages that fetch their data (bans, stickers, integrations) finish loading", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { const i = s.instances.test; i.instance = { ...i.instance, serverStickers: true, integrations: true }; });
+    });
+    await page.route("https://experience.test/api/servers/server/stickers", (route) => route.fulfill({ json: { stickers: [], limit: 30 } }));
+    await page.getByRole("button", { name: "Menu de Comunidade de teste" }).click();
+    await page.getByRole("menuitem", { name: "Configurações do servidor", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Comunidade de teste · Configurações", exact: true });
+    const content = settings.locator(".settings-content");
+    await settings.getByRole("button", { name: "Banimentos", exact: true }).click();
+    await expect(content).toContainText("Ninguém foi banido.");
+    await settings.getByRole("button", { name: "Figurinhas", exact: true }).click();
+    await expect(content.getByRole("heading", { name: "Figurinhas", exact: true })).toBeVisible();
+    await expect(content).not.toContainText("Carregando…");
+    await settings.getByRole("button", { name: "Integrações", exact: true }).click();
+    await expect(content.locator(".server-integrations")).toBeVisible();
+    await expect(content).not.toContainText("Carregando…");
+    // Coming back reloads the page instead of staying on the placeholder.
+    await settings.getByRole("button", { name: "Banimentos", exact: true }).click();
+    await expect(content).toContainText("Ninguém foi banido.");
+  } finally { await close(); }
+});
+
+test("user settings manage the account's store integrations without leaving the server", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const settings = page.getByRole("dialog").filter({ has: page.locator(".settings-sidebar") });
+    const openSettings = () => page.evaluate(async () => {
+      const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`);
+      openModal({ kind: "userSettings" });
+    });
+    await openSettings();
+    await settings.getByRole("button", { name: "Integrações", exact: true }).click();
+    const content = settings.locator(".account-integrations");
+    await expect(content.getByRole("heading", { name: "Integrações" })).toBeVisible();
+    await expect(content).toContainText("sem sair de onde você está");
+    // This fixture has no Annoy cloud session: the catalog fails, says so and offers to retry in place.
+    await expect(content).toContainText("Não foi possível carregar a Loja.");
+    await content.getByRole("button", { name: "Tentar de novo" }).click();
+    await expect(content.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+    await settings.getByRole("searchbox", { name: "Buscar configurações" }).fill("chave api");
+    await expect(settings.locator(".settings-sidebar nav button")).toHaveText(["Integrações"]);
+    // Still in the server: managing integrations never navigated to the Store.
+    expect(await page.evaluate(async () => { const { getState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); return getState().view.kind; })).toBe("server");
+    await page.keyboard.press("Escape");
+    await expect(settings).toHaveCount(0);
+    // Integrations belong to the Annoy account: without one the page is not offered.
+    await page.evaluate(async () => { const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`); setState((s: any) => { s.global = null; }); });
+    await openSettings();
+    await expect(settings.locator(".settings-sidebar nav")).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Integrações", exact: true })).toHaveCount(0);
+  } finally { await close(); }
 });
 
 test("emoji reactions toggle, the Annoy set shows for everyone and the library imports and restores packs", async()=>{
@@ -2668,4 +3248,52 @@ test("microphone audio keeps flowing when the app is covered, hidden and restore
     }).catch(() => undefined);
     await close();
   }
+});
+
+test("reacting never moves the message: every chip has the sticker's height and the add button stays put", async()=>{
+  const {app,page,close}=await launch();
+  try{
+    await seed(page);
+    const sticker=`https://cdn.experience.test/i/${"1".repeat(40)}.png`;
+    await page.evaluate(async(sticker)=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.test.instance={...s.instances.test.instance,reactions:true};const m=s.instances.test.messages.general.items.find((x:any)=>x.id==="message");m.reactions=[{emoji:"😂",userIds:["peer"]},{emoji:sticker,userIds:["peer"]}];});},sticker);
+    await page.route("https://cdn.experience.test/i/**", async route => route.fulfill({ contentType: "image/png", body: await readFile("build/icon.png") }));
+    const reactions=await uiReactionFixture(app);
+    const row=page.locator('[data-message-id="message"]'), chips=row.locator(".message-reactions");
+    await expect(chips.locator(".reaction")).toHaveCount(2);
+    // An emoji takes the same 24px box as a sticker picture.
+    const box=(selector:string)=>chips.locator(selector).first().evaluate((e)=>{const r=e.getBoundingClientRect();return [Math.round(r.width),Math.round(r.height)];});
+    await expect.poll(()=>box(".reaction:not(.sticker) > span:first-child")).toEqual([24,24]);
+    await expect.poll(()=>box(".reaction.sticker .reaction-sticker")).toEqual([24,24]);
+    // The size the app really applies, and the glyph it draws at that size.
+    const emoji=await chips.locator(".reaction:not(.sticker) > span:first-child").first().evaluate((span)=>{
+      const style=getComputedStyle(span), c=document.createElement("canvas");c.width=c.height=80;
+      const g=c.getContext("2d")!;g.font=`${style.fontSize} ${style.fontFamily}`;g.textBaseline="middle";g.textAlign="center";g.fillText(span.textContent||"",40,40);
+      const d=g.getImageData(0,0,80,80).data;let top=80,bottom=0;for(let y=0;y<80;y++)for(let x=0;x<80;x++)if(d[(y*80+x)*4+3]>40){top=Math.min(top,y);bottom=Math.max(bottom,y);}
+      return { fontSize: style.fontSize, glyph: bottom-top+1 };
+    });
+    expect(emoji.fontSize).toBe("22px");
+    expect(emoji.glyph).toBeGreaterThanOrEqual(20);
+    const heights=()=>chips.locator(":scope > *").evaluateAll(els=>els.map(e=>Math.round(e.getBoundingClientRect().height)));
+    await expect.poll(heights).toEqual([32,32,32]);
+    // Every frame while a reaction goes out and comes back: where the message is and how tall.
+    const watch=()=>page.evaluate(()=>{const w=window as any;w.__frames=new Set<string>();const tick=()=>{const r=document.querySelector('[data-message-id="message"]')!.getBoundingClientRect();w.__frames.add(`${Math.round(r.top)}:${Math.round(r.height)}`);w.__raf=requestAnimationFrame(tick);};tick();});
+    const frames=()=>page.evaluate(()=>{const w=window as any;cancelAnimationFrame(w.__raf);return [...w.__frames];});
+    reactions.delay=true;
+    await watch();
+    await chips.locator(".reaction").first().click();
+    await expect(chips.getByRole("button",{name:"Adicionar reação",exact:true})).toBeDisabled();
+    reactions.release?.();
+    await expect(chips.locator(".reaction.selected")).toHaveCount(1);
+    await page.waitForTimeout(300);
+    expect(await frames()).toHaveLength(1);
+    await watch();
+    await chips.getByRole("button",{name:"Adicionar reação",exact:true}).click();
+    await page.getByRole("dialog",{name:"Escolher reação"}).getByRole("button",{name:"positivo gostei",exact:true}).click();
+    await expect(chips.locator(".reaction")).toHaveCount(3);
+    await page.waitForTimeout(300);
+    expect(await frames()).toHaveLength(1);
+    await expect.poll(heights).toEqual([32,32,32,32]);
+    await chips.screenshot({path:join(capture,"reaction-chips-uniform-dark.png")});
+    expect(reactions.writes).toEqual(["PUT","PUT"]);
+  } finally { await close(); }
 });

@@ -1,7 +1,8 @@
 // TODO item 1, end to end: two real Annoy apps, two Annoy accounts, no server
 // at all. Friends, status, encrypted DMs and a direct call go through the
 // Annoy cloud. Needs the local cloud stack (annoy-api-global: npm run
-// cloud:dev, the services and a dev Global); set ANNOY_TEST_CLOUD=1 to run.
+// cloud:dev, the services and a dev Global); set ANNOY_TEST_CLOUD=1 to run
+// (authannoy with REGISTRATION=open: sign-up is closed by default).
 import { electron } from "./fixtures/electron-launch.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { createRequire } from "node:module";
@@ -37,7 +38,7 @@ async function account(name: string) {
   const keys = kdf.newAccountKeys(), salt = kdf.newSalt();
   const pk = await kdf.derivePasswordKeys(password, salt, iterations);
   const terms = (await json("/v1/terms")).body.version;
-  await json("/v1/auth/register", { acceptTerms: terms, email, name, salt, authKey: pk.authKey, wrappedKeys: await kdf.wrapKeys(pk.wrapKey, keys), recovery: { mode: "recoveryKey", wrapped: await kdf.wrapWithRecovery(kdf.newRecoveryKey(), keys) } });
+  await json("/v1/auth/register", { acceptTerms: terms, ageConfirmed: true, email, name, salt, authKey: pk.authKey, wrappedKeys: await kdf.wrapKeys(pk.wrapKey, keys), recovery: { mode: "recoveryKey", wrapped: await kdf.wrapWithRecovery(kdf.newRecoveryKey(), keys) } });
   return { email, password, name };
 }
 
@@ -90,7 +91,9 @@ test("two Annoy accounts become friends, see each other online, talk by encrypte
     await expect(a.page.locator(".friend").filter({ hasText: bruno.name })).toContainText("Online", { timeout: 15_000 });
 
     // Friend nickname: private, only Alice (who gave it) sees it.
-    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: `Editar apelido de ${bruno.name}` }).click();
+    // The nickname is in the friend's menu (⋯), with the other per-friend options.
+    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: `Opções de ${bruno.name}`, exact: true }).click();
+    await a.page.getByRole("menuitem", { name: `Editar apelido de ${bruno.name}` }).click();
     await expect(a.page.getByText("Apelido para seu amigo. Só você vê.")).toBeVisible();
     await a.page.getByRole("textbox").last().fill("Bruninho");
     await a.page.getByRole("button", { name: "Confirmar" }).click();
@@ -101,7 +104,7 @@ test("two Annoy accounts become friends, see each other online, talk by encrypte
     expect(await b.page.evaluate(async () => JSON.stringify((await import(/* @vite-ignore */ `${location.origin}/src/store.ts`)).getState().social))).not.toContain("Bruninho");
 
     // Encrypted DM, both ways.
-    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: "Mensagem" }).click();
+    await a.page.locator(".friend").filter({ hasText: bruno.name }).getByRole("button", { name: "Mensagem", exact: true }).click();
     // Alice's side shows her private nickname for Bruno.
     const aBox = a.page.getByRole("textbox", { name: "Mensagem para Bruninho" });
     await aBox.fill("oi Bruno, mensagem criptografada");

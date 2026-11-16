@@ -1,4 +1,5 @@
 import { IntegrationIcon } from "../features/integrations/Setup.tsx";
+import { useComposerAttach } from "../lib/composer-attach.ts";
 import { useCommandSuggestions } from "../features/integrations/CommandSuggestions.tsx";
 import { useServerCommandChoices } from "../features/integrations/command-choices.ts";
 import {rich} from "../lib/localization.ts";
@@ -28,7 +29,9 @@ import {
   type UIEvent,
   type WheelEvent,
 } from "react";
-import { apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
+import { annoyIdOf, apiFor, jumpToMessage, loadMessages, loadPinnedMessages, markChannelRead, returnToLatest, sendTyping, setMessagePinned } from "../client.ts";
+import { fillSteamArgs } from "../../../shared/integration-commands.ts";
+import { ownSteam, ownSteamOrFail, steamOfAnnoy } from "../features/integrations/steam-args.ts";
 import { formatClock, formatDay, formatSize, formatTime, renderContent, type NameOf } from "../format.tsx";
 import { toast, getState, setState, useStore } from "../store.ts";
 import { act, Avatar, Icon, type IconName } from "./ui.tsx";
@@ -39,38 +42,11 @@ import { Textarea } from "./ui/textarea.tsx";
 import { notificationKey } from "../lib/notification-preferences.ts";
 import { UserProfile } from "./UserProfile.tsx";
 import { ReplyPreview } from "./ReplyPreview.tsx";
+import { PendingFile } from "./PendingFile.tsx";
 import { TypingIndicator } from "./TypingIndicator.tsx";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation, RequestError } from "../../../shared/requests.ts";
 import { readChatDraft, readPendingFiles, writeChatDraft, writePendingFiles, readChatAnchor, writeChatAnchor, clearChatAnchor, flushChatState, type ChatDraft } from "../chat-state.ts";
-
-function PendingFile({ file, onRemove, disabled }: { file: File; onRemove: () => void; disabled: boolean }) {
-  const [url, setUrl] = useState<string>();
-  const [failed, setFailed] = useState(false);
-  const media = /^(image|video|audio)\//.test(file.type);
-  useEffect(() => {
-    if (!media) return;
-    const source = URL.createObjectURL(file);
-    setUrl(source);
-    return () => URL.revokeObjectURL(source);
-  }, [file, media]);
-  return (
-    <div className="pending-file">
-      {media && !failed ? (
-        <div className="pending-preview">
-          {file.type.startsWith("image/") ? <img src={url} alt={translate("chat.2cefb830f434",{p0:(file.name)})} onError={() => setFailed(true)} />
-            : file.type.startsWith("video/") ? <video src={url} controls muted playsInline preload="metadata" aria-label={translate("chat.2cefb830f434",{p0:(file.name)})} onError={() => setFailed(true)} />
-            : <><Icon name="music" size={24} /><audio src={url} controls preload="metadata" aria-label={translate("chat.2cefb830f434",{p0:(file.name)})} onError={() => setFailed(true)} /></>}
-        </div>
-      ) : <div className="pending-preview pending-preview-file"><Icon name="paperclip" size={24} /><span>{failed ? translate("chat.03d8e08e0311") : translate("chat.f9c6a1bb7ec8")}</span></div>}
-      <div className="pending-file-details">
-        <span className="truncate" title={file.name}>{file.name}</span>
-        <span className="pending-file-size">{formatSize(file.size)}</span>
-        <button className="icon-btn tiny" disabled={disabled} onClick={onRemove} aria-label={translate("expression.82e85db7347e",{p0:(file.name)})}><Icon name="x" size={14} /></button>
-      </div>
-    </div>
-  );
-}
 
 const ImageViewer = lazy(() => import("./ImageViewer.tsx"));
 const MediaViewer = lazy(() => import("./MediaViewer.tsx"));
@@ -338,7 +314,7 @@ function MessageRow({
           <GiphyMessage accountId={accountId} content={message.content} />
           {message.content && <StickerMessage content={message.content} />}
           {message.attachments.length > 0 && <Attachments accountId={accountId} message={message} />}
-          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={reacting || !reactionsEnabled || !canReact} stickers={stickerReactions} onToggle={(emoji) => void react(emoji)} />
+          <ReactionChips reactions={message.reactions ?? []} me={me} nameOf={nameOf} disabled={!reactionsEnabled || !canReact} busy={reacting} stickers={stickerReactions} onToggle={(emoji) => void react(emoji)} />
         </div>
       </div>
       {!editing && (
@@ -508,6 +484,7 @@ function Composer({
     onDraftChange({ attachmentCount: next.length });
   };
   dropRef.current = addFiles;
+  useComposerAttach(canAttach && connected ? addFiles : null);
 
   const send = async () => {
     if (!connected) return;
@@ -519,6 +496,17 @@ function Composer({
     setSending(true);
     const signal = requests.signal;
     try {
+      // An integration that reads Steam profiles gets the Steam accounts behind mentions (and the sender's own when none is given).
+      if (content.startsWith("/")) {
+        const own = getState().instances[accountId]?.user?.id;
+        content = await fillSteamArgs(content, commands.choices, {
+          own: ownSteam,
+          mention: (token) => {
+            const id = token.slice(2, -1);
+            return id === own ? ownSteamOrFail() : steamOfAnnoy(annoyIdOf(accountId, id), picked.find((m) => m.id === id)?.name ?? id, "channel");
+          },
+        });
+      }
       await apiFor(accountId).sendMessage(channelId, content, files, replyToId, expiresIn ? new Date(Date.now() + expiresIn).toISOString() : null, signal);
       signal.throwIfAborted();
       onDraftChange({ text: "", replyToId: null, attachmentCount: 0 });
@@ -761,9 +749,19 @@ export function Chat(props: ChatProps) {
     state.top = el.scrollTop;
     const fromEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
     state.pinned = fromEnd < 80 && !entryRef.current?.hasMoreAfter;
-    const top = el.getBoundingClientRect().top;
-    const first = [...el.querySelectorAll<HTMLElement>(".virtual-message[data-row-id]")].find((row) => row.getBoundingClientRect().bottom > top + 1);
-    if (first?.dataset.rowId) {
+    const { top, bottom } = el.getBoundingClientRect();
+    // Only a row actually on screen can be the anchor. After a long jump (scrollbar drag,
+    // Home/End) the virtual window still holds the rows of the old position until the next
+    // commit; anchoring to one of those would pull the reader back to where they left.
+    const first = [...el.querySelectorAll<HTMLElement>(".virtual-message[data-row-id]")].find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.bottom > top + 1 && rect.top < bottom;
+    });
+    if (!first) {
+      state.anchor = null;
+      return;
+    }
+    if (first.dataset.rowId) {
       state.anchor = { id: first.dataset.rowId, offset: first.getBoundingClientRect().top - top };
       if (state.pinned) clearChatAnchor(accountId, channelId);
       else writeChatAnchor(accountId, channelId, { messageId: state.anchor.id, offset: state.anchor.offset! });

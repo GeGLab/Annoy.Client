@@ -5,6 +5,8 @@
   --bg-channels: #0c131d;
   --bg-main: #0e151f;
   --bg-elev: #152133;
+  /* Cards that float over the app (profile cards): visibly lifted from the sidebar they open from. */
+  --bg-popover: #16233a;
   --bg-hover: #192638;
   --bg-active: #213249;
   --bg-input: #111b28;
@@ -44,6 +46,7 @@
   --bg-channels: #ebeef2;
   --bg-main: #f7f9fb;
   --bg-elev: #e3e8ed;
+  --bg-popover: #ffffff;
   --bg-hover: #dce2e9;
   --bg-active: #d5dfe9;
   --bg-input: #eef1f5;

@@ -60,7 +60,7 @@ function Modals() {
     case "createServer":
       return <CreateServerModal accountId={modal.accountId} initialMode={modal.initialMode} />;
     case "serverSettings":
-      return <SettingsGuard><ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} /></SettingsGuard>;
+      return <SettingsGuard><ServerSettingsModal accountId={modal.accountId} serverId={modal.serverId} initialPage={modal.page} /></SettingsGuard>;
     case "channelSettings":
       return <SettingsGuard><ChannelSettingsModal accountId={modal.accountId} serverId={modal.serverId} channelId={modal.channelId} /></SettingsGuard>;
     case "createChannel":
@@ -154,6 +154,14 @@ export function App() {
   // Windows throttles covered apps; during a call that crackles everyone's voice.
   useEffect(() => { window.annoy?.voiceActive?.(inVoice); }, [inVoice]);
   useUnreadBadge();
+
+  // Glass panels read these: blur behind and how much of the panel is solid.
+  const glassBlur = useStore((s) => s.settings.glassBlur);
+  const glassTransparency = useStore((s) => s.settings.glassTransparency);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--glass-blur", `${glassBlur}px`);
+    document.documentElement.style.setProperty("--glass-fill", `${100 - glassTransparency}%`);
+  }, [glassBlur, glassTransparency]);
 
   useEffect(() => {
     applyTheme(theme, { accentColor, surfaceColor, themePreset });

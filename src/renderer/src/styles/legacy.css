@@ -1162,32 +1162,6 @@ h3 {
   padding: 10px;
 }
 
-.invite-box {
-  display: flex;
-  gap: 14px;
-  align-items: flex-end;
-  background: var(--bg-rail);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin: 12px 0 16px;
-}
-.invite-box > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.invite-box .section-label {
-  padding: 0;
-}
-.invite-code {
-  font-size: 1.1rem;
-  letter-spacing: 0.05em;
-}
-.invite-box .btn {
-  margin-left: auto;
-}
-
 .settings-section {
   display: flex;
   flex-direction: column;

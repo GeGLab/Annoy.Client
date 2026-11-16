@@ -347,16 +347,16 @@
 .song-upnext-copy small { font-size: 0.75rem; }
 
 /* Asking for a song: one roomy field, and what the link is before it goes in. */
-.song-room .song-side .song-request { flex: none; display: flex; flex-direction: column; gap: 8px; margin: 2px 10px 6px; padding: 8px; border: 1px solid var(--glass-line); border-radius: 18px; background: var(--soft); transition: border-color .2s ease, background .2s ease; }
-.song-room .song-side .song-request:focus-within { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: color-mix(in srgb, var(--text) 9%, transparent); }
-.song-room .song-side .song-request.dragging { border-style: dashed; border-color: color-mix(in srgb, var(--text) 45%, transparent); background: color-mix(in srgb, var(--text) 12%, transparent); }
-.song-room .song-side .song-request.invalid { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+:is(.song-room .song-side, .song-request-dialog) .song-request { flex: none; display: flex; flex-direction: column; gap: 8px; margin: 2px 10px 6px; padding: 8px; border: 1px solid var(--glass-line); border-radius: 18px; background: var(--soft); transition: border-color .2s ease, background .2s ease; }
+:is(.song-room .song-side, .song-request-dialog) .song-request:focus-within { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: color-mix(in srgb, var(--text) 9%, transparent); }
+:is(.song-room .song-side, .song-request-dialog) .song-request.dragging { border-style: dashed; border-color: color-mix(in srgb, var(--text) 45%, transparent); background: color-mix(in srgb, var(--text) 12%, transparent); }
+:is(.song-room .song-side, .song-request-dialog) .song-request.invalid { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .song-request-field { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: text; }
 .song-request-badge { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 10px; background: var(--soft); color: var(--text-muted); transition: background .2s ease, color .2s ease; }
 .song-request-badge.kind-youtube { background: #e62117; color: #fff; }
 .song-request-badge.kind-direct, .song-request-badge.kind-file { background: var(--text); color: var(--bg-main); }
 .song-request-badge.kind-site { background: color-mix(in srgb, var(--text) 16%, transparent); color: var(--text); }
-.song-room .song-side .song-request-field input { flex: 1; min-width: 0; height: 32px; padding: 0 2px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text); font-size: 0.89286rem; outline: none; }
+:is(.song-room .song-side, .song-request-dialog) .song-request-field input { flex: 1; min-width: 0; height: 32px; padding: 0 2px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text); font-size: 0.89286rem; outline: none; }
 .song-request-field input::placeholder { color: var(--text-muted); }
 .song-request-clear { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); }
 .song-request-clear:hover { background: var(--soft); color: var(--text); }
@@ -364,7 +364,7 @@
 .song-request-thumb { display: grid; place-items: center; width: 64px; aspect-ratio: 16 / 9; flex: none; overflow: hidden; border-radius: 7px; background: var(--soft); color: var(--text-muted); }
 .song-request-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .song-request-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.song-request-copy strong { color: var(--text); font-size: 0.82rem; font-weight: 700; }
+.song-request-copy strong { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .song-request-copy small { color: var(--text-muted); font-size: 0.72rem; }
 .song-request-add { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--text); color: var(--bg-main); font-size: 0.78rem; font-weight: 750; white-space: nowrap; transition: transform .15s var(--spring), opacity .15s ease; }
 .song-request-add:hover:not(:disabled) { transform: translateY(-1px); }
@@ -631,3 +631,94 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .queue-item.drop-before::before, .queue-item.drop-after::before { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 18%, transparent); pointer-events: none; }
 .queue-item.drop-before::before { top: -2px; }
 .queue-item.drop-after::before { bottom: -2px; }
+
+/* Glass panels (song request, studio): blur the room behind them, as much as the person set. */
+.dialog-overlay.glass-overlay { background: color-mix(in srgb, #05060a 30%, transparent); backdrop-filter: blur(var(--glass-blur, 16px)) saturate(1.15); -webkit-backdrop-filter: blur(var(--glass-blur, 16px)) saturate(1.15); }
+.dialog-content.glass-dialog {
+  background-color: color-mix(in srgb, var(--bg-elev) var(--glass-fill, 60%), transparent);
+  background-image: linear-gradient(160deg, color-mix(in srgb, #fff 10%, transparent), transparent 42%);
+  backdrop-filter: blur(calc(var(--glass-blur, 16px) * 1.5)) saturate(1.4);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur, 16px) * 1.5)) saturate(1.4);
+  border: 1px solid color-mix(in srgb, #fff 14%, transparent);
+  box-shadow: 0 24px 60px #0008, inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+}
+/* One column that may shrink: a long track title must never push the panel sideways. */
+.glass-dialog .modal-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; overflow-x: hidden; }
+.glass-dialog h2 { display: flex; align-items: center; gap: 8px; font-size: 1.28571rem; font-weight: 650; }
+.song-request-dialog { width: min(560px, calc(100vw - 32px)); }
+.song-request-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 32px; }
+.song-request-dialog-head .icon-btn.active { color: var(--accent-strong); background: color-mix(in srgb, var(--accent-strong) 14%, transparent); }
+.glass-controls { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 10px; }
+.glass-settings { display: grid; gap: 8px; margin-top: 24px; }
+.glass-settings > p { margin: 0; }
+
+/* What already played, under the queue. */
+.queue-history h3 { margin: 18px 12px 6px; color: var(--text-muted); font-size: .78571rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.queue-item.played { opacity: .82; }
+.queue-item.played:hover { opacity: 1; }
+
+/* Studio: the listener's mixer. */
+.sound-studio { width: min(640px, calc(100vw - 32px)); }
+.studio-mixer { display: grid; gap: 14px; }
+.studio-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-soft); font-size: .85714rem; }
+.studio-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.studio-chip.active { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+.studio-eq.off { opacity: .55; }
+.studio-slider { display: grid; grid-template-columns: 96px minmax(0, 1fr) 64px; align-items: center; gap: 12px; font-size: .85714rem; }
+.studio-slider output { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.studio-note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--warn); font-size: .85714rem; }
+@media (max-width: 520px) { .studio-slider { grid-template-columns: 72px minmax(0, 1fr) 52px; } }
+
+@media (prefers-reduced-motion: reduce) { .studio-eq { transition: none; } }
+
+/* The request form in its glass dialog: the room's variables, and the full width of the panel. */
+.song-request-dialog { --glass: color-mix(in srgb, var(--bg-elev) 52%, transparent); --glass-strong: color-mix(in srgb, var(--bg-elev) 72%, transparent); --glass-line: color-mix(in srgb, var(--text) 10%, transparent); --soft: color-mix(in srgb, var(--text) 7%, transparent); --spring: cubic-bezier(.2, .8, .2, 1); }
+.song-request-dialog .song-request { min-width: 0; margin: 0; }
+
+/* The equalizer: a preamp and ten vertical faders, like a graphic EQ. */
+.studio-eq { display: flex; align-items: stretch; gap: 14px; padding: 14px 12px 10px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bg-main) 35%, transparent); transition: opacity var(--duration); }
+.studio-bands { display: grid; flex: 1; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; background: linear-gradient(transparent calc(50% - 0.5px), color-mix(in srgb, var(--text) 12%, transparent) calc(50% - 0.5px), color-mix(in srgb, var(--text) 12%, transparent) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
+.studio-band { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.studio-band.preamp { padding-right: 14px; border-right: 1px solid color-mix(in srgb, var(--border) 80%, transparent); }
+.studio-band output { color: var(--text-soft); font-size: .71429rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.studio-band > span { color: var(--text-muted); font-size: .71429rem; font-variant-numeric: tabular-nums; }
+.studio-band .ui-slider[data-orientation="vertical"] { flex-direction: column; width: 22px; min-width: 0; height: 150px; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-track { width: 4px; height: 100%; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-fill { width: 100%; height: auto; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-thumb { width: 18px; height: 10px; border-radius: 3px; box-shadow: 0 1px 3px #0007; }
+.studio-actions { display: flex; justify-content: flex-end; }
+@media (max-width: 560px) { .studio-band output { display: none; } .studio-eq { gap: 8px; padding-inline: 8px; } .studio-band.preamp { padding-right: 8px; } }
+.studio-band .ui-slider-fill { display: none; }
+.song-modes-row { flex-wrap: wrap; }
+.song-modes-row > .song-mode { flex: 1 1 150px; }
+/* Chat / queue tabs with the small history button beside them. */
+.song-tabs-row { display: flex; flex: none; align-items: stretch; gap: 6px; margin: 0 10px 4px; }
+.song-tabs-row .song-tabs { flex: 1; margin: 0; }
+.song-tabs[data-active="history"] .song-tabs-glider { opacity: 0; }
+.song-history-btn { display: grid; place-items: center; width: 34px; flex: none; border: 0; border-radius: 10px; background: var(--soft); color: var(--text-muted); transition: background var(--duration), color var(--duration); }
+.song-history-btn:hover { color: var(--text); }
+.song-history-btn.active { background: color-mix(in srgb, var(--text) 13%, transparent); color: var(--text); }
+
+/* Nothing playing: the room waits, quietly. A neutral, outlined record with no glow, a dashed
+   frame, the room's colour toned down and everything centred, so it never reads as "playing". */
+.song-main.idle .song-layout { display: flex; align-items: center; justify-content: center; }
+.song-main.idle { --art: color-mix(in srgb, var(--text) 32%, var(--bg-main)); }
+.song-room:has(.song-main.idle) .song-ambient { opacity: .35; }
+.song-room:has(.song-main.idle) .song-aurora { display: none; }
+.song-panel.empty .song-art { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--text) 18%, transparent); box-shadow: none; }
+.song-panel.empty .song-disc { width: 64%; background: radial-gradient(circle, transparent 54%, color-mix(in srgb, var(--text) 14%, transparent) 55%, transparent 56%), color-mix(in srgb, var(--text) 6%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent); animation: song-idle-breathe 3.6s ease-in-out infinite; }
+.song-panel.empty .song-label { background: color-mix(in srgb, var(--text) 22%, transparent); }
+.song-panel.empty .song-title { color: var(--text-soft); }
+@keyframes song-idle-breathe { 50% { opacity: .55; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .song-panel.empty .song-disc { animation: none; } }
+/* Always one centred column, whatever the room's width (narrow rooms turn the playing panel into a grid). */
+.song-main.idle .song-panel.empty { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(380px, 100%); }
+/* Discreet: a small record instead of the big cover, a smaller title, no room options until a song plays. */
+.song-main.idle .song-panel.empty .song-stage { width: 72px; margin-bottom: 4px; }
+.song-main.idle .song-panel.empty .song-art { border: 0; border-radius: 50%; }
+.song-main.idle .song-panel.empty .song-disc { width: 100%; }
+.song-main.idle .song-panel.empty .song-title { font-size: 1.14286rem; font-weight: 650; }
+.song-main.idle .song-panel.empty .song-empty-hint { margin: 0 0 6px; color: var(--text-muted); font-size: .85714rem; }
+/* The history panel scrolls like the queue: its list fills the panel and scrolls inside it. */
+.queue-history { flex: 1; min-height: 0; display: flex; flex-direction: column; }

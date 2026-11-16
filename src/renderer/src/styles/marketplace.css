@@ -75,7 +75,9 @@
 .integration-event-actions { display: flex; gap: 8px; }
 .integration-requests { flex: none; border-bottom: 1px solid var(--border); background: var(--bg-elev); max-height: 25vh; overflow-y: auto; }
 .profile-panel h3 { display: flex; align-items: center; gap: 8px; }
-.profile-panel-image { display: block; max-width: 100%; height: auto; border-radius: 8px; }
+/* A card, not a banner: it sits beside the rest of the profile. */
+.profile-panel-image { display: block; width: min(100%, 320px); height: auto; border-radius: 8px; }
+.profile-panel > a { display: inline-block; max-width: 100%; border-radius: 8px; }
 .server-integrations .installed-bot { padding: 14px 0; }
 .integration-links .link-button { background: none; border: 0; padding: 0; cursor: pointer; color: var(--link); text-decoration: underline; }
 .command-suggestions { left: 0; right: 0; max-height: min(420px, 50vh); overflow-y: auto; padding: 6px; box-shadow: 0 12px 32px #0003; }
@@ -105,3 +107,7 @@
 .server-listing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
 .server-listing-tags > span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
 .server-listing-tags .server-listing-ready { color: var(--ok); }
+.integration-steam-source { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.integration-steam-source > p { margin: 0; }
+.integration-steam-link { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.integration-steam-linked { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ok); }

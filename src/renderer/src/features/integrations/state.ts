@@ -35,10 +35,12 @@ export interface IntegrationsState {
   accountStatus: "off" | "loading" | "ready" | "error";
   /** Integrations this account shows on its Annoy profile. */
   panels: string[];
+  /** A Steam profile typed by hand for those panels, used while no Steam account is linked. */
+  manualSteam: string | null;
 }
 
 const emptyAccount = (): AccountIntegrations => ({ v: 1, connected: {}, dms: {} });
-let state: IntegrationsState = { catalog: [], catalogStatus: "idle", account: emptyAccount(), accountStatus: "off", panels: [] };
+let state: IntegrationsState = { catalog: [], catalogStatus: "idle", account: emptyAccount(), accountStatus: "off", panels: [], manualSteam: null };
 const listeners = new Set<() => void>();
 function set(patch: Partial<IntegrationsState>): void {
   state = { ...state, ...patch };
@@ -139,7 +141,7 @@ async function read(): Promise<AccountIntegrations> {
 /** Signed in: read the catalog, the account's data and its profile panels. */
 export async function startIntegrations(me: string): Promise<void> {
   const mine = ++generation;
-  set({ account: emptyAccount(), accountStatus: "loading", panels: [] });
+  set({ account: emptyAccount(), accountStatus: "loading", panels: [], manualSteam: null });
   void loadCatalog();
   try {
     const account = await read();
@@ -148,13 +150,13 @@ export async function startIntegrations(me: string): Promise<void> {
   } catch {
     if (mine === generation) set({ accountStatus: "error" });
   }
-  cloud<{ integrations: string[] }>("dev", `/v1/users/${me}/panels`).then((p) => { if (mine === generation) set({ panels: p.integrations }); }, () => undefined);
+  cloud<{ integrations: string[]; manual?: { steam?: string | null } }>("dev", `/v1/users/${me}/panels`).then((p) => { if (mine === generation) set({ panels: p.integrations, manualSteam: p.manual?.steam ?? null }); }, () => undefined);
 }
 
 export function stopIntegrations(): void {
   generation++;
   version = 0;
-  set({ account: emptyAccount(), accountStatus: "off", panels: [] });
+  set({ account: emptyAccount(), accountStatus: "off", panels: [], manualSteam: null });
 }
 
 /** Another install of the account changed something. */
@@ -218,10 +220,12 @@ export async function disconnectIntegration(id: string): Promise<void> {
   registerConnection(id, false);
 }
 
-export async function setProfilePanel(id: string, shown: boolean): Promise<void> {
+/** Shows or hides a panel; `manualSteam` (when given) sets or, with null, forgets the Steam profile typed by hand. */
+export async function setProfilePanel(id: string, shown: boolean, manualSteam?: string | null): Promise<void> {
   const next = shown ? [...new Set([...state.panels, id])] : state.panels.filter((p) => p !== id);
-  const saved = await cloud<{ integrations: string[] }>("dev", "/v1/me/panels", { method: "PUT", body: { integrations: next } });
-  set({ panels: saved.integrations });
+  const body = { integrations: next, ...(manualSteam !== undefined && { manual: { steam: manualSteam } }) };
+  const saved = await cloud<{ integrations: string[]; manual?: { steam?: string | null } }>("dev", "/v1/me/panels", { method: "PUT", body });
+  set({ panels: saved.integrations, manualSteam: saved.manual?.steam ?? null });
   panelCache.clear();
 }
 

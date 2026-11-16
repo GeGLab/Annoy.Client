@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { DevelopmentIcon } from "./DevelopmentIcon.tsx";
 import { GameIcon } from "./GameIcon.tsx";
+import { Button } from "../../components/ui/button.tsx";
+import { steamJoinUrl } from "../../../../shared/steam-activity.ts";
 
 /** Album covers found for music that came without one, by artist and track ("" when the catalogs had none). */
 const covers = new Map<string, string>();
@@ -34,7 +36,8 @@ function useCover(artist: string | undefined, track: string, wanted: boolean): s
   return key ? covers.get(key) || undefined : undefined;
 }
 
-export function ActivityCard({ activity, compact = false }: { activity: UserActivity; compact?: boolean }) {
+/** joinAs: the person's Steam account, when the viewer may see it; with a lobby in the activity, it offers to join. */
+export function ActivityCard({ activity, compact = false, joinAs }: { activity: UserActivity; compact?: boolean; joinAs?: string | null }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!activity.startedAt) return;
@@ -54,6 +57,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
   const artwork = activity.artwork ?? cover ?? (game && activity.provider === "steam" && /^\d{1,10}$/.test(activity.appId ?? "")
     ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${activity.appId}/header.jpg` : undefined);
   const image = artwork && artwork !== failedArtwork;
+  const join = steamJoinUrl(activity, joinAs);
   return (
     <div className={`activity-card activity-${activity.kind}${compact ? " compact" : ""}`}>
       <span className={`activity-artwork${image ? "" : " no-artwork"}`}>
@@ -67,6 +71,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
         {activity.artist && <span title={activity.artist}>{activity.artist}</span>}
         {development && activity.file && <span className="activity-file" title={activity.file}><DevelopmentIcon name={activity.language ?? "code"} size={14} />{activity.file}</span>}
       </div>
+      {!compact && join && <Button size="sm" className="activity-join" onClick={() => { window.open(join); }} aria-label={translate("activity.joinLobby", { p0: activity.name })}>{translate("activity.join")}</Button>}
       {!compact && game && activity.provider === "steam" && activity.appId && (
         <a
           href={`https://store.steampowered.com/app/${activity.appId}/`}
@@ -88,7 +93,7 @@ export function ActivityCard({ activity, compact = false }: { activity: UserActi
 }
 
 
-export function ActivityStack({ activities, compact = false }: { activities: readonly UserActivity[]; compact?: boolean }) {
+export function ActivityStack({ activities, compact = false, joinAs }: { activities: readonly UserActivity[]; compact?: boolean; joinAs?: string | null }) {
   const [intent, setIntent] = useState<boolean | null>(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -113,7 +118,7 @@ export function ActivityStack({ activities, compact = false }: { activities: rea
   if(compact)return <div className="activity-summary"><button className="activity-summary-toggle" aria-expanded={intent===true} aria-label={translate("activity.9d47c960ad08",{p0:(activities[0]!.name),p1:(activities.length>1?counted(activities.length-1,"counts.activity.one","counts.activity.other"):"")})} onClick={()=>setIntent(intent!==true)}><ProviderIcon provider={activities[0]!.provider} size={14}/><span>{activities[0]!.name}</span>{activities.length>1&&<strong>+{activities.length-1}</strong>}</button>{intent===true&&<div className="activity-summary-details">{activities.map(activity=><ActivityCard key={`${activity.kind}:${activity.provider}`} activity={activity} compact/>)}</div>}</div>;
   return <div className={`activity-stack${activities.length > 1 ? " multiple" : ""}${open ? " expanded" : ""}`} onMouseEnter={() => { setHovered(true); setIntent(null); }} onMouseLeave={() => setHovered(false)} onFocusCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIntent(null); setFocused(true); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     {activities.length > 1 && <button className="activity-stack-toggle" aria-expanded={open} onClick={() => setIntent(!open)}>{activities.length}{translate("activity.948d3744fc44")}<span>{open ? translate("activity.2225d4a9a607") : translate("activity.e095e6d5592b")}</span></button>}
-    <div className="activity-stack-cards" ref={cards}>{activities.map((activity, index) => <div className="activity-stack-item" key={`${activity.kind}:${activity.provider}:${activity.appId ?? activity.name}`} style={{ zIndex: activities.length - index, marginTop: index && !open && heights[index] ? -heights[index]! + 14 : 0 }}><ActivityCard activity={activity} compact={compact} /></div>)}</div>
+    <div className="activity-stack-cards" ref={cards}>{activities.map((activity, index) => <div className="activity-stack-item" key={`${activity.kind}:${activity.provider}:${activity.appId ?? activity.name}`} style={{ zIndex: activities.length - index, marginTop: index && !open && heights[index] ? -heights[index]! + 14 : 0 }}><ActivityCard activity={activity} compact={compact} joinAs={joinAs} /></div>)}</div>
   </div>;
 }
 

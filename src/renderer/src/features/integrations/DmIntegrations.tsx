@@ -1,7 +1,7 @@
 import { isCallable } from "@annoy/protocol";
 import { useEffect, useState } from "react";
 import { t as translate } from "../../../../shared/localization/index.ts";
-import { navigate } from "../../client.ts";
+import { openModal } from "../../components/ui.tsx";
 import { Button } from "../../components/ui/button.tsx";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog.tsx";
 import { toast } from "../../store.ts";
@@ -61,7 +61,7 @@ export function DmIntegrationsDialog({ conversationId, me, otherName, onClose }:
             })}
           </div>
           <div className="form-actions">
-            <Button variant="secondary" onClick={() => { onClose(); navigate({ kind: "marketplace", accountId: null, serverId: null }); }}>{translate("integrations.openStore")}</Button>
+            <Button variant="secondary" onClick={() => { onClose(); openModal({ kind: "userSettings", section: "integrations" }); }}>{translate("integrations.manage")}</Button>
           </div>
         </div>
       </DialogContent>

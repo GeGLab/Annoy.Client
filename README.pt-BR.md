@@ -4,7 +4,7 @@
 
 **Um app desktop para todas as suas comunidades: servidores Annoy e também Discord, WhatsApp, TeamSpeak e outros, cada um na sua aba.**
 
-[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-7b61ff.svg)](LICENSE)
+[![Licença: AGPL-3.0](https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-7b61ff.svg)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-45-47848f?logo=electron&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
 
@@ -113,7 +113,7 @@ os servidores e abre o app oficial do TeamSpeak.
 
 ## Licença
 
-[MIT](LICENSE) © Gustavo Cruz.
+[GNU AGPL-3.0](LICENSE) © Gustavo Cruz.
 
 ## Desenvolvimento da interface
 

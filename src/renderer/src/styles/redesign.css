@@ -25,6 +25,11 @@
 .live-redesign .titlebar-context { position: absolute; left: 50%; width: auto; max-width: 40%; padding: 0; text-align: center; transform: translateX(-50%); font-size: 11px; color: var(--text-muted); }
 .live-redesign .titlebar-search { position: static; width: 290px; max-width: 33vw; height: 28px; margin-left: auto; border-radius: 6px; background: var(--bg-channels); font-size: 10px; }
 .live-redesign .window-controls, .live-redesign .titlebar .window-controls { margin-left: auto; }
+/* Search in the title bar is a magnifier, not a box: the channel name keeps the centre. */
+.live-redesign .titlebar .titlebar-search-compact { width: 32px; height: 28px; padding: 0; margin: 0 4px 0 auto; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); }
+.live-redesign .titlebar .titlebar-search-compact:hover { background: var(--bg-hover); color: var(--text); }
+.live-redesign .titlebar .titlebar-search-compact > span, .live-redesign .titlebar .titlebar-search-compact > kbd { display: none; }
+.live-redesign .titlebar .titlebar-search-compact + .window-controls { margin-left: 0; }
 .live-redesign.bar-side .clean-rail { width: 76px; padding: 17px 10px 14px; gap: 13px; border-right: 0; background: var(--bg-rail); }
 .live-redesign.bar-side .clean-rail .rail-brand { width: 47px; height: 47px; min-height: 47px; margin: 0 auto; }
 .live-redesign.bar-side .clean-rail .rail-brand img { width: 36px; height: 36px; border-radius: 12px; }
@@ -79,6 +84,9 @@
 }
 .live-community-cover .live-cover-art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; opacity: .8; }
 .live-community-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg,#0c131d 0%,transparent 95%); z-index: -1; }
+/* A server's own cover is a photo: shown at full strength, with shade where the text sits. */
+.live-community-cover .live-cover-photo { object-fit: cover; opacity: 1; pointer-events: none; user-select: none; }
+.live-community-cover.has-banner::after { background: linear-gradient(0deg,#0c131d 0%,rgb(12 19 29 / .55) 45%,transparent 70%), linear-gradient(180deg,rgb(12 19 29 / .6) 0%,transparent 34%); }
 .live-cover-eyebrow { position: absolute; top: 17px; left: 18px; display: flex; align-items: center; gap: 6px; font-size: 7px; letter-spacing: 1.3px; font-weight: 600; opacity: .65; }
 .live-community-identity { position: absolute; left: 16px; right: 17px; bottom: 12px; display: flex; align-items: center; gap: 9px; }
 .live-community-identity > strong { font-size: 21px; font-weight: 700; letter-spacing: -.7px; flex: 1; }
@@ -128,8 +136,11 @@
 .live-redesign .composer > .icon-btn:first-child { color: var(--text-muted); }
 .live-redesign .composer-send { border-radius: 7px; background: var(--accent); color: var(--on-accent); width: 31px; height: 31px; min-height: 31px; margin-left: 4px; }
 .live-redesign .composer-send:hover { background: var(--accent-hover); }
-.live-redesign .reaction { min-height: 24px; border-radius: 6px; padding: 2px 7px; gap: 5px; font-size: 10px; background: var(--bg-elev); }
-.live-redesign .reaction > span:first-child { font-size: 13px; }
+/* Reaction chips: one 32px height for emoji, stickers and the add button; the emoji
+   fills the same 24px box as a sticker picture (see social-experience.css). */
+.live-redesign .reaction { min-height: 32px; border-radius: 6px; padding: 0 9px; gap: 6px; font-size: 10px; background: var(--bg-elev); }
+.live-redesign .reaction.sticker { padding: 0 9px 0 4px; }
+.live-redesign .reaction > span:first-child { font-size: 22px; }
 .live-redesign .message-tools { border-radius: 8px; padding: 3px; background: var(--bg-channels); box-shadow: 0 4px 15px #0003; }
 .live-redesign .attachment-image { border-radius: 9px; }
 .live-redesign .dm-conversation .chat-header { padding-inline: 23px; }
@@ -208,6 +219,11 @@
 .live-redesign .friend { max-width: 1100px; margin: 0 auto; padding: 16px 9px; min-height: 72px; border-bottom: 1px solid var(--border); border-radius: 6px; }
 .live-redesign .friend .avatar { border-radius: 15px; }
 .live-redesign .friend-names strong { font-size: 13px; }
+/* A friend's row opens the conversation; the name is its keyboard-reachable button. */
+.friend-openable { cursor: pointer; }
+.friend-name-link { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.friend-name-link:hover strong { text-decoration: underline; text-underline-offset: 2px; }
+.friend-name-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .live-redesign .friend-names > .muted { font-size: 10px; }
 .live-redesign .friend .icon-btn { border-radius: 50%; background: var(--bg-channels); color: var(--text-muted); width: 32px; min-height: 32px; height: 32px; }
 .live-redesign .friend .icon-btn:hover { color: var(--text); background: var(--bg-hover); }
@@ -236,6 +252,7 @@
 .live-redesign .server-directory-card { position: relative; display: flex; flex-wrap: wrap; align-items: center; padding: 142px 18px 19px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-channels); overflow: hidden; gap: 12px; min-height: 218px; }
 .live-directory-card-art { position: absolute; top: 0; left: 0; right: 0; height: 118px; overflow: hidden; background: #101c2d; }
 .live-directory-card-art > .scenery { width: 100%; height: 100%; }
+.live-directory-card-photo { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
 .live-redesign .server-directory-card:nth-child(3n+2) .live-directory-card-art > .scenery { transform: scale(1.3); transform-origin: 35% 70%; }
 .live-redesign .server-directory-card:nth-child(3n) .live-directory-card-art > .scenery { transform: scale(1.15); transform-origin: 70% 50%; }
 .live-redesign .server-directory-avatar { position: absolute; top: 95px; left: 16px; width: 44px; height: 44px; border: 4px solid var(--bg-channels); border-radius: 15px; background: var(--accent); color: var(--on-accent); font-size: 12px; }
@@ -244,25 +261,30 @@
 .live-redesign .server-directory-card > .icon { color: var(--text-muted); margin-left: auto; }
 
 /* Settings, profiles and media use the same visual system. */
-.user-settings-modal { width: min(930px,calc(100vw - 48px)); border-radius: 16px; background: var(--bg-main); overflow: hidden; }
-.user-settings-modal > .modal-header { padding: 24px 29px; min-height: 80px; }
-.user-settings-modal .modal-header h2 { font-size: 24px; letter-spacing: -.8px; font-weight: 650; }
-.user-settings-modal .settings-layout { min-height: 490px; }
-.user-settings-modal .settings-sidebar { background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
-.user-settings-modal .settings-identity { padding: 4px 7px 20px; gap: 11px; }
-.user-settings-modal .settings-identity .avatar { border-radius: 14px; }
-.user-settings-modal .settings-sidebar input { min-height: 33px; font-size: 10px; margin-bottom: 16px; border-radius: 7px; }
-.user-settings-modal .settings-sidebar nav button { border-radius: 7px; padding: 10px 11px; font-size: 11px; gap: 10px; }
-.user-settings-modal .settings-sidebar nav button[aria-current=page] { color: var(--text); background: var(--accent-soft); }
-.user-settings-modal .settings-content { padding: 27px 32px 35px; background: var(--bg-main); }
-.user-settings-modal .settings-section > h3 { font-size: 20px; font-weight: 600; letter-spacing: -.6px; }
-.user-settings-modal .settings-section > .muted { font-size: 12px; line-height: 1.8; }
-.user-settings-modal .profile-banner { border-radius: 10px; }
-.user-settings-modal .theme-preview { height: 86px; border-radius: 6px; }
-.user-settings-modal .theme-preset { border-radius: 9px; padding: 5px; }
-.user-settings-modal .theme-preset-caption { padding: 9px 5px 6px; font-size: 10px; }
-.user-settings-modal .preference-card { border-radius: 10px; background: var(--bg-channels); }
-.member-profile, .full-profile { border-radius: 15px; background: var(--bg-main); }
+.settings-shell { width: min(930px,calc(100vw - 48px)); border-radius: 16px; background: var(--bg-main); overflow: hidden; }
+.settings-shell > .modal-header { padding: 24px 29px; min-height: 80px; }
+.settings-shell .modal-header h2 { font-size: 24px; letter-spacing: -.8px; font-weight: 650; }
+.settings-shell .settings-layout { min-height: 490px; }
+.settings-shell .settings-sidebar { background: var(--bg-channels); padding: 22px 17px; border-right: 1px solid var(--border); }
+.settings-shell .settings-identity { padding: 4px 7px 20px; gap: 11px; }
+.settings-shell .settings-identity .avatar { border-radius: 14px; }
+.settings-shell .settings-sidebar input { min-height: 33px; font-size: 10px; margin-bottom: 16px; border-radius: 7px; }
+.settings-shell .settings-sidebar nav button { border-radius: 7px; padding: 10px 11px; font-size: 11px; gap: 10px; }
+.settings-shell .settings-sidebar nav button[aria-current=page] { color: var(--text); background: var(--accent-soft); }
+.settings-shell .settings-content { padding: 27px 32px 35px; background: var(--bg-main); }
+.settings-shell .settings-section > h3 { font-size: 20px; font-weight: 600; letter-spacing: -.6px; }
+.settings-shell .settings-section > .muted { font-size: 12px; line-height: 1.8; }
+.settings-shell .profile-banner { border-radius: 10px; }
+.settings-shell .theme-preview { height: 86px; border-radius: 6px; }
+.settings-shell .theme-preset { border-radius: 9px; padding: 5px; }
+.settings-shell .theme-preset-caption { padding: 9px 5px 6px; font-size: 10px; }
+.settings-shell .preference-card { border-radius: 10px; background: var(--bg-channels); }
+.full-profile { border-radius: 15px; background: var(--bg-main); }
+/* Profile cards float above the sidebar: their own surface, an edge and a shadow, never the sidebar's colour. */
+.member-profile { border: 1px solid var(--border-strong); border-radius: 15px; background: var(--bg-popover); box-shadow: var(--shadow-overlay); }
+.member-profile .btn-ghost { background: color-mix(in srgb, var(--text) 7%, var(--bg-popover)); color: var(--text); }
+.member-profile .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 13%, var(--bg-popover)); }
+.self-profile > .btn + .btn { margin-top: 10px; }
 .live-redesign .stage-card { border-radius: 13px; background: radial-gradient(circle at center,var(--bg-elev),var(--bg-channels)); border: 1px solid var(--border); }
 .live-redesign .stage-card.person .avatar { border-radius: 35%; }
 .live-redesign .voice-stage { background: var(--bg-rail); }

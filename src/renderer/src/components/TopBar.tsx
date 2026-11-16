@@ -116,7 +116,7 @@ export function UserPanel() {
                 {activities.length > 0 && <p className="muted">{settings.manualPresence === "offline" ? translate("common.eb909edd26f9") : groupActivitySupported ? translate("common.57415ffd7b3b") : translate("common.7bda91a1a79b")}</p>}
               </div>
               <Popover.Close asChild><button className="btn btn-ghost" onClick={openSettings}>{rich("common.fdea9c93093b",{p0:(<Icon name="edit" size={16} />)})}</button></Popover.Close>
-              <Popover.Close asChild><button className="btn btn-ghost" onClick={() => openModal({ kind: "switchAccount" })}>{rich("common.facf0ad3761a",{p0:(<Icon name="users" size={16} />)})}</button></Popover.Close>
+              {/* "Trocar de conta" lives in the user settings (Conta) for now. */}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>

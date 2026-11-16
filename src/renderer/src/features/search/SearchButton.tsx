@@ -29,10 +29,20 @@ export function useSearchShortcut() {
   }, [accountId, view, modal]);
 }
 
-export function SearchButton() {
+/**
+ * The visible way into search. `compact` is the title-bar magnifier: no box takes
+ * room there, but search stays one click away wherever Ctrl+K works.
+ */
+export function SearchButton({ compact = false }: { compact?: boolean }) {
   const { view, accountId, open } = useSearch();
-  return accountId && view.kind === "server" ? (
-    <button className="titlebar-search" onClick={open} aria-label={translate("common.fd3cfa0ab6b4")}>
+  const visible = compact ? view.kind !== "service" : view.kind === "server";
+  return accountId && visible ? (
+    <button
+      className={`titlebar-search${compact ? " titlebar-search-compact" : ""}`}
+      onClick={open}
+      aria-label={translate("common.fd3cfa0ab6b4")}
+      title={compact ? translate("common.fd3cfa0ab6b4") : undefined}
+    >
       <Search size={14} />
       <span>{view.kind === "server" ? translate("common.f995fa5ca4fd") : translate("common.a85a80ba87f5")}</span>
       <kbd>{translate("common.854f7b248f9d")}</kbd>
