@@ -14,6 +14,7 @@ const test = base.extend<{ libraryPage: Page }>({
     const env = { ...process.env, ANNOY_GLOBAL_URL: auth.url, ANNOY_TEST_DATA: directory, ELECTRON_RENDERER_URL: "http://127.0.0.1:5178", ANNOY_CDN_URL: "http://127.0.0.1:5178" };
     delete env.ELECTRON_RUN_AS_NODE;
     const app = await electron.launch({ executablePath: require("electron"), args: [resolve("tests/fixtures/electron.cjs")], env });
+    const child = app.process();
     try {
       const page = await app.firstWindow();
       await auth.keepAuthenticated(page);
@@ -21,7 +22,11 @@ const test = base.extend<{ libraryPage: Page }>({
       await use(page);
     } finally {
       await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.destroy())).catch(() => undefined);
-      await app.close(); await auth.close();
+      // Like voice-watch and server-admin: closing Electron on Windows runners can stall well past
+      // the test's own timeout after the test passed; give it 15 s, then end the process.
+      await Promise.race([app.close().catch(() => undefined), new Promise((done) => setTimeout(done, 15_000))]);
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      await auth.close();
       if (!directory.startsWith(join(tmpdir(), "annoy-catalog-test-"))) throw new Error("Unsafe test directory");
       await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
