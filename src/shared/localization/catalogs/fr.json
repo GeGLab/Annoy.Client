@@ -2663,5 +2663,7 @@
   "image.undo": "Annuler",
   "image.redo": "Rétablir",
   "image.clear": "Effacer les annotations",
-  "image.textPlaceholder": "Tapez puis appuyez sur Entrée"
+  "image.textPlaceholder": "Tapez puis appuyez sur Entrée",
+  "channels.nameTaken": "Il existe déjà un salon de ce type avec ce nom ici.",
+  "channels.categoryNameTaken": "Il existe déjà une catégorie avec ce nom."
 }

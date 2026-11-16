@@ -19,10 +19,11 @@ import { useOwnActivities } from "../features/activity/use-activity.ts";
 import * as ProfilePopover from "@radix-ui/react-popover";
 import { EntityPicker } from "./ui/entity-picker.tsx";
 import { has, isVoiceChannel, Permission, type Channel, type Member, type ServerState, type VoiceState } from "@annoy/protocol";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type LiHTMLAttributes } from "react";
+import { channelNameTaken, dropFor, moveInOrder, type ChannelDrop } from "../../../shared/channel-order.ts";
 import { apiFor, editServerNickname, ensureServer, joinVoice, loadServerMembers, navigate, openChannel, openDm, reconnect } from "../client.ts";
 import { channelPerms, displayNameOf, memberColor, rankOf } from "../perms.ts";
-import { getState, toast, useStore } from "../store.ts";
+import { getState, setState, toast, useStore } from "../store.ts";
 import { Chat } from "./Chat.tsx";
 import { VoiceStage } from "./VoiceStage.tsx";
 import { FilesView } from "../features/channels/FilesView.tsx";
@@ -117,12 +118,15 @@ function ChannelRow({
   channel,
   me,
   activeId,
+  itemProps,
 }: {
   accountId: string;
   state: ServerState;
   channel: Channel;
   me: string;
   activeId: string | null;
+  /** Drag and drop in the room list. */
+  itemProps?: LiHTMLAttributes<HTMLLIElement>;
 }) {
   const unread = useStore((s) => s.instances[accountId]?.unread[channel.id]);
   const voice = useStore((s) => s.voice);
@@ -149,7 +153,7 @@ function ChannelRow({
     // A theater opens first: people may watch along without joining the call.
     const theater = channel.type === "theater";
     return (
-      <li>
+      <li {...itemProps}>
         <div
           className={`channel voice${canManage ? " has-gear" : ""}${connected || (theater && activeId === channel.id) ? " active" : ""}${canConnect || theater ? "" : " locked"}`}
           onClick={() => {
@@ -183,11 +187,11 @@ function ChannelRow({
   );
   // Song rooms show what plays and who listens, live.
   if (channel.type === "song") {
-    return <SongChannelRow accountId={accountId} state={state} channel={channel} active={activeId === channel.id} unread={unread} muted={muted} actions={actions} onOpen={() => openChannel(accountId, state.server.id, channel.id)} />;
+    return <SongChannelRow accountId={accountId} state={state} channel={channel} active={activeId === channel.id} unread={unread} muted={muted} actions={actions} onOpen={() => openChannel(accountId, state.server.id, channel.id)} itemProps={itemProps} />;
   }
 
   return (
-    <li>
+    <li {...itemProps}>
       <div
         className={`channel${activeId === channel.id ? " active" : ""}${unread ? " unread" : ""}`}
         onClick={() => openChannel(accountId, state.server.id, channel.id)}
@@ -240,6 +244,65 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
       categories: cats.map((cat) => ({ cat, children: sorted.filter((c) => c.parentId === cat.id) })),
     };
   }, [state.channels]);
+
+  // Drag and drop: rooms within and between categories, categories among themselves.
+  const orderSupported = useStore((s) => s.instances[accountId]?.instance?.channelOrder === true);
+  const reorder = canChannels && orderSupported;
+  const [dragged, setDragged] = useState<Channel | null>(null);
+  const [over, setOver] = useState<{ id: string; edge: "before" | "after" | "into" } | null>(null);
+  const placeOf = (c: Channel) => (c.type !== "category" && c.parentId && categories.some((k) => k.cat.id === c.parentId) ? c.parentId : null);
+  const siblingsOf = (c: Channel) => (c.type === "category" ? categories.map((k) => k.cat) : placeOf(c) ? categories.find((k) => k.cat.id === placeOf(c))!.children : loose);
+  const edgeOf = (event: DragEvent<HTMLLIElement>, target: Channel, source: Channel) => {
+    if (target.type === "category" && source.type !== "category") return "into" as const;
+    const row = event.currentTarget.querySelector(":scope > .channel, :scope > .category-header, :scope > div") ?? event.currentTarget;
+    const rect = row.getBoundingClientRect();
+    return event.clientY < rect.top + rect.height / 2 ? ("before" as const) : ("after" as const);
+  };
+  const move = async (channel: Channel, drop: ChannelDrop) => {
+    const current = state.channels;
+    const next = moveInOrder(current, channel.id, drop);
+    const order = (list: readonly Channel[]) => [...list].sort((a, b) => a.position - b.position).map((c) => `${c.id}:${c.parentId ?? ""}`).join("|");
+    if (order(next) === order(current)) return;
+    if (channel.type !== "category" && !channel.temporary && (channel.parentId ?? null) !== drop.parentId && channelNameTaken(current, channel.type, channel.name, drop.parentId, channel.id))
+      return toast(translate("channels.nameTaken"));
+    setState((s) => { const server = s.instances[accountId]?.serverStates[state.server.id]; if (server) server.channels = next; });
+    try {
+      await apiFor(accountId).post(`/channels/${channel.id}/move`, drop);
+    } catch (err) {
+      toast((err as Error).message);
+      void ensureServer(accountId, state.server.id, true);
+    }
+  };
+  const itemProps = (c: Channel): LiHTMLAttributes<HTMLLIElement> => !reorder ? {} : {
+    draggable: true,
+    className: [c.type === "category" ? "category" : "", dragged?.id === c.id ? "dragging" : "", over?.id === c.id ? `drop-${over.edge}` : ""].filter(Boolean).join(" ") || undefined,
+    onDragStart: (event) => {
+      event.stopPropagation();
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", c.name);
+      setDragged(c);
+    },
+    onDragEnd: () => { setDragged(null); setOver(null); },
+    onDragOver: (event) => {
+      if (!dragged || dragged.id === c.id) return;
+      const edge = edgeOf(event, c, dragged);
+      if (!dropFor(dragged, c, edge, placeOf(c), siblingsOf(c))) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      if (over?.id !== c.id || over.edge !== edge) setOver({ id: c.id, edge });
+    },
+    onDragLeave: (event) => { if (over?.id === c.id && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(null); },
+    onDrop: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const source = dragged, edge = over?.id === c.id ? over.edge : null;
+      setDragged(null);
+      setOver(null);
+      const drop = source && edge ? dropFor(source, c, edge, placeOf(c), siblingsOf(c)) : null;
+      if (source && drop) void move(source, drop);
+    },
+  };
 
   const leave = async () => {
     if (await confirmAction(
@@ -305,10 +368,10 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
           </button>
         </li>
         {loose.map((c) => (
-          <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} />
+          <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} itemProps={itemProps(c)} />
         ))}
         {categories.map(({ cat, children }) => (
-          <li key={cat.id} className="category">
+          <li key={cat.id} className="category" {...itemProps(cat)}>
             <div className="category-header">
               <button className="category-toggle" onClick={() => setCollapsed((c) => ({ ...c, [cat.id]: !c[cat.id] }))}>
                 <span className={collapsed[cat.id] ? "chev collapsed" : "chev"}>
@@ -341,7 +404,7 @@ function ChannelList({ accountId, state, me, activeId }: { accountId: string; st
               {children
                 .filter((c) => !collapsed[cat.id] || c.id === activeId || state.voiceStates.some((v) => v.channelId === c.id))
                 .map((c) => (
-                  <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} />
+                  <ChannelRow key={c.id} accountId={accountId} state={state} channel={c} me={me} activeId={activeId} itemProps={itemProps(c)} />
                 ))}
             </ul>
           </li>

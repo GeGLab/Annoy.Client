@@ -46,6 +46,7 @@ import { useSettingsDraft, useSettingsGuard } from "./settings/SettingsGuard.tsx
 import { requestNavigation } from "../lib/navigation-guard.ts";
 import { useRequestOwner } from "../lib/use-request-owner.ts";
 import { isCancellation } from "../../../shared/requests.ts";
+import { channelNameTaken, storedChannelName } from "../../../shared/channel-order.ts";
 
 const ALL_NAMES = Object.keys(Permission) as PermissionName[];
 const TEXT_PERMS: PermissionName[] = ["VIEW_CHANNEL", "SEND_MESSAGES", "MANAGE_MESSAGES", "ATTACH_FILES", "MENTION_EVERYONE"];
@@ -675,6 +676,12 @@ export function ChannelSettingsModal({ accountId, serverId, channelId }: { accou
   const values = JSON.stringify([name, topic, parentId, ttl]);
   const saveChannel = async () => {
     if (!channel || !name.trim()) return false;
+    const place = channel.type === "category" ? null : parentId || null;
+    // Only a new name or place must be free: rooms that already share a name stay editable.
+    if ((name.trim() !== channel.name || place !== (channel.parentId ?? null)) && !channel.temporary && state && channelNameTaken(state.channels, channel.type, name, place, channel.id)) {
+      toast(translate(channel.type === "category" ? "channels.categoryNameTaken" : "channels.nameTaken"));
+      return false;
+    }
     const ok = await act(
       apiFor(accountId).patch(`/channels/${channel.id}`, {
         name,
@@ -791,10 +798,12 @@ export function CreateChannelModal({
   const [parentId, setParentId] = useState(initialParent ?? "");
   const [creating, setCreating] = useState(false);
   const categories = state?.channels.filter((c) => c.type === "category") ?? [];
+  // Same rule as the server: one name per type and place.
+  const taken = !!state && !!name.trim() && channelNameTaken(state.channels, type, storedChannelName(type, name), type === "category" ? null : parentId || null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (creating) return;
+    if (creating || taken) return;
     setCreating(true);
     try {
       const channel = await apiFor(accountId).post<Channel>(`/servers/${serverId}/channels`, {
@@ -843,8 +852,10 @@ export function CreateChannelModal({
             placeholder={type === "category" ? translate("settings.bd2af681513d") : (CHANNEL_KINDS.find((k) => k.type === type)?.placeholder ?? translate("common.f118f1738f1c"))}
             required
             maxLength={100}
+            aria-invalid={taken || undefined}
           />
         </Field>
+        {taken && <p className="error small" role="alert">{translate(type === "category" ? "channels.categoryNameTaken" : "channels.nameTaken")}</p>}
         {type !== "category" && categories.length > 0 && (
           <Field label={translate("settings.54276aa0307f")}>
             <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>

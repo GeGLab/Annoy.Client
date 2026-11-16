@@ -2663,5 +2663,7 @@
   "image.undo": "Undo",
   "image.redo": "Redo",
   "image.clear": "Clear annotations",
-  "image.textPlaceholder": "Type, then press Enter"
+  "image.textPlaceholder": "Type, then press Enter",
+  "channels.nameTaken": "There is already a room of this type with this name here.",
+  "channels.categoryNameTaken": "There is already a category with this name."
 }

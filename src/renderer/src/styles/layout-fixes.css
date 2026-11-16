@@ -90,3 +90,10 @@
 /* Server tabs: every unread message counts in red, not only mentions, so news is obvious at a glance. */
 .tab-badge { color: #fff; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
 .tab-item .tab-badge { animation: unread-message 180ms var(--ease); }
+/* Reordering rooms: a line where the dragged row lands, the category it goes into, the row on the move. */
+.channel-scroll li[draggable="true"] { position: relative; }
+.channel-scroll li.dragging { opacity: .45; }
+.channel-scroll li.drop-before::before, .channel-scroll li.drop-after::after { content: ""; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px; background: var(--accent-strong); pointer-events: none; z-index: 1; }
+.channel-scroll li.drop-before::before { top: -1px; }
+.channel-scroll li.drop-after::after { bottom: -1px; }
+.channel-scroll li.category.drop-into > .category-header { border-radius: 6px; background: color-mix(in srgb, var(--accent-strong) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-strong) 45%, transparent); }

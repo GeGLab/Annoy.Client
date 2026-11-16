@@ -100,6 +100,58 @@ test("Steam profile commands send what was typed and ask for a linked Steam when
   } finally { await close(); }
 });
 
+test("rooms reorder by drag and drop, into categories, and names repeat only across types or places", async () => {
+  const { page, close } = await launch();
+  try {
+    await seed(page);
+    const moves: { id: string; body: unknown }[] = [];
+    await page.route(/https:\/\/experience\.test\/api\/channels\/[^/]+\/move$/, async (route) => {
+      moves.push({ id: route.request().url().split("/").at(-2)!, body: route.request().postDataJSON() });
+      await route.fulfill({ json: {} });
+    });
+    const sidebar = page.locator(".channel-scroll");
+    const row = (name: string) => sidebar.locator(".channel", { hasText: name }).first();
+    const item = (name: string) => sidebar.locator("li", { has: page.locator(":scope > .channel", { hasText: name }) });
+    // An older server (no channelOrder) keeps the list fixed.
+    await expect(row("geral")).toBeVisible();
+    await expect(item("geral")).not.toHaveAttribute("draggable", "true");
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => {
+        const inst = s.instances.test;
+        inst.instance = { ...inst.instance, channelOrder: true };
+        inst.serverStates.server.channels.push(
+          { id: "cat", serverId: "server", name: "Categoria", type: "category", topic: "", position: 2, parentId: null, overwrites: [] },
+          { id: "memes", serverId: "server", name: "memes", type: "text", topic: "", position: 3, parentId: "cat", overwrites: [] },
+        );
+      });
+    });
+    const order = async () => (await sidebar.locator(".channel:not(.server-bot-link) .channel-name, .category-toggle").allTextContents()).map((t) => t.trim());
+    await expect.poll(order).toEqual(["geral", "Sala de conversa", "Categoria", "memes"]);
+    // The voice room above "geral".
+    await item("Sala de conversa").dragTo(row("geral"), { targetPosition: { x: 20, y: 3 } });
+    await expect.poll(() => moves.length).toBe(1);
+    expect(moves[0]).toEqual({ id: "voice", body: { parentId: null, beforeId: "general" } });
+    await expect.poll(order).toEqual(["Sala de conversa", "geral", "Categoria", "memes"]);
+    // "geral" into the category, at its end.
+    await item("geral").dragTo(sidebar.locator(".category-header", { hasText: "Categoria" }));
+    await expect.poll(() => moves.length).toBe(2);
+    expect(moves[1]).toEqual({ id: "general", body: { parentId: "cat", beforeId: null } });
+    await expect.poll(order).toEqual(["Sala de conversa", "Categoria", "memes", "geral"]);
+    // A text room named like another one in the same category is refused before asking the server.
+    await page.evaluate(async () => {
+      const { openModal } = await import(/* @vite-ignore */ `${location.origin}/src/components/ui.tsx`);
+      openModal({ kind: "createChannel", accountId: "test", serverId: "server", parentId: "cat", type: "text" });
+    });
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").first().fill("Memes");
+    await expect(dialog.getByRole("alert")).toHaveText("Já existe uma sala desse tipo com esse nome aqui.");
+    await dialog.getByRole("radio").nth(1).click();
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+    await page.screenshot({ path: join(capture, "channel-order.png") });
+  } finally { await close(); }
+});
+
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {

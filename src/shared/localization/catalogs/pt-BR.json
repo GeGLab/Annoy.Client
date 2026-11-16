@@ -2663,5 +2663,7 @@
   "image.undo": "Desfazer",
   "image.redo": "Refazer",
   "image.clear": "Limpar anotações",
-  "image.textPlaceholder": "Digite e tecle Enter"
+  "image.textPlaceholder": "Digite e tecle Enter",
+  "channels.nameTaken": "Já existe uma sala desse tipo com esse nome aqui.",
+  "channels.categoryNameTaken": "Já existe uma categoria com esse nome."
 }

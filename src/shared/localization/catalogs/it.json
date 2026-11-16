@@ -2663,5 +2663,7 @@
   "image.undo": "Annulla",
   "image.redo": "Ripeti",
   "image.clear": "Cancella annotazioni",
-  "image.textPlaceholder": "Scrivi e premi Invio"
+  "image.textPlaceholder": "Scrivi e premi Invio",
+  "channels.nameTaken": "Esiste già una stanza di questo tipo con questo nome qui.",
+  "channels.categoryNameTaken": "Esiste già una categoria con questo nome."
 }

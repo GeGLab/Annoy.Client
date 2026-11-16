@@ -2663,5 +2663,7 @@
   "image.undo": "元に戻す",
   "image.redo": "やり直す",
   "image.clear": "書き込みを消去",
-  "image.textPlaceholder": "入力して Enter"
+  "image.textPlaceholder": "入力して Enter",
+  "channels.nameTaken": "ここには同じ種類・同じ名前のルームがすでにあります。",
+  "channels.categoryNameTaken": "同じ名前のカテゴリーがすでにあります。"
 }

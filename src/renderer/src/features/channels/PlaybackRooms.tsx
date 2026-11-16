@@ -1872,7 +1872,9 @@ function SongDisc() {
  * looking at the list: the record takes the colour of the music's genre, a thin light runs along
  * the bottom, and the track that plays and the faces of who is listening show.
  */
-export function SongChannelRow({ accountId, state, channel, active, unread, muted, actions, onOpen }: {
+export function SongChannelRow({ accountId, state, channel, active, unread, muted, actions, onOpen, itemProps }: {
+  /** Drag and drop in the room list. */
+  itemProps?: import("react").LiHTMLAttributes<HTMLLIElement>;
   accountId: string; state: ServerState; channel: Channel; active: boolean; unread: { count: number; mention: boolean } | undefined;
   muted: boolean; actions: ReactNode; onOpen: () => void;
 }) {
@@ -1890,7 +1892,7 @@ export function SongChannelRow({ accountId, state, channel, active, unread, mute
   const listening = count ? counted(count, "counts.listening.one", "counts.listening.other") : channel.name;
   const label = live && track ? translate("song.channelLive", { p0: listening, p1: track }) : translate("song.channelIdle");
   return (
-    <li>
+    <li {...itemProps}>
       <div
         className={`channel song-channel${live ? " song-live" : ""}${active ? " active" : ""}${unread ? " unread" : ""}`}
         style={live ? ({ "--vibe": hue } as CSSProperties) : undefined}
