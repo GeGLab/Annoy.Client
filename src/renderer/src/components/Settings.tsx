@@ -999,32 +999,16 @@ onLocalizationChange(()=>{CHANNEL_KINDS=[
 
 /** Mixed, text-only or voice-only: what rooms a category takes. */
 function CategoryKindChoice({ value, onChange }: { value: CategoryKind; onChange: (kind: CategoryKind) => void }) {
-  const kinds: { value: CategoryKind; icon: IconName; label: string; hint: string }[] = [
-    { value: "mixed", icon: "folder", label: translate("channels.kindMixed"), hint: translate("channels.kindMixedHint") },
-    { value: "text", icon: "hash", label: translate("channels.kindText"), hint: translate("channels.kindTextHint") },
-    { value: "voice", icon: "speaker", label: translate("channels.kindVoice"), hint: translate("channels.kindVoiceHint") },
+  const kinds: { value: CategoryKind; label: string; hint: string }[] = [
+    { value: "mixed", label: translate("channels.kindMixed"), hint: translate("channels.kindMixedHint") },
+    { value: "text", label: translate("channels.kindText"), hint: translate("channels.kindTextHint") },
+    { value: "voice", label: translate("channels.kindVoice"), hint: translate("channels.kindVoiceHint") },
   ];
   return (
-    <div className="field category-kind-choice">
-    <span className="field-label" aria-hidden>{translate("channels.kind")}</span>
-    <RadioGroup
-      cards
-      label={translate("channels.kind")}
-      value={value}
-      onValueChange={(next) => onChange(next as CategoryKind)}
-      options={kinds.map((kind) => ({
-        value: kind.value,
-        label: (
-          <>
-            <Icon name={kind.icon} />
-            <span>
-              <strong>{kind.label}</strong>
-              <span className="muted small">{kind.hint}</span>
-            </span>
-          </>
-        ),
-      }))}
-    />
-    </div>
+    <Field label={translate("channels.kind")} hint={kinds.find((kind) => kind.value === value)?.hint}>
+      <Select value={value} onChange={(event) => onChange(event.target.value as CategoryKind)} aria-label={translate("channels.kind")}>
+        {kinds.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
+      </Select>
+    </Field>
   );
 }

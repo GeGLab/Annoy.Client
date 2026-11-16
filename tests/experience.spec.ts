@@ -182,7 +182,9 @@ test("the cover's + creates rooms and categories, and text- or voice-only catego
     await page.getByRole("menuitem", { name: "Criar categoria" }).click();
     let dialog = page.getByRole("dialog");
     await dialog.getByRole("textbox").first().fill("Jogatina");
-    await dialog.getByRole("radio", { name: /Só voz/ }).click();
+    await dialog.getByRole("combobox", { name: "Tipo da categoria" }).click();
+    await page.getByRole("option", { name: "Só voz" }).click();
+    await expect(dialog).toContainText("Voz e cinema");
     await page.screenshot({ path: join(capture, "category-kind.png") });
     await dialog.getByRole("button", { name: "Criar", exact: true }).click();
     await expect.poll(() => created.length).toBe(1);

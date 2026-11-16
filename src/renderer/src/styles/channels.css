@@ -631,9 +631,3 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .queue-item.drop-before::before, .queue-item.drop-after::before { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 18%, transparent); pointer-events: none; }
 .queue-item.drop-before::before { top: -2px; }
 .queue-item.drop-after::before { bottom: -2px; }
-/* Category type: three cards side by side, title over hint. */
-.category-kind-choice .radio-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.category-kind-choice .radio-card { align-items: flex-start; }
-.category-kind-choice .radio-option-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.category-kind-choice .radio-option-copy > span { display: flex; flex-direction: column; gap: 2px; }
-@media (max-width: 520px) { .category-kind-choice .radio-cards { grid-template-columns: 1fr; } }
