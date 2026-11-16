@@ -46,17 +46,27 @@ function useViewBounds(slot: Slot, el: HTMLElement | null, active: boolean): voi
     if (!bridge) return;
     const hide = () => bridge.setBounds(slot, { x: 0, y: 0, width: 0, height: 0 });
     if (!el || !active || modalOpen) return hide();
+    // The native view sits over the window, so it must follow the slot wherever the layout moves
+    // it (a side panel resized moves the slot without resizing it, which no ResizeObserver sees):
+    // each frame, compare where the slot is with what was sent, and send only a change.
+    let last = "";
+    let frame = 0;
     const report = () => {
       const r = el.getBoundingClientRect();
-      bridge.setBounds(slot, { x: r.left, y: r.top, width: r.width, height: r.height });
+      const bounds = { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+      const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
+      if (key !== last) {
+        last = key;
+        bridge.setBounds(slot, bounds);
+      }
     };
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(el);
-    window.addEventListener("resize", report);
+    const follow = () => {
+      report();
+      frame = requestAnimationFrame(follow);
+    };
+    follow();
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", report);
+      cancelAnimationFrame(frame);
       hide();
     };
   }, [slot, el, active, modalOpen]);

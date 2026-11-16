@@ -232,6 +232,46 @@ test("without Manage channels the cover has no + button", async () => {
   } finally { await close(); }
 });
 
+test("a page playing in a room follows its slot when the channel bar is resized", async () => {
+  const { app, page, close } = await launch();
+  try {
+    await seed(page);
+    // Every position the native page is given, as the main process receives it.
+    await app.evaluate(({ ipcMain }) => {
+      const seen: { slot: string; rect: { x: number; width: number } }[] = [];
+      (globalThis as any).__bounds = seen;
+      ipcMain.on("theater:bounds", (_event, slot, rect) => seen.push({ slot, rect }));
+    });
+    const item = { id: "page", url: "https://example.invalid/watch", title: "Página", kind: "site", addedBy: "person", addedAt: "2026-11-16T10:00:00Z" };
+    await page.route("https://experience.test/api/channels/cinema/playback**", (route) => route.fulfill({ json: { channelId: "cinema", queue: [item], currentId: "page", paused: false, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true } }));
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      const { openChannel } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
+      setState((s: any) => {
+        s.settings.channelsWidth = 240;
+        s.instances.test.serverStates.server.channels.push({ id: "cinema", serverId: "server", name: "cinema", type: "theater", topic: "", position: 5, parentId: null, overwrites: [] });
+      });
+      openChannel("test", "server", "cinema");
+    });
+    const lastX = () => app.evaluate(() => {
+      const seen = ((globalThis as any).__bounds as { slot: string; rect: { x: number; width: number } }[]).filter((b) => b.slot === "theater" && b.rect.width > 0);
+      return seen.at(-1)?.rect.x ?? null;
+    });
+    // Like the music room's video: a slot of fixed size, which a wider bar only moves.
+    await page.addStyleTag({ content: ".theater-view { flex: none !important; width: 400px !important; height: 225px !important; }" });
+    await expect.poll(lastX).not.toBeNull();
+    const before = (await lastX())!;
+    // Wider channel bar: the slot moves right (its size may not change at all).
+    await page.evaluate(async () => {
+      const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
+      setState((s: any) => { s.settings.channelsWidth = 340; });
+    });
+    await expect.poll(lastX).toBeGreaterThanOrEqual(before + 90);
+    const slot = await page.locator(".theater-view, .theater-slot, [data-theater-slot]").first().boundingBox().catch(() => null);
+    if (slot) expect(Math.abs((await lastX())! - Math.round(slot.x))).toBeLessThanOrEqual(1);
+  } finally { await close(); }
+});
+
 test("large integration cards use the conversation width and still open in the image viewer", async () => {
   const { page, close } = await launch();
   try {
