@@ -2713,5 +2713,6 @@
   "studio.bands": "Bandes de l'égaliseur",
   "studio.reset": "Réinitialiser",
   "song.removePlayedServer": "Ce serveur n'a pas encore cette option. Mettez à jour annoy-server pour l'utiliser.",
-  "song.removePlayedServerShort": "Mise à jour du serveur requise"
+  "song.removePlayedServerShort": "Mise à jour du serveur requise",
+  "song.historyEmpty": "Rien n'a encore été joué."
 }

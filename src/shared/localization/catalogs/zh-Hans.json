@@ -2713,5 +2713,6 @@
   "studio.bands": "均衡器频段",
   "studio.reset": "重置",
   "song.removePlayedServer": "此服务器尚无此选项。请更新 annoy-server 后使用。",
-  "song.removePlayedServerShort": "需要更新服务器"
+  "song.removePlayedServerShort": "需要更新服务器",
+  "song.historyEmpty": "还没有播放过任何曲目。"
 }

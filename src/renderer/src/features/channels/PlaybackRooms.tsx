@@ -331,12 +331,21 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
           );
         })}
       </ol>
-      {/* Tracks that left the queue after playing: back to the end of the queue with one click. */}
-      {song && !!state?.history?.length && (
+    </div>
+  );
+}
+
+/** Tracks that left the queue after playing (rooms that keep a history): back to the end of the queue with one click. */
+function SongHistory({ playback, perms }: { playback: Playback; perms: number }) {
+  const { state, send } = playback;
+  const canAdd = has(perms, Permission.SEND_MESSAGES);
+  const history = state?.history ?? [];
+  return (
+    <div className="playback-queue">
+      {history.length === 0 ? <p className="muted queue-empty">{translate("song.historyEmpty")}</p> : (
         <section className="queue-history" aria-label={translate("song.history")}>
-          <h3>{translate("song.history")}</h3>
           <ol className="queue-list">
-            {state.history.map((item) => (
+            {history.map((item) => (
               <li key={item.id} className="queue-item played">
                 <QueueThumb item={item} />
                 <span className="queue-meta">
@@ -2016,7 +2025,9 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
   const { info, loading } = useSongInfo(item, known);
   const duration = known ?? info?.duration ?? null;
   const [video, setVideo] = useState(false);
-  const [side, setSide] = useState<"chat" | "queue">("chat");
+  const [side, setSide] = useState<"chat" | "queue" | "history">("chat");
+  // Only rooms that keep a history (removePlayed) get the small history button.
+  const keepsHistory = playback.state?.removePlayed === true || !!playback.state?.history?.length;
   // "Request a song" opens over the room, the cursor already in its field.
   const [requesting, setRequesting] = useState(false);
   // The room re-renders only on its own changes; the clock lives in the panel, so the chat
@@ -2077,13 +2088,22 @@ export function SongView({ accountId, state, channel, perms }: { accountId: stri
             </div>
           </div>
           <aside className="theater-side song-side" aria-label={translate("song.chat")}>
+            <div className="song-tabs-row">
             <div className="song-tabs" role="tablist" aria-label={translate("common.ded83118d934")} data-active={side}>
-              <span className="song-tabs-glider" aria-hidden="true" />
-              <button role="tab" aria-selected={side === "chat"} onClick={() => setSide("chat")}><Icon name="message" size={14} /> {translate("common.460b3a7da007")}</button>
-              <button role="tab" aria-selected={side === "queue"} onClick={() => setSide("queue")}><Icon name="song" size={14} /> {translate("song.queue")}{queued ? <span className="song-tabs-count">{queued}</span> : null}</button>
+                <span className="song-tabs-glider" aria-hidden="true" />
+                <button role="tab" aria-selected={side === "chat"} onClick={() => setSide("chat")}><Icon name="message" size={14} /> {translate("common.460b3a7da007")}</button>
+                <button role="tab" aria-selected={side === "queue"} onClick={() => setSide("queue")}><Icon name="song" size={14} /> {translate("song.queue")}{queued ? <span className="song-tabs-count">{queued}</span> : null}</button>
+              </div>
+              {keepsHistory && (
+                <button type="button" className={`song-history-btn${side === "history" ? " active" : ""}`} aria-pressed={side === "history"} title={translate("song.history")} aria-label={translate("song.history")} onClick={() => setSide(side === "history" ? "queue" : "history")}>
+                  <Icon name="clock" size={14} />
+                </button>
+              )}
             </div>
             {side === "chat" ? (
               <RoomChat accountId={accountId} state={state} channel={channel} perms={perms} />
+            ) : side === "history" ? (
+              <SongHistory playback={playback} perms={perms} />
             ) : (
               <Queue accountId={accountId} channel={channel} playback={playback} perms={perms} me={me} names={names} audioOnly song />
             )}

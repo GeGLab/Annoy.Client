@@ -2713,5 +2713,6 @@
   "studio.bands": "Faixas do equalizador",
   "studio.reset": "Zerar",
   "song.removePlayedServer": "Este servidor ainda não tem essa opção. Atualize o annoy-server para usar.",
-  "song.removePlayedServerShort": "Requer servidor atualizado"
+  "song.removePlayedServerShort": "Requer servidor atualizado",
+  "song.historyEmpty": "Nada tocou ainda."
 }

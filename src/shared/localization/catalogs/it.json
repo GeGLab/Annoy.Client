@@ -2713,5 +2713,6 @@
   "studio.bands": "Bande dell'equalizzatore",
   "studio.reset": "Azzera",
   "song.removePlayedServer": "Questo server non ha ancora questa opzione. Aggiorna annoy-server per usarla.",
-  "song.removePlayedServerShort": "Richiede un server aggiornato"
+  "song.removePlayedServerShort": "Richiede un server aggiornato",
+  "song.historyEmpty": "Non è ancora stato riprodotto nulla."
 }

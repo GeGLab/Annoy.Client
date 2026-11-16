@@ -310,8 +310,11 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
     await route.fulfill({ json: { ...playback, serverTime: Date.now() } });
   });
   await special(page, "radio", "song");
-  // The history, under the queue: one click puts a played track back.
+  // The queue stays the queue; the history is a small button beside the tabs.
   await page.getByRole("tab", { name: /Na fila/ }).click();
+  await expect(page.getByRole("region", { name: "Tocadas" })).toHaveCount(0);
+  await page.locator(".song-tabs-row").screenshot({ path: ".impeccable/review/song-tabs.png" });
+  await page.getByRole("button", { name: "Tocadas", exact: true }).click();
   const history = page.getByRole("region", { name: "Tocadas" });
   await expect(history).toContainText("Faixa antiga");
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
@@ -327,7 +330,8 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await expect.poll(() => sent).toContainEqual({ op: "removePlayed", value: false });
   await page.keyboard.press("Escape");
   await expect(page.locator(".channel-settings-modal")).toHaveCount(0);
-  // The queue keeps its own request field.
+  // Back to the queue, which keeps its own request field.
+  await page.getByRole("tab", { name: /Na fila/ }).click();
   await expect(page.locator(".song-side .song-request").getByRole("textbox", { name: "Link para adicionar à fila" })).toBeVisible();
   // "Pedir uma música" opens over the room, as glass whose blur and transparency the person sets.
   await page.locator(".song-panel").getByRole("button", { name: "Pedir uma música" }).click();

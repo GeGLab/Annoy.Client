@@ -2713,5 +2713,6 @@
   "studio.bands": "イコライザーの帯域",
   "studio.reset": "リセット",
   "song.removePlayedServer": "このサーバーにはまだこのオプションがありません。使うにはannoy-serverを更新してください。",
-  "song.removePlayedServerShort": "サーバーの更新が必要"
+  "song.removePlayedServerShort": "サーバーの更新が必要",
+  "song.historyEmpty": "まだ何も再生されていません。"
 }

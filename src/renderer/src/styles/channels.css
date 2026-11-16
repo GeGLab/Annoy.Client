@@ -692,3 +692,10 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .studio-band .ui-slider-fill { display: none; }
 .song-modes-row { flex-wrap: wrap; }
 .song-modes-row > .song-mode { flex: 1 1 150px; }
+/* Chat / queue tabs with the small history button beside them. */
+.song-tabs-row { display: flex; flex: none; align-items: stretch; gap: 6px; margin: 0 10px 4px; }
+.song-tabs-row .song-tabs { flex: 1; margin: 0; }
+.song-tabs[data-active="history"] .song-tabs-glider { opacity: 0; }
+.song-history-btn { display: grid; place-items: center; width: 34px; flex: none; border: 0; border-radius: 10px; background: var(--soft); color: var(--text-muted); transition: background var(--duration), color var(--duration); }
+.song-history-btn:hover { color: var(--text); }
+.song-history-btn.active { background: color-mix(in srgb, var(--text) 13%, transparent); color: var(--text); }

@@ -2713,5 +2713,6 @@
   "studio.bands": "Bandas del ecualizador",
   "studio.reset": "Restablecer",
   "song.removePlayedServer": "Este servidor aún no tiene esta opción. Actualiza annoy-server para usarla.",
-  "song.removePlayedServerShort": "Requiere actualizar el servidor"
+  "song.removePlayedServerShort": "Requiere actualizar el servidor",
+  "song.historyEmpty": "Todavía no sonó nada."
 }
