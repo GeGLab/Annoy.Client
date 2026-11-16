@@ -658,13 +658,12 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .queue-item.played:hover { opacity: 1; }
 
 /* Studio: the listener's mixer. */
-.sound-studio { width: min(580px, calc(100vw - 32px)); }
+.sound-studio { width: min(640px, calc(100vw - 32px)); }
 .studio-mixer { display: grid; gap: 14px; }
 .studio-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .studio-chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-soft); font-size: .85714rem; }
 .studio-chip:hover { border-color: var(--border-strong); color: var(--text); }
 .studio-chip.active { border-color: transparent; background: var(--accent); color: var(--on-accent); }
-.studio-eq { display: grid; gap: 10px; transition: opacity var(--duration); }
 .studio-eq.off { opacity: .55; }
 .studio-slider { display: grid; grid-template-columns: 96px minmax(0, 1fr) 64px; align-items: center; gap: 12px; font-size: .85714rem; }
 .studio-slider output { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
@@ -676,3 +675,18 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 /* The request form in its glass dialog: the room's variables, and the full width of the panel. */
 .song-request-dialog { --glass: color-mix(in srgb, var(--bg-elev) 52%, transparent); --glass-strong: color-mix(in srgb, var(--bg-elev) 72%, transparent); --glass-line: color-mix(in srgb, var(--text) 10%, transparent); --soft: color-mix(in srgb, var(--text) 7%, transparent); --spring: cubic-bezier(.2, .8, .2, 1); }
 .song-request-dialog .song-request { min-width: 0; margin: 0; }
+
+/* The equalizer: a preamp and ten vertical faders, like a graphic EQ. */
+.studio-eq { display: flex; align-items: stretch; gap: 14px; padding: 14px 12px 10px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bg-main) 35%, transparent); transition: opacity var(--duration); }
+.studio-bands { display: grid; flex: 1; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; background: linear-gradient(transparent calc(50% - 0.5px), color-mix(in srgb, var(--text) 12%, transparent) calc(50% - 0.5px), color-mix(in srgb, var(--text) 12%, transparent) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
+.studio-band { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.studio-band.preamp { padding-right: 14px; border-right: 1px solid color-mix(in srgb, var(--border) 80%, transparent); }
+.studio-band output { color: var(--text-soft); font-size: .71429rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.studio-band > span { color: var(--text-muted); font-size: .71429rem; font-variant-numeric: tabular-nums; }
+.studio-band .ui-slider[data-orientation="vertical"] { flex-direction: column; width: 22px; min-width: 0; height: 150px; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-track { width: 4px; height: 100%; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-fill { width: 100%; height: auto; }
+.studio-band .ui-slider[data-orientation="vertical"] .ui-slider-thumb { width: 18px; height: 10px; border-radius: 3px; box-shadow: 0 1px 3px #0007; }
+.studio-actions { display: flex; justify-content: flex-end; }
+@media (max-width: 560px) { .studio-band output { display: none; } .studio-eq { gap: 8px; padding-inline: 8px; } .studio-band.preamp { padding-right: 8px; } }
+.studio-band .ui-slider-fill { display: none; }

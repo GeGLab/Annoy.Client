@@ -1,5 +1,5 @@
 import { t as translate } from "../../../../shared/localization/index.ts";
-import { EQ_BANDS, EQ_LIMIT, MIXER_PRESETS, type MixerPreset } from "../../../../shared/sound-mixer.ts";
+import { EQ_BANDS, EQ_LIMIT, MIXER_PRESETS, PREAMP_MAX, PREAMP_MIN, type MixerPreset } from "../../../../shared/sound-mixer.ts";
 import { Icon } from "../../components/ui.tsx";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../../components/ui/dialog.tsx";
 import { Slider } from "../../components/ui/slider.tsx";
@@ -9,9 +9,10 @@ import { choosePreset, setMixer, useMixer, useMixerReach } from "./sound-studio.
 type Key = Parameters<typeof translate>[0];
 const presetLabel = (preset: MixerPreset) => translate(`studio.preset.${preset}` as Key);
 const band = (hz: number) => (hz >= 1000 ? `${hz / 1000} kHz` : `${hz} Hz`);
+const bandShort = (hz: number) => (hz >= 1000 ? `${hz / 1000}k` : String(hz));
 
 /**
- * The listener's mixer in a song room: how the music sounds to them, on this device only.
+ * The listener's equalizer in a song room: how the music sounds to them, on this device only.
  */
 export function SoundStudio({ onClose, effectsHere }: { onClose: () => void; effectsHere: boolean }) {
   return (
@@ -31,6 +32,7 @@ function MixerPanel({ effectsHere }: { effectsHere: boolean }) {
   const mixer = useMixer();
   const reach = useMixerReach();
   const custom = (patch: Partial<typeof mixer>) => setMixer({ ...mixer, ...patch, on: true, preset: "custom" });
+  const db = (value: number) => `${value > 0 ? "+" : ""}${value} dB`;
   return (
     <div className="studio-mixer">
       <label className="switch-setting">
@@ -50,28 +52,29 @@ function MixerPanel({ effectsHere }: { effectsHere: boolean }) {
         ))}
       </div>
       <div className={`studio-eq${mixer.on ? "" : " off"}`}>
-        {EQ_BANDS.map((hz, i) => (
-          <label key={hz} className="studio-slider">
-            <span>{band(hz)}</span>
-            <Slider
-              min={-EQ_LIMIT} max={EQ_LIMIT} step={0.5} value={mixer.eq[i] ?? 0}
-              aria-label={translate("studio.band", { p0: band(hz) })}
-              aria-valuetext={`${mixer.eq[i] ?? 0} dB`}
-              onChange={(e) => custom({ eq: mixer.eq.map((gain, j) => (j === i ? Number(e.target.value) : gain)) })}
-            />
-            <output>{(mixer.eq[i] ?? 0) > 0 ? "+" : ""}{mixer.eq[i] ?? 0} dB</output>
-          </label>
-        ))}
-        <label className="studio-slider">
-          <span>{translate("studio.reverb")}</span>
-          <Slider min={0} max={100} value={Math.round(mixer.reverb * 100)} aria-label={translate("studio.reverb")} aria-valuetext={`${Math.round(mixer.reverb * 100)}%`} onChange={(e) => custom({ reverb: Number(e.target.value) / 100 })} />
-          <output>{Math.round(mixer.reverb * 100)}%</output>
-        </label>
-        <label className="studio-slider">
-          <span>{translate("studio.spin")}</span>
-          <Slider min={0} max={100} value={Math.round(mixer.spin * 100)} aria-label={translate("studio.spin")} aria-valuetext={`${Math.round(mixer.spin * 100)}%`} onChange={(e) => custom({ spin: Number(e.target.value) / 100 })} />
-          <output>{Math.round(mixer.spin * 100)}%</output>
-        </label>
+        {/* The preamp first, apart: lower it when boosting a lot. */}
+        <div className="studio-band preamp">
+          <output>{db(mixer.preamp)}</output>
+          <Slider orientation="vertical" min={PREAMP_MIN} max={PREAMP_MAX} step={0.5} value={mixer.preamp} aria-label={translate("studio.preamp")} aria-valuetext={db(mixer.preamp)} onChange={(e) => custom({ preamp: Number(e.target.value) })} />
+          <span>{translate("studio.preampShort")}</span>
+        </div>
+        <div className="studio-bands" role="group" aria-label={translate("studio.bands")}>
+          {EQ_BANDS.map((hz, i) => (
+            <div key={hz} className="studio-band">
+              <output>{db(mixer.eq[i] ?? 0)}</output>
+              <Slider
+                orientation="vertical" min={-EQ_LIMIT} max={EQ_LIMIT} step={0.5} value={mixer.eq[i] ?? 0}
+                aria-label={translate("studio.band", { p0: band(hz) })}
+                aria-valuetext={db(mixer.eq[i] ?? 0)}
+                onChange={(e) => custom({ eq: mixer.eq.map((gain, j) => (j === i ? Number(e.target.value) : gain)) })}
+              />
+              <span>{bandShort(hz)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="studio-actions">
+        <button type="button" className="studio-chip" onClick={() => choosePreset("flat")}>{translate("studio.reset")}</button>
       </div>
     </div>
   );

@@ -354,8 +354,16 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   // The mixer: a preset turns it on, only on this device.
   await page.getByRole("button", { name: "Mixer", exact: true }).click();
   const studio = page.locator(".sound-studio");
-  await studio.getByRole("button", { name: "Grave forte" }).click();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "bass", eq: [8, 4, 0, 0, 1] });
+  await studio.getByRole("button", { name: "Rock" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ on: true, preset: "rock", eq: [4, 3, 2, 0, -1, -1, 1, 3, 4, 4], preamp: -2 });
+  // Ten bands and a preamp, as vertical faders; a fader turns the preset into a custom curve.
+  await expect(studio.getByRole("group", { name: "Faixas do equalizador" }).getByRole("slider")).toHaveCount(10);
+  const bass = studio.getByRole("slider", { name: "Faixa de 31 Hz" });
+  await expect(bass).toHaveAttribute("aria-orientation", "vertical");
+  await bass.focus();
+  await page.keyboard.press("ArrowUp");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("annoy.song.mixer") ?? "{}"))).toMatchObject({ preset: "custom", eq: [4.5, 3, 2, 0, -1, -1, 1, 3, 4, 4] });
+  await expect(studio.getByRole("slider", { name: "Pré-amplificação" })).toBeVisible();
   await page.screenshot({ path: ".impeccable/review/sound-studio-mixer.png" });
   // Nothing the mixer does reaches the room.
   expect(sent.every((body) => body.op === "requeue" || body.op === "removePlayed")).toBe(true);
