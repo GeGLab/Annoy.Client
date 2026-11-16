@@ -303,7 +303,9 @@ test("playback failures preserve the submitted URL and ignore stale responses af
 test("radio rooms: played tracks wait in a history, the option is for managers, the request is glass and the mixer is local", async ({ page }) => {
   await seed(page);
   const played = { id: "old", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Faixa antiga", kind: "youtube", addedBy: "me", addedAt: "2026-11-16T10:00:00Z", playedAt: "2026-11-16T10:04:00Z" };
-  const playback = { channelId: "radio", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true, ducking: true, dj: false, djStyle: "auto", listeners: [], removePlayed: true, history: [played] };
+  // A long history (the server keeps up to 50): the panel must scroll through it.
+  const older = Array.from({ length: 30 }, (_, i) => ({ ...played, id: `older-${i}`, title: `Faixa ${i}` }));
+  const playback = { channelId: "radio", queue: [], currentId: null, paused: true, position: 0, updatedAt: Date.now(), serverTime: Date.now(), autoplay: true, ducking: true, dj: false, djStyle: "auto", listeners: [], removePlayed: true, history: [played, ...older] };
   const sent: Record<string, unknown>[] = [];
   await page.route("https://requests-a.test/api/channels/radio/playback", async (route) => {
     if (route.request().method() === "POST") sent.push(route.request().postDataJSON());
@@ -318,6 +320,13 @@ test("radio rooms: played tracks wait in a history, the option is for managers, 
   await page.getByRole("button", { name: "Tocadas", exact: true }).click();
   const history = page.getByRole("region", { name: "Tocadas" });
   await expect(history).toContainText("Faixa antiga");
+  const list = history.locator(".queue-list");
+  expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await list.hover();
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 800);
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await expect(history.getByText("Faixa 29")).toBeInViewport();
+  await list.evaluate((el) => { el.scrollTop = 0; });
   await history.getByRole("button", { name: "Pôr Faixa antiga de volta na fila" }).click();
   await expect.poll(() => sent).toContainEqual({ op: "requeue", itemId: "old" });
   // Putting a song on while not listening brings you into the room.
