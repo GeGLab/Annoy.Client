@@ -674,18 +674,21 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .studio-pads { outline: none; }
 .studio-pads:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; border-radius: 10px; }
 .studio-pads > p { margin: 0; }
-.studio-pad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.studio-pad { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; min-height: 64px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, var(--bg-main)); color: var(--text); transition: transform 80ms ease, background 80ms ease; touch-action: manipulation; }
-.studio-pad:hover { border-color: var(--border-strong); }
-.studio-pad.hit, .studio-pad:active { transform: scale(.96); background: color-mix(in srgb, var(--accent) 38%, var(--bg-main)); }
+.studio-pad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.studio-pad { --pad: 260; position: relative; display: flex; align-items: flex-end; aspect-ratio: 1.35; padding: 10px 12px; border: 1px solid hsl(var(--pad) 70% 60% / .35); border-radius: 14px; background: radial-gradient(120% 90% at 30% 15%, hsl(var(--pad) 80% 62% / .30), hsl(var(--pad) 60% 30% / .18) 60%, transparent), var(--bg-main); box-shadow: inset 0 1px 0 hsl(var(--pad) 90% 80% / .18), 0 2px 0 #0004; color: var(--text); transition: transform 70ms ease, box-shadow 70ms ease, background 70ms ease; touch-action: manipulation; }
+.studio-pad:hover { border-color: hsl(var(--pad) 80% 65% / .6); }
+.studio-pad.hit, .studio-pad:active { transform: translateY(1px) scale(.97); background: radial-gradient(120% 90% at 30% 15%, hsl(var(--pad) 90% 66% / .75), hsl(var(--pad) 70% 40% / .45) 65%, transparent), var(--bg-main); box-shadow: 0 0 22px hsl(var(--pad) 90% 60% / .45); }
 .studio-pad strong { font-size: .85714rem; }
-.studio-pad kbd, .studio-key kbd { color: var(--text-muted); font-family: inherit; font-size: .71429rem; }
-.studio-keys { display: flex; align-items: flex-start; gap: 3px; height: 96px; }
-.studio-key { display: flex; flex: 1; align-items: flex-end; justify-content: center; height: 100%; padding-bottom: 6px; border: 1px solid var(--border); border-radius: 0 0 7px 7px; background: #eef0f4; touch-action: none; }
-.studio-key kbd { color: #4a4f5a; }
-.studio-key.sharp { flex: .75; height: 62%; background: #1c1e25; }
-.studio-key.sharp kbd { color: #a9adb8; }
-.studio-key.hit, .studio-key:active { background: var(--accent); }
+.studio-pad kbd { position: absolute; top: 8px; right: 9px; min-width: 18px; padding: 1px 5px; border-radius: 5px; background: #0005; color: var(--text-soft); font-family: inherit; font-size: .71429rem; text-align: center; }
+.pad-kick { --pad: 4; } .pad-snare { --pad: 28; } .pad-hat { --pad: 52; } .pad-clap { --pad: 150; }
+.pad-horn { --pad: 190; } .pad-laser { --pad: 215; } .pad-riser { --pad: 270; } .pad-drop { --pad: 315; }
+.studio-keys { --black-key: 7.5%; position: relative; display: flex; height: 120px; padding: 6px 6px 0; border-radius: 10px 10px 8px 8px; background: #101218; box-shadow: inset 0 6px 10px #0008; }
+.studio-key { display: flex; flex: 1; align-items: flex-end; justify-content: center; margin: 0 1px; padding-bottom: 8px; border: 0; border-radius: 0 0 6px 6px; background: linear-gradient(#f7f8fa, #e3e6ec); box-shadow: inset 0 -4px 0 #c9ced8; touch-action: none; }
+.studio-key kbd { color: #6a7080; font-family: inherit; font-size: .71429rem; }
+.studio-key.sharp { position: absolute; top: 6px; z-index: 1; width: var(--black-key); height: 62%; margin: 0; padding-bottom: 6px; background: linear-gradient(#2b2e37, #121318); box-shadow: inset 0 -3px 0 #000, 0 3px 4px #0007; }
+.studio-key.sharp kbd { color: #9aa0ad; }
+.studio-key.hit, .studio-key:active { background: linear-gradient(color-mix(in srgb, var(--accent) 55%, #fff), var(--accent)); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 70%, #000); }
+.studio-key.sharp.hit, .studio-key.sharp:active { background: linear-gradient(color-mix(in srgb, var(--accent) 80%, #000), color-mix(in srgb, var(--accent) 55%, #000)); }
 .studio-pad-options { display: grid; gap: 12px; }
 @media (max-width: 520px) {
   .studio-pad-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

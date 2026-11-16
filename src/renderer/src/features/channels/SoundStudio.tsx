@@ -11,6 +11,7 @@ type Key = Parameters<typeof translate>[0];
 const presetLabel = (preset: MixerPreset) => translate(`studio.preset.${preset}` as Key);
 const padLabel = (pad: PadName) => translate(`studio.pad.${pad}` as Key);
 const waveLabel = (wave: Wave) => translate(`studio.wave.${wave}` as Key);
+const WHITE_KEYS = NOTES.filter((n) => !isSharp(n)).length;
 const band = (hz: number) => (hz >= 1000 ? `${hz / 1000} kHz` : `${hz} Hz`);
 
 /**
@@ -118,19 +119,25 @@ function PadsPanel() {
           </button>
         ))}
       </div>
+      {/* A real piano octave: white keys side by side, black keys on top between them. */}
       <div className="studio-keys" role="group" aria-label={translate("studio.keyboard")}>
-        {NOTES.map((midi, i) => (
-          <button
-            key={midi} type="button" tabIndex={-1}
-            className={`studio-key${isSharp(midi) ? " sharp" : ""}${hit === `note-${midi}` ? " hit" : ""}`}
-            aria-label={translate("studio.note", { p0: NOTE_KEYS[i]!.toUpperCase() })}
-            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press(midi); }}
-            onPointerUp={() => release(midi)}
-            onPointerCancel={() => release(midi)}
-          >
-            <kbd>{NOTE_KEYS[i]!.toUpperCase()}</kbd>
-          </button>
-        ))}
+        {NOTES.map((midi, i) => {
+          const sharp = isSharp(midi);
+          const whitesBefore = NOTES.slice(0, i).filter((n) => !isSharp(n)).length;
+          return (
+            <button
+              key={midi} type="button" tabIndex={-1}
+              className={`studio-key${sharp ? " sharp" : ""}${hit === `note-${midi}` ? " hit" : ""}`}
+              style={sharp ? { left: `calc(${(whitesBefore / WHITE_KEYS) * 100}% - var(--black-key) / 2)` } : undefined}
+              aria-label={translate("studio.note", { p0: NOTE_KEYS[i]!.toUpperCase() })}
+              onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press(midi); flash(`note-${midi}`); }}
+              onPointerUp={() => release(midi)}
+              onPointerCancel={() => release(midi)}
+            >
+              <kbd>{NOTE_KEYS[i]!.toUpperCase()}</kbd>
+            </button>
+          );
+        })}
       </div>
       <div className="studio-pad-options">
         <div className="studio-presets" role="radiogroup" aria-label={translate("studio.wave")}>
