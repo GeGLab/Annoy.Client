@@ -13,3 +13,5 @@ tests/display.local.json
 
 # Local Rust build caches; source for these experiments lives in separate worktrees.
 native/**/target/
+
+TODO.md
