@@ -2727,5 +2727,11 @@
   "terms.termsLink": "Conditions d’utilisation",
   "terms.privacyLink": "Politique de confidentialité",
   "terms.accept": "Accepter",
-  "terms.leave": "Se déconnecter"
+  "terms.leave": "Se déconnecter",
+  "song.playlistPull": "Importer la playlist",
+  "song.shuffleMode": "Mode aléatoire",
+  "song.shuffleQueue": "Mélanger la file",
+  "song.originalOrder": "Ordre d'origine",
+  "song.playlistAdded": "{p0} morceaux ajoutés",
+  "song.playlistSkipped": "{p0} morceaux ajoutés, {p1} laissés de côté : la file est limitée à {p2}"
 }

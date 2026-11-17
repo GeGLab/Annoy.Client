@@ -1,4 +1,4 @@
-import { playbackPosition, type PlaybackAction, type PlaybackItem, type PlaybackState } from "@annoy/protocol";
+import { playbackPosition, type PlaybackAction, type PlaybackAddResult, type PlaybackItem, type PlaybackState } from "@annoy/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFor } from "../../client.ts";
 import { toast, useStore } from "../../store.ts";
@@ -16,12 +16,14 @@ export interface Playback {
   /** Server clock minus ours, in ms. */
   offset: number;
   send: (action: PlaybackAction) => Promise<boolean>;
+  /** Like send, with the room's answer (for a playlist, how many tracks went in); null when it failed. */
+  post: (action: PlaybackAction) => Promise<PlaybackAddResult | null>;
 }
 
 export function usePlayback(accountId: string, channelId: string): Playback {
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const requests = useRequestOwner(JSON.stringify([accountId, channelId, connected]));
-  const writes = useMemo(() => new Map<string, Promise<boolean>>(), [requests]);
+  const writes = useMemo(() => new Map<string, Promise<PlaybackAddResult | null>>(), [requests]);
   const [state, setState] = useState<PlaybackState | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -55,19 +57,19 @@ export function usePlayback(accountId: string, channelId: string): Playback {
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
-  const send = useCallback(
-    (action: PlaybackAction): Promise<boolean> => {
+  const post = useCallback(
+    (action: PlaybackAction): Promise<PlaybackAddResult | null> => {
       const key = JSON.stringify(action), pending = writes.get(key);
       if (pending) return pending;
       const operation = (async () => {
         try {
-          const next = await apiFor(accountId).post<PlaybackState>(`/channels/${channelId}/playback`, action, requests.signal);
+          const next = await apiFor(accountId).post<PlaybackAddResult>(`/channels/${channelId}/playback`, action, requests.signal);
           requests.signal.throwIfAborted();
           apply(next);
-          return true;
+          return next;
         } catch (err) {
           if (!requests.signal.aborted && !isCancellation(err)) toast((err as Error).message);
-          return false;
+          return null;
         }
       })();
       writes.set(key, operation);
@@ -76,8 +78,9 @@ export function usePlayback(accountId: string, channelId: string): Playback {
     },
     [accountId, channelId, apply, requests, writes],
   );
+  const send = useCallback((action: PlaybackAction) => post(action).then((answer) => answer !== null), [post]);
 
-  return { state: connected ? state : null, offset, send, loading: connected && loading, error: connected ? error : null, retry };
+  return { state: connected ? state : null, offset, send, post, loading: connected && loading, error: connected ? error : null, retry };
 }
 
 export const currentItem = (state: PlaybackState | null): PlaybackItem | null =>

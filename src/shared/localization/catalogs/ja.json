@@ -2727,5 +2727,11 @@
   "terms.termsLink": "利用規約",
   "terms.privacyLink": "プライバシーポリシー",
   "terms.accept": "同意する",
-  "terms.leave": "ログアウト"
+  "terms.leave": "ログアウト",
+  "song.playlistPull": "プレイリストを取り込む",
+  "song.shuffleMode": "シャッフル再生",
+  "song.shuffleQueue": "キューをシャッフル",
+  "song.originalOrder": "元の順番",
+  "song.playlistAdded": "{p0} 曲を追加しました",
+  "song.playlistSkipped": "{p0} 曲を追加しました。{p1} 曲は追加できませんでした: キューの上限は {p2} 曲です"
 }

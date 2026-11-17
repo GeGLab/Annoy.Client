@@ -2727,5 +2727,11 @@
   "terms.termsLink": "Terms of Use",
   "terms.privacyLink": "Privacy Policy",
   "terms.accept": "Accept",
-  "terms.leave": "Sign out"
+  "terms.leave": "Sign out",
+  "song.playlistPull": "Pull playlist",
+  "song.shuffleMode": "Shuffle mode",
+  "song.shuffleQueue": "Shuffle queue",
+  "song.originalOrder": "Original order",
+  "song.playlistAdded": "{p0} songs added",
+  "song.playlistSkipped": "{p0} songs added, {p1} left out: the queue holds up to {p2}"
 }

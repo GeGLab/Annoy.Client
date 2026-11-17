@@ -1,6 +1,6 @@
 import {rich} from "../../lib/localization.ts";
 import {t as translate,counted,onLocalizationChange,localizationPreferences} from "../../../../shared/localization/index.ts";
-import { DJ_STYLES, has, Permission, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackItem, type PlaybackState, type ServerState } from "@annoy/protocol";
+import { DJ_STYLES, has, nextInQueue, Permission, PLAYBACK_QUEUE_MAX, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackAddResult, type PlaybackItem, type PlaybackState, type ServerState } from "@annoy/protocol";
 import { familyHue, genreFamily, planMix, type MixPlan, type MixPreset } from "./dj.ts";
 import { useRoomPulse } from "./room-pulse.ts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
@@ -152,16 +152,17 @@ function PlaybackFeedback({ playback }: { playback: Playback }) {
 }
 
 /** Adding to the queue: a link, or files uploaded to the room's chat first. One at a time. */
-function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]) {
+function useQueueAdd(accountId: string, channel: Channel, post: Playback["post"]) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const requests = useRequestOwner(JSON.stringify([accountId, channel.id]));
-  const submit = async (link: string): Promise<boolean> => {
-    if (!link.trim() || pending.current) return false;
+  const send = async (action: Parameters<Playback["post"]>[0]) => (await post(action)) !== null;
+  const submit = async (link: string): Promise<PlaybackAddResult | null> => {
+    if (!link.trim() || pending.current) return null;
     pending.current = true;
     setBusy(true);
     try {
-      const added = await send({ op: "add", url: link.trim() });
+      const added = await post({ op: "add", url: link.trim() });
       if (added) joinAfterPlaying(accountId, channel);
       return added;
     } finally { pending.current = false; if (!requests.signal.aborted) setBusy(false); }
@@ -191,11 +192,14 @@ function useQueueAdd(accountId: string, channel: Channel, send: Playback["send"]
 function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song = false }: { accountId: string; channel: Channel; playback: Playback; perms: number; me: string; names: Map<string, string>; audioOnly: boolean; song?: boolean }) {
   const { state, send } = playback;
   const [url, setUrl] = useState("");
-  const { busy, submit, upload } = useQueueAdd(accountId, channel, send);
+  const { busy, submit, upload } = useQueueAdd(accountId, channel, playback.post);
   const file = useRef<HTMLInputElement>(null);
   const canAdd = has(perms, Permission.SEND_MESSAGES);
   const canAttach = canAdd && has(perms, Permission.ATTACH_FILES);
   const moderator = has(perms, Permission.MANAGE_MESSAGES);
+  // Whoever manages a song room shuffles its queue once, and can put the order before back.
+  const canShuffle = song && has(perms, Permission.MANAGE_CHANNELS) && state?.shuffle !== undefined;
+  const after = state ? state.queue.length - 1 - state.queue.findIndex((entry) => entry.id === state.currentId) : 0;
 
   // Moderators reorder by dragging a row (or its grip, with the arrow keys). The new order shows
   // at once and holds until the room's own answer replaces it.
@@ -221,7 +225,13 @@ function Queue({ accountId, channel, playback, perms, me, names, audioOnly, song
 
   return (
     <div className="playback-queue">
-      {canAdd && song && <SongRequest id={`${songRequestId(channel.id)}-queue`} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />}
+      {canAdd && song && <SongRequest id={`${songRequestId(channel.id)}-queue`} busy={busy} canAttach={canAttach} playlists={state?.shuffle !== undefined} onAdd={submit} onFiles={(list) => void upload(list)} />}
+      {canShuffle && (
+        <div className="queue-tools">
+          <button type="button" className="btn btn-ghost btn-small" disabled={after < 2} onClick={() => void send({ op: "shuffleQueue" })}><Icon name="shuffle" size={14} /> {translate("song.shuffleQueue")}</button>
+          {state?.originalOrder && <button type="button" className="btn btn-ghost btn-small" onClick={() => void send({ op: "unshuffle" })}><Icon name="listOrdered" size={14} /> {translate("song.originalOrder")}</button>}
+        </div>
+      )}
       {canAdd && !song && (
         <form className="queue-add" onSubmit={add}>
           <input
@@ -373,7 +383,7 @@ function SongHistory({ accountId, channel, playback, perms }: { accountId: strin
 
 /** "Pedir uma música" over the room: glass that blurs what's behind, as much as the person set. */
 function SongRequestDialog({ accountId, channel, playback, perms, onClose }: { accountId: string; channel: Channel; playback: Playback; perms: number; onClose: () => void }) {
-  const { busy, submit, upload } = useQueueAdd(accountId, channel, playback.send);
+  const { busy, submit, upload } = useQueueAdd(accountId, channel, playback.post);
   const [tuning, setTuning] = useState(false);
   const blur = useStore((s) => s.settings.glassBlur);
   const transparency = useStore((s) => s.settings.glassTransparency);
@@ -388,7 +398,7 @@ function SongRequestDialog({ accountId, channel, playback, perms, onClose }: { a
             <button type="button" className={`icon-btn${tuning ? " active" : ""}`} aria-expanded={tuning} title={translate("glass.adjust")} aria-label={translate("glass.adjust")} onClick={() => setTuning((v) => !v)}><Icon name="sliders" size={16} /></button>
           </div>
           {tuning && <GlassControls blur={blur} transparency={transparency} onChange={setGlass} />}
-          <SongRequest id={songRequestId(channel.id)} busy={busy} canAttach={canAttach} onAdd={submit} onFiles={(list) => void upload(list)} />
+          <SongRequest id={songRequestId(channel.id)} busy={busy} canAttach={canAttach} playlists={playback.state?.shuffle !== undefined} onAdd={submit} onFiles={(list) => void upload(list)} />
         </div>
       </DialogContent>
     </Dialog>
@@ -1499,6 +1509,7 @@ function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, vi
   const [style, setStyle] = useOptimistic<DjStyle>(state.djStyle ?? "auto");
   const [ducking, setDucking] = useOptimistic(state.ducking === true);
   const [autoplay, setAutoplay] = useOptimistic(state.autoplay);
+  const [shuffle, setShuffle] = useOptimistic(state.shuffle === true);
   const [menu, setMenu] = useState<"styles" | "more" | null>(null);
   const [studio, setStudio] = useState(false);
   useOverlay(menu !== null || studio);
@@ -1522,6 +1533,8 @@ function RoomOptions({ playback, here, lite, canControl, canManage, canVideo, vi
         <DropdownMenuLabel>{translate("song.forEveryone")}</DropdownMenuLabel>
         {/* A DJ always moves on to the next track: autoplay stays on while DJ mode is. */}
         <MenuSwitch icon="repeat" label={translate("common.aaae0f8a9481")} on={autoplay || dj} disabled={!canControl || dj} onToggle={() => setAutoplay(!autoplay, () => send({ op: "autoplay", value: !autoplay }))} />
+        {/* Random mode: only whoever manages the room changes it. */}
+        {state.shuffle !== undefined && <MenuSwitch icon="shuffle" label={translate("song.shuffleMode")} on={shuffle} disabled={!canManage} onToggle={() => setShuffle(!shuffle, () => send({ op: "shuffle", value: !shuffle }))} />}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{translate("song.justYou")}</DropdownMenuLabel>
         <MenuSwitch icon="feather" label={translate("song.lite")} hint={translate("song.liteHint")} on={lite} onToggle={() => withTransition(() => setSongLite(!lite))} />
@@ -1632,7 +1645,7 @@ function Listeners({ state, ids, me }: { state: ServerState; ids: readonly strin
 const YOUTUBE_HOST = /^(www\.|m\.|music\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
 const DIRECT_MEDIA = /\.(mp4|webm|mkv|mov|m4v|ogv|mp3|ogg|oga|opus|m4a|aac|flac|wav)$/i;
 
-interface LinkPreview { url: string; kind: PlaybackItem["kind"]; name: string; detail: string; thumb: string | null }
+interface LinkPreview { url: string; kind: PlaybackItem["kind"]; name: string; detail: string; thumb: string | null; playlist: boolean }
 
 /** What a pasted link will be once queued (the server decides the same way); null while it isn't a link. */
 function previewLink(raw: string): LinkPreview | null {
@@ -1651,11 +1664,13 @@ function previewLink(raw: string): LinkPreview | null {
   if (YOUTUBE_HOST.test(url.hostname)) {
     const thumb = youtubeThumb({ kind: "youtube", url: href } as PlaybackItem);
     const id = thumb ? /\/vi\/([\w-]+)\//.exec(thumb)?.[1] : null;
-    return { url: href, kind: "youtube", name: id ? `youtu.be/${id}` : host, detail: host, thumb };
+    // A list= link pulls the whole playlist into a song room (the server reads it the same way).
+    const playlist = /^[\w-]{2,64}$/.test(url.searchParams.get("list") ?? "");
+    return { url: href, kind: "youtube", name: id ? `youtu.be/${id}` : host, detail: host, thumb, playlist };
   }
   const file = (() => { try { return decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() ?? ""); } catch { return ""; } })();
-  if (DIRECT_MEDIA.test(url.pathname)) return { url: href, kind: "direct", name: file || host, detail: host, thumb: null };
-  return { url: href, kind: "site", name: host, detail: `${host}${url.pathname === "/" ? "" : url.pathname}`, thumb: null };
+  if (DIRECT_MEDIA.test(url.pathname)) return { url: href, kind: "direct", name: file || host, detail: host, thumb: null, playlist: false };
+  return { url: href, kind: "site", name: host, detail: `${host}${url.pathname === "/" ? "" : url.pathname}`, thumb: null, playlist: false };
 }
 
 /** YouTube's own title for a pasted video, best effort (the room names it on its own anyway). */
@@ -1680,30 +1695,51 @@ function useLinkTitle(preview: LinkPreview | null): string | null {
 }
 
 /**
+ * The last answer of each request field. The first track of an empty room starts playing and
+ * the room redraws its side panel (often before the answer arrives), so the field remounts:
+ * the note lives here and every field showing that id follows it.
+ */
+interface RequestNote { at: number; /** A pulled playlist: how many tracks went in, and how many found the queue full. */ pulled: { added: number; skipped: number } | null }
+const requestNotes = new Map<string, RequestNote>();
+const noteListeners = new Set<() => void>();
+const noteMs = (note: RequestNote) => (note.pulled?.skipped ? 8000 : 2600);
+function setRequestNote(id: string, note: RequestNote | null): void {
+  if (note) requestNotes.set(id, note);
+  else requestNotes.delete(id);
+  noteListeners.forEach((listener) => listener());
+}
+const subscribeNotes = (listener: () => void) => {
+  noteListeners.add(listener);
+  return () => { noteListeners.delete(listener); };
+};
+
+/**
  * Asking for a song: paste a link and see what it is (the video's thumbnail and title) before
  * it goes in; Enter adds it. Files can be picked or dropped on the box.
  */
-function SongRequest({ id, busy, canAttach, onAdd, onFiles }: { id: string; busy: boolean; canAttach: boolean; onAdd: (url: string) => Promise<boolean>; onFiles: (files: File[]) => void }) {
+function SongRequest({ id, busy, canAttach, playlists, onAdd, onFiles }: { id: string; busy: boolean; canAttach: boolean; playlists: boolean; onAdd: (url: string) => Promise<PlaybackAddResult | null>; onFiles: (files: File[]) => void }) {
   const [text, setText] = useState("");
-  const [added, setAdded] = useState(0);
+  const note = useSyncExternalStore(subscribeNotes, () => requestNotes.get(id) ?? null);
+  const pulled = note?.pulled ?? null;
   const [dragging, setDragging] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const preview = useMemo(() => previewLink(text), [text]);
   const title = useLinkTitle(preview);
   const invalid = text.trim().length > 3 && !preview;
   useEffect(() => {
-    if (!added) return;
-    const timer = setTimeout(() => setAdded(0), 2600);
+    if (!note) return;
+    const timer = setTimeout(() => { if (requestNotes.get(id) === note) setRequestNote(id, null); }, Math.max(0, note.at + noteMs(note) - Date.now()));
     return () => clearTimeout(timer);
-  }, [added]);
+  }, [note, id]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!preview || busy) return;
     const sent = text;
-    if (await onAdd(preview.url)) {
+    const answer = await onAdd(preview.url);
+    if (answer) {
       setText((current) => (current === sent ? "" : current));
-      setAdded((n) => n + 1);
+      setRequestNote(id, { at: Date.now(), pulled: answer.added !== undefined ? { added: answer.added, skipped: answer.skipped ?? 0 } : null });
     }
   };
   const hasFiles = (e: ReactDragEvent) => [...e.dataTransfer.types].includes("Files");
@@ -1754,15 +1790,20 @@ function SongRequest({ id, busy, canAttach, onAdd, onFiles }: { id: string; busy
           </span>
           <button type="submit" className="song-request-add" disabled={busy} title={translate("song.requestEnter")}>
             <Icon name={busy ? "loader" : "plus"} size={15} className={busy ? "song-spin" : ""} />
-            {busy ? translate("song.requestAdding") : translate("song.requestAdd")}
+            {busy ? translate("song.requestAdding") : playlists && preview.playlist ? translate("song.playlistPull") : translate("song.requestAdd")}
           </button>
         </div>
       ) : dragging ? (
         <p className="song-request-note drop"><Icon name="upload" size={14} /> {translate("song.requestDrop")}</p>
       ) : invalid ? (
         <p className="song-request-note error" role="alert">{translate("song.requestInvalid")}</p>
-      ) : added ? (
-        <p key={added} className="song-request-note done" role="status"><Icon name="check" size={14} /> {translate("song.requestAdded")}</p>
+      ) : note ? (
+        <p key={note.at} className="song-request-note done" role="status">
+          <Icon name="check" size={14} />{" "}
+          {!pulled ? translate("song.requestAdded")
+            : pulled.skipped > 0 ? translate("song.playlistSkipped", { p0: pulled.added, p1: pulled.skipped, p2: PLAYBACK_QUEUE_MAX })
+              : translate("song.playlistAdded", { p0: pulled.added })}
+        </p>
       ) : (
         <div className="song-request-foot">
           <span>{translate("song.requestHint")}</span>
@@ -1799,7 +1840,7 @@ function UpNext({ playback, canRequest, onOpen, onRequest }: { playback: Playbac
   useSyncExternalStore(subscribe, () => songInfos.size);
   if (!state || !item) return null;
   const index = state.queue.findIndex((entry) => entry.id === item.id);
-  const next = state.queue[index + 1];
+  const next = nextInQueue(state);
   const info = next ? songInfos.get(next.id) : undefined;
   return (
     <div className="song-upnext">
@@ -1832,6 +1873,8 @@ function goBack(playback: Playback, at: number): void {
   if (at > 3) void send({ op: "seek", position: 0 });
   // Played tracks that left the queue wait in the history: back brings the last one.
   else if (state.removePlayed && state.history?.length) void send({ op: "previous" });
+  // Random mode: back to the track that played before this one (none yet: from the start).
+  else if (state.shuffle) void send(state.played?.length ? { op: "previous" } : { op: "seek", position: 0 });
   else if (!previous) void send({ op: "seek", position: 0 });
   else void send({ op: "play", itemId: previous.id });
 }
@@ -1917,7 +1960,7 @@ function SongInvite({ playback, info, loading, names, channel, canControl, state
   const state = playback.state!;
   const item = currentItem(state)!;
   const index = state.queue.findIndex((entry) => entry.id === item.id);
-  const next = state.queue[index + 1];
+  const next = nextInQueue(state);
   const requester = names.get(item.addedBy) ?? translate("common.11bf7e98a3f1");
   const album = info?.album ? (info.year ? `${info.album} · ${info.year}` : info.album) : null;
   return (
@@ -2251,8 +2294,7 @@ function SongPlayer({ session }: { session: Listening }) {
   // DJ mode: shortly before the end, load the next track on the other deck (held, silent);
   // at the mix point start it with its transition, play this one out, and move the room on.
   // Every listener does this at the same room time, so everyone hears the same mix.
-  const index = state && item ? state.queue.findIndex((entry) => entry.id === item.id) : -1;
-  const next = index >= 0 ? state!.queue[index + 1] : undefined;
+  const next = state && item ? nextInQueue(state) ?? undefined : undefined;
   // The next track's genre and tempo shape the transition: look them up ahead of time.
   useSongInfo(next ?? null, null);
   const dj = state?.dj === true && !!state.autoplay;

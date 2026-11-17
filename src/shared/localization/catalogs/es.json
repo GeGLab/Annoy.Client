@@ -2727,5 +2727,11 @@
   "terms.termsLink": "Términos de Uso",
   "terms.privacyLink": "Política de Privacidad",
   "terms.accept": "Aceptar",
-  "terms.leave": "Cerrar sesión"
+  "terms.leave": "Cerrar sesión",
+  "song.playlistPull": "Traer playlist",
+  "song.shuffleMode": "Modo aleatorio",
+  "song.shuffleQueue": "Mezclar cola",
+  "song.originalOrder": "Orden original",
+  "song.playlistAdded": "{p0} canciones añadidas",
+  "song.playlistSkipped": "{p0} canciones añadidas, {p1} quedaron fuera: la cola tiene un límite de {p2}"
 }

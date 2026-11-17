@@ -2727,5 +2727,11 @@
   "terms.termsLink": "使用条款",
   "terms.privacyLink": "隐私政策",
   "terms.accept": "接受",
-  "terms.leave": "退出账户"
+  "terms.leave": "退出账户",
+  "song.playlistPull": "导入播放列表",
+  "song.shuffleMode": "随机播放",
+  "song.shuffleQueue": "打乱队列",
+  "song.originalOrder": "原始顺序",
+  "song.playlistAdded": "已添加 {p0} 首歌曲",
+  "song.playlistSkipped": "已添加 {p0} 首歌曲，{p1} 首未加入：队列最多 {p2} 首"
 }

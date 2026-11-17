@@ -2727,5 +2727,11 @@
   "terms.termsLink": "Termini di utilizzo",
   "terms.privacyLink": "Informativa sulla privacy",
   "terms.accept": "Accetta",
-  "terms.leave": "Esci dall’account"
+  "terms.leave": "Esci dall’account",
+  "song.playlistPull": "Importa playlist",
+  "song.shuffleMode": "Modalità casuale",
+  "song.shuffleQueue": "Mescola coda",
+  "song.originalOrder": "Ordine originale",
+  "song.playlistAdded": "{p0} brani aggiunti",
+  "song.playlistSkipped": "{p0} brani aggiunti, {p1} esclusi: la coda ha un limite di {p2}"
 }

@@ -2727,5 +2727,11 @@
   "terms.termsLink": "Termos de Uso",
   "terms.privacyLink": "Política de Privacidade",
   "terms.accept": "Aceitar",
-  "terms.leave": "Sair da conta"
+  "terms.leave": "Sair da conta",
+  "song.playlistPull": "Puxar playlist",
+  "song.shuffleMode": "Modo aleatório",
+  "song.shuffleQueue": "Embaralhar fila",
+  "song.originalOrder": "Ordem original",
+  "song.playlistAdded": "{p0} músicas adicionadas",
+  "song.playlistSkipped": "{p0} músicas adicionadas, {p1} ficaram de fora: a fila tem limite de {p2}"
 }
