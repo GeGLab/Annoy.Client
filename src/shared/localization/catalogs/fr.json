@@ -2714,5 +2714,18 @@
   "studio.reset": "Réinitialiser",
   "song.removePlayedServer": "Ce serveur n'a pas encore cette option. Mettez à jour annoy-server pour l'utiliser.",
   "song.removePlayedServerShort": "Mise à jour du serveur requise",
-  "song.historyEmpty": "Rien n'a encore été joué."
+  "song.historyEmpty": "Rien n'a encore été joué.",
+  "announcements.title": "Annonces",
+  "announcements.vote": "Voter",
+  "announcements.viewResults": "Voir les résultats",
+  "announcements.changeVote": "Changer de vote",
+  "announcements.closed": "Sondage clos",
+  "announcements.votes.one": "{count} vote",
+  "announcements.votes.other": "{count} votes",
+  "terms.title": "Conditions mises à jour",
+  "terms.body": "Nous avons mis à jour les Conditions d’utilisation et la Politique de confidentialité. Lisez-les et acceptez-les pour continuer à utiliser votre compte Annoy.",
+  "terms.termsLink": "Conditions d’utilisation",
+  "terms.privacyLink": "Politique de confidentialité",
+  "terms.accept": "Accepter",
+  "terms.leave": "Se déconnecter"
 }

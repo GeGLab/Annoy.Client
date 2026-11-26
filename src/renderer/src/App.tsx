@@ -34,6 +34,8 @@ import { TopBar } from "./components/TopBar.tsx";
 import { ServerDirectory } from "./components/ServerDirectory.tsx";
 import { ScreenPickerModal } from "./components/VoiceStage.tsx";
 import { BANNER_HEIGHT, isBlocking, MandatoryUpdate, UpdateBanner, useBannerVisible, useUpdateState } from "./components/Updates.tsx";
+import { AnnouncementsDialog, useDueAnnouncements } from "./features/announcements/Announcements.tsx";
+import { TermsGate } from "./components/TermsGate.tsx";
 
 const AddAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.AddAccountModal })));
 const SwitchAccountModal = lazy(() => import("./components/AccountModals.tsx").then(m => ({ default: m.SwitchAccountModal })));
@@ -149,6 +151,7 @@ export function App() {
   const appIcon = useStore((s) => s.settings.appIcon);
   const mainRef = useRef<HTMLElement>(null);
   useUpdateState();
+  useDueAnnouncements();
   // The window and tray icon live in the main process; keep them on the chosen icon.
   useEffect(() => { void window.annoy?.appIcon?.set(appIcon).catch(() => undefined); }, [appIcon]);
   // Windows throttles covered apps; during a call that crackles everyone's voice.
@@ -264,6 +267,8 @@ export function App() {
       </>}
       <Suspense fallback={<div className="overlay-loading" role="status">{translate("common.0911dfa616da")}</div>}><AccountPolicyNotice /><Modals /></Suspense>
       <MandatoryUpdate />
+      {access && !blocking && <AnnouncementsDialog />}
+      {access && !blocking && <TermsGate />}
       <ActionDialogHost />
       {access && <DirectCallPanel />}
       {access && <CallWindow />}

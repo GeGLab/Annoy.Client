@@ -2714,5 +2714,18 @@
   "studio.reset": "Reset",
   "song.removePlayedServer": "This server doesn't have this option yet. Update annoy-server to use it.",
   "song.removePlayedServerShort": "Needs a server update",
-  "song.historyEmpty": "Nothing has played yet."
+  "song.historyEmpty": "Nothing has played yet.",
+  "announcements.title": "Announcements",
+  "announcements.vote": "Vote",
+  "announcements.viewResults": "View results",
+  "announcements.changeVote": "Change vote",
+  "announcements.closed": "Poll closed",
+  "announcements.votes.one": "{count} vote",
+  "announcements.votes.other": "{count} votes",
+  "terms.title": "Terms updated",
+  "terms.body": "We updated the Terms of Use and the Privacy Policy. Read and accept them to keep using your Annoy account.",
+  "terms.termsLink": "Terms of Use",
+  "terms.privacyLink": "Privacy Policy",
+  "terms.accept": "Accept",
+  "terms.leave": "Sign out"
 }

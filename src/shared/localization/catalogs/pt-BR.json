@@ -2714,5 +2714,18 @@
   "studio.reset": "Zerar",
   "song.removePlayedServer": "Este servidor ainda não tem essa opção. Atualize o annoy-server para usar.",
   "song.removePlayedServerShort": "Requer servidor atualizado",
-  "song.historyEmpty": "Nada tocou ainda."
+  "song.historyEmpty": "Nada tocou ainda.",
+  "announcements.title": "Comunicados",
+  "announcements.vote": "Votar",
+  "announcements.viewResults": "Ver resultados",
+  "announcements.changeVote": "Mudar voto",
+  "announcements.closed": "Enquete encerrada",
+  "announcements.votes.one": "{count} voto",
+  "announcements.votes.other": "{count} votos",
+  "terms.title": "Termos atualizados",
+  "terms.body": "Atualizamos os Termos de Uso e a Política de Privacidade. Leia e aceite para continuar usando sua conta Annoy.",
+  "terms.termsLink": "Termos de Uso",
+  "terms.privacyLink": "Política de Privacidade",
+  "terms.accept": "Aceitar",
+  "terms.leave": "Sair da conta"
 }
