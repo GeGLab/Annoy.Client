@@ -1388,7 +1388,7 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
         const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
         addAccount({ id, url: "https://private.test", token: "synthetic", userId: id, instanceName: "Chamadas de teste" });
       }, id);
-      await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].displayName}`, exact: true })).toBeVisible();
+      await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].profile.displayName}`, exact: true })).toBeVisible();
     }
     await left.page.getByRole("button", { name: "Chamada de vídeo com Bob", exact: true }).click();
     await expect(right.page.getByRole("dialog", { name: "Chamada recebida", exact: true })).toBeVisible();
