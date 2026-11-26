@@ -2714,5 +2714,18 @@
   "studio.reset": "重置",
   "song.removePlayedServer": "此服务器尚无此选项。请更新 annoy-server 后使用。",
   "song.removePlayedServerShort": "需要更新服务器",
-  "song.historyEmpty": "还没有播放过任何曲目。"
+  "song.historyEmpty": "还没有播放过任何曲目。",
+  "announcements.title": "公告",
+  "announcements.vote": "投票",
+  "announcements.viewResults": "查看结果",
+  "announcements.changeVote": "更改投票",
+  "announcements.closed": "投票已结束",
+  "announcements.votes.one": "{count} 票",
+  "announcements.votes.other": "{count} 票",
+  "terms.title": "条款已更新",
+  "terms.body": "我们更新了使用条款和隐私政策。请阅读并接受，以继续使用你的 Annoy 账户。",
+  "terms.termsLink": "使用条款",
+  "terms.privacyLink": "隐私政策",
+  "terms.accept": "接受",
+  "terms.leave": "退出账户"
 }

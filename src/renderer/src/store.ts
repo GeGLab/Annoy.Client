@@ -210,6 +210,9 @@ export interface AppState {
 
 export interface GlobalAccount {
   cryptoMigrationRequired?: boolean;
+  /** The terms of use or the privacy policy changed: the app asks to accept currentTerms (TermsGate). */
+  termsRequired?: boolean;
+  currentTerms?: string;
   id: string;
   name: string;
   email: string;

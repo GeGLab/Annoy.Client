@@ -30,6 +30,7 @@ import { RadioGroup } from "../ui/radio-group.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog.tsx";
 import { UpdateSettings } from "../Updates.tsx";
+import { AnnouncementHistory } from "../../features/announcements/Announcements.tsx";
 import { MediaLibrarySettings } from "../../features/expression/MediaLibrarySettings.tsx";
 import { ProfileEditor, type ProfileDraft } from "./ProfileEditor.tsx";
 import { NOISE_FILTERS, type NoiseFilter } from "../../noise.ts";
@@ -577,12 +578,13 @@ export function UserSettingsModal() {
                 <DevicesList />
               </section>
             )}
-            {page === "updates" && (
+            {page === "updates" && (<>
               <section className="settings-section">
                 <h3>{translate("common.a1f09a31ad36")}</h3>
                 <UpdateSettings />
               </section>
-            )}
+              <AnnouncementHistory />
+            </>)}
             {page === "tabs" && (
               <section className="settings-section">
                 <h3>{rich("common.03789960fb4a",{p0:(<Icon name="sliders" size={24} />)})}</h3>

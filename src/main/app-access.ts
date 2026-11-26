@@ -3,7 +3,7 @@ import { LOCKED_ACCESS, type AppAccessState } from "../shared/app-access.ts";
 import {secureHttpUrl} from '../shared/transport.ts';
 
 export interface LocalCredential { id: string; url: string; token: string; userId: string }
-interface GlobalUser { id: string; name: string; email: string; cryptoMigrationRequired?:boolean }
+interface GlobalUser { id: string; name: string; email: string; cryptoMigrationRequired?:boolean; termsRequired?: boolean; currentTerms?: string }
 
 /** A refusal from the server itself (401/403). Anything else (network, timeout, 5xx) is not an answer about the session. */
 export class SessionRefused extends Error {}
@@ -33,7 +33,8 @@ export function createAppAccess(globalUrl: string, changed: (state: AppAccessSta
       if (version !== globalVersion) throw new Error(translate("common.459edfa35541"));
       if (typeof user.id !== "string" || !user.id || typeof user.name !== "string" || typeof user.email !== "string") throw new Error(translate("common.a449c449c31a"));
       globalToken = token; publish();
-      return { id: user.id, name: user.name, email: user.email, ...(user.cryptoMigrationRequired===true?{cryptoMigrationRequired:true}:{}) };
+      // termsRequired: the terms changed since this account accepted them (the renderer asks again).
+      return { id: user.id, name: user.name, email: user.email, ...(user.cryptoMigrationRequired===true?{cryptoMigrationRequired:true}:{}), ...(user.termsRequired===true&&typeof user.currentTerms==="string"&&user.currentTerms.length<=32?{termsRequired:true,currentTerms:user.currentTerms}:{}) };
     } catch (err) {
       // Only the server's refusal ends a session. A network failure, a timeout or a restarting
       // service keeps an accepted session; revalidation tries again later.

@@ -2714,5 +2714,18 @@
   "studio.reset": "リセット",
   "song.removePlayedServer": "このサーバーにはまだこのオプションがありません。使うにはannoy-serverを更新してください。",
   "song.removePlayedServerShort": "サーバーの更新が必要",
-  "song.historyEmpty": "まだ何も再生されていません。"
+  "song.historyEmpty": "まだ何も再生されていません。",
+  "announcements.title": "お知らせ",
+  "announcements.vote": "投票",
+  "announcements.viewResults": "結果を見る",
+  "announcements.changeVote": "投票を変更",
+  "announcements.closed": "投票は終了しました",
+  "announcements.votes.one": "{count} 票",
+  "announcements.votes.other": "{count} 票",
+  "terms.title": "規約が更新されました",
+  "terms.body": "利用規約とプライバシーポリシーを更新しました。Annoy アカウントを引き続き使うには、内容を読んで同意してください。",
+  "terms.termsLink": "利用規約",
+  "terms.privacyLink": "プライバシーポリシー",
+  "terms.accept": "同意する",
+  "terms.leave": "ログアウト"
 }
