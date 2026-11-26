@@ -1,3 +1,4 @@
+import { personOf } from "../../social/profiles.ts";
 import {localizationPreferences} from "../../../../shared/localization/index.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import { useRef, useState } from "react";
@@ -118,7 +119,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
                 <option value="">{translate("common.b014ff0d6f76")}</option>
                 {members.map((u) => (
                   <option value={u.id} key={u.id}>
-                    {u.displayName} (@{u.username})
+                    {personOf(u).displayName} (@{personOf(u).username})
                   </option>
                 ))}
               </Select>
@@ -171,7 +172,7 @@ export default function SearchDialog({ accountId, serverId, channelId }: { accou
             <Avatar user={message.author} size={32} />
             <div>
               <header>
-                <strong>{message.author.displayName}</strong>
+                <strong>{personOf(message.author).displayName}</strong>
                 <time>{new Date(message.createdAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</time>
               </header>
               <p>{message.content || translate("common.36c4a07428f6",{p0:(message.attachments.length)})}</p>

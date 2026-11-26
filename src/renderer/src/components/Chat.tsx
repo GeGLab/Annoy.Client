@@ -1,3 +1,4 @@
+import { personOf, useProfilesRevision } from "../social/profiles.ts";
 import { IntegrationIcon } from "../features/integrations/Setup.tsx";
 import { useComposerAttach } from "../lib/composer-attach.ts";
 import { useCommandSuggestions } from "../features/integrations/CommandSuggestions.tsx";
@@ -202,6 +203,8 @@ function MessageRow({
   highlighted?: boolean;
   onReply: (m: Message) => void;
 }) {
+  // Names come from usersannoy: redraw when a profile arrives.
+  useProfilesRevision();
   const reactionsEnabled = useStore((s) => s.instances[accountId]?.instance?.reactions === true);
   const stickerReactions = useStore((s) => s.instances[accountId]?.instance?.stickerReactions === true);
   const isPinned = useStore((s) => s.instances[accountId]?.messages[message.channelId]?.pins?.some(pin => pin.message.id === message.id) ?? false);
@@ -233,7 +236,7 @@ function MessageRow({
   const [draft, setDraft] = useState(message.content);
   const own = message.author.id === me;
   const mentioned = message.mentionsEveryone || message.mentionIds.includes(me);
-  const name = nameOf(message.author.id) ?? message.author.displayName;
+  const name = nameOf(message.author.id) ?? personOf(message.author).displayName;
 
   const save = async () => {
     const content = draft.trim();
@@ -256,7 +259,7 @@ function MessageRow({
           <Icon name="reply" size={12} />
           {replyTo ? (
             <>
-              <strong>{nameOf(replyTo.author.id) ?? replyTo.author.displayName}</strong>
+              <strong>{nameOf(replyTo.author.id) ?? personOf(replyTo.author).displayName}</strong>
               <span className="truncate">{replyTo.content || translate("common.be9ae4ef7a22")}</span>
             </>
           ) : (
@@ -579,7 +582,7 @@ function Composer({
           ))}
         </div>
       )}
-      {replyTo && <ReplyPreview author={nameOf(replyTo.author.id) ?? replyTo.author.displayName} content={replyTo.content} attachmentNames={replyTo.attachments.map(file => file.filename)} nameOf={nameOf} channelOf={channelOf} onCancel={onClearReply} />}
+      {replyTo && <ReplyPreview author={nameOf(replyTo.author.id) ?? personOf(replyTo.author).displayName} content={replyTo.content} attachmentNames={replyTo.attachments.map(file => file.filename)} nameOf={nameOf} channelOf={channelOf} onCancel={onClearReply} />}
       {replyToId && !replyTo && <div className="reply-bar" role="status">
         <span>{replyValid ? translate("chat.daa628ee773b") : replyStatus === "checking" ? translate("chat.32ece7067212") : translate("chat.555f78669b82")}</span>
         <button className="btn btn-ghost" disabled={replyValid || replyStatus === "checking"} onClick={onRetryReply}>{translate("chat.861c025f8735")}</button>
@@ -689,6 +692,7 @@ const EMPTY_UNREAD={count:0,mention:false};
 export function Chat(props: ChatProps) {
   const { accountId, channelId, nameOf } = props;
   const entry = useStore((s) => s.instances[accountId]?.messages[channelId]);
+  useProfilesRevision();
   const me = useStore((s) => s.instances[accountId]?.user?.id ?? "");
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const items = entry?.items ?? EMPTY;
@@ -959,7 +963,7 @@ export function Chat(props: ChatProps) {
       </header>
       {pinsOpen && <div className="pins-panel" role="region" aria-label={translate("chat.dd5705122a58")}>
         <div className="pins-panel-title"><strong>{translate("chat.dd5705122a58")}</strong><button className="icon-btn tiny" aria-label={translate("chat.0f2cac634ffa")} onClick={()=>setPinsOpen(false)}><Icon name="x" size={15}/></button></div>
-        {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{pin.message.author.displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
+        {entry?.pinsLoading && <p role="status">{translate("chat.705ff05e88ed")}</p>}{entry?.pinsError && <p role="alert">{entry.pinsError} <button className="btn btn-ghost" onClick={()=>void loadPinnedMessages(accountId,channelId)}>{translate("common.b9e10688be01")}</button></p>}{!entry?.pinsLoading && !entry?.pinsError && !entry?.pins?.length ? <p className="muted small">{translate("chat.ccd83eb43bb7")}</p> : entry?.pins?.map(pin=><button className="pinned-message" key={pin.message.id} onClick={()=>{setPinsOpen(false);void jumpToMessage(accountId,channelId,pin.message.id,props.serverId??null).catch(error=>toast((error as Error).message));}}><span><strong>{personOf(pin.message.author).displayName}</strong><small>{new Date(pin.pinnedAt).toLocaleString(localizationPreferences().region,{hourCycle:localizationPreferences().hourCycle})}</small></span><span className="pinned-message-content">{pin.message.content || translate("common.e186297c35aa")}</span></button>)}
         {entry?.pinsNextCursor&&<button className="btn btn-ghost" disabled={entry.pinsLoading} onClick={()=>void loadPinnedMessages(accountId,channelId,true)}>{translate("chat.d4d0696420fd")}</button>}
       </div>}
       {props.introduction}

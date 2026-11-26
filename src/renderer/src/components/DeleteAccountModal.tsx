@@ -1,3 +1,4 @@
+import { usePerson } from "../social/profiles.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { Input } from "./ui/input.tsx";
 import { useState } from "react";
@@ -8,7 +9,9 @@ import { confirmAction } from "./ui/action-dialog.tsx";
 
 /** Self-service account deletion. */
 export function DeleteAccountModal({ accountId }: { accountId: string }) {
-  const user = useStore((s) => s.instances[accountId]?.user);
+  const serverUser = useStore((s) => s.instances[accountId]?.user);
+  // The @username to type: the Annoy one (usersannoy) for Annoy accounts, the server's for local ones.
+  const user = usePerson(serverUser);
   const instanceName = useStore((s) => s.accounts.find((account) => account.id === accountId)?.instanceName ?? "");
   const [confirmText, setConfirmText] = useState("");
   const [password, setPassword] = useState("");

@@ -22,6 +22,7 @@ stub('lib/navigation-guard.ts',{requestNavigation:run=>run()});
 stub('features/channels/events.ts',{emitRoomEvent:noop});
 stub('format.tsx',{previewText:value=>value});
 stub('perms.ts',{displayNameOf:()=>''});
+stub('social/profiles.ts',{personOf:user=>({id:user.id,username:user.username??'',displayName:user.profile?.displayName??'',avatarUrl:null}),requestServerProfiles:()=>noop});
 stub('lib/devices.ts',{savedDevice:noop});
 stub('voice.ts',{VoiceSession:class {}});
 stub('voice-cloudflare.ts',{CloudflareVoiceSession:class {}});
@@ -32,7 +33,7 @@ stub('features/direct-calls.ts',{handleDirectCallEvent:noop,updateDirectCallMute
 stub('chat-state.ts',{clearAccountChatState:noop,clearChatAnchor:noop,clearRecoveryReturn:noop,flushChatState:noop,readChatAnchor:()=>null,readRecoveryReturn:()=>null});
 stub('social/runtime.ts',{runtime:h.runtime,social:()=>h.state.social,setSocial:recipe=>recipe(h.state.social),cloudDevice:()=> 'synthetic-device-123456',displayName:p=>p?.username??''});
 stub('auth/session.ts',{accountIdentityKey:()=>h.identity});
-stub('social/cloud.ts',{cloud:(...args)=>h.cloud(...args),cloudFetch:()=>{throw Error('Unexpected file download');}});
+stub('social/cloud.ts',{cloud:(...args)=>h.cloud(...args),cloudFetch:()=>{throw Error('Unexpected file download');},cloudReachable:()=>true,onCloudReachability:()=>()=>{},imageUrl:()=>null});
 stub('social/local-db.ts',{
  getMessage:async(_me,id)=>h.records.get(id),putMessages:async(_me,items)=>{for(const m of items)h.records.set(m.id,m);},
  getPins:async(_me,id)=>h.pins.get(id)??[],putPins:async(_me,id,pins)=>{h.pins.set(id,structuredClone(pins));},

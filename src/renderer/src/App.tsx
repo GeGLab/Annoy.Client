@@ -24,7 +24,7 @@ import { ActionDialogHost } from "./components/ui/action-dialog.tsx";
 import { connectAll, leaveVoice, navigate, showServiceView } from "./client.ts";
 import { getState, setState, useStore } from "./store.ts";
 import { initSocial, setWhere } from "./social/index.ts";
-import { startProfileSync } from "./social/profile-sync.ts";
+import { requestServerProfiles } from "./social/profiles.ts";
 import { fetchInfo } from "./api.ts";
 import { AuthGate } from "./components/AuthGate.tsx";
 import { Home } from "./components/Home.tsx";
@@ -197,7 +197,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>import("./features/integrations/vpngo.ts")).then(v=>v.initVpngoRoutes()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();startProfileSync();});});
+    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>import("./features/integrations/vpngo.ts")).then(v=>v.initVpngoRoutes()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();requestServerProfiles();});});
     if (getState().view.kind !== "home") navigate(getState().view);
     return window.annoy?.services.onBadge((id, badge) =>
       setState((s) => {

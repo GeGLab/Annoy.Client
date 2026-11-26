@@ -1,3 +1,4 @@
+import { personOf, useProfilesRevision } from "../social/profiles.ts";
 import { FriendsDashboard, PersonalHeading } from "../features/redesign/LiveExperience.tsx";
 import { Scenery } from "../features/redesign/Scenery.tsx";
 import {rich} from "../lib/localization.ts";
@@ -25,6 +26,7 @@ import { notificationKey, toggleMessageMute } from "../lib/notification-preferen
 type Tab = "online" | "all" | "pending" | "add";
 
 function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relationship; online: boolean }) {
+  useProfilesRevision();
   const connected = useStore((s) => s.instances[accountId]?.status === "ready");
   const presence = useStore((s) => s.instances[accountId]?.presences[rel.user.id] ?? "offline");
   const activities = useStore((s) => s.instances[accountId]?.activities?.[rel.user.id] ?? EMPTY_ACTIVITIES);
@@ -33,7 +35,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
     <div className="friend">
       <Avatar user={rel.user} size={36} presence={presence} />
       <div className="friend-names">
-        <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || rel.user.displayName}</strong></UserProfile>
+        <UserProfile user={rel.user} accountId={accountId}><strong>{rel.nickname || personOf(rel.user).displayName}</strong></UserProfile>
         <span className="muted">
           {!connected ? translate("common.b13c69621e91") : rel.status === "incoming" ? translate("common.13954746d501") : rel.status === "outgoing" ? translate("common.5407d7530e44") : presence === "idle" ? translate("common.fd7f0836e8ad") : presence === "dnd" ? translate("common.976685dd88bf") : online ? translate("common.0d21bd52022c") : translate("common.a1794783aab7")}
         </span>
@@ -41,7 +43,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
       </div>
       <span className="spacer" />
       {rel.status === "friend" && (
-        <><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.2fbb31f3ee73",{p0:(rel.user.displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.87b78cdc3e7c",{p0:(rel.user.displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, true)}><Icon name="camera" /></button></>
+        <><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.2fbb31f3ee73",{p0:(personOf(rel.user).displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={!connected || !online} aria-label={translate("common.87b78cdc3e7c",{p0:(personOf(rel.user).displayName)})} onClick={() => void startDirectCall(accountId, rel.user.id, true)}><Icon name="camera" /></button></>
       )}
       {rel.status === "friend" && (
         <button className="icon-btn" title={translate("common.322085898310")} onClick={() => void openDm(accountId, rel.user.id)}>
@@ -58,7 +60,7 @@ function FriendRow({ accountId, rel, online }: { accountId: string; rel: Relatio
         disabled={!connected}
         title={rel.status === "friend" ? translate("common.517ae8f44afa") : translate("common.b3a927e0711a")}
         onClick={async () =>
-          (rel.status !== "friend" || (await confirmAction(translate("common.b51f90451a7a",{p0:(rel.user.displayName)})))) &&
+          (rel.status !== "friend" || (await confirmAction(translate("common.b51f90451a7a",{p0:(personOf(rel.user).displayName)})))) &&
           void act(api.del(`/relationships/${rel.user.id}`))
         }
       >
@@ -175,6 +177,7 @@ export function WelcomeMain({ onAddFriend }: { onAddFriend?: () => void } = {}) 
 }
 
 export function Home({ accountId, dmId }: { accountId: string | null; dmId: string | null }) {
+  useProfilesRevision();
   const settings = useStore((s) => s.settings);
   const accounts = useStore((s) => s.accounts);
   const inst = useStore((s) => (accountId ? s.instances[accountId] : undefined));
@@ -261,7 +264,7 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
                   onClick={() => navigate({ kind: "home", accountId, dmId: d.id })}
                 >
                   <Avatar user={r} size={28} presence={inst.presences[r.id] ?? "offline"} />
-                  <span className="channel-name">{inst.relationships.find((relationship) => relationship.user.id === r.id)?.nickname || r.displayName}</span>
+                  <span className="channel-name">{inst.relationships.find((relationship) => relationship.user.id === r.id)?.nickname || personOf(r).displayName}</span>
                   {u && <span className="badge">{u.count}</span>}
                 </div>
               </li>
@@ -276,15 +279,15 @@ export function Home({ accountId, dmId }: { accountId: string | null; dmId: stri
           key={JSON.stringify([accountId, dm.id])}
           accountId={accountId}
           channelId={dm.id}
-          title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || other.displayName}
+          title={inst.relationships.find((relationship) => relationship.user.id === other.id)?.nickname || personOf(other).displayName}
           headerExtra={<><button className="icon-btn" aria-label={settings.dmProfileOpen ? translate("common.5319bf1ddaab") : translate("common.37ce919497c5")} aria-pressed={settings.dmProfileOpen} onClick={() => setState((s) => { s.settings.dmProfileOpen = !s.settings.dmProfileOpen; })}><Icon name="users" /></button><UserProfile user={other} accountId={accountId}><Avatar user={other} size={28} /></UserProfile><button className="icon-btn" disabled={inst.status !== "ready"} aria-label={translate("common.8db31db870ec")} onClick={() => void startDirectCall(accountId, other.id, false)}><Icon name="phone" /></button><button className="icon-btn" disabled={inst.status !== "ready"} aria-label={translate("common.eef68657b73c")} onClick={() => void startDirectCall(accountId, other.id, true)}><Icon name="camera" /></button><button className="icon-btn" aria-label={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? translate("common.edc1c54b69d1") : translate("common.30278e825ac4")} onClick={() => toggleMessageMute("channel", accountId, dm.id)}><Icon name={settings.mutedChannels.includes(notificationKey(accountId, dm.id)) ? "bellOff" : "bell"} /></button></>}
           icon={null}
           canSend
           canAttach
           canModerate={false}
           canPin
-          nameOf={(id) => (id === me.id ? me.displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || dm.recipients.find((r) => r.id === id)?.displayName)}
-          mentionables={dm.recipients.map((r) => ({ id: r.id, name: r.displayName, username: r.username }))}
+          nameOf={(id) => (id === me.id ? personOf(me).displayName : inst.relationships.find((r) => r.user.id === id)?.nickname || (() => { const r = dm.recipients.find((item) => item.id === id); return r ? personOf(r).displayName : undefined; })())}
+          mentionables={dm.recipients.map((r) => ({ id: r.id, name: personOf(r).displayName, username: personOf(r).username }))}
         />{settings.dmProfileOpen && <DmProfile key={other.id} user={other} accountId={accountId} />}</div>
       ) : (
         <Friends accountId={accountId} />

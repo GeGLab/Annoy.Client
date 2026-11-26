@@ -74,11 +74,42 @@ async function send(service: keyof CloudUrls, path: string, init: CloudRequest, 
   });
 }
 
+/**
+ * Whether the Annoy cloud answers at all. Any HTTP answer (even a refusal) means it does; only a
+ * request that gets no answer (offline, DNS, timeout) means it does not. The local profile cache
+ * is read only while it does not (social/profiles.ts).
+ */
+let reachable = true;
+const reachabilityListeners = new Set<() => void>();
+export const cloudReachable = () => reachable && (typeof navigator === "undefined" || navigator.onLine !== false);
+export const onCloudReachability = (listener: () => void) => (reachabilityListeners.add(listener), () => void reachabilityListeners.delete(listener));
+function observeReachability(next: boolean): void {
+  if (next === reachable) return;
+  reachable = next;
+  for (const listener of reachabilityListeners) listener();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { for (const l of reachabilityListeners) l(); });
+  window.addEventListener("offline", () => { for (const l of reachabilityListeners) l(); });
+}
+
+async function answered(service: keyof CloudUrls, path: string, init: CloudRequest, force: boolean): Promise<Response> {
+  try {
+    const res = await send(service, path, init, force);
+    observeReachability(true);
+    return res;
+  } catch (error) {
+    // Cancelled by the caller: says nothing about the cloud.
+    if (!(init.signal?.aborted)) observeReachability(error instanceof CloudError || (error as { status?: number })?.status ? true : false);
+    throw error;
+  }
+}
+
 export async function cloudFetch(service: keyof CloudUrls, path: string, init: CloudRequest = {}): Promise<Response> {
-  let res = await send(service, path, init, false);
+  let res = await answered(service, path, init, false);
   if (res.status === 401) {
     await res.body?.cancel();
-    res = await send(service, path, init, true);
+    res = await answered(service, path, init, true);
   }
   if (!res.ok) {
     let body: { error?: string; message?: string } = {};

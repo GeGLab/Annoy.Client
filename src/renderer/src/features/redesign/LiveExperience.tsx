@@ -1,3 +1,4 @@
+import { personOf } from "../../social/profiles.ts";
 import { useState } from "react";
 import { has, Permission, type ServerState } from "@annoy/protocol";
 import { t } from "../../../../shared/localization/index.ts";
@@ -86,9 +87,8 @@ export function PersonalHeading() {
 export function FriendsDashboard({ accountId, onAddFriend }: { accountId?: string; onAddFriend?: () => void }) {
   const social = useStore(s => s.social);
   const instance = useStore(s => accountId ? s.instances[accountId] : undefined);
-  const global = useStore(s => s.global);
-  const me = instance?.user ?? (social.me ? cloudUser(social.me) : null);
-  const friends = accountId ? (instance?.relationships ?? []).filter(rel => rel.status === "friend").map(rel => ({ user: rel.user, name: rel.nickname || rel.user.displayName, online: ["online", "idle", "dnd"].includes(instance?.presences[rel.user.id] ?? "offline"), activity: instance?.activities[rel.user.id]?.[0] }))
+  const me = instance?.user ? personOf(instance.user) : social.me ? cloudUser(social.me) : null;
+  const friends = accountId ? (instance?.relationships ?? []).filter(rel => rel.status === "friend").map(rel => ({ user: rel.user, name: rel.nickname || personOf(rel.user).displayName, online: ["online", "idle", "dnd"].includes(instance?.presences[rel.user.id] ?? "offline"), activity: instance?.activities[rel.user.id]?.[0] }))
     : social.relationships.filter(rel => rel.status === "friend").map(rel => ({ user: cloudUser(rel.user), name: rel.nickname || rel.user.displayName || rel.user.username, online: !!social.presences[rel.user.id] && social.presences[rel.user.id]!.status !== "offline", activity: social.presences[rel.user.id]?.activities[0] }));
   const online = friends.filter(friend => friend.online);
   const playing = online.find(friend => friend.activity?.kind === "game");
@@ -99,7 +99,7 @@ export function FriendsDashboard({ accountId, onAddFriend }: { accountId?: strin
     if (accountId) await openDm(accountId, friend.user.id);
     else { const dm = await openDmWith(friend.user.id); navigate({ kind: "home", accountId: null, dmId: dm.id }); }
   };
-  const name = me?.displayName || global?.name || t("redesign.friend");
+  const name = me?.displayName || t("redesign.friend");
   return <div className="live-friends-dashboard">
     <div className="live-friends-greeting"><div><span className="live-eyebrow">{t("redesign.friendsEyebrow")}</span><h2>{t("redesign.greeting", { p0: name })}<span aria-hidden>✳</span></h2><p>{t("redesign.friendsBody")}</p></div><span className="live-online-pill"><i className="live-dot"/>{t("redesign.onlineCount", { p0: online.length })}</span></div>
     <div className="live-activity-cards">

@@ -1,3 +1,4 @@
+import { personOf } from "./social/profiles.ts";
 import { usableAccount } from "../../shared/saved-accounts.ts";
 import { vpngoVoice } from "./features/integrations/vpngo.ts";
 import { requestNavigation } from "./lib/navigation-guard.ts";
@@ -337,7 +338,8 @@ export function removeAccount(accountId: string, mode: "signOut" | "remove" | "i
     s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== accountId);
     if (mode === "signOut" && account && user) {
       const { token: _token, ...remembered } = account;
-      s.rememberedAccounts.push({ ...remembered, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, ...(account.annoy && s.global && { annoyEmail: s.global.email }) });
+      const shown = personOf(user);
+      s.rememberedAccounts.push({ ...remembered, username: shown.username, displayName: shown.displayName, avatarUrl: shown.avatarUrl, ...(account.annoy && s.global && { annoyEmail: s.global.email }) });
     }
   });
   // Removing on purpose: the Annoy account's server list forgets it too, so it doesn't come back.
@@ -1018,11 +1020,12 @@ function notify(accountId: string, message: Message, isDm: boolean): void {
     const dm = inst.dms.find((d) => d.id === message.channelId);
     const nameOf = (id: string) => {
       const member = server?.members.find((m) => m.user.id === id);
-      return member ? displayNameOf(member) : (dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null))?.displayName;
+      const user = member?.user ?? dm?.recipients.find((r) => r.id === id) ?? (id === me ? inst.user : null);
+      return member ? displayNameOf(member) : user ? personOf(user).displayName : undefined;
     };
     const channelOf = (id: string) => server?.channels.find((c) => c.id === id)?.name;
     const body = previewText(message.content, nameOf, channelOf) || "Enviou um anexo";
-    const n = new Notification(message.author.displayName, { body, silent: true });
+    const n = new Notification(personOf(message.author).displayName, { body, silent: true });
     n.onclick = () => window.focus();
   }
 }

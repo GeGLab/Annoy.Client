@@ -38,7 +38,7 @@ async function seed(page: Page) {
   await page.evaluate(async () => {
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-    const me = { id: "me", username: "teste", displayName: "Pessoa de teste", avatarUrl: null };
+    const me = { id: "me", username: "teste", profile: { displayName: "Pessoa de teste", avatarUrl: null } };
     const server = { id: "server", name: "Comunidade de teste", iconUrl: null, ownerId: "me" };
     const channel = (id: string, type = "text") => ({
       id,
@@ -114,7 +114,7 @@ test("M4 full profile clears authorized details on revocation and returns keyboa
   const {page,cleanup}=await launch();let privateView=false;
   try{
     await seed(page);
-    await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:{user:{id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null},fields:privateView?[]:[{kind:"github",value:"https://github.com/octocat",audience:"friends"}],hasPrivateFields:privateView,history:{enabled:true,visibility:privateView?"private":"visible",entries:[]}}}));
+    await page.route(`${origin}/api/users/me/profile`,route=>route.fulfill({json:{user:{id:"me",username:"teste",profile: { displayName: "Pessoa de teste", avatarUrl: null }},fields:privateView?[]:[{kind:"github",value:"https://github.com/octocat",audience:"friends"}],hasPrivateFields:privateView,history:{enabled:true,visibility:privateView?"private":"visible",entries:[]}}}));
     await page.evaluate(async()=>{const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);setState((s:any)=>{s.instances.workspace.instance={profileDetails:true};});});
     await page.locator(".messages").evaluate(el=>{el.scrollTop=0;});
     await page.locator(".message-author").first().click();await page.getByRole("button",{name:"Ver perfil completo",exact:true}).click();
@@ -132,7 +132,7 @@ test("M4 full profile clears authorized details on revocation and returns keyboa
 
 test("M3 opens at persisted unread, advances only visible reading and loads pinned context outside the cache",async()=>{
   const {page,cleanup}=await launch();const reads:string[]=[];
-  const me={id:"me",username:"teste",displayName:"Pessoa de teste",avatarUrl:null};
+  const me={id:"me",username:"teste",profile: { displayName: "Pessoa de teste", avatarUrl: null }};
   const messages=Array.from({length:1000},(_,index)=>({id:String(index+1).padStart(12,"0"),channelId:"general",author:me,content:`Histórico ${index+1}`,createdAt:new Date(Date.UTC(2026,9,30,0,index)).toISOString(),editedAt:null,replyToId:null,attachments:[],mentionIds:[],mentionsEveryone:false}));
   try{
     await seed(page);
@@ -642,7 +642,7 @@ test("file channel searches and orders the full server result with explicit pagi
       const all = url.searchParams.get("q") ? [{ id: "report", name: "Relatório final.pdf" }] : [{ id: "video", name: "video.mp4" }, { id: "report", name: "Relatório final.pdf" }];
       const offset = Number(url.searchParams.get("offset"));
       const selected = all.slice(offset, offset + Number(url.searchParams.get("limit")));
-      return route.fulfill({ json: { files: selected.map((item) => ({ attachment: { id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }, message: { id: `message-${item.id}`, channelId: "file-channel", author: { id: "me", username: "teste", displayName: "Pessoa de teste", avatarUrl: null }, content: "Documento compartilhado", createdAt: new Date().toISOString(), editedAt: null, replyToId: null, attachments: [{ id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }], mentionIds: [], mentionsEveryone: false } })), nextOffset: offset + selected.length < all.length ? offset + selected.length : null, total: all.length } });
+      return route.fulfill({ json: { files: selected.map((item) => ({ attachment: { id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }, message: { id: `message-${item.id}`, channelId: "file-channel", author: { id: "me", username: "teste", profile: { displayName: "Pessoa de teste", avatarUrl: null } }, content: "Documento compartilhado", createdAt: new Date().toISOString(), editedAt: null, replyToId: null, attachments: [{ id: item.id, filename: item.name, contentType: "application/pdf", url: `/uploads/${item.id}`, size: 20 }], mentionIds: [], mentionsEveryone: false } })), nextOffset: offset + selected.length < all.length ? offset + selected.length : null, total: all.length } });
     });
     await page.locator(".channel-name", { hasText: /^arquivos$/ }).click();
     await expect(page.getByRole("heading", { name: "arquivos" })).toBeVisible();

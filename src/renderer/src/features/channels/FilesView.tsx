@@ -1,3 +1,4 @@
+import { personOf } from "../../social/profiles.ts";
 import {rich} from "../../lib/localization.ts";
 import {t as translate} from "../../../../shared/localization/index.ts";
 import {SecureAttachment} from "../../components/SecureAttachment.tsx";
@@ -258,7 +259,7 @@ export function FilesView({ accountId, state, channel, perms }: { accountId: str
                 <span className="file-meta">
                   <strong className="truncate">{attachment.filename}</strong>
                   <small className="muted truncate">
-                    {formatSize(attachment.size)} · {names.get(message.author.id) ?? message.author.displayName} · {formatDay(message.createdAt)}
+                    {formatSize(attachment.size)} · {names.get(message.author.id) ?? personOf(message.author).displayName} · {formatDay(message.createdAt)}
                   </small>
                   {message.content && <span className="file-note truncate">{message.content}</span>}
                 </span>

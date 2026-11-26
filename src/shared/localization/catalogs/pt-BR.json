@@ -2730,8 +2730,8 @@
   "news.polls.body": "Comunicados podem ter enquetes. Vote com a sua conta Annoy e mude o voto enquanto a enquete estiver aberta. O voto é anônimo: o resultado mostra só contagens.",
   "news.playlists.title": "Playlists na sala de música",
   "news.playlists.body": "Cole o link de uma playlist do YouTube ou do YouTube Music no pedido de música para puxar as faixas para a fila, até 200.",
-  "news.shuffle.title": "Modo aleatório e embaralhar",
-  "news.shuffle.body": "Quem gerencia a sala liga o modo aleatório ou embaralha a fila uma vez, com a opção de voltar à ordem original.",
   "news.terms.title": "Termos atualizados",
-  "news.terms.body": "Os Termos de Uso e a Política de Privacidade agora incluem as enquetes. O app pede o aceite uma vez; sem aceitar, amigos, DMs e enquetes ficam indisponíveis."
+  "news.terms.body": "Os Termos de Uso e a Política de Privacidade agora incluem as enquetes. O app pede o aceite uma vez; sem aceitar, amigos, DMs e enquetes ficam indisponíveis.",
+  "news.profile.title": "Um perfil, um lugar",
+  "news.profile.body": "Nome, foto, bio e @usuário de quem usa conta Annoy vêm só da conta Annoy, em todos os servidores. Os servidores não guardam mais cópia, e ao entrar num servidor novo você não escolhe outro nome."
 }

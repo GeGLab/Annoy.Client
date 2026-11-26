@@ -123,7 +123,8 @@ export async function syncVault(): Promise<VaultSync> {
       result.added++;
     } catch (error) {
       if (isCancellation(error)) return result;
-      const needsUser = error instanceof AuthError && error.code === "global_new_account";
+      // A server that creates accounts only by invite: the person adds it from "Adicionar servidor" with the code.
+      const needsUser = error instanceof AuthError && error.code === "invite_required";
       if (needsUser) result.needsAccount.push(entry.url);
       addAccountQuietly({ id: `${entry.url}#annoy`, url: entry.url, token: "", userId: "", instanceName: name, annoy: true, pending: needsUser ? "invalid" : "offline" });
     }
@@ -179,8 +180,8 @@ async function proofFor(url: string, serverId: string, signal?: AbortSignal) {
   }
 }
 
-/** Signs in to a server with the Annoy account. The first time, the server answers "global_new_account": call again with a username. */
-export async function signInServer(url: string, serverId: string, first?: Pick<GlobalLogin, "username" | "displayName" | "inviteCode">, signal?: AbortSignal): Promise<AuthResponse> {
+/** Signs in to a server with the Annoy account (an account there is created on the first sign-in; invite-only servers need `inviteCode`). */
+export async function signInServer(url: string, serverId: string, first?: Pick<GlobalLogin, "inviteCode">, signal?: AbortSignal): Promise<AuthResponse> {
   const g = currentGeneration();
   const body: GlobalLogin = { ...(await proofFor(url, serverId, signal)), ...first };
   const auth = await server<AuthResponse>(url, "/api/auth/global", body, undefined, signal);

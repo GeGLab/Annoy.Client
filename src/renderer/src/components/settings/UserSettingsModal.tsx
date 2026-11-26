@@ -45,7 +45,7 @@ import { accountWebsite, signOut as signOutGlobal } from "../../auth/session.ts"
 import { useRequestOwner } from "../../lib/use-request-owner.ts";
 import { isCancellation } from "../../../../shared/requests.ts";
 import { SavedNotice, useSavedNotice } from "./SavedNotice.tsx";
-import { ownCloudUser } from "../../social/profile.ts";
+import { personOf, usePerson } from "../../social/profiles.ts";
 import { AccountIntegrations } from "../../features/integrations/AccountIntegrations.tsx";
 
 let SETTINGS_PAGES: { id: string; label: string; icon: IconName; search: string }[] = [
@@ -222,8 +222,10 @@ export function UserSettingsModal() {
   const annoy = useStore((s) => s.global);
   const annoyMode = !!annoy && (selected === null || !!accounts.find((account) => account.id === selected)?.annoy);
   const shownAccounts = accounts.filter((account) => account.id === selected);
-  const cloudProfile = useStore((s) => s.social.me);
-  const profileUser = annoyMode ? ownCloudUser(cloudProfile, annoy!) : shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined;
+  // One source: the own Annoy profile (usersannoy) or the server's profile of a local account.
+  const ownAnnoy = usePerson(annoy ? { id: annoy.id, annoyId: annoy.id } : null);
+  const localUser = usePerson(shownAccounts[0] ? instances[shownAccounts[0].id]?.user : undefined);
+  const profileUser = annoyMode ? ownAnnoy : localUser;
   const saved = useStore((s) => s.settings);
   const [desktopStatus,setDesktopStatus]=useState<DesktopSnapshot|null>(null);
   const [desktopDraft,setDesktopDraft]=useState<DesktopPreferences|null>(null);
@@ -244,7 +246,8 @@ export function UserSettingsModal() {
   const dirtyProfiles = accounts.filter((account) => {
     const change = profiles[account.id],
       user = instances[account.id]?.user;
-    return change && user && (change.displayName.trim() !== user.displayName || change.avatar !== undefined || (change.bio ?? user.bio ?? "") !== (user.bio ?? "") || change.details !== undefined);
+    const shown = user && personOf(user);
+    return change && shown && (change.displayName.trim() !== shown.displayName || change.avatar !== undefined || (change.bio ?? shown.bio ?? "") !== (shown.bio ?? "") || change.details !== undefined);
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || dirtyProfiles.length > 0 || desktopDirty;
   const update = (patch: Partial<Settings>) => setDraft((current) => ({ ...current, ...patch }));
@@ -332,9 +335,10 @@ export function UserSettingsModal() {
         const api = apiFor(account.id);
         const profileDetails=change.details?{fields:change.details.fields.map(field=>({...field,value:normalizeProfileField(field.kind,field.value)})).filter(field=>field.value),historyEnabled:change.details.historyEnabled}:undefined;
         if(profileDetails&&!getState().instances[account.id]?.instance?.profileDetails)throw new Error(translate("settings.8b950195eb67"));
-        const bioChanged = change.bio !== undefined && change.bio !== (user.bio ?? "");
+        const shown = personOf(user);
+        const bioChanged = change.bio !== undefined && change.bio !== (shown.bio ?? "");
         if (bioChanged && !getState().instances[account.id]?.instance?.socialProfiles) throw new Error(translate("settings.ffe91680efa4"));
-        if (name !== user.displayName || bioChanged) {
+        if (name !== shown.displayName || bioChanged) {
           const updated = await api.patch<User>("/users/@me", { displayName: name, ...(bioChanged && { bio: change.bio }) }, signal);
           signal.throwIfAborted();
           applyUserUpdate(account.id, updated);
@@ -345,7 +349,7 @@ export function UserSettingsModal() {
             change.avatar === null ? await api.patch<User>("/users/@me", { avatarUrl: null }, signal) : await api.uploadAvatar<User>(change.avatar, signal);
           signal.throwIfAborted();
           // Old servers may ignore an unknown avatar field. Never claim success.
-          if (change.avatar === null && updated.avatarUrl !== null)
+          if (change.avatar === null && updated.profile?.avatarUrl)
             throw new Error(translate("settings.19472d8ef3c7"));
           applyUserUpdate(account.id, updated);
         }

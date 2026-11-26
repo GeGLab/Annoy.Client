@@ -2730,8 +2730,8 @@
   "news.polls.body": "Announcements can have polls. Vote with your Annoy account and change your vote while the poll is open. Votes are anonymous: results show only counts.",
   "news.playlists.title": "Playlists in song rooms",
   "news.playlists.body": "Paste a YouTube or YouTube Music playlist link in the song request to pull its tracks into the queue, up to 200.",
-  "news.shuffle.title": "Random mode and shuffle",
-  "news.shuffle.body": "Room managers can turn on random mode or shuffle the queue once, with the option to go back to the original order.",
   "news.terms.title": "Updated terms",
-  "news.terms.body": "The Terms of Use and the Privacy Policy now cover polls. The app asks you to accept them once; until you do, friends, DMs and polls are unavailable."
+  "news.terms.body": "The Terms of Use and the Privacy Policy now cover polls. The app asks you to accept them once; until you do, friends, DMs and polls are unavailable.",
+  "news.profile.title": "One profile, one place",
+  "news.profile.body": "The name, photo, bio and @username of anyone with an Annoy account come only from the Annoy account, on every server. Servers no longer keep a copy, and joining a new server no longer asks for another name."
 }

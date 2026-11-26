@@ -1,3 +1,4 @@
+import { personOf } from "./social/profiles.ts";
 import { computePermissions, type Channel, type Member, type ServerState } from "@annoy/protocol";
 
 /** Mirrors the server's resolution; used only to decide which controls to show. */
@@ -29,4 +30,5 @@ export function memberColor(state: ServerState, member: Member): string | undefi
   return best?.color;
 }
 
-export const displayNameOf = (member: Member) => member.nick || member.user.displayName;
+/** Server nickname, else the profile name (usersannoy for Annoy accounts, the server for local ones). */
+export const displayNameOf = (member: Member) => member.nick || personOf(member.user).displayName;

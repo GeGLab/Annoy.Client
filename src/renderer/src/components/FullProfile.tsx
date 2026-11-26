@@ -1,3 +1,4 @@
+import { usePerson } from "../social/profiles.ts";
 import { ProfilePanels } from "../features/integrations/ProfilePanels.tsx";
 import { CLOUD_ACCOUNT } from "../social/types.ts";
 import {localizationPreferences} from "../../../shared/localization/index.ts";
@@ -52,7 +53,7 @@ function FullProfile({ accountId, user }: { accountId: string; user: User }) {
   const activities = canViewActivity(instance, user.id)
     ? (instance?.activities[user.id] ?? EMPTY_ACTIVITIES)
     : EMPTY_ACTIVITIES;
-  const identity = details?.user ?? user;
+  const identity = usePerson(details?.user ?? user)!;
   const annoyId = accountId === CLOUD_ACCOUNT ? user.id : user.annoyId;
   const ownAnnoyId = useStore((s) => s.social.me?.id ?? null);
   const self = !!annoyId && annoyId === ownAnnoyId;

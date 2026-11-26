@@ -2730,8 +2730,8 @@
   "news.polls.body": "Les annonces peuvent contenir des sondages. Votez avec votre compte Annoy et changez de vote tant que le sondage est ouvert. Le vote est anonyme : les résultats ne montrent que des totaux.",
   "news.playlists.title": "Playlists dans les salons musique",
   "news.playlists.body": "Collez le lien d’une playlist YouTube ou YouTube Music dans la demande de musique pour ajouter ses titres à la file, jusqu’à 200.",
-  "news.shuffle.title": "Mode aléatoire et mélange",
-  "news.shuffle.body": "Les gestionnaires du salon activent le mode aléatoire ou mélangent la file une fois, avec la possibilité de revenir à l’ordre d’origine.",
   "news.terms.title": "Conditions mises à jour",
-  "news.terms.body": "Les Conditions d’utilisation et la Politique de confidentialité couvrent désormais les sondages. L’app demande de les accepter une fois ; sans cela, amis, messages privés et sondages sont indisponibles."
+  "news.terms.body": "Les Conditions d’utilisation et la Politique de confidentialité couvrent désormais les sondages. L’app demande de les accepter une fois ; sans cela, amis, messages privés et sondages sont indisponibles.",
+  "news.profile.title": "Un profil, un seul endroit",
+  "news.profile.body": "Le nom, la photo, la bio et le @nom d’utilisateur de toute personne avec un compte Annoy viennent uniquement du compte Annoy, sur tous les serveurs. Les serveurs n’en gardent plus de copie, et rejoindre un nouveau serveur ne demande plus d’autre nom."
 }

@@ -69,7 +69,7 @@ async function invalidateSaved(page: Page, mode: "global" | "local") {
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
     addAccount({ id: "saved", url: "http://127.0.0.1:48101", token: "previous-session", userId: "original-id", instanceName: "Policy test" });
-    setState((s: any) => { s.instances.saved.user = { id: "original-id", username: "original", displayName: "Original" }; });
+    setState((s: any) => { s.instances.saved.user = { id: "original-id", username: "original", profile: { displayName: "Original", avatarUrl: null } }; });
   });
 }
 
@@ -102,7 +102,7 @@ test("global-to-local migration uses the old session, sets a local password and 
     await page.route("https://global.geg.dev.br/**", route => { requestsToGlobal++; return route.abort(); });
     await page.route(`${origin}/api/auth/migrate/local`, route => {
       migrated = { body: route.request().postDataJSON(), authorization: route.request().headers().authorization };
-      return route.fulfill({ json: { token: "local-session", user: { id: "original-id", username: "original", displayName: "Original", global: false } } });
+      return route.fulfill({ json: { token: "local-session", user: { id: "original-id", username: "original", profile: { displayName: "Original", avatarUrl: null }, global: false } } });
     });
     await invalidateSaved(page, "local");
     await expect(page.getByRole("heading", { name: "Migrar sua conta" })).toBeVisible();
@@ -211,7 +211,7 @@ test("account metadata distinguishes local and Annoy sessions before connecting"
   try {
     const kinds = await page.evaluate(async () => {
       const { toAccount } = await import(/* @vite-ignore */ `${location.origin}/src/auth/servers.ts`);
-      const auth = { token: "synthetic", user: { id: "u", username: "u", displayName: "U", avatarUrl: null } };
+      const auth = { token: "synthetic", user: { id: "u", username: "u", profile: { displayName: "U", avatarUrl: null } } };
       const info = { name: "Fixture", version: "1", protocol: 1, registrationOpen: true, registration: "open", discordLogin: false };
       return [toAccount("https://instance.test", { ...info, accountMode: "local" }, auth).annoy, toAccount("https://instance.test", { ...info, accountMode: "global" }, auth).annoy, toAccount("https://instance.test", info, { ...auth, user: { ...auth.user, global: true } }).annoy];
     });

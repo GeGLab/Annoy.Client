@@ -16,7 +16,8 @@ import { visibleUserActivities } from "../../../shared/activity.ts";
 import { ServerTabMenu } from "./ServerTabMenu.tsx";
 import { Select } from "./ui/select.tsx";
 import { presenceLabel, type ManualPresence } from "../../../shared/presence.ts";
-import { cloudUser, ownCloudUser } from "../social/profile.ts";
+import { cloudUser } from "../social/profile.ts";
+import { personOf, usePerson } from "../social/profiles.ts";
 import { displayName } from "../social/runtime.ts";
 import { useOwnActivities } from "../features/activity/use-activity.ts";
 
@@ -63,9 +64,12 @@ export function UserPanel() {
   const accountId = "accountId" in view ? view.accountId ?? undefined : identityAccountId;
   const account = accounts.find((a) => a.id === accountId);
   const annoyMode = !!annoy && (!accountId || !!account?.annoy);
-  const profile = useStore((s) => s.social.me);
+  // One source: the own Annoy profile from usersannoy (the cache only without any cloud answer),
+  // or the server's profile of a local account.
+  const ownAnnoy = usePerson(annoy ? { id: annoy.id, annoyId: annoy.id } : null);
   const serverUser = useStore((s) => (accountId ? s.instances[accountId]?.user : undefined));
-  const user = annoyMode ? ownCloudUser(profile, annoy!) : serverUser;
+  const shownServer = usePerson(serverUser);
+  const user = annoyMode ? ownAnnoy : shownServer;
   const cloudPresence = useStore((s) => s.social.me ? s.social.presences[s.social.me.id] : undefined);
   const cloudStatus = useStore((s) => s.social.status);
   const serverPresence = useStore((s) => accountId && serverUser ? s.instances[accountId]?.status === "ready" ? s.instances[accountId]?.presences[serverUser.id] ?? "online" : "offline" : undefined);
@@ -189,7 +193,7 @@ export function TopBar() {
     ...directMessages.map(({ account, dm, unread }) => {
       const user = dm.recipients[0];
       if (!user) return null;
-      const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || user.displayName;
+      const nickname = instances[account.id]?.relationships.find((r) => r.user.id === user.id)?.nickname || personOf(user).displayName;
       const count = unread > 99 ? "99+" : String(unread);
       return <Tooltip key={`${account.id}-${dm.id}`} content={translate("common.6e8c81a18a65",{p0:(nickname),p1:(count)})}><button className="tab-item dm-shortcut" aria-label={translate("common.6d4b720de0ef",{p0:(nickname),p1:(count)})} onClick={() => navigate({ kind: "home", accountId: account.id, dmId: dm.id })}><Avatar user={user} size={40} /><span key={unread} className="tab-badge">{count}</span></button></Tooltip>;
     }),

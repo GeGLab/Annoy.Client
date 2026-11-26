@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 
 test.use({ launchOptions: { args: ['--mute-audio', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] } });
 const origin = 'https://disconnect.test';
-const me = { id: 'me', username: 'tester', displayName: 'Pessoa de teste', avatarUrl: null };
-const friend = { id: 'friend', username: 'friend', displayName: 'Amigo de teste', avatarUrl: null };
+const me = { id: 'me', username: 'tester', profile: { displayName: 'Pessoa de teste', avatarUrl: null } };
+const friend = { id: 'friend', username: 'friend', profile: { displayName: 'Amigo de teste', avatarUrl: null } };
 const server = { id: 'server', name: 'Comunidade de teste', iconUrl: null, ownerId: 'me' };
 const channel = { id: 'voice', serverId: 'server', name: 'Voz', type: 'voice', topic: '', parentId: null, position: 0, overwrites: [] };
 const ready = { user: me, servers: [server], dms: [{ id: 'dm', recipients: [friend], lastMessageId: null }], relationships: [{ user: friend, status: 'friend' }], presences: { me: 'online', friend: 'online' }, activities: { friend: [{ kind: 'development', provider: 'vscode', name: 'Atividade antiga' }] }, instance: { isAdmin: false, registration: 'open', voiceBackend: 'cloudflare', directCalls: true } };
