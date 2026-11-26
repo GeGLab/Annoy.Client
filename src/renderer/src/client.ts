@@ -1,3 +1,4 @@
+import { usableAccount } from "../../shared/saved-accounts.ts";
 import { vpngoVoice } from "./features/integrations/vpngo.ts";
 import { requestNavigation } from "./lib/navigation-guard.ts";
 import {t as translate} from "../../shared/localization/index.ts";
@@ -296,8 +297,9 @@ export function addAccount(account: Account): void {
 /** Adds a server account in the background (servers coming back from the global vault).
  * A real sign-in replaces the disconnected placeholder of the same server. */
 export function addAccountQuietly(account: Account): void {
-  const placeholder = getState().accounts.find((a) => a.url === account.url && a.pending);
-  if (getState().accounts.some((a) => a.url === account.url && !a.pending)) return;
+  // A placeholder waits for sign-in; an account that lost its token (an old failed restore) counts as one too.
+  const placeholder = getState().accounts.find((a) => a.url === account.url && !usableAccount(a));
+  if (getState().accounts.some((a) => a.url === account.url && usableAccount(a))) return;
   if (placeholder && account.pending) {
     if (placeholder.pending !== account.pending) setState((s) => {
       const saved = s.accounts.find((a) => a.id === placeholder.id);
