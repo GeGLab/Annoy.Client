@@ -1,3 +1,4 @@
+import { usableAccount } from "../../../shared/saved-accounts.ts";
 import type { AuthResponse, GlobalLogin, InstanceInfo } from "@annoy/protocol";
 import { t as translate } from "../../../shared/localization/index.ts";
 import { fetchJson, isCancellation, RequestError, WRITE_TIMEOUT_MS } from "../../../shared/requests.ts";
@@ -105,7 +106,8 @@ export async function syncVault(): Promise<VaultSync> {
     for (const account of getState().accounts.filter((a) => a.annoy && seen!.has(a.url) && !inVault.has(a.url))) removeAccount(account.id, "internal");
   }
   try { localStorage.setItem(seenKey, JSON.stringify([...inVault])); } catch { /* storage unavailable */ }
-  const known = new Set(getState().accounts.filter((a) => !a.pending).map((a) => a.url));
+  // Accounts without a token (lost by an old failed restore) sign in again from the vault.
+  const known = new Set(getState().accounts.filter(usableAccount).map((a) => a.url));
   for (const entry of servers) {
     if (known.has(entry.url)) continue;
     let name = new URL(entry.url).host;

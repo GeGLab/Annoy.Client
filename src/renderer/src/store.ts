@@ -1,4 +1,5 @@
 // Must run before this module reads storage: bundling can evaluate this chunk before main.tsx's own code.
+import { accountsToRestore } from "../../shared/saved-accounts.ts";
 import "./storage-migration.ts";
 import {configureLocalization,defaultLocalization,normalizeLocalization,type LocalizationPreferences} from "../../shared/localization/index.ts";
 import { normalizeAppIcon } from "../../shared/app-icon.ts";
@@ -384,12 +385,10 @@ function persistAccounts(accounts:Account[]):void {
   savedAccountWrite=savedAccountWrite.catch(()=>{}).then(()=>window.annoy?.secrets.set('accounts',value)).catch(()=>false);
 }
 export async function restoreSavedAccounts():Promise<void>{
-  const legacy=state.accounts;
   const saved=await window.annoy?.secrets.get('accounts').catch(()=>null);
-  let restored=legacy;
-  if(saved){try{const value=JSON.parse(saved);if(Array.isArray(value))restored=value;}catch{}}
+  const {accounts:restored,persist}=accountsToRestore(saved,state.accounts);
   state=produce(state,s=>{s.accounts=restored;});
-  persistAccounts(restored);
+  if(persist)persistAccounts(restored);
   for(const listener of listeners)listener();
 }
 const listeners = new Set<() => void>();
