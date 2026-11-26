@@ -148,6 +148,8 @@ test("the Annoy emoji set comes from the local cache and asks cdnannoy at most e
     Date.now = () => realNow() + offset;
     window.fetch = async (input, init) => {
       const url = String(input);
+      // The app also asks cdnannoy for announcements when it opens; that is not the emoji set.
+      if (url.endsWith("/v1/announcements")) return Response.json({ version: "0", items: [] });
       requests.push(`${url} ${new Headers(init?.headers).get("if-none-match") ?? ""}`.trim());
       if (mode === "down") throw new TypeError("Offline");
       if (url === image) return new Response(png, { headers: { "content-type": "image/png" } });
