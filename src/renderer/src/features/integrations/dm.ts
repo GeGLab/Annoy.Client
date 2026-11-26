@@ -126,7 +126,7 @@ async function answer(message: DmMessage, local: boolean): Promise<void> {
       ? items
           .filter((m) => m.id < message.id && !m.state && m.content && (!m.integration || m.integration.op === "reply"))
           .slice(-count)
-          .map((m) => ({ author: m.integration ? m.integration.name : ownName(m.senderId), text: m.content, at: m.createdAt, ...(m.integration?.id === integration.id && { self: true }) }))
+          .map((m) => ({ author: m.integration ? { id: m.integration.id, name: m.integration.name } : { id: m.senderId }, text: m.content, at: m.createdAt, ...(m.integration?.id === integration.id && { self: true }) }))
       : [];
     const attachments: IntegrationFile[] = [];
     if (integration.access.attachments) {
@@ -139,7 +139,9 @@ async function answer(message: DmMessage, local: boolean): Promise<void> {
     let text: string, files: File[] = [];
     try {
       const output = await runIntegration(integrationHttp, {
-        trigger, scope: "dm", locale: localizationPreferences().language, invoker: ownName(message.senderId), history, attachments, settings: connected.settings, apiKey: connected.key,
+        trigger, scope: "dm", locale: localizationPreferences().language, invoker: { id: message.senderId }, history,
+        // Integrations get Annoy IDs; first-party GPT writes names into its prompt, read by ID from usersannoy.
+        ...(integration.runtime.type !== "http" && { names: Object.fromEntries([message.senderId, ...history.map((h) => h.author.id)].map((id) => [id, ownName(id)])) }), attachments, settings: connected.settings, apiKey: connected.key,
         // devannoy signs the body hash so the developer knows the call comes from Annoy; it never sees the content.
         sign: (integration, bodySha256) => cloud<IntegrationSignature>("dev", "/v1/calls/sign", { body: { integration, scope: "dm", bodySha256 } }),
         report: (integration, ok) => void cloud("dev", "/v1/calls/result", { body: { integration, scope: "dm", ok } }).catch(() => undefined),

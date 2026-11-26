@@ -1,3 +1,4 @@
+import { personOf } from "../../social/profiles.ts";
 import {rich} from "../../lib/localization.ts";
 import {t as translate,textForError} from "../../../../shared/localization/index.ts";
 import {PROFILE_FIELD_KINDS,normalizeProfileField,type ProfileField,type User} from "@annoy/protocol";
@@ -36,6 +37,8 @@ export function ProfileEditor({
   disabled: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  // Only local accounts edit a profile here: it is the server's own (User.profile). Annoy accounts use CloudProfileEditor.
+  const shown = personOf(user);
   const profile=useProfileDetails(account.id,user.id);
   const details=draft.details??(profile.details?{fields:profile.details.fields,historyEnabled:profile.details.history.enabled}:null);
   const changeDetails=(next:NonNullable<ProfileDraft["details"]>)=>{
@@ -44,7 +47,7 @@ export function ProfileEditor({
   };
   const [file, setFile] = useState<File | null>(null);
   const original = useRef<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(user.avatarUrl);
+  const [preview, setPreview] = useState<string | null>(shown.avatarUrl);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (draft.avatar instanceof Blob) {
@@ -52,8 +55,8 @@ export function ProfileEditor({
       setPreview(url);
       return () => URL.revokeObjectURL(url);
     }
-    setPreview(draft.avatar === null ? null : user.avatarUrl);
-  }, [draft.avatar, user.avatarUrl]);
+    setPreview(draft.avatar === null ? null : shown.avatarUrl);
+  }, [draft.avatar, shown.avatarUrl]);
   const pick = (photo: File) => {
     if (!/^image\/(png|jpeg|webp|gif)$/.test(photo.type) || photo.size > 8 * 1024 * 1024) {
       setError(translate("settings.a6d45f4a8661"));
@@ -69,9 +72,9 @@ export function ProfileEditor({
       setFile(original.current);
       return;
     }
-    if (!user.avatarUrl) return;
+    if (!shown.avatarUrl) return;
     try {
-      const response = await fetch(user.avatarUrl, { signal: AbortSignal.timeout(10_000) });
+      const response = await fetch(shown.avatarUrl, { signal: AbortSignal.timeout(10_000) });
       if (!response.ok) throw new Error();
       const blob = await response.blob();
       pick(new File([blob], "perfil.webp", { type: blob.type }));
@@ -84,19 +87,19 @@ export function ProfileEditor({
       <div className="profile-fields">
         <strong>{account.instanceName}</strong>
         <span className="muted small">
-          @{user.username} · {account.url}
+          @{shown.username} · {account.url}
         </span>
         <label className="field">
           <span className="field-label">{translate("common.80d20f1ebbc0")}</span>
           <Input
-            aria-label={translate("settings.6a44cc7b2a5c",{p0:(user.username)})}
+            aria-label={translate("settings.6a44cc7b2a5c",{p0:(shown.username)})}
             value={draft.displayName}
             maxLength={32}
             disabled={disabled}
             onChange={(event) => onChange({ ...draft, displayName: event.target.value })}
           />
         </label>
-        <label className="field"><span className="field-label">{translate("settings.b14f559be424")}</span><Textarea aria-label={translate("settings.b05eec51338a",{p0:(user.username)})} value={draft.bio ?? user.bio ?? ""} maxLength={1000} rows={4} disabled={disabled} placeholder={translate("settings.d7599fd431c5")} onChange={(event) => onChange({ ...draft, bio: event.target.value })} /><span className="field-hint">{rich("common.bd1c531633d3",{p0:((draft.bio ?? user.bio ?? "").length)})}</span></label>
+        <label className="field"><span className="field-label">{translate("settings.b14f559be424")}</span><Textarea aria-label={translate("settings.b05eec51338a",{p0:(shown.username)})} value={draft.bio ?? shown.bio ?? ""} maxLength={1000} rows={4} disabled={disabled} placeholder={translate("settings.d7599fd431c5")} onChange={(event) => onChange({ ...draft, bio: event.target.value })} /><span className="field-hint">{rich("common.bd1c531633d3",{p0:((draft.bio ?? shown.bio ?? "").length)})}</span></label>
         <div className="profile-actions">
           <Button variant="secondary" size="sm" disabled={disabled} onClick={() => input.current?.click()}>{rich("common.a7bede7763b9",{p0:(<Icon name="upload" size={15} />)})}</Button>
           {preview && (
@@ -112,7 +115,7 @@ export function ProfileEditor({
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"
           ref={input}
-          aria-label={translate("settings.5d931a5ba01b",{p0:(user.username)})}
+          aria-label={translate("settings.5d931a5ba01b",{p0:(shown.username)})}
           onChange={(event) => {
             if (event.target.files?.[0]) pick(event.target.files[0]);
             event.target.value = "";
@@ -128,8 +131,8 @@ export function ProfileEditor({
       <aside className="profile-live-preview" aria-label={translate("settings.8a9623359659")}>
         <h4>{translate("settings.e6f37ed76e87")}</h4>
         <div className="member-card member-profile profile-preview-card">
-          <div className="member-card-head"><Avatar user={{ ...user, avatarUrl: preview, displayName: draft.displayName }} size={56} /><div><strong>{draft.displayName.trim() || user.displayName}</strong><div className="muted">@{user.username}</div></div></div>
-          {(draft.bio ?? user.bio) && <p className="profile-bio" title={draft.bio ?? user.bio ?? ""}>{draft.bio ?? user.bio}</p>}
+          <div className="member-card-head"><Avatar user={{ ...shown, avatarUrl: preview, displayName: draft.displayName }} size={56} /><div><strong>{draft.displayName.trim() || shown.displayName}</strong><div className="muted">@{shown.username}</div></div></div>
+          {(draft.bio ?? shown.bio) && <p className="profile-bio" title={draft.bio ?? shown.bio ?? ""}>{draft.bio ?? shown.bio}</p>}
           {!!details?.fields.some(field=>field.value)&&<ul className="profile-contact-preview">{details.fields.filter(field=>field.value).map(field=><li key={field.kind}><ProfileFieldIcon kind={field.kind}/><div><strong>{PROFILE_LABELS[field.kind]}</strong><span>{field.value}</span><small>{AUDIENCE_LABELS[field.audience]}</small></div></li>)}</ul>}
         </div>
         <p className="muted small">{translate("settings.0faf65a2a34c")}</p>

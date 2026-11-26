@@ -1,3 +1,4 @@
+import { usePerson, type Person } from "../social/profiles.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import type { Presence, User } from "@annoy/protocol";
 import { requestNavigation } from "../lib/navigation-guard.ts";
@@ -10,7 +11,9 @@ import { colorFor, initials } from "../format.tsx";
 import { setState, toast, type Modal as ModalState } from "../store.ts";
 import { isCancellation } from "../../../shared/requests.ts";
 
-export function Avatar({ user, size = 32, presence, speaking }: { user: User; size?: number; presence?: Presence; speaking?: boolean }) {
+/** A server user (its profile is read from usersannoy or, for local accounts, the server) or an already shown person. */
+export function Avatar({ user: who, size = 32, presence, speaking }: { user: User | Person; size?: number; presence?: Presence; speaking?: boolean }) {
+  const user = usePerson(who)!;
   return (
     <span className={`avatar${speaking ? " speaking" : ""}`} style={{ width: size, height: size, fontSize: size * 0.4 }}>
       {user.avatarUrl ? (

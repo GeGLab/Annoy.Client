@@ -1,3 +1,4 @@
+import { usePerson } from "../social/profiles.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import {FullProfileButton} from "./FullProfile.tsx";
@@ -47,12 +48,13 @@ export function UserProfile({ user: supplied, accountId, children }: { user: Use
   const reportedActivities = useStore((s) => s.instances[accountId]?.activities[user.id] ?? EMPTY_ACTIVITIES);
   const activities = isSelf ? own : reportedActivities;
   const me = useStore((s) => s.instances[accountId]?.user?.id);
-  return <Popover.Root open={open} onOpenChange={setOpen}><Popover.Trigger ref={trigger} className="profile-trigger" aria-label={translate("common.bb51fa235d84",{p0:(rel?.nickname || user.displayName)})}>{children}</Popover.Trigger><Popover.Portal container={trigger.current?.ownerDocument.body}><Popover.Content className="member-card member-profile" side="right" align="start" sideOffset={10} collisionPadding={12} role="dialog" aria-label={translate("common.bb51fa235d84",{p0:(user.displayName)})}>
-    <div className="member-card-head"><Avatar user={user} size={56} /><div><strong>{rel?.nickname || user.displayName}</strong><div className="muted">@{user.username}</div></div></div>
-    {user.bio && <p className="profile-bio" title={user.bio}>{user.bio}</p>}
+  const shown = usePerson(user)!;
+  return <Popover.Root open={open} onOpenChange={setOpen}><Popover.Trigger ref={trigger} className="profile-trigger" aria-label={translate("common.bb51fa235d84",{p0:(rel?.nickname || shown.displayName)})}>{children}</Popover.Trigger><Popover.Portal container={trigger.current?.ownerDocument.body}><Popover.Content className="member-card member-profile" side="right" align="start" sideOffset={10} collisionPadding={12} role="dialog" aria-label={translate("common.bb51fa235d84",{p0:(shown.displayName)})}>
+    <div className="member-card-head"><Avatar user={user} size={56} /><div><strong>{rel?.nickname || shown.displayName}</strong><div className="muted">@{shown.username}</div></div></div>
+    {shown.bio && <p className="profile-bio" title={shown.bio}>{shown.bio}</p>}
     <FullProfileButton accountId={accountId} user={user}/>
     {canViewActivity(instance, user.id) && <ActivityStack activities={activities} />}
-    {me !== user.id && <UserVolume accountId={accountId} userId={user.id} name={user.displayName} />}
+    {me !== user.id && <UserVolume accountId={accountId} userId={user.id} name={shown.displayName} />}
     {me !== user.id && <div className="profile-contact-actions"><Button size="sm" variant="secondary" onClick={() => void openDm(accountId, user.id)}>{rich("common.6d036fbeb731",{p0:(<Icon name="message" />)})}</Button>{rel?.status === "friend" && <><Button size="sm" variant="secondary" onClick={() => void startDirectCall(accountId, user.id, false)}>{rich("common.31a3bb10b8b1",{p0:(<Icon name="phone" />)})}</Button><Button size="sm" variant="secondary" onClick={() => void startDirectCall(accountId, user.id, true)}>{rich("common.d9ab20219407",{p0:(<Icon name="camera" />)})}</Button><Button size="sm" variant="ghost" onClick={() => void editNickname()}>{rich("common.d7cbba741f05",{p0:(<Icon name="edit" />)})}</Button></>}</div>}
   </Popover.Content></Popover.Portal></Popover.Root>;
 }
@@ -64,16 +66,17 @@ export function DmProfile({ user: supplied, accountId }: { user: User; accountId
   const { rel: relationship, editNickname } = useFriend(accountId, user);
   const activities = canViewActivity(instance, user.id) ? instance?.activities[user.id] ?? EMPTY_ACTIVITIES : EMPTY_ACTIVITIES;
   const presence = instance?.presences[user.id] ?? "offline";
-  return <aside className="dm-profile" aria-label={translate("common.bb51fa235d84",{p0:(user.displayName)})}>
+  const shown = usePerson(user)!;
+  return <aside className="dm-profile" aria-label={translate("common.bb51fa235d84",{p0:(shown.displayName)})}>
     <div className="dm-profile-banner" />
     <div className="dm-profile-content">
       <Avatar user={user} size={72} presence={presence} />
-      <h2>{relationship?.nickname || user.displayName}</h2><p className="muted">@{user.username}</p>
+      <h2>{relationship?.nickname || shown.displayName}</h2><p className="muted">@{shown.username}</p>
       <span className="dm-profile-presence">{presence === "online" ? translate("common.0d21bd52022c") : presence === "idle" ? translate("common.fd7f0836e8ad") : presence === "dnd" ? translate("common.976685dd88bf") : translate("common.a1794783aab7")}</span>
-      {user.bio && <section><h3>{translate("common.4cadb7f9efaa")}</h3><p className="dm-profile-bio">{user.bio}</p></section>}
+      {shown.bio && <section><h3>{translate("common.4cadb7f9efaa")}</h3><p className="dm-profile-bio">{shown.bio}</p></section>}
       {activities.length > 0 && <section><h3>{translate("common.dff6624256ba")}</h3><ActivityStack activities={activities} /></section>}
       <FullProfileButton accountId={accountId} user={user}/>
-      <UserVolume accountId={accountId} userId={user.id} name={user.displayName} />
+      <UserVolume accountId={accountId} userId={user.id} name={shown.displayName} />
       {relationship?.status === "friend" && <Button variant="secondary" onClick={() => void editNickname()}>{rich("common.d7cbba741f05",{p0:(<Icon name="edit" />)})}</Button>}
     </div>
   </aside>;

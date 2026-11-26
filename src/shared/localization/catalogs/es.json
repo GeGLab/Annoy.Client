@@ -2730,8 +2730,8 @@
   "news.polls.body": "Los comunicados pueden tener encuestas. Vota con tu cuenta Annoy y cambia el voto mientras la encuesta esté abierta. El voto es anónimo: el resultado muestra solo recuentos.",
   "news.playlists.title": "Listas en la sala de música",
   "news.playlists.body": "Pega el enlace de una lista de YouTube o YouTube Music en la petición de música para traer sus pistas a la cola, hasta 200.",
-  "news.shuffle.title": "Modo aleatorio y mezclar",
-  "news.shuffle.body": "Quien gestiona la sala activa el modo aleatorio o mezcla la cola una vez, con la opción de volver al orden original.",
   "news.terms.title": "Términos actualizados",
-  "news.terms.body": "Los Términos de Uso y la Política de Privacidad ahora incluyen las encuestas. La app pide aceptarlos una vez; sin aceptar, amigos, mensajes directos y encuestas no están disponibles."
+  "news.terms.body": "Los Términos de Uso y la Política de Privacidad ahora incluyen las encuestas. La app pide aceptarlos una vez; sin aceptar, amigos, mensajes directos y encuestas no están disponibles.",
+  "news.profile.title": "Un perfil, un lugar",
+  "news.profile.body": "El nombre, la foto, la bio y el @usuario de quien usa cuenta Annoy vienen solo de la cuenta Annoy, en todos los servidores. Los servidores ya no guardan una copia y, al entrar en un servidor nuevo, no eliges otro nombre."
 }

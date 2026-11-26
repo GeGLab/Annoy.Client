@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
-const me = { id: "me", username: "tester", displayName: "Pessoa de teste", avatarUrl: null };
+const me = { id: "me", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null } };
 const summary = (name: string) => ({ id: "shared", name, ownerId: "me", iconUrl: null });
 const state = (name: string) => ({
   server: summary(name), channels: [{ id: "chat", serverId: "shared", name: "geral", type: "text", topic: "", parentId: null, position: 0, overwrites: [] }],

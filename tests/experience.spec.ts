@@ -308,9 +308,12 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         s.accounts[0].annoy = { serverId: "linked-server", identity: "identity" };
-        // Deliberately different login and server data: neither is the public profile.
+        // Deliberately different login data: it is not the public profile. The server knows only the Annoy ID.
         s.global.name = "login-name";
-        s.instances.test.user = { id: "person", username: "old-server-name", displayName: "Old server profile", avatarUrl: null };
+        s.global.id = "annoy-person";
+        const linked = { id: "person", annoyId: "annoy-person" };
+        s.instances.test.user = linked;
+        for (const state of Object.values(s.instances.test.serverStates) as any[]) for (const m of state.members) if (m.user.id === "person") m.user = linked;
         const me = { id: "annoy-person", username: "gordziilla", displayName: "Gordziilla", avatar: "own-photo", bio: "My Annoy biography", banner: null, accentColor: null, dmKey: null, dmKeyVersion: null };
         const other = { ...me, id: "friend", username: "friend", displayName: "Friend", avatar: null };
         // An offline server must not change which identity the app displays.
@@ -338,6 +341,9 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
     await page.screenshot({ path: join(capture, "annoy-profile-friends.png") });
     await page.evaluate(async () => (await import(/* @vite-ignore */ `${location.origin}/src/client.ts`)).openServer("test", "server"));
     await assertProfile();
+    // The member list reads the same Annoy profile, by Annoy ID: never a server copy.
+    await expect(page.locator(".member").filter({ hasText: "Gordziilla" }).first()).toBeVisible();
+    await expect(page.locator(".member").filter({ hasText: "Gordziilla" }).first().locator("img")).toHaveAttribute("src", "https://cdn.experience.test/i/own-photo");
     await identity.click();
     await expect(page.locator(".self-profile .member-card-name")).toHaveText("Gordziilla");
     await expect(page.locator(".self-profile .profile-bio")).toHaveText("My Annoy biography");
@@ -370,8 +376,10 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         s.modal = null;
+        // An edit of the Annoy profile updates usersannoy's answer (social.profiles), the one source.
         s.social.me.displayName = "Updated Annoy name";
         s.social.me.avatar = "updated-photo";
+        s.social.profiles["annoy-person"] = { ...s.social.profiles["annoy-person"], displayName: "Updated Annoy name", avatar: "updated-photo" };
       });
     });
     await expect(identity.locator("strong")).toHaveText("Updated Annoy name");
@@ -379,7 +387,10 @@ test("the Annoy profile stays identical across friends, DMs, linked servers and 
     // Independent local accounts still display their own profile.
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s: any) => { delete s.accounts[0].annoy; });
+      setState((s: any) => {
+        delete s.accounts[0].annoy;
+        s.instances.test.user = { id: "person", username: "old-server-name", profile: { displayName: "Old server profile", avatarUrl: null } };
+      });
     });
     await expect(identity.locator("strong")).toHaveText("Old server profile");
     await expect(identity).toContainText("@old-server-name");
@@ -499,7 +510,7 @@ async function seed(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
   await page.evaluate(async () => {
     const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
     const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-    const user = { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null };
+    const user = { id: "person", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null } };
     const server = { id: "server", name: "Comunidade de teste", ownerId: "person", iconUrl: null };
     addAccount({ id: "test", url: "https://experience.test", userId: "person", token: "synthetic", instanceName: "Instância de teste" });
     setState((s: any) => {
@@ -615,7 +626,7 @@ test("live redesign opens real community invites, activity conversations and dis
       const { navigate } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
       setState((s: any) => {
         const inst = s.instances.test;
-        const friend = { id: "friend", username: "friend", displayName: "Amiga conectada", avatarUrl: null };
+        const friend = { id: "friend", username: "friend", profile: { displayName: "Amiga conectada", avatarUrl: null } };
         inst.relationships = [{ user: friend, status: "friend" }];
         inst.presences.friend = "online";
         inst.activities.friend = [{ kind: "game", provider: "steam", name: "Jogo em andamento" }];
@@ -694,8 +705,9 @@ test("native idle, manual presence and member profile file activity", async () =
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         s.instances.test.instance = { presenceStatus: true, manualPresence: true };
-        s.instances.test.user.bio = "Minha biografia na lista de membros.";
-        s.instances.test.serverStates.server.members[0].user.bio = s.instances.test.user.bio;
+        // A local account: its bio is in the server's profile for it.
+        s.instances.test.user.profile.bio = "Minha biografia na lista de membros.";
+        s.instances.test.serverStates.server.members[0].user.profile.bio = s.instances.test.user.profile.bio;
         s.desktopActivity = { supported: true, error: null, activities: [{ kind: "development", provider: "vscode", name: "Annoy.Client", project: "Annoy.Client", file: "package.json", language: "json" }] };
       });
     });
@@ -710,7 +722,7 @@ test("native idle, manual presence and member profile file activity", async () =
     await selectStatus("Não incomodar");
     await expect(page.locator(".user-identity .presence-dnd")).toBeVisible();
     await page.evaluate(() => { const original = AudioContext.prototype.createOscillator; (window as any).cueCount = 0; AudioContext.prototype.createOscillator = function () { (window as any).cueCount++; return original.call(this); }; });
-    socket!.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id: "dnd-message", channelId: "general", author: { id: "other", username: "other", displayName: "Other", avatarUrl: null }, content: "Mensagem silenciosa", createdAt: new Date().toISOString(), editedAt: null, attachments: [], replyToId: null, mentionIds: [], mentionsEveryone: false } }));
+    socket!.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id: "dnd-message", channelId: "general", author: { id: "other", username: "other", profile: { displayName: "Other", avatarUrl: null } }, content: "Mensagem silenciosa", createdAt: new Date().toISOString(), editedAt: null, attachments: [], replyToId: null, mentionIds: [], mentionsEveryone: false } }));
     await expect(page.getByText("Mensagem silenciosa", { exact: true })).toBeAttached();
     expect(await page.evaluate(() => (window as any).cueCount)).toBe(0);
     await selectStatus("Aparecer como offline");
@@ -836,7 +848,7 @@ test("call membership sounds, stable participants, status icons and channel swit
       setState((s: any) => {
         const server = s.instances.test.serverStates.server;
         server.channels.push({ ...server.channels[1], id: "other-voice", name: "Outra chamada" });
-        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, displayName: id === "friend" ? "Amiga na chamada" : "Visitante", avatarUrl: null } });
+        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, profile: { displayName: id === "friend" ? "Amiga na chamada" : "Visitante", avatarUrl: null } } });
         s.instances.test.relationships = [{ user: server.members[1].user, status: "friend" }];
         s.instances.test.activities.friend = [{ kind: "music", provider: "spotify", name: "Faixa de teste" }];
       });
@@ -913,7 +925,7 @@ test("individual voice volume reaches 300%, works without moderation and persist
         const inst = s.instances.test, state = inst.serverStates.server;
         state.server.ownerId = "alice"; inst.servers[0].ownerId = "alice";
         state.permissions = 0; state.roles[0].permissions = 0;
-        for (const id of ["alice", "bob"]) state.members.push({ ...state.members[0], user: { id, username: id, displayName: id === "alice" ? "Alice" : "Bob", avatarUrl: null } });
+        for (const id of ["alice", "bob"]) state.members.push({ ...state.members[0], user: { id, username: id, profile: { displayName: id === "alice" ? "Alice" : "Bob", avatarUrl: null } } });
         state.voiceStates = ["person", "alice", "bob"].map((userId) => ({ userId, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, video: false, screen: false }));
       });
     });
@@ -1039,7 +1051,7 @@ test("voice names show local and online game activity, respecting sharing and fr
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         const inst = s.instances.test, server = inst.serverStates.server;
-        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, displayName: id, avatarUrl: null } });
+        for (const id of ["friend", "visitor"]) server.members.push({ ...server.members[0], user: { id, username: id, profile: { displayName: id, avatarUrl: null } } });
         server.voiceStates = ["person", "friend", "visitor"].map((userId) => ({ userId, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, video: false, screen: false }));
         inst.relationships = [{ user: server.members[1].user, status: "friend" }];
         inst.activities.person = [{ kind: "game", provider: "steam", name: "Online game", appId: "480" }];
@@ -1183,7 +1195,7 @@ test("owners with other members must transfer ownership before leaving or removi
       setState((s: any) => {
         const inst = s.instances.test, state = inst.serverStates.server;
         inst.instance = { ...inst.instance, serverOwnership: true };
-        state.members.push({ ...state.members[0], user: { id: "next-owner", username: "next-owner", displayName: "Outro membro", avatarUrl: null }, presence: "offline" });
+        state.members.push({ ...state.members[0], user: { id: "next-owner", username: "next-owner", profile: { displayName: "Outro membro", avatarUrl: null } }, presence: "offline" });
       });
     });
     const data = await page.evaluate(async () => {
@@ -1262,7 +1274,7 @@ test("activity cards show platform marks and album/game artwork with fallback", 
 test("message sounds, channel/server mute, DM shortcuts, hover layout and settings cards", async () => {
   const { page, app, close } = await launch();
   let socket: WebSocketRoute;
-  const friend = { id: "friend", username: "amiga", displayName: "Amiga", avatarUrl: null };
+  const friend = { id: "friend", username: "amiga", profile: { displayName: "Amiga", avatarUrl: null } };
   const send = (id: string, channelId = "general", author = friend) => socket.send(JSON.stringify({ t: "MESSAGE_CREATE", d: { id, channelId, author, content: `Mensagem ${id}`, createdAt: new Date().toISOString(), editedAt: null, replyToId: null, attachments: [], mentionIds: [], mentionsEveryone: false } }));
   try {
     await seed(page, (ws) => { socket = ws; });
@@ -1291,7 +1303,7 @@ test("message sounds, channel/server mute, DM shortcuts, hover layout and settin
     await expect(page.locator(".chat-header h1")).toHaveText("Amiga");
     send("private-3", "private");
     await expect(page.locator('[data-message-id="private-3"]')).toHaveClass(/message-received/);
-    send("private-own", "private", { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null });
+    send("private-own", "private", { id: "person", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null } });
     await expect(page.locator('[data-message-id="private-own"]')).toHaveClass(/message-sent/);
     await expect(page.getByRole("button", { name: "Loja de bots", exact: true })).toHaveCount(0);
     await page.evaluate(async () => {
@@ -1334,7 +1346,7 @@ test("message sounds, channel/server mute, DM shortcuts, hover layout and settin
 test("private video calls ring, negotiate WebRTC media and release devices on hangup", async () => {
   const left = await launch({ fakeMedia: true }), right = await launch({ fakeMedia: true });
   const sockets = new Map<string, WebSocketRoute>();
-  const users = { alice: { id: "alice", username: "alice", displayName: "Alice", avatarUrl: null }, bob: { id: "bob", username: "bob", displayName: "Bob", avatarUrl: null } };
+  const users = { alice: { id: "alice", username: "alice", profile: { displayName: "Alice", avatarUrl: null } }, bob: { id: "bob", username: "bob", profile: { displayName: "Bob", avatarUrl: null } } };
   let call: any;
   const publish = () => { for (const socket of sockets.values()) socket.send(JSON.stringify({ t: "CALL_UPDATE", d: call })); };
   try {
@@ -1376,7 +1388,7 @@ test("private video calls ring, negotiate WebRTC media and release devices on ha
         const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
         addAccount({ id, url: "https://private.test", token: "synthetic", userId: id, instanceName: "Chamadas de teste" });
       }, id);
-      await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].displayName}`, exact: true })).toBeVisible();
+      await expect(session.page.getByRole("button", { name: `Chamada de vídeo com ${users[other].profile.displayName}`, exact: true })).toBeVisible();
     }
     await left.page.getByRole("button", { name: "Chamada de vídeo com Bob", exact: true }).click();
     await expect(right.page.getByRole("dialog", { name: "Chamada recebida", exact: true })).toBeVisible();
@@ -1414,7 +1426,7 @@ test("profile biography, screen quality, Annoy news and remembered sign-in", asy
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => { s.instances.test.instance = { isAdmin: false, registration: "open", voiceBackend: "builtin", socialProfiles: true }; });
     });
-    await page.route("https://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null, ...route.request().postDataJSON() }) }));
+    await page.route("https://experience.test/api/users/@me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: "person", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null }, ...route.request().postDataJSON() }) }));
     await page.route("https://experience.test/api/info", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ name: "Instância de teste", registrationOpen: true, registration: "open", discordLogin: false, accountMode: "local" }) }));
     // A local account has no profile editor in the user settings, only "Excluir conta".
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
@@ -1468,7 +1480,7 @@ test("Steam connection publishes online fallback, prefers local games and clears
     await page.routeWebSocket("wss://steam.test/gateway", (socket) => socket.onMessage((message) => {
       const data = JSON.parse(String(message));
       if (data.op === "identify") socket.send(JSON.stringify({ t: "READY", d: {
-        user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {},
+        user: { id: "me", username: "me", profile: { displayName: "Pessoa", avatarUrl: null } }, servers: [], dms: [], relationships: [], presences: {}, activities: {},
         instance: { name: "Steam test", activityArtwork: true, steamConnection: true, developmentActivity: true },
       } }));
       if (data.op === "activity") sent.push(data.activities);
@@ -1530,7 +1542,7 @@ test("Spotify activity publishes on ready, clears when disabled and resumes afte
   const { app, page, close } = await launch();
   const sent: any[] = [];
   let socket: any;
-  const ready = { t: "READY", d: { user: { id: "me", username: "me", displayName: "Pessoa", avatarUrl: null }, servers: [], dms: [], relationships: [], presences: {}, activities: {}, instance: { name: "Teste", activityArtwork: false } } };
+  const ready = { t: "READY", d: { user: { id: "me", username: "me", profile: { displayName: "Pessoa", avatarUrl: null } }, servers: [], dms: [], relationships: [], presences: {}, activities: {}, instance: { name: "Teste", activityArtwork: false } } };
   try {
     // This test supplies synthetic activity; native polling must not overwrite it.
     await app.evaluate(({ ipcMain }) => {
@@ -1635,7 +1647,7 @@ test("message search filters, pagination, context jump and return to latest", as
     const message = {
       id: "found",
       channelId: "general",
-      author: { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null },
+      author: { id: "person", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null } },
       content: "Uma conversa encontrada sobre planejamento",
       createdAt: "2026-10-01T12:00:00.000Z",
       editedAt: null,
@@ -1708,8 +1720,8 @@ test("friend activity is distinct from public membership and shared action dialo
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
         const i = s.instances.test;
-        const friend = { id: "friend", username: "bruna", displayName: "Bruna", avatarUrl: null },
-          stranger = { id: "stranger", username: "outro", displayName: "Outro membro", avatarUrl: null };
+        const friend = { id: "friend", username: "bruna", profile: { displayName: "Bruna", avatarUrl: null } },
+          stranger = { id: "stranger", username: "outro", profile: { displayName: "Outro membro", avatarUrl: null } };
         i.relationships = [{ user: friend, status: "friend" }];
         i.serverStates.server.members.push(
           ...[friend, stranger].map((user) => ({
@@ -2082,7 +2094,7 @@ test("friend sidebar, elapsed activity, animated stack and persistent personal v
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
-        const user = { id: "friend", username: "bruna", displayName: "Bruna", bio: "Jogos, música e boas conversas.", avatarUrl: null };
+        const user = { id: "friend", username: "bruna", profile: { displayName: "Bruna", avatarUrl: null, bio: "Jogos, música e boas conversas." } };
         const i = s.instances.test;
         i.relationships = [{ user, status: "friend", nickname: "Bru" }];
         i.dms = [{ id: "dm-test", recipients: [user] }];
@@ -2260,7 +2272,7 @@ test("global search keeps server context and server editing saves image drafts",
     await seed(page);
     await page.evaluate(async()=>{
       const {setState}=await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
-      setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",displayName:"Pessoa do grupo",avatarUrl:null};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"https://experience.test/image.png",startedAt:Date.now()-200000}];});
+      setState((s:any)=>{const i=s.instances.test;i.instance={...i.instance,groupActivity:true,serverIcons:true};const user={id:"peer",username:"grupo",profile: { displayName: "Pessoa do grupo", avatarUrl: null }};i.serverStates.server.members.push({user,nick:null,presence:"online",roleIds:["server"],joinedAt:new Date().toISOString()});i.activities.peer=[{kind:"game",provider:"steam",name:"Jogo do grupo",appId:"480",artwork:"https://experience.test/image.png",startedAt:Date.now()-200000}];});
     });
     await expect(page.getByRole("button",{name:"Buscar mensagens (Ctrl+K)"})).toHaveCount(1);
     const searches: string[] = [];
@@ -2537,7 +2549,7 @@ test("stream start has a distinct room cue and message senders stay silent",asyn
   const stream=(userId:string,channelId="voice")=>socket.send(JSON.stringify({t:"VOICE_STATE_UPDATE",d:{userId,serverId:"server",state:{userId,serverId:"server",channelId,selfMute:false,selfDeaf:false,serverMute:false,speaking:false,screen:true,video:false}}}));
   stream("peer");await expect.poll(frequencies).toEqual([523,784,1047,784]);stream("peer");expect(await frequencies()).toHaveLength(4);
   stream("person");await expect.poll(async()=>(await frequencies()).length).toBe(8);stream("other","elsewhere");
-  const message=(id:string,author:string)=>socket.send(JSON.stringify({t:"MESSAGE_CREATE",d:{id,channelId:"general",author:{id:author,username:author,displayName:author,avatarUrl:null},content:id,createdAt:new Date().toISOString(),editedAt:null,replyToId:null,attachments:[],mentionIds:[],mentionsEveryone:false}}));
+  const message=(id:string,author:string)=>socket.send(JSON.stringify({t:"MESSAGE_CREATE",d:{id,channelId:"general",author:{id:author,username:author,profile: { displayName: author, avatarUrl: null }},content:id,createdAt:new Date().toISOString(),editedAt:null,replyToId:null,attachments:[],mentionIds:[],mentionsEveryone:false}}));
   message("own-message","person");await expect(page.getByText("own-message",{exact:true})).toBeVisible();expect(await frequencies()).toHaveLength(8);
   message("received-message","peer");await expect.poll(async()=>(await frequencies()).length).toBe(10);expect((await frequencies()).slice(-2)).toEqual([880,1175]);
  }finally{await close();}
@@ -2566,7 +2578,7 @@ test("packaged renderer shows the Annoy stickers without a development server UR
  try{
   await annoySetFixture(page);
   expect(page.url()).toMatch(/^file:/);
-  const user={id:"production",username:"production",displayName:"Pessoa",avatarUrl:null};
+  const user={id:"production",username:"production",profile: { displayName: "Pessoa", avatarUrl: null }};
   const server={id:"packaged-server",name:"Servidor",ownerId:user.id,iconUrl:null};
   const channel={id:"packaged-general",serverId:server.id,type:"text",name:"geral",topic:"",parentId:null,position:0,overwrites:[]};
   await page.route("https://packaged.test/api/**",(route)=>route.fulfill({contentType:"application/json",headers:{"access-control-allow-origin":"*"},body:JSON.stringify(new URL(route.request().url()).pathname.endsWith(`/servers/${server.id}`)?{server,channels:[channel],roles:[{id:server.id,serverId:server.id,name:"Membros",permissions:2147483647,position:0,color:null}],members:[{user,nick:null,presence:"online",roleIds:[server.id],joinedAt:new Date().toISOString()}],voiceStates:[],permissions:2147483647}:[])}));
@@ -2650,7 +2662,7 @@ test("clean navigation starts with direct messages and keeps secondary destinati
       setState((s: any) => {
         const instance = s.instances.test;
         instance.servers.push({ id: "second", name: "Outro servidor", ownerId: "person", iconUrl: null });
-        instance.dms = [{ id: "old-dm", recipients: [{ id: "friend", username: "amiga", displayName: "Amiga", avatarUrl: null }], lastMessageId: "last" }];
+        instance.dms = [{ id: "old-dm", recipients: [{ id: "friend", username: "amiga", profile: { displayName: "Amiga", avatarUrl: null } }], lastMessageId: "last" }];
         s.services = [{ id: "discord", kind: "discord", name: "Discord", url: "https://discord.com/app" }];
       });
     });
@@ -2752,7 +2764,7 @@ test("friend message reactions explain an old server and work when support is ad
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       setState((s: any) => {
-        const i = s.instances.test, friend = { id: "friend", username: "bruna", displayName: "Bruna", avatarUrl: null };
+        const i = s.instances.test, friend = { id: "friend", username: "bruna", profile: { displayName: "Bruna", avatarUrl: null } };
         i.relationships = [{ user: friend, status: "friend" }];
         i.dms = [{ id: "dm-friend", recipients: [friend] }];
         i.messages["dm-friend"] = { items: [{ ...i.messages.general.items[0], channelId: "dm-friend", author: friend, attachments: [], protection: "e2ee", reactions: [{ emoji: "👍", userIds: ["friend"] }] }], hasMore: false, loading: false };
@@ -3035,7 +3047,7 @@ test("camera keeps the full frame and call window shares controls and returns me
         s.view = { kind: "server", accountId: "test", serverId: "server", channelId: "voice" };
         s.voice = { accountId: "test", serverId: "server", channelId: "voice", status: "connected", canStream: true, camera: true, screen: false };
         s.instances.test.serverStates.server.voiceStates = [{ userId: "person", channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: true, screen: false }];
-        const peer = { id: "peer", username: "peer", displayName: "Pessoa na chamada", avatarUrl: null };
+        const peer = { id: "peer", username: "peer", profile: { displayName: "Pessoa na chamada", avatarUrl: null } };
         s.instances.test.serverStates.server.members.push({ user: peer, nick: null, presence: "online", roleIds: ["server"], joinedAt: new Date().toISOString() });
         s.instances.test.serverStates.server.voiceStates.push({ userId: peer.id, channelId: "voice", selfMute: false, selfDeaf: false, serverMute: false, speaking: false, video: false, screen: false });
       });

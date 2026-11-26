@@ -1,3 +1,4 @@
+import { personOf, usePerson, useProfilesRevision } from "../social/profiles.ts";
 import { CommunityCover, CommunitySummary, CommunityWelcome, CommunityPulse } from "../features/redesign/LiveExperience.tsx";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
@@ -438,6 +439,7 @@ function MemberCard({
   const inst = useStore((s) => s.instances[accountId]);
   const relationships = useStore((s) => s.instances[accountId]?.relationships);
   const member = useStore((s) => s.instances[accountId]?.serverStates[state.server.id]?.members.find((item) => item.user.id === supplied.user.id) ?? supplied);
+  const shown = usePerson(member.user)!;
   const perms = state.permissions;
   const myRank = rankOf(state, me);
   const isSelf = member.user.id === me;
@@ -458,7 +460,7 @@ function MemberCard({
       <ProfilePopover.Portal>
         <ProfilePopover.Content
           role="dialog"
-          aria-label={translate("common.bb51fa235d84",{p0:(member.user.displayName)})}
+          aria-label={translate("common.bb51fa235d84",{p0:(shown.displayName)})}
           className="member-card member-profile"
           side="left"
           align="start"
@@ -471,10 +473,10 @@ function MemberCard({
               <div className="member-card-name" style={{ color: memberColor(state, member) }}>
                 {displayNameOf(member)}
               </div>
-              <div className="muted">@{member.user.username}</div>
+              <div className="muted">@{shown.username}</div>
             </div>
           </div>
-          {member.user.bio && <p className="profile-bio" title={member.user.bio}>{member.user.bio}</p>}
+          {shown.bio && <p className="profile-bio" title={shown.bio}>{shown.bio}</p>}
           <FullProfileButton accountId={accountId} user={member.user}/>
           {canViewActivity(inst, member.user.id) && activities.length > 0 && (
             <div className="member-card-section">
@@ -553,6 +555,8 @@ function MemberCard({
 }
 
 function MemberList({ accountId, state, me }: { accountId: string; state: ServerState; me: string }) {
+  // Names come from usersannoy (Annoy accounts): redraw when they arrive.
+  useProfilesRevision();
   const inst = useStore((s) => s.instances[accountId]);
   const [query, setQuery] = useState("");
   const [searchMembers, setSearchMembers] = useState<Member[] | null>(null);
@@ -697,6 +701,7 @@ function ServerUnavailable({ accountId, serverId }: { accountId: string; serverI
 }
 
 export function ServerView({ accountId, serverId, channelId }: { accountId: string; serverId: string; channelId: string | null }) {
+  useProfilesRevision();
   const state = useStore((s) => s.instances[accountId]?.serverStates[serverId]);
   const me = useStore((s) => s.instances[accountId]?.user?.id);
   const showMembers = useMembersShown();
@@ -738,7 +743,7 @@ export function ServerView({ accountId, serverId, channelId }: { accountId: stri
           serverId={serverId}
           nameOf={(id) => names.get(id)}
           channelOf={(id) => state.channels.find((c) => c.id === id)?.name}
-          mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: m.user.username }))}
+          mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: personOf(m.user).username }))}
           headerExtra={
             <button
               className={`icon-btn${showMembers ? " on" : ""}`}

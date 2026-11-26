@@ -73,8 +73,8 @@ test("desktop navigation, themes, window controls and image attachments", async 
     await page.evaluate(async () => {
       const { setState } = await import(/* @vite-ignore */ `${location.origin}/src/store.ts`);
       const { addAccount } = await import(/* @vite-ignore */ `${location.origin}/src/client.ts`);
-      const me = { id: "me", username: "gustavo", displayName: "Gustavo", avatarUrl: null };
-      const friend = { id: "friend", username: "marina", displayName: "Marina", avatarUrl: null };
+      const me = { id: "me", username: "gustavo", profile: { displayName: "Gustavo", avatarUrl: null } };
+      const friend = { id: "friend", username: "marina", profile: { displayName: "Marina", avatarUrl: null } };
       const server = { id: "test", name: "Comunidade de teste", iconUrl: null, ownerId: "me" };
       const channel = (id: string, name: string, type = "text", parentId: string | null = "community") => ({ id, serverId: "test", type, name, topic: "Um lugar para colocar o papo em dia.", parentId, position: 0, overwrites: [] });
       const now = new Date().toISOString();

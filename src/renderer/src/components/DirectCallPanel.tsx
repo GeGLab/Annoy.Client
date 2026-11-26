@@ -1,3 +1,4 @@
+import { personOf, type Person } from "../social/profiles.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate} from "../../../shared/localization/index.ts";
 import { useEffect, useRef } from "react";
@@ -66,14 +67,14 @@ export function DirectCallPanel() {
     return () => { active = false; };
   }, [audioTracks, entry?.call.id, settings.selfDeaf, settings.outputDeviceId]);
   if (!entry || !myId) return null;
-  let other: import("@annoy/protocol").User | undefined, name: string;
+  let other: import("@annoy/protocol").User | Person | undefined, name: string;
   if (cloudCall) {
     other = cloudUser(cloudProfiles[otherId], otherId);
-    name = cloudFriends.find((r) => r.user.id === otherId)?.nickname || other.displayName;
+    name = cloudFriends.find((r) => r.user.id === otherId)?.nickname || personOf(other).displayName;
   } else {
     const friend = instance!.relationships.find((relationship) => relationship.user.id === otherId);
     other = friend?.user ?? instance!.dms.flatMap((dm) => dm.recipients).find((user) => user.id === otherId);
-    name = friend?.nickname || other?.displayName || translate("common.dfdf1ff8c702");
+    name = friend?.nickname || (other && personOf(other).displayName) || translate("common.dfdf1ff8c702");
   }
   if (ringing) return <Modal title={incoming ? translate("common.93947904c31c") : translate("common.c330e6eab743")} onClose={() => callAction(incoming ? "reject" : "end")} className="direct-call-invite">
     <div className="call-invite-person">{other && <Avatar user={other} size={80} />}<h3>{name}</h3><p className="muted">{incoming ? translate("common.b691e187af93") : translate("common.74d16463d404")} · {entry.call.video ? translate("common.63fb625e5405") : translate("common.195c60bb2325")}</p></div>

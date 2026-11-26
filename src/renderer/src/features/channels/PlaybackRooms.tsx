@@ -1,3 +1,4 @@
+import { personOf } from "../../social/profiles.ts";
 import {rich} from "../../lib/localization.ts";
 import {t as translate,counted,onLocalizationChange,localizationPreferences} from "../../../../shared/localization/index.ts";
 import { DJ_STYLES, has, nextInQueue, Permission, PLAYBACK_QUEUE_MAX, playbackPosition, type Channel, type DjStyle, type Message, type PlaybackAddResult, type PlaybackItem, type PlaybackState, type ServerState } from "@annoy/protocol";
@@ -422,7 +423,7 @@ function RoomChat({ accountId, state, channel, perms }: { accountId: string; sta
       canModerate={has(perms, Permission.MANAGE_MESSAGES)}
       nameOf={(id) => names.get(id)}
       channelOf={(id) => state.channels.find((c) => c.id === id)?.name}
-      mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: m.user.username }))}
+      mentionables={state.members.map((m) => ({ id: m.user.id, name: displayNameOf(m), username: personOf(m.user).username }))}
     />
   );
 }

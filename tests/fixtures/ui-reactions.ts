@@ -63,7 +63,7 @@ export async function uiSendFixture(app: ElectronApplication): Promise<SendFixtu
     fixture.sends.push({ channel, content, files });
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ id: `sent-${fixture.sends.length}`, channelId: channel, author: { id: "person", username: "tester", displayName: "Pessoa de teste", avatarUrl: null }, content, attachments: [], replyToId: null, createdAt: new Date().toISOString(), editedAt: null, mentionIds: [], mentionsEveryone: false }),
+      body: JSON.stringify({ id: `sent-${fixture.sends.length}`, channelId: channel, author: { id: "person", username: "tester", profile: { displayName: "Pessoa de teste", avatarUrl: null } }, content, attachments: [], replyToId: null, createdAt: new Date().toISOString(), editedAt: null, mentionIds: [], mentionsEveryone: false }),
     });
   });
   return fixture;

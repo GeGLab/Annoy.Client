@@ -1,3 +1,4 @@
+import { personOf } from "../social/profiles.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate,onLocalizationChange} from "../../../shared/localization/index.ts";
 import { Checkbox } from "./ui/checkbox.tsx";
@@ -179,7 +180,7 @@ function Bans({ accountId, serverId }: { accountId: string; serverId: string }) 
       {bans.map((b) => (
         <div key={b.user.id} className="list-row">
           <span>
-            <strong>{b.user.displayName}</strong> <span className="muted">@{b.user.username}</span>
+            <strong>{personOf(b.user).displayName}</strong> <span className="muted">@{personOf(b.user).username}</span>
             {b.reason && <div className="muted small">{b.reason}</div>}
           </span>
           <button
@@ -340,7 +341,7 @@ export function ServerSettingsModal({ accountId, serverId, initialPage = "overvi
   const api = apiFor(accountId);
   const role = state.roles.find((r) => r.id === roleId) ?? null;
   const alone = state.members.length === 1 && state.members[0]?.user.id === me;
-  const eligibleOwners = state.members.filter((m) => m.user.id !== me && !/^(dc|deleted)\./i.test(m.user.username));
+  const eligibleOwners = state.members.filter((m) => m.user.id !== me && !/^(dc|deleted)\./i.test(m.user.username ?? ""));
   const transfer = async () => {
     const target = eligibleOwners.find((m) => m.user.id === nextOwner);
     if (!target || !ownershipSupported || transferring) return;
@@ -624,9 +625,9 @@ function OverwriteEditor({ accountId, state, channel, me, signal }: { accountId:
                 ? t.id === state.server.id
                   ? translate("settings.6a69de16d1bc")
                   : translate("settings.359565b63ccc")
-                : `@${state.members.find((m) => m.user.id === t.id)?.user.username ?? ""}`,
+                : `@${(() => { const m = state.members.find((item) => item.user.id === t.id); return m ? personOf(m.user).username : ""; })()}`,
             color: state.roles.find((r) => r.id === t.id)?.color,
-            avatarUrl: state.members.find((m) => m.user.id === t.id)?.user.avatarUrl,
+            avatarUrl: (() => { const m = state.members.find((item) => item.user.id === t.id); return m ? personOf(m.user).avatarUrl : null; })(),
             customized: channel.overwrites.some((o) => o.targetId === t.id),
           }))}
         />

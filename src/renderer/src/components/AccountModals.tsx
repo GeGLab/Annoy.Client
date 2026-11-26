@@ -1,3 +1,4 @@
+import { personOf, usePerson } from "../social/profiles.ts";
 import {rich} from "../lib/localization.ts";
 import {t as translate,counted} from "../../../shared/localization/index.ts";
 import { SignInForm as GlobalSignIn } from "./auth/SignInForm.tsx";
@@ -36,6 +37,8 @@ export function AddAccountModal() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const globalAccount = useStore(s => s.global);
+  // The name on the button comes from the Annoy profile (usersannoy).
+  const ownAnnoy = usePerson(globalAccount ? { id: globalAccount.id, annoyId: globalAccount.id } : null);
   // A remembered name is not a session: without a live Annoy session, ask for the Annoy sign-in.
   const annoyReady = !!globalAccount && globalSignedIn();
   // Signing in again after leaving an account always asks for the Annoy credentials:
@@ -87,7 +90,8 @@ export function AddAccountModal() {
     if (!info?.info.globalServerId || busy) return;
     setError(null); setBusy(true);
     try {
-      const first = globalFirst ? { username, ...(displayName && { displayName }), ...(inviteCode.trim() && { inviteCode: inviteCode.trim() }) } : undefined;
+      // No name is chosen here: the @username and the profile belong to the Annoy account. Only an invite may be asked.
+      const first = globalFirst && inviteCode.trim() ? { inviteCode: inviteCode.trim() } : undefined;
       const auth = migration
         ? await migrateServer(info.url, info.info, { username, password, recoveryCode }, saved?.token)
         : await signInServer(info.url, info.info.globalServerId, first, signal);
@@ -95,10 +99,9 @@ export function AddAccountModal() {
       addAccount(toAccount(info.url, info.info, auth));
     } catch (err) {
       if (isCancellation(err)) return;
-      if (err instanceof GlobalError && err.code === "global_new_account") {
-        setGlobalFirst(true);
-        if (!username && globalAccount) setUsername(globalAccount.name.toLowerCase().replace(/[^a-z0-9_.]/g, "").slice(0, 32));
-      } else setError((err as Error).message);
+      // A server that creates accounts by invite asks for the code on the first sign-in.
+      if (err instanceof GlobalError && err.code === "invite_required" && !globalFirst) setGlobalFirst(true);
+      else setError((err as Error).message);
     } finally { setBusy(false); }
   }
   async function submitLocal(e: FormEvent) {
@@ -152,10 +155,10 @@ export function AddAccountModal() {
       {!localMode && <p role={migration ? "alert" : undefined}>{translate("common.3c6e57294ab7")}</p>}
       {localMode && <p>{info.info.accountMode === "local" ? translate("common.b58caef0b088") : translate("common.bb61831cf63a")}{migration && translate("common.da0bf384ca28")}</p>}
       {!localMode && needsCredentials ? <GlobalSignIn identifier={remembered?.annoyEmail} onSignedIn={() => { setReauthenticated(true); if (remembered?.annoy) void withGlobal(); }} /> : <form className="form" onSubmit={localMode ? submitLocal : e => void withGlobal(e)}>
-        {migration ? ownershipFields : (localMode || globalFirst) && <>
+        {migration ? ownershipFields : !localMode ? globalFirst && <Field label={translate("common.3dba7a6e77c4")}><Input autoFocus value={inviteCode} onChange={e => setInviteCode(e.target.value)} required /></Field> : <>
           {localMode && <div className="tabs"><Button type="button" variant="ghost" onClick={() => setMode("login")}>{translate("common.4105811890ae")}</Button><Button type="button" variant="ghost" disabled={!info.info.registrationOpen} onClick={() => setMode("register")}>{translate("common.391f1af9142d")}</Button></div>}
           <Field label={translate("common.47644adea672")}><Input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></Field>
-          {(globalFirst || mode === "register") && <>
+          {mode === "register" && <>
             <Field label={translate("common.80d20f1ebbc0")}><Input value={displayName} onChange={e => setDisplayName(e.target.value)} /></Field>
             {needsInvite && <Field label={translate("common.3dba7a6e77c4")}><Input value={inviteCode} onChange={e => setInviteCode(e.target.value)} required /></Field>}
           </>}
@@ -167,7 +170,7 @@ export function AddAccountModal() {
           <Button type="button" variant="secondary" onClick={() => void findInstance(info.url).then(setInfo, err => setError((err as Error).message))}>{translate("common.b9e10688be01")}</Button>
         </>}
         {error && <p className="error">{error}</p>}
-        <Button type="submit" loading={busy} disabled={!localMode && !info.info.globalServerId}>{migration ? translate("common.680f2192f2f7") : localMode ? mode === "register" ? translate("common.391f1af9142d") : translate("common.4105811890ae") : translate("common.e32748582627",{p0:(globalAccount?.name ?? "conta Annoy")})}</Button>
+        <Button type="submit" loading={busy} disabled={!localMode && !info.info.globalServerId}>{migration ? translate("common.680f2192f2f7") : localMode ? mode === "register" ? translate("common.391f1af9142d") : translate("common.4105811890ae") : translate("common.e32748582627",{p0:(ownAnnoy?.displayName || "conta Annoy")})}</Button>
       </form>}
       {localMode && info.info.discordLogin && !migration && <Button type="button" variant="outline" loading={busy} onClick={() => void withDiscord()}>{translate("common.d1a81cb724d8")}</Button>}
       {discordAbort.current && <Button type="button" variant="secondary" onClick={() => discordAbort.current?.abort()}>{translate("common.2a2c8450b1c9")}</Button>}
@@ -184,7 +187,7 @@ export function SwitchAccountModal() {
   const current = useStore((s) => ("accountId" in s.view ? s.view.accountId : null));
   const saved = remembered.filter((item) => !accounts.some((account) => account.id === item.id));
   return <Modal title={translate("common.cd405060935b")} className="account-switcher"><p className="muted">{translate("common.7cad3bbb5598")}</p><div className="saved-accounts">
-    {accounts.map((account) => { const user = instances[account.id]?.user, name = user?.displayName ?? account.instanceName; return <div className="saved-account-row" key={account.id}><button className={account.id === current ? "saved-account active" : "saved-account"} aria-current={account.id === current ? "true" : undefined} onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
+    {accounts.map((account) => { const user = instances[account.id]?.user, name = (user ? personOf(user).displayName : "") || account.instanceName; return <div className="saved-account-row" key={account.id}><button className={account.id === current ? "saved-account active" : "saved-account"} aria-current={account.id === current ? "true" : undefined} onClick={() => { navigate({ kind: "home", accountId: account.id, dmId: null }); closeModal(); }}>
     {user ? <Avatar user={user} size={40} /> : <Brand size={40} />}<span><strong>{name}</strong><small>{account.annoy ? translate("common.21c5709ca7b8") : translate("common.8e8a58b4d1d5")} · {account.instanceName} · {account.pending || instances[account.id]?.status === "offline" || instances[account.id]?.status === "invalid" ? translate("common.c1f272b304da") : account.id === current ? translate("common.256189f0291c") : translate("common.79c5eb4810e5")}</small></span>{account.id === current && <Icon name="check" />}</button><Tooltip content={translate("common.bff9a330986f")}><button className="icon-btn" aria-label={translate("common.ece23c8b325f",{p0:(name)})} onClick={() => signOutAccount(account.id)}><Icon name="logout" /></button></Tooltip></div>; })}
     {saved.map((account) => <div className="saved-account-row" key={account.id}><button className="saved-account" onClick={() => openModal({ kind: "addAccount", rememberedId: account.id })}><Avatar user={{ id: account.userId, username: account.username, displayName: account.displayName, avatarUrl: account.avatarUrl }} size={40} /><span><strong>{account.displayName}</strong><small>{rich("common.99f91f6f1e05",{p0:(account.annoy ? translate("common.21c5709ca7b8") : translate("common.8e8a58b4d1d5")),p1:(account.instanceName)})}</small></span><Icon name="right" /></button><button className="icon-btn" aria-label={translate("common.cb11afce3a10",{p0:(account.displayName)})} onClick={() => setState((s) => { s.rememberedAccounts = s.rememberedAccounts.filter((item) => item.id !== account.id); })}><Icon name="x" /></button></div>)}
   </div><Button onClick={() => openModal({ kind: "addAccount" })}>{rich("common.f058dba0348d",{p0:(<Icon name="plus" />)})}</Button></Modal>;
