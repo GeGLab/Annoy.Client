@@ -133,7 +133,17 @@ function setAccount(user: GlobalAccount | null): void {
   });
 }
 
-const toUser = (u: GlobalAccount): GlobalAccount => ({ id: u.id, name: u.name, email: u.email, ...(u.cryptoMigrationRequired && { cryptoMigrationRequired: true }) });
+const toUser = (u: GlobalAccount): GlobalAccount => ({ id: u.id, name: u.name, email: u.email, ...(u.cryptoMigrationRequired && { cryptoMigrationRequired: true }), ...(u.termsRequired && typeof u.currentTerms === "string" && { termsRequired: true, currentTerms: u.currentTerms }) });
+
+/** Accepts the current terms of use and privacy policy; the cloud refuses access tokens until then. */
+export async function acceptTerms(version: string): Promise<void> {
+  await authRequest("/v1/me/terms", { body: { version } });
+  const user = getState().global;
+  if (!user) return;
+  const next = toUser({ ...user, termsRequired: false });
+  setAccount(next);
+  await persist(next);
+}
 
 let restoring: Promise<void> | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
