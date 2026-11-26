@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { t as translate, textForError } from "../../../shared/localization/index.ts";
-import { accountWebsite, acceptTerms, signOut } from "../auth/session.ts";
+import { acceptTerms, signOut } from "../auth/session.ts";
+import { useLocalization } from "../lib/localization.ts";
 import { useStore } from "../store.ts";
 import { Button } from "./ui/button.tsx";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog.tsx";
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dial
  */
 export function TermsGate() {
   const user = useStore((s) => s.global);
+  const { language } = useLocalization();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!user?.termsRequired || !user.currentTerms) return null;
@@ -28,7 +30,8 @@ export function TermsGate() {
       setBusy(false);
     }
   };
-  const site = accountWebsite();
+  // The texts people read are on annoy.geg.dev.br, in their language (the Global keeps a mirror).
+  const legal = (slug: string) => `https://annoy.geg.dev.br/legal/${language === "pt-BR" ? "" : `${language}/`}${slug}/`;
   return (
     <Dialog open>
       <DialogContent className="modal terms-gate" showClose={false} onEscapeKeyDown={(event) => event.preventDefault()} onPointerDownOutside={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()}>
@@ -36,9 +39,9 @@ export function TermsGate() {
         <div className="modal-body">
           <DialogDescription>{translate("terms.body")}</DialogDescription>
           <p className="terms-links">
-            <a href={`${site}/termos`} target="_blank" rel="noreferrer">{translate("terms.termsLink")}</a>
+            <a href={legal("terms-of-use")} target="_blank" rel="noreferrer">{translate("terms.termsLink")}</a>
             <span aria-hidden> · </span>
-            <a href={`${site}/privacidade`} target="_blank" rel="noreferrer">{translate("terms.privacyLink")}</a>
+            <a href={legal("privacy-policy")} target="_blank" rel="noreferrer">{translate("terms.privacyLink")}</a>
           </p>
           {error && <p className="error small" role="alert">{error}</p>}
           <div className="form-actions">
