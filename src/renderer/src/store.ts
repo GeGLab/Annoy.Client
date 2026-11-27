@@ -172,6 +172,8 @@ export interface Settings extends LocalizationPreferences {
   screenHeight: number;
   screenFps: number;
   screenAudio: boolean;
+  /** Web app on a computer: the desktop interface, the mobile one, or by the window's width. */
+  displayMode: "auto" | "desktop" | "mobile";
 }
 
 export interface AppState {
@@ -285,6 +287,7 @@ const DEFAULT_SETTINGS: Settings = {
   screenHeight: 1080,
   screenFps: 30,
   screenAudio: true,
+  displayMode: "auto",
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -297,7 +300,7 @@ function load<T>(key: string, fallback: T): T {
       if (saved.screenQuality === "max") saved.screenHeight = 0;
     }
     const glass = (value: unknown, max: number, fallbackValue: number) => (typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(0, Math.round(value))) : fallbackValue);
-    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon), glassBlur: glass(saved.glassBlur, 30, 16), glassTransparency: glass(saved.glassTransparency, 90, 40) } : {}) } as T;
+    return { ...fallback, ...saved, ...(key === SETTINGS_KEY ? { ...normalizeLocalization(saved,navigator.language), micFilters: normalizeMicFilters(saved.micFilters), appIcon: normalizeAppIcon(saved.appIcon), glassBlur: glass(saved.glassBlur, 30, 16), glassTransparency: glass(saved.glassTransparency, 90, 40), displayMode: saved.displayMode === "desktop" || saved.displayMode === "mobile" ? saved.displayMode : "auto" } : {}) } as T;
   } catch {
     return fallback;
   }

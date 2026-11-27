@@ -97,6 +97,26 @@ export function AppearanceSettings({ settings, update }: { settings: Settings; u
         <p className="muted small">{translate("glass.hint")}</p>
         <GlassControls blur={settings.glassBlur} transparency={settings.glassTransparency} onChange={update} />
       </section>
+      {window.annoy?.web?.computer && (
+        <div className="app-icon-field display-mode-field">
+          <span>{translate("settings.displayMode.title")}</span>
+          <div className="theme-options" role="group" aria-label={translate("settings.displayMode.title")}>
+            {(["auto", "desktop", "mobile"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`theme-option${settings.displayMode === mode ? " selected" : ""}`}
+                aria-pressed={settings.displayMode === mode}
+                onClick={() => update({ displayMode: mode })}
+              >
+                <span><strong>{translate(`settings.displayMode.${mode}`)}</strong></span>
+                {settings.displayMode === mode && <Icon name="check" size={16} />}
+              </button>
+            ))}
+          </div>
+          <span className="muted small">{translate("settings.displayMode.hint")}</span>
+        </div>
+      )}
     </div>
   );
 }

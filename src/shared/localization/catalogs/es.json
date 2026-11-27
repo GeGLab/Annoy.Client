@@ -2733,5 +2733,10 @@
   "news.terms.title": "Términos actualizados",
   "news.terms.body": "Los Términos de Uso y la Política de Privacidad ahora incluyen las encuestas. La app pide aceptarlos una vez; sin aceptar, amigos, mensajes directos y encuestas no están disponibles.",
   "news.profile.title": "Un perfil, un lugar",
-  "news.profile.body": "El nombre, la foto, la bio y el @usuario de quien usa cuenta Annoy vienen solo de la cuenta Annoy, en todos los servidores. Los servidores ya no guardan una copia y, al entrar en un servidor nuevo, no eliges otro nombre."
+  "news.profile.body": "El nombre, la foto, la bio y el @usuario de quien usa cuenta Annoy vienen solo de la cuenta Annoy, en todos los servidores. Los servidores ya no guardan una copia y, al entrar en un servidor nuevo, no eliges otro nombre.",
+  "settings.displayMode.title": "Modo de visualización",
+  "settings.displayMode.auto": "Automático",
+  "settings.displayMode.desktop": "Escritorio",
+  "settings.displayMode.mobile": "Móvil",
+  "settings.displayMode.hint": "Automático usa Escritorio en ventanas de 940 px de ancho o más y Móvil en las más pequeñas."
 }

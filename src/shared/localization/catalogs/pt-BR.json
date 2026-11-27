@@ -2733,5 +2733,10 @@
   "news.terms.title": "Termos atualizados",
   "news.terms.body": "Os Termos de Uso e a Política de Privacidade agora incluem as enquetes. O app pede o aceite uma vez; sem aceitar, amigos, DMs e enquetes ficam indisponíveis.",
   "news.profile.title": "Um perfil, um lugar",
-  "news.profile.body": "Nome, foto, bio e @usuário de quem usa conta Annoy vêm só da conta Annoy, em todos os servidores. Os servidores não guardam mais cópia, e ao entrar num servidor novo você não escolhe outro nome."
+  "news.profile.body": "Nome, foto, bio e @usuário de quem usa conta Annoy vêm só da conta Annoy, em todos os servidores. Os servidores não guardam mais cópia, e ao entrar num servidor novo você não escolhe outro nome.",
+  "settings.displayMode.title": "Modo de exibição",
+  "settings.displayMode.auto": "Automático",
+  "settings.displayMode.desktop": "Desktop",
+  "settings.displayMode.mobile": "Mobile",
+  "settings.displayMode.hint": "Automático usa Desktop em janelas a partir de 940 px de largura e Mobile nas menores."
 }

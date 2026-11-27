@@ -1,5 +1,6 @@
 import { initDmIntegrations } from "../features/integrations/dm.ts";
 import { accountIntegrationsChanged, startIntegrations, stopIntegrations } from "../features/integrations/state.ts";
+import { preferencesChanged, startPreferences, stopPreferences } from "../features/preferences/sync.ts";
 import { t as translate } from "../../../shared/localization/index.ts";
 import type { UserActivity } from "@annoy/protocol";
 import { handleAccountEvent, signedIn as globalSignedIn } from "../auth/session.ts";
@@ -65,6 +66,7 @@ async function start(): Promise<void> {
       s.profiles[me.id] = me;
     });
     void startIntegrations(me.id);
+    void startPreferences(me.id);
     await Promise.all([publishDmKey().catch(() => undefined), loadRelationships(), loadDms()]);
   } catch (error) {
     if (generation !== runtime.generation) return;
@@ -91,6 +93,7 @@ function stop(): void {
   runtime.me = null;
   resetDms();
   stopIntegrations();
+  stopPreferences();
   setSocial((s) => Object.assign(s, emptySocial()));
   // Signing out removes this device's copy of the DMs (TODO item 2.3).
   if (userId) void local.wipe(userId);
@@ -190,6 +193,9 @@ async function handle(event: CloudEvent, generation: number): Promise<void> {
       return;
     case "INTEGRATIONS_CHANGED":
       void accountIntegrationsChanged();
+      return;
+    case "PREFERENCES_CHANGED":
+      void preferencesChanged(Number(event.d?.version));
       return;
     case "INVALID_SESSION":
       return;

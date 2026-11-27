@@ -30,8 +30,11 @@ export function screenProfile(quality: ScreenQuality): { constraints: MediaTrack
   }
 }
 
-/** Windows captures the system's sound with the screen (WASAPI loopback); Linux through a PipeWire virtual microphone. */
-export const screenAudioSupported = () => window.annoy?.platform === "win32" || window.annoy?.platform === "linux";
+/**
+ * Windows captures the system's sound with the screen (WASAPI loopback); Linux through a PipeWire virtual microphone.
+ * In the web app on a computer the browser's own picker offers the tab's or the system's sound.
+ */
+export const screenAudioSupported = () => !!window.annoy?.web?.computer || window.annoy?.platform === "win32" || window.annoy?.platform === "linux";
 
 /** Name of the Linux screen-share microphone (see src/main/screen-audio-linux.ts); never offered as a microphone. */
 export const SCREEN_AUDIO_DEVICE = "Annoy screen audio";
@@ -42,7 +45,7 @@ export const SCREEN_AUDIO_DEVICE = "Annoy screen audio";
  * which stops together with its track.
  */
 export async function captureScreen(video: MediaTrackConstraints, withAudio: boolean): Promise<MediaStream> {
-  const linux = window.annoy?.platform === "linux";
+  const linux = window.annoy?.platform === "linux" && !window.annoy.web;
   const stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: withAudio && !linux ? SCREEN_AUDIO_CONSTRAINTS : false });
   if (!withAudio || !linux || !window.annoy) return stream;
   const bridge = window.annoy.screenAudio;

@@ -2733,5 +2733,10 @@
   "news.terms.title": "条款已更新",
   "news.terms.body": "使用条款和隐私政策现已包含投票。应用会请你接受一次；接受之前，好友、私信和投票都无法使用。",
   "news.profile.title": "一个资料，一个地方",
-  "news.profile.body": "使用 Annoy 账户的人的名称、照片、简介和 @用户名在所有服务器上都只来自 Annoy 账户。服务器不再保存副本，加入新服务器时也不再需要另选名称。"
+  "news.profile.body": "使用 Annoy 账户的人的名称、照片、简介和 @用户名在所有服务器上都只来自 Annoy 账户。服务器不再保存副本，加入新服务器时也不再需要另选名称。",
+  "settings.displayMode.title": "显示模式",
+  "settings.displayMode.auto": "自动",
+  "settings.displayMode.desktop": "桌面",
+  "settings.displayMode.mobile": "移动",
+  "settings.displayMode.hint": "自动：窗口宽度不小于 940 px 时使用桌面，更小时使用移动。"
 }

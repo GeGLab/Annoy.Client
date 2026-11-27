@@ -640,7 +640,7 @@ export function UserSettingsModal() {
               <section className="settings-section">
                 <h3>{rich("common.5b986d904c4a",{p0:(<Icon name="radio" size={24} />)})}</h3>
                 <p className="muted">{translate("settings.ef3f1976270b")}</p>
-                {window.annoy?.platform === "win32" || window.annoy?.platform === "linux" ? (
+                {!window.annoy?.web && (window.annoy?.platform === "win32" || window.annoy?.platform === "linux") ? (
                   <>
                     <label className="switch-setting">
                       <span><strong>{rich("common.7d846bb586da",{p0:(<Icon name="radio" />)})}</strong><small>{translate("settings.90aac47f7432")}</small></span>

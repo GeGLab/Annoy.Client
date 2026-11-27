@@ -2733,5 +2733,10 @@
   "news.terms.title": "Termini aggiornati",
   "news.terms.body": "I Termini di utilizzo e l’Informativa sulla privacy ora includono i sondaggi. L’app chiede di accettarli una volta; senza accettarli, amici, messaggi diretti e sondaggi non sono disponibili.",
   "news.profile.title": "Un profilo, un solo posto",
-  "news.profile.body": "Nome, foto, bio e @nome utente di chi usa un account Annoy arrivano solo dall’account Annoy, su tutti i server. I server non ne tengono più una copia e, entrando in un nuovo server, non scegli un altro nome."
+  "news.profile.body": "Nome, foto, bio e @nome utente di chi usa un account Annoy arrivano solo dall’account Annoy, su tutti i server. I server non ne tengono più una copia e, entrando in un nuovo server, non scegli un altro nome.",
+  "settings.displayMode.title": "Modalità di visualizzazione",
+  "settings.displayMode.auto": "Automatica",
+  "settings.displayMode.desktop": "Desktop",
+  "settings.displayMode.mobile": "Mobile",
+  "settings.displayMode.hint": "Automatica usa Desktop nelle finestre larghe almeno 940 px e Mobile in quelle più piccole."
 }

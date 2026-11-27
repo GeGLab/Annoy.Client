@@ -2733,5 +2733,10 @@
   "news.terms.title": "Conditions mises à jour",
   "news.terms.body": "Les Conditions d’utilisation et la Politique de confidentialité couvrent désormais les sondages. L’app demande de les accepter une fois ; sans cela, amis, messages privés et sondages sont indisponibles.",
   "news.profile.title": "Un profil, un seul endroit",
-  "news.profile.body": "Le nom, la photo, la bio et le @nom d’utilisateur de toute personne avec un compte Annoy viennent uniquement du compte Annoy, sur tous les serveurs. Les serveurs n’en gardent plus de copie, et rejoindre un nouveau serveur ne demande plus d’autre nom."
+  "news.profile.body": "Le nom, la photo, la bio et le @nom d’utilisateur de toute personne avec un compte Annoy viennent uniquement du compte Annoy, sur tous les serveurs. Les serveurs n’en gardent plus de copie, et rejoindre un nouveau serveur ne demande plus d’autre nom.",
+  "settings.displayMode.title": "Mode d'affichage",
+  "settings.displayMode.auto": "Automatique",
+  "settings.displayMode.desktop": "Ordinateur",
+  "settings.displayMode.mobile": "Mobile",
+  "settings.displayMode.hint": "Automatique utilise Ordinateur dans les fenêtres d'au moins 940 px de large et Mobile dans les plus petites."
 }
