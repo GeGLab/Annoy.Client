@@ -246,6 +246,8 @@ function ensureView(service: Service): WebContentsView {
     return { action: "deny" };
   });
   wc.on("did-create-window", popup => { serviceWindows.add(popup); popup.on("closed", () => serviceWindows.delete(popup)); });
+  // Sites with a menu of their own (Discord on a message) cancel the event; this one covers the rest.
+  wc.on("context-menu", (_event, params) => showNativeMenu(wc, params, true));
   wc.on("will-navigate", (event, url) => {
     if (!inSites(url, sites)) {
       event.preventDefault();
@@ -358,13 +360,16 @@ function parseService(raw: unknown): Service | null {
 }
 
 /**
- * Fallback right-click menu for whatever the renderer has no menu of its own for (its menus call preventDefault,
+ * Fallback right-click menu for whatever the page has no menu of its own for (its menus call preventDefault,
  * so this never fires on them): images can be copied or saved, selections copied and text fields edited.
+ * Browser services also get the spelling suggestions. There is never an "Inspect" item.
  */
-function showNativeMenu(params: Electron.ContextMenuParams): void {
+function showNativeMenu(wc: Electron.WebContents, params: Electron.ContextMenuParams, spelling = false): void {
   if (!win) return;
-  const wc = win.webContents;
   const items: Electron.MenuItemConstructorOptions[] = [];
+  if (spelling && params.isEditable && params.misspelledWord) {
+    for (const suggestion of params.dictionarySuggestions) items.push({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) });
+  }
   const image = params.mediaType === "image" && /^(https?|blob|data):/.test(params.srcURL);
   if (image) {
     items.push(
@@ -460,7 +465,7 @@ function createWindow(): void {
       openExternal(url);
     }
   });
-  win.webContents.on("context-menu", (_event, params) => showNativeMenu(params));
+  win.webContents.on("context-menu", (_event, params) => showNativeMenu(win!.webContents, params));
   // A crashed or killed renderer leaves an empty window; bring the app back.
   win.webContents.on("render-process-gone", (_event, details) => {
     logError(`renderer gone: ${details.reason} (exit ${details.exitCode})`);
