@@ -653,6 +653,7 @@ button.lyric-line:not(.active):hover { color: color-mix(in srgb, var(--text) 72%
 .glass-controls { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 10px; }
 .glass-settings { display: grid; gap: 8px; margin-top: 24px; }
 .glass-settings > p { margin: 0; }
+.display-mode-field { margin-top: 24px; margin-bottom: 0; }
 
 /* What already played, under the queue. */
 .queue-history h3 { margin: 18px 12px 6px; color: var(--text-muted); font-size: .78571rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
