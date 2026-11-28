@@ -864,7 +864,7 @@
   "chat.5b0d728f295a": "Chatea en {p0}{p1}",
   "chat.dc29e3aa63fe": "Soltar para adjuntar",
   "common.799524ffd2ba": "annoy",
-  "settings.bac8755ed814": "Tus colores son sólo para este cliente. El contraste se ajusta automáticamente para cada tema.",
+  "settings.bac8755ed814": "Con una cuenta Annoy, la Apariencia se aplica en todos tus dispositivos. El contraste se ajusta automáticamente en cada tema.",
   "settings.555148c1db65": "Color de acento",
   "settings.26cfe72fc0d9": "Botones, selección y enlaces.",
   "settings.383efa53297e": "Tono del panel",
@@ -2733,5 +2733,10 @@
   "news.terms.title": "Términos actualizados",
   "news.terms.body": "Los Términos de Uso y la Política de Privacidad ahora incluyen las encuestas. La app pide aceptarlos una vez; sin aceptar, amigos, mensajes directos y encuestas no están disponibles.",
   "news.profile.title": "Un perfil, un lugar",
-  "news.profile.body": "El nombre, la foto, la bio y el @usuario de quien usa cuenta Annoy vienen solo de la cuenta Annoy, en todos los servidores. Los servidores ya no guardan una copia y, al entrar en un servidor nuevo, no eliges otro nombre."
+  "news.profile.body": "El nombre, la foto, la bio y el @usuario de quien usa cuenta Annoy vienen solo de la cuenta Annoy, en todos los servidores. Los servidores ya no guardan una copia y, al entrar en un servidor nuevo, no eliges otro nombre.",
+  "settings.displayMode.title": "Modo de visualización",
+  "settings.displayMode.auto": "Automático",
+  "settings.displayMode.desktop": "Escritorio",
+  "settings.displayMode.mobile": "Móvil",
+  "settings.displayMode.hint": "Automático usa Escritorio en ventanas de 940 px de ancho o más y Móvil en las más pequeñas."
 }

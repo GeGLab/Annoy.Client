@@ -172,7 +172,10 @@ const bridge = {
   },
 };
 
-export type AnnoyBridge = typeof bridge;
+export type AnnoyBridge = typeof bridge & {
+  /** Only in the web app (annoy-pwa): `computer` is a browser that is neither iOS nor Android. */
+  web?: { computer: boolean };
+};
 
 contextBridge.exposeInMainWorld("annoy", bridge);
 import type {LocalizationPreferences} from "../shared/localization/preferences.ts";

@@ -130,8 +130,49 @@ function WorkspaceActivity() {
 }
 
 
-export function App() {
+/** Start-up of the app: access state, saved accounts, the Annoy session and the cloud. Runs once per page. */
+export function useAppStartup() {
   useEffect(()=>window.annoy?.desktop?.onQuitRequested(()=>requestNavigation(()=>{flushChatState();void window.annoy?.desktop?.quit().catch(()=>{});})),[]);
+  useEffect(() => {
+    const auth = window.annoy?.auth;
+    let revision = 0;
+    let active = true;
+    const update = (next: import("../../shared/app-access.ts").AppAccessState) => {
+      if (!active) return;
+      const revoked = getState().access.global && !next.global;
+      if (getState().access.allowed && !next.allowed) {
+        leaveVoice();
+        for (const account of getState().accounts) disconnectDirectCall(account.id);
+        setState(s => { s.modal = null; });
+      }
+      setState(s => { s.access = next; if (!next.global) s.global = null; });
+      // The server refused the session: back to sign-in, nothing is deleted. Only "Sair" wipes.
+      if (revoked) void import("./auth/session.ts").then(g => g.endSession());
+    };
+    const off = auth?.onState(next => { revision++; update(next); });
+    const started = revision;
+    void auth?.get().then(next => { if (revision === started) update(next); });
+    return () => { active = false; off?.(); };
+  }, []);
+
+  useEffect(() => {
+    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>import("./features/integrations/vpngo.ts")).then(v=>v.initVpngoRoutes()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();requestServerProfiles();});});
+    if (getState().view.kind !== "home") navigate(getState().view);
+    return window.annoy?.services.onBadge((id, badge) =>
+      setState((s) => {
+        s.serviceBadges[id] = badge;
+      }),
+    );
+  }, []);
+}
+
+export function App() {
+  useAppStartup();
+  return <AppWorkspace />;
+}
+
+/** Everything on screen; the web app (annoy-pwa) shows it on computers and runs its own start-up. */
+export function AppWorkspace() {
   const localization=useLocalization();
   useEffect(()=>applyTextPreferences(localization),[localization]);
   const access = useStore(s => s.access.allowed);
@@ -174,37 +215,6 @@ export function App() {
     return () => media.removeEventListener("change", change);
   }, [theme, accentColor, surfaceColor, themePreset]);
 
-  useEffect(() => {
-    const auth = window.annoy?.auth;
-    let revision = 0;
-    let active = true;
-    const update = (next: import("../../shared/app-access.ts").AppAccessState) => {
-      if (!active) return;
-      const revoked = getState().access.global && !next.global;
-      if (getState().access.allowed && !next.allowed) {
-        leaveVoice();
-        for (const account of getState().accounts) disconnectDirectCall(account.id);
-        setState(s => { s.modal = null; });
-      }
-      setState(s => { s.access = next; if (!next.global) s.global = null; });
-      // The server refused the session: back to sign-in, nothing is deleted. Only "Sair" wipes.
-      if (revoked) void import("./auth/session.ts").then(g => g.endSession());
-    };
-    const off = auth?.onState(next => { revision++; update(next); });
-    const started = revision;
-    void auth?.get().then(next => { if (revision === started) update(next); });
-    return () => { active = false; off?.(); };
-  }, []);
-
-  useEffect(() => {
-    void import("./store.ts").then(s=>s.restoreSavedAccounts()).then(()=>import("./features/integrations/vpngo.ts")).then(v=>v.initVpngoRoutes()).then(()=>{connectAll();void import("./auth/session.ts").then(g=>g.restoreSession()).then(()=>{initSocial();requestServerProfiles();});});
-    if (getState().view.kind !== "home") navigate(getState().view);
-    return window.annoy?.services.onBadge((id, badge) =>
-      setState((s) => {
-        s.serviceBadges[id] = badge;
-      }),
-    );
-  }, []);
 
   // Browser services are a native layer above the page; hide it while a modal is open.
   useEffect(() => {

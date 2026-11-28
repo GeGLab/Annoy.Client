@@ -864,7 +864,7 @@
   "chat.5b0d728f295a": "Chat on {p0}{p1}",
   "chat.dc29e3aa63fe": "Release to attach",
   "common.799524ffd2ba": "annoy",
-  "settings.bac8755ed814": "Your colors are only for this client. Contrast is automatically adjusted for each theme.",
+  "settings.bac8755ed814": "With an Annoy account, Appearance applies on all your devices. Contrast is automatically adjusted for each theme.",
   "settings.555148c1db65": "Accent color",
   "settings.26cfe72fc0d9": "Buttons, selection and links",
   "settings.383efa53297e": "Panel tone",
@@ -2733,5 +2733,10 @@
   "news.terms.title": "Updated terms",
   "news.terms.body": "The Terms of Use and the Privacy Policy now cover polls. The app asks you to accept them once; until you do, friends, DMs and polls are unavailable.",
   "news.profile.title": "One profile, one place",
-  "news.profile.body": "The name, photo, bio and @username of anyone with an Annoy account come only from the Annoy account, on every server. Servers no longer keep a copy, and joining a new server no longer asks for another name."
+  "news.profile.body": "The name, photo, bio and @username of anyone with an Annoy account come only from the Annoy account, on every server. Servers no longer keep a copy, and joining a new server no longer asks for another name.",
+  "settings.displayMode.title": "Display mode",
+  "settings.displayMode.auto": "Automatic",
+  "settings.displayMode.desktop": "Desktop",
+  "settings.displayMode.mobile": "Mobile",
+  "settings.displayMode.hint": "Automatic uses Desktop in windows 940 px wide or more and Mobile in smaller ones."
 }

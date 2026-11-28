@@ -39,7 +39,7 @@ export class AuthError extends Error {
 }
 
 /** Local data that survives sign-out (TODO item 2.3): preferences, the username, this install's IDs. */
-const KEEP = new Set(["annoy.settings", "annoy.lastUsername", "annoy.clientId", "annoy.cloudDevice", "annoy.globalUrl", "annoy.cloudUrls", "annoy.authUrl"]);
+const KEEP = new Set(["annoy.settings", "annoy.lastUsername", "annoy.clientId", "annoy.cloudDevice", "annoy.globalUrl", "annoy.cloudUrls", "annoy.authUrl", "annoy.preferencesSynced"]);
 
 export const lastUsername = (): string => {
   try {
